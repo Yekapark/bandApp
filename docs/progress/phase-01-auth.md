@@ -198,13 +198,32 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 | 본문·테스트 컴파일 | `./gradlew compileJava compileTestJava` | ✅ BUILD SUCCESSFUL, 경고 없음 |
 | deprecated API 사용 여부 | 컴파일러 `-Xlint` + jar 바이트코드 확인 | ✅ 없음 (`SimpleClientHttpRequestFactory`의 `int` 타임아웃 오버로드는 Spring 6.2.1 기준 deprecated 아님) |
 | 스프링 없는 순수 단위 테스트 | `./gradlew test --tests '*JwtTokenProviderTest'` | ✅ 통과 |
-| Testcontainers 통합 테스트 | `./gradlew test --tests '*RefreshTokenStoreTest'` | ⚠️ 실행 불가 — 이 PC에 Docker 미설치 (`ContainerFetchException` → `DockerClientProviderStrategy`). Phase 0 §7.1과 동일 |
 | 커밋된 비밀값 | 브랜치 diff 전체 스캔 | ✅ 없음 (`.env.example`은 플레이스홀더, `KAKAO_*` 빈 값) |
 
-### 6.3 아직 안 한 것 — Docker Desktop 설치 후 진행
+### 6.3 두 번째 PC — `docker compose` 전체 스택 수동 검증 (2026-08-31, Docker Desktop 29.7.2 설치 후)
 
-- `./gradlew test` 전체 (통합 테스트 8종) — **Phase 1 완료 기준 `AuthLifecycleIntegrationTest` 포함**
-- `docker compose up` + §5 방법 A 수동 시나리오 (201→200→401→200→401→204→401)
+`docker compose up --build`로 app+postgres+redis 기동 후 §5 방법 A 시나리오 실행:
+
+| 확인 항목 | 결과 |
+|---|---|
+| 앱 기동, `/actuator/health` | ✅ 200 UP (db/redis 모두 UP) |
+| Flyway `V1__auth.sql` | ✅ `Successfully applied 1 migration ... now at version v1` |
+| `ddl-auto: validate` | ✅ 통과 (기동 성공 = 엔티티↔DDL 일치) |
+| 완료 기준 전 과정 (가입→내정보→로그인→갱신→이전refresh재사용→탈퇴→탈퇴후로그인→탈퇴전access) | ✅ **`201 200 401 200 200 401 204 401 401`** (기대치와 정확히 일치) |
+| 이전 refresh 재사용 → 401 `REFRESH_TOKEN_INVALID` | ✅ |
+| 탈퇴 전 access → 401 `ACCOUNT_WITHDRAWN` | ✅ |
+| 카카오 로그인 (키 미설정) → 503 `KAKAO_NOT_CONFIGURED` | ✅ |
+| 회귀: `/v3/api-docs` | ✅ 200 |
+| **리뷰 수정 R1**: 동일 이메일 동시 가입 10건 | ✅ 정확히 1건 201, 9건 409, 500 없음. 앱 로그에 `처리되지 않은 예외` 없음 (DB 경합이 실제로 발생했고 — `ux_users_email_active` 위반 — 새 catch 블록이 409로 변환) |
+| **리뷰 수정 R2**: 탈퇴(소셜 아님) | ✅ 204, `deletedAt` 기록됨 |
+
+### 6.4 아직 안 한 것
+
+- `./gradlew test` 전체 (Testcontainers) — **이 PC의 Docker 29.7.2 + Testcontainers 1.20.4
+  (Spring Boot BOM 고정) 사이 알려진 비호환**으로 실행 불가. `docker-java`가 Docker Engine 28+에
+  거부되는 헤더를 보내 `/info` 호출이 HTTP 400. §7.2 참조. **완료 기준 자동 테스트
+  (`AuthLifecycleIntegrationTest`) 판정은 CI(ubuntu-latest, 호환 Docker)로 한다** —
+  위 6.3에서 같은 흐름을 수동으로 통과 확인함.
 - CI 초록불 확인 후 §8 링크 기입, `main` 머지
 
 ## 7. 알려진 이슈 / 제약
@@ -215,7 +234,7 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 
 | 커밋 | 내용 |
 |---|---|
-| `fix(auth): 동시 가입 경합 시 500 대신 409` | `signup`의 존재 선검사와 부분 유니크 인덱스 사이 경합에서 `DataIntegrityViolationException`이 공통 핸들러에 걸려 500이 되던 것을 `EMAIL_ALREADY_REGISTERED`(409)로 변환. 동시 8건 통합 테스트 추가. |
+| `fix(auth): 동시 가입 경합 시 500 대신 409` | `signup`의 존재 선검사와 부분 유니크 인덱스 사이 경합에서 `DataIntegrityViolationException`이 공통 핸들러에 걸려 500이 되던 것을 `EMAIL_ALREADY_REGISTERED`(409)로 변환. 동시 8건 통합 테스트 추가. **§6.3에서 실스택 동시 10건으로 검증 완료.** |
 | `refactor(auth): 카카오 unlink 를 트랜잭션 커밋 이후로 이동` | `withdraw()`가 `@Transactional` 안에서 외부 HTTP(최대 5s)를 호출해 DB 커넥션을 붙잡던 것을 `afterCommit`으로 이동. 탈퇴 성공 의미론은 그대로. |
 | `docs: Phase 0 문서의 프로젝트 경로 수정` | `E:\project\band` → `C:\band\bandApp`. |
 
@@ -232,8 +251,11 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 
 ### 7.2 그 밖의 제약
 
-- **로컬 자동 테스트 불가**: 두 개발 PC 모두 Docker 미설치/문제로 `./gradlew test`(Testcontainers)가
-  실패한다. 검증은 `docker compose` 수동 확인 + CI에 의존한다. (Phase 0 문서 7.1과 동일)
+- **로컬 `./gradlew test`(Testcontainers) 실행 불가 — Docker 29.x 비호환**: Spring Boot 3.4.1
+  BOM이 Testcontainers를 1.20.4로 고정하는데, 이 버전이 쓰는 `docker-java`가 Docker Engine 28+에서
+  거부되는 요청 헤더를 보내 데몬이 `/info`에 HTTP 400을 준다(`docker`·`docker compose` CLI는 정상).
+  검증은 `docker compose` 수동 확인(§6.3) + CI에 의존한다. Testcontainers 1.20.6+ 로 올리면
+  해소되나 BOM 버전 override라 별도 승인 후 반영 예정. CI(ubuntu-latest)는 호환 Docker라 영향 없음.
 - **카카오 연결 해제 재시도 없음**: 탈퇴 시 카카오 unlink가 실패하면 로그만 남기고 넘어간다.
   자동 재시도 큐는 배치 인프라가 생기는 Phase 9에서 붙인다. 그때까지는 실패 로그를 보고
   수동 대응한다.
