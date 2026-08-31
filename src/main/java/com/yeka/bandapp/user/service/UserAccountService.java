@@ -15,6 +15,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -73,11 +75,32 @@ public class UserAccountService {
         accessTokenBlocklist.block(userId, jwtProperties.accessTokenTtl());
 
         if (social && socialId != null) {
-            try {
-                kakaoClient.unlink(socialId);
-            } catch (RuntimeException e) {
-                log.error("카카오 unlink 실패, 탈퇴는 계속 진행 userId={} socialId={}", userId, socialId, e);
+            unlinkKakaoAfterCommit(userId, socialId);
+        }
+    }
+
+    /**
+     * 카카오 unlink 는 외부 HTTP(최대 connect+read 5s)라 트랜잭션 커밋 뒤로 미룬다 — DB 커넥션을
+     * 그동안 붙잡지 않기 위해서다. 실패해도 이미 커밋된 탈퇴를 되돌리지 않는다(스토어 심사 요건).
+     */
+    private void unlinkKakaoAfterCommit(long userId, String socialId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            doUnlink(userId, socialId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                doUnlink(userId, socialId);
             }
+        });
+    }
+
+    private void doUnlink(long userId, String socialId) {
+        try {
+            kakaoClient.unlink(socialId);
+        } catch (RuntimeException e) {
+            log.error("카카오 unlink 실패, 탈퇴는 이미 완료됨 userId={} socialId={}", userId, socialId, e);
         }
     }
 
