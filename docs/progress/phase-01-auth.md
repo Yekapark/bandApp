@@ -269,11 +269,16 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 
 ## 8. 커밋 · CI
 
-- 브랜치: `phase-1-auth`
+- 브랜치: `phase-1-auth` (2026-08-31 `7a3b7d2`까지 push 완료)
 - 구현 커밋: `3aba760` (Security+JWT 기반) · `299cc09` (User 도메인 + `V1__auth.sql`) ·
   `4d5095e` (이메일·카카오 로그인, 토큰 갱신, 탈퇴, 파기 배치) · `a35bc5b` (테스트) · `9207b7f` (문서)
-- 리뷰 수정 커밋: `1de539e` (동시 가입 409) · `c648e2f` (unlink afterCommit) · `d062510` (문서 경로)
-- CI: (푸시 후 GitHub Actions 링크 채움 — 자동 테스트 통과 판정은 이 결과로 한다)
+- 리뷰·검증 커밋: `1de539e` (동시 가입 409) · `c648e2f` (unlink afterCommit) ·
+  `d062510` (Phase 0 문서 경로) · `48122aa` (리뷰 기록) · `5756345` (`bin/` gitignore) ·
+  `033e818` (BUILD_PLAN에 passwordHash) · `7fddfab` (compose 수동 검증 기록) ·
+  `7a3b7d2` (Testcontainers 1.21.3)
+- CI: **아직 미실행.** `ci.yml`은 `main` push / `main` 대상 PR에서만 돈다. `phase-1-auth`를
+  push해도 트리거되지 않으므로, `main` 대상 PR을 열어야 자동 테스트가 실행된다.
+  자동 테스트 통과 판정은 이 CI 결과로 한다 (링크는 실행 후 기입).
 
 ## 9. 다음 Phase 예고 — Phase 2 (밴드 · 초대 · 멤버)
 
