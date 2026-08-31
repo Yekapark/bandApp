@@ -22,6 +22,12 @@ import java.util.regex.Pattern;
  *
  * <p>실제 링크 라우팅은 OS 가 위 검증 파일을 보고 처리한다. 이 컨트롤러는 파일 제공과,
  * 검증이 안 되는 브라우저(데스크톱 등)를 위한 폴백 페이지만 담당한다.
+ *
+ * <p>세 핸들러 모두 {@code produces} 를 두지 않고 응답에 {@code Content-Type} 을 직접 박는다.
+ * {@code produces} 를 쓰면 클라이언트 {@code Accept} 에 해당 타입도 {@code *&#47;*} 도 없을 때
+ * 406 이 난다 — {@code .well-known} 파일을 가져가는 iOS/Android 페처가 특이한 Accept 를 보내도
+ * 깨지지 않게 하기 위함이다. {@link ResponseEntity} 에 구체 Content-Type 을 지정하면
+ * Accept 협상을 건너뛰고 그 타입으로 직렬화한다.
  */
 @RestController
 public class InviteLandingController {
@@ -34,7 +40,7 @@ public class InviteLandingController {
         this.properties = properties;
     }
 
-    @GetMapping(value = "/invite/{code}", produces = MediaType.TEXT_HTML_VALUE)
+    @GetMapping("/invite/{code}")
     public ResponseEntity<String> landing(@PathVariable String code) {
         if (!CODE.matcher(code).matches()) {
             return ResponseEntity.notFound().build();
@@ -44,23 +50,25 @@ public class InviteLandingController {
                 .body(renderLanding(code));
     }
 
-    @GetMapping(value = "/.well-known/apple-app-site-association", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Map<String, Object> appleAppSiteAssociation() {
-        return Map.of("applinks", Map.of(
+    @GetMapping("/.well-known/apple-app-site-association")
+    public ResponseEntity<Map<String, Object>> appleAppSiteAssociation() {
+        Map<String, Object> body = Map.of("applinks", Map.of(
                 "apps", List.of(),
                 "details", List.of(Map.of(
                         "appID", properties.iosAppId(),
                         "paths", List.of("/invite/*")))));
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(body);
     }
 
-    @GetMapping(value = "/.well-known/assetlinks.json", produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<Map<String, Object>> assetLinks() {
-        return List.of(Map.of(
+    @GetMapping("/.well-known/assetlinks.json")
+    public ResponseEntity<List<Map<String, Object>>> assetLinks() {
+        List<Map<String, Object>> body = List.of(Map.of(
                 "relation", List.of("delegate_permission/common.handle_all_urls"),
                 "target", Map.of(
                         "namespace", "android_app",
                         "package_name", properties.androidPackage(),
                         "sha256_cert_fingerprints", properties.androidSha256CertFingerprints())));
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(body);
     }
 
     private String renderLanding(String code) {
