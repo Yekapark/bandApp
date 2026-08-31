@@ -60,5 +60,15 @@ public abstract class IntegrationTestSupport {
         registry.add("app.kakao.admin-key", () -> "test-admin-key");
         // 통합 테스트 중 파기 배치가 끼어들지 않도록 비활성화한다("-").
         registry.add("app.withdrawal.purge-cron", () -> "-");
+        // 초대 딥링크: 링크·검증 파일의 값을 고정해 assertion 을 쓸 수 있게 한다.
+        registry.add("app.deeplink.base-url", () -> "https://band.test");
+        registry.add("app.deeplink.scheme", () -> "bandapp");
+        registry.add("app.deeplink.ios-app-id", () -> "ABCDE12345.com.yeka.bandapp");
+        registry.add("app.deeplink.android-sha256-cert-fingerprints", () -> "AA:BB:CC");
+        // 레이트리밋: 테스트가 초과를 빠르게 검증할 수 있게 낮춘다. 단일 테스트가 이보다 많이
+        // 호출하지 않도록 유지한다(매 테스트 전 Redis flush 로 카운터는 초기화된다).
+        registry.add("app.ratelimit.invite-join-per-user-per-min", () -> "10");
+        registry.add("app.ratelimit.invite-join-per-ip-per-min", () -> "10");
+        registry.add("app.ratelimit.auth-per-ip-per-min", () -> "30");
     }
 }

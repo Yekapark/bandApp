@@ -56,3 +56,15 @@ app:
     purge-zone: Asia/Seoul
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
+  deeplink:
+    base-url: ${DEEPLINK_BASE_URL:http://localhost:8080}    # 초대 링크·랜딩 페이지 공개 주소
+    scheme: ${DEEPLINK_SCHEME:bandapp}                       # 앱 커스텀 스킴 (bandapp://invite/CODE)
+    ios-app-id: ${IOS_APP_ID:}                               # 예: TEAMID.com.yeka.bandapp (AASA 검증용)
+    ios-app-store-url: ${IOS_APP_STORE_URL:https://apps.apple.com/app/id0000000000}
+    android-package: ${ANDROID_PACKAGE:com.yeka.bandapp}
+    android-play-store-url: ${ANDROID_PLAY_STORE_URL:https://play.google.com/store/apps/details?id=com.yeka.bandapp}
+    android-sha256-cert-fingerprints: ${ANDROID_SHA256_CERT_FINGERPRINTS:}   # 쉼표 구분, assetlinks.json 검증용
+  ratelimit:
+    invite-join-per-user-per-min: ${RL_INVITE_JOIN_USER:10}
+    invite-join-per-ip-per-min: ${RL_INVITE_JOIN_IP:20}
+    auth-per-ip-per-min: ${RL_AUTH_IP:20}

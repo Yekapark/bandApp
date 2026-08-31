@@ -44,6 +44,24 @@ public abstract class ApiIntegrationTest extends IntegrationTestSupport {
         return rest.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), String.class);
     }
 
+    protected ResponseEntity<String> put(String path, String json, String bearer) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (bearer != null) {
+            headers.setBearerAuth(bearer);
+        }
+        return rest.exchange(path, HttpMethod.PUT, new HttpEntity<>(json, headers), String.class);
+    }
+
+    /** 본문 없는 DELETE. {@code SimpleClientHttpRequestFactory}는 본문 있는 DELETE를 지원하지 않는다. */
+    protected ResponseEntity<String> delete(String path, String bearer) {
+        HttpHeaders headers = new HttpHeaders();
+        if (bearer != null) {
+            headers.setBearerAuth(bearer);
+        }
+        return rest.exchange(path, HttpMethod.DELETE, new HttpEntity<>(headers), String.class);
+    }
+
     protected JsonNode body(ResponseEntity<String> response) {
         try {
             return objectMapper.readTree(response.getBody());
