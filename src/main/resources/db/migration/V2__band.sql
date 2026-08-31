@@ -67,4 +67,4 @@ CREATE UNIQUE INDEX ux_band_invites_code ON band_invites (code);
 CREATE INDEX ix_band_invites_band ON band_invites (band_id, created_at DESC);
 
 COMMENT ON COLUMN band_invites.max_uses IS 'NULL 이면 사용 횟수 무제한. 값이 있으면 used_count 가 그 값에 도달할 때 소진.';
-COMMENT ON COLUMN band_invites.created_at IS 'BUILD_PLAN 도메인 모델에 없던 컬럼(리뷰에서 추가 승인 대기). 활성 코드 최신순 조회·감사에 쓴다.';
+COMMENT ON COLUMN band_invites.created_at IS 'Phase 2에서 도메인 모델에 추가 승인된 컬럼. 활성 코드 최신순 조회·감사에 쓴다.';

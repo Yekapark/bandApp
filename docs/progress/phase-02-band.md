@@ -40,9 +40,9 @@
 - `ux_band_members_active` — `(band_id, user_id) WHERE left_at IS NULL`: 한 밴드에 활성 멤버십 하나
 - `ux_band_members_single_leader` — `(band_id) WHERE left_at IS NULL AND role = 'LEADER'`: 밴드당 활성 밴드장 정확히 하나
 
-> **도메인 모델과의 차이 (승인 대기 항목)**: `band_invites`에 `created_at` 컬럼을 추가했다.
-> `BUILD_PLAN.md` §3의 `BandInvite`에는 없는 필드다. "활성 코드 최신순 조회"와 감사 로그 용도로
-> 넣었고, 값 의미를 바꾸는 변경은 아니다. 문제가 있으면 되돌린다.
+> **도메인 모델 추가 (승인됨, 2026-09-01)**: `band_invites`에 `created_at` 컬럼을 추가했다.
+> 원래 `BUILD_PLAN.md` §3의 `BandInvite`에는 없던 필드로, "활성 코드 최신순 조회"와 감사 로그
+> 용도다. 지시자 승인 후 `BUILD_PLAN.md` §3 모델에도 반영했다.
 
 ### 3.2 밴드 도메인 — `src/main/java/com/yeka/bandapp/band/`
 
@@ -287,7 +287,7 @@ GitHub Actions `build` 잡: `./gradlew build --no-daemon` → `> Task :test` 실
 
 ## 7. 알려진 이슈 / 제약
 
-- **`band_invites.created_at`은 도메인 모델에 없던 컬럼이다** (§3.1 인용문). 리뷰에서 확정 필요.
+- ~~`band_invites.created_at`은 도메인 모델에 없던 컬럼이다~~ → **승인 완료** (2026-09-01), `BUILD_PLAN.md` §3에 반영.
 - **레이트리밋은 고정 윈도우**라 윈도우 경계에서 짧게 최대 2배까지 통과할 수 있다. 무차별 대입·열거를
   늦추는 목적엔 충분하다. 슬라이딩 로그가 필요하면 `RedisRateLimiter`만 교체하면 된다.
 - **`X-Forwarded-For` 신뢰**: 현재는 헤더 첫 홉을 그대로 IP로 쓴다. 운영에서 Nginx가 이 헤더를

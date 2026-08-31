@@ -86,9 +86,10 @@ BandMember { id, bandId, userId, role(LEADER | MEMBER), joinedAt, leftAt }
   - 자발적 탈퇴 + 밴드장에 의한 추방 모두 지원
   - 밴드장 위임 시 기존 LEADER는 MEMBER로 강등
 
-BandInvite { id, bandId, code, expiresAt, maxUses, usedCount, revoked, createdBy }
+BandInvite { id, bandId, code, expiresAt, maxUses, usedCount, revoked, createdBy, createdAt }
   - code: 8자 영숫자, 혼동 문자(0/O, 1/l/I) 제외, unique
   - 기본 만료 7일, 재발급 시 기존 코드 revoked 처리
+  - createdAt: Phase 2에서 추가(승인됨). 활성 코드 최신순 조회·감사용
 
 Room { id, bandId, name, address, lat, lng, phone, memo, usageCount, createdBy }
   - 밴드별 독립 등록 (여러 밴드가 같은 장소를 각자 등록해도 별개 레코드)
