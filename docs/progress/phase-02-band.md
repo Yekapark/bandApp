@@ -276,10 +276,14 @@ BUILD SUCCESSFUL — 3 tests
 만료 코드 거부(`INVITE_EXPIRED`)는 과거 만료 시각을 API로 만들 수 없어 통합 테스트
 (`BandInviteIntegrationTest.expired_code_is_rejected_as_expired`, 저장소로 과거 만료 코드 주입)에서 검증한다.
 
-### 6.3 CI — 자동 테스트
+### 6.3 CI — 자동 테스트 (2026-09-01, PR #16)
 
-PR 생성 후 채워진다. 테스트 클래스: `BandMemberIntegrationTest`(11) · `BandInviteIntegrationTest`(11) ·
-`InviteDeepLinkIntegrationTest`(4) · `AuthRateLimitIntegrationTest`(2) · `InviteCodeGeneratorTest`(3, 단위).
+GitHub Actions `build` 잡: `./gradlew build --no-daemon` → `> Task :test` 실행,
+`BUILD SUCCESSFUL in 43s`, `:check`/`:build` 통과.
+[actions/runs/33408692987](https://github.com/Yekapark/bandApp/actions/runs/33408692987)
+
+테스트 클래스: `BandMemberIntegrationTest` · `BandInviteIntegrationTest` ·
+`InviteDeepLinkIntegrationTest` · `AuthRateLimitIntegrationTest` · `InviteCodeGeneratorTest`(단위).
 
 ## 7. 알려진 이슈 / 제약
 
@@ -297,7 +301,14 @@ PR 생성 후 채워진다. 테스트 클래스: `BandMemberIntegrationTest`(11)
 
 ## 8. 커밋 · CI
 
-(PR 생성 후 채운다.)
+- 브랜치 `phase-2-band` → **PR #16** (`main` 대상)
+- 커밋 (기능 단위):
+  1. `feat(band): 밴드/멤버/초대 도메인 모델 + V2 마이그레이션`
+  2. `feat(ratelimit): Redis 고정 윈도우 레이트리밋 + 인증 엔드포인트 적용`
+  3. `feat(band): 밴드 생성·조회·설정 + 멤버 목록·탈퇴·추방·밴드장 위임`
+  4. `feat(band): 초대코드 발급·재발급·무효화·참여 + 초대 딥링크`
+  5. `test(band): Phase 2 통합·단위 테스트 + 진행 기록`
+- CI: [actions/runs/33408692987](https://github.com/Yekapark/bandApp/actions/runs/33408692987) — pass
 
 ## 9. 다음 Phase 예고 — Phase 3 (합주실 / Room)
 
