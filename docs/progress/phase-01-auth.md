@@ -170,9 +170,9 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 | 카카오 로그인이 항상 503 | `KAKAO_APP_ID` / `KAKAO_ADMIN_KEY` 미설정. 의도된 동작 |
 | `docker compose up`이 포트 충돌 | 8080/5432/6379를 쓰는 다른 프로세스 종료 |
 
-## 6. 실제 검증 기록 (2026-08-31)
+## 6. 실제 검증 기록
 
-`docker compose up --build`로 전체 스택 기동 후 수동 확인:
+### 6.1 최초 구현 PC — `docker compose up --build` 수동 확인 (2026-08-31)
 
 | 확인 항목 | 결과 |
 |---|---|
@@ -187,11 +187,52 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 | 중복 이메일 → 409 / 짧은 비밀번호 → 400 + 필드 오류 / 잘못된 JSON → 400 | ✅ |
 | 회귀: `/v3/api-docs` | ✅ 200 |
 | 부팅 로그에 임의 보안 비밀번호 출력 없음 | ✅ (자동설정 제외 적용됨) |
-| 자동 테스트 (로컬 `./gradlew test`) | ⚠️ 미실행 — 이 PC의 Docker 문제 (Phase 0 7.1). CI로 확인 |
+
+### 6.2 두 번째 PC — 코드 리뷰 + 정적 검증 (2026-08-31)
+
+`phase-1-auth` 브랜치를 받아 전체 코드를 리뷰하고, Docker 없이 가능한 범위를 확인했다.
+발견 사항과 수정은 아래 §7.1 참조.
+
+| 확인 항목 | 명령 | 결과 |
+|---|---|---|
+| 본문·테스트 컴파일 | `./gradlew compileJava compileTestJava` | ✅ BUILD SUCCESSFUL, 경고 없음 |
+| deprecated API 사용 여부 | 컴파일러 `-Xlint` + jar 바이트코드 확인 | ✅ 없음 (`SimpleClientHttpRequestFactory`의 `int` 타임아웃 오버로드는 Spring 6.2.1 기준 deprecated 아님) |
+| 스프링 없는 순수 단위 테스트 | `./gradlew test --tests '*JwtTokenProviderTest'` | ✅ 통과 |
+| Testcontainers 통합 테스트 | `./gradlew test --tests '*RefreshTokenStoreTest'` | ⚠️ 실행 불가 — 이 PC에 Docker 미설치 (`ContainerFetchException` → `DockerClientProviderStrategy`). Phase 0 §7.1과 동일 |
+| 커밋된 비밀값 | 브랜치 diff 전체 스캔 | ✅ 없음 (`.env.example`은 플레이스홀더, `KAKAO_*` 빈 값) |
+
+### 6.3 아직 안 한 것 — Docker Desktop 설치 후 진행
+
+- `./gradlew test` 전체 (통합 테스트 8종) — **Phase 1 완료 기준 `AuthLifecycleIntegrationTest` 포함**
+- `docker compose up` + §5 방법 A 수동 시나리오 (201→200→401→200→401→204→401)
+- CI 초록불 확인 후 §8 링크 기입, `main` 머지
 
 ## 7. 알려진 이슈 / 제약
 
-- **로컬 자동 테스트 불가**: 이 개발 PC에서 `./gradlew test`가 Testcontainers Docker 문제로
+### 7.1 코드 리뷰 결과 (2026-08-31, 두 번째 PC)
+
+수정한 것:
+
+| 커밋 | 내용 |
+|---|---|
+| `fix(auth): 동시 가입 경합 시 500 대신 409` | `signup`의 존재 선검사와 부분 유니크 인덱스 사이 경합에서 `DataIntegrityViolationException`이 공통 핸들러에 걸려 500이 되던 것을 `EMAIL_ALREADY_REGISTERED`(409)로 변환. 동시 8건 통합 테스트 추가. |
+| `refactor(auth): 카카오 unlink 를 트랜잭션 커밋 이후로 이동` | `withdraw()`가 `@Transactional` 안에서 외부 HTTP(최대 5s)를 호출해 DB 커넥션을 붙잡던 것을 `afterCommit`으로 이동. 탈퇴 성공 의미론은 그대로. |
+| `docs: Phase 0 문서의 프로젝트 경로 수정` | `E:\project\band` → `C:\band\bandApp`. |
+
+검토했으나 **의도된 설계로 판단해 두는 것**:
+
+- **`refresh` 재사용 탐지 시 전 기기 세션 종료**: 오래된 refresh 토큰을 가진 누구나 해당
+  사용자 세션을 끊을 수 있는 DoS 여지가 있으나, OAuth 2.0 BCP 권고를 따른 트레이드오프다(§4).
+- **탈퇴 시 Redis 쓰기가 트랜잭션 롤백에 연동되지 않음**: 롤백 시 access 차단 목록이 최대
+  30분 남지만, "탈퇴 안 된 사용자를 잠그는" 안전 방향으로만 실패한다.
+- **`/api/v1/auth/**`는 `permitAll`이라 이 경로에서는 access 차단 목록을 검사하지 않음**:
+  탈퇴 시 `refreshTokenStore.removeAll()`로 refresh가 이미 무효화되므로 실제 우회 경로는 없다.
+- **`POST /users/me/withdraw`** (`DELETE` 아님): `TestRestTemplate`이 본문 있는 DELETE를
+  지원하지 않아 완료 기준 테스트가 깨지기 때문. 컨트롤러 주석에 근거 있음.
+
+### 7.2 그 밖의 제약
+
+- **로컬 자동 테스트 불가**: 두 개발 PC 모두 Docker 미설치/문제로 `./gradlew test`(Testcontainers)가
   실패한다. 검증은 `docker compose` 수동 확인 + CI에 의존한다. (Phase 0 문서 7.1과 동일)
 - **카카오 연결 해제 재시도 없음**: 탈퇴 시 카카오 unlink가 실패하면 로그만 남기고 넘어간다.
   자동 재시도 큐는 배치 인프라가 생기는 Phase 9에서 붙인다. 그때까지는 실패 로그를 보고
@@ -207,8 +248,10 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 ## 8. 커밋 · CI
 
 - 브랜치: `phase-1-auth`
-- 커밋: (푸시 후 채움)
-- CI: (푸시 후 GitHub Actions 링크 채움)
+- 구현 커밋: `3aba760` (Security+JWT 기반) · `299cc09` (User 도메인 + `V1__auth.sql`) ·
+  `4d5095e` (이메일·카카오 로그인, 토큰 갱신, 탈퇴, 파기 배치) · `a35bc5b` (테스트) · `9207b7f` (문서)
+- 리뷰 수정 커밋: `1de539e` (동시 가입 409) · `c648e2f` (unlink afterCommit) · `d062510` (문서 경로)
+- CI: (푸시 후 GitHub Actions 링크 채움 — 자동 테스트 통과 판정은 이 결과로 한다)
 
 ## 9. 다음 Phase 예고 — Phase 2 (밴드 · 초대 · 멤버)
 
