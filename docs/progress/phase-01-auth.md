@@ -217,14 +217,24 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 | **리뷰 수정 R1**: 동일 이메일 동시 가입 10건 | ✅ 정확히 1건 201, 9건 409, 500 없음. 앱 로그에 `처리되지 않은 예외` 없음 (DB 경합이 실제로 발생했고 — `ux_users_email_active` 위반 — 새 catch 블록이 409로 변환) |
 | **리뷰 수정 R2**: 탈퇴(소셜 아님) | ✅ 204, `deletedAt` 기록됨 |
 
-### 6.4 아직 안 한 것
+### 6.4 CI — 자동 테스트 (2026-08-31, PR #1)
 
-- `./gradlew test` 전체 (Testcontainers) — **이 PC의 Docker 29.7.2 + Testcontainers 1.20.4
-  (Spring Boot BOM 고정) 사이 알려진 비호환**으로 실행 불가. `docker-java`가 Docker Engine 28+에
-  거부되는 헤더를 보내 `/info` 호출이 HTTP 400. §7.2 참조. **완료 기준 자동 테스트
-  (`AuthLifecycleIntegrationTest`) 판정은 CI(ubuntu-latest, 호환 Docker)로 한다** —
-  위 6.3에서 같은 흐름을 수동으로 통과 확인함.
-- CI 초록불 확인 후 §8 링크 기입, `main` 머지
+`phase-1-auth` → `main` PR 을 열어 GitHub Actions 실행.
+
+| 시도 | 결과 | 원인 / 조치 |
+|---|---|---|
+| 1차 (`963afad`) | ❌ 31개 중 19개 실패 | 통합 테스트 전부 `ConnectException`(Postgres). §7.1 R7 참조 |
+| 2차 (`9dd16c7`) | ❌ 동일 | Testcontainers 1.21.3 되돌려도 동일 → 버전 문제 아님을 확인 |
+| 3차 (`82b2890`) | ✅ **BUILD SUCCESSFUL 45초, 31개 전부 통과** | 싱글턴 컨테이너로 전환 (R7) |
+
+3차 통과로 **완료 기준 충족**: `AuthLifecycleIntegrationTest.full_lifecycle` (가입 201 →
+내정보 200 → 로그인 200 → 갱신 200 → 이전 refresh 재사용 401 → 탈퇴 204 → 탈퇴후 로그인
+401 → 탈퇴전 access 401) 을 포함한 통합 테스트 8종 + 단위 테스트가 CI 에서 초록불.
+
+> 참고: 로컬 `./gradlew test`(Testcontainers)는 이 개발 PC(Windows + Docker Desktop 29.x,
+> containerd 이미지 스토어 ON)에서 named pipe `/info` HTTP 400 으로 여전히 실행 불가하다.
+> Docker Desktop 설정에서 "Use containerd for pulling and storing images" 를 끄거나
+> "Allow the default Docker socket to be used" 를 켜면 해소된다. `docker compose`·CI 는 정상.
 
 ## 7. 알려진 이슈 / 제약
 
@@ -237,6 +247,7 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 | `fix(auth): 동시 가입 경합 시 500 대신 409` | `signup`의 존재 선검사와 부분 유니크 인덱스 사이 경합에서 `DataIntegrityViolationException`이 공통 핸들러에 걸려 500이 되던 것을 `EMAIL_ALREADY_REGISTERED`(409)로 변환. 동시 8건 통합 테스트 추가. **§6.3에서 실스택 동시 10건으로 검증 완료.** |
 | `refactor(auth): 카카오 unlink 를 트랜잭션 커밋 이후로 이동` | `withdraw()`가 `@Transactional` 안에서 외부 HTTP(최대 5s)를 호출해 DB 커넥션을 붙잡던 것을 `afterCommit`으로 이동. 탈퇴 성공 의미론은 그대로. |
 | `docs: Phase 0 문서의 프로젝트 경로 수정` | `E:\project\band` → `C:\band\bandApp`. |
+| **R7** `fix(test): 싱글턴 컨테이너로 전환` | `IntegrationTestSupport`가 `@Testcontainers`+`@Container`로 컨테이너를 **클래스마다 start/stop** 했는데, 스프링은 `ApplicationContext`를 **클래스 간에 캐시**한다. 첫 통합 테스트 클래스가 끝나며 컨테이너를 내리면, 캐시된 컨텍스트를 재사용하는 이후 클래스는 죽은 포트를 가리켜 커넥션이 거부됐다(Phase 0은 통합 테스트 클래스가 하나뿐이라 안 드러남 / CI 1차·2차 실패의 원인). 컨테이너를 `static` 블록에서 한 번만 띄우고 JVM 수명 동안 재사용하도록 변경. `@ServiceConnection` → `spring.datasource.*` 명시 주입. |
 
 검토했으나 **의도된 설계로 판단해 두는 것**:
 
@@ -251,11 +262,12 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 
 ### 7.2 그 밖의 제약
 
-- **로컬 `./gradlew test`(Testcontainers) 실행 불가 — Docker 29.x 비호환**: Spring Boot 3.4.1
-  BOM이 Testcontainers를 1.20.4로 고정하는데, 이 버전이 쓰는 `docker-java`가 Docker Engine 28+에서
-  거부되는 요청 헤더를 보내 데몬이 `/info`에 HTTP 400을 준다(`docker`·`docker compose` CLI는 정상).
-  검증은 `docker compose` 수동 확인(§6.3) + CI에 의존한다. Testcontainers 1.20.6+ 로 올리면
-  해소되나 BOM 버전 override라 별도 승인 후 반영 예정. CI(ubuntu-latest)는 호환 Docker라 영향 없음.
+- **로컬 `./gradlew test`(Testcontainers) 실행 불가 — 이 개발 PC 한정**: Windows + Docker Desktop
+  29.x 에서 containerd 이미지 스토어가 켜져 있으면 named pipe `/info` 호출이 HTTP 400 이라
+  Testcontainers 가 Docker 환경을 못 찾는다(`docker`·`docker compose` CLI 는 정상, CI 도 정상).
+  Docker Desktop 설정에서 containerd 이미지 스토어를 끄거나 default socket 허용을 켜면 해소된다.
+  Testcontainers 1.21.3 로 올려도, docker-java 를 3.5.1 로 강제해도 이 400 은 그대로였다
+  (라이브러리가 아니라 Docker Desktop 소켓 설정 문제). 검증은 `docker compose` 수동(§6.3) + CI(§6.4).
 - **카카오 연결 해제 재시도 없음**: 탈퇴 시 카카오 unlink가 실패하면 로그만 남기고 넘어간다.
   자동 재시도 큐는 배치 인프라가 생기는 Phase 9에서 붙인다. 그때까지는 실패 로그를 보고
   수동 대응한다.
@@ -269,16 +281,15 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 
 ## 8. 커밋 · CI
 
-- 브랜치: `phase-1-auth` (2026-08-31 `7a3b7d2`까지 push 완료)
+- 브랜치: `phase-1-auth` → `main` (PR [#1](https://github.com/Yekapark/bandApp/pull/1))
 - 구현 커밋: `3aba760` (Security+JWT 기반) · `299cc09` (User 도메인 + `V1__auth.sql`) ·
   `4d5095e` (이메일·카카오 로그인, 토큰 갱신, 탈퇴, 파기 배치) · `a35bc5b` (테스트) · `9207b7f` (문서)
 - 리뷰·검증 커밋: `1de539e` (동시 가입 409) · `c648e2f` (unlink afterCommit) ·
   `d062510` (Phase 0 문서 경로) · `48122aa` (리뷰 기록) · `5756345` (`bin/` gitignore) ·
-  `033e818` (BUILD_PLAN에 passwordHash) · `7fddfab` (compose 수동 검증 기록) ·
-  `7a3b7d2` (Testcontainers 1.21.3)
-- CI: **아직 미실행.** `ci.yml`은 `main` push / `main` 대상 PR에서만 돈다. `phase-1-auth`를
-  push해도 트리거되지 않으므로, `main` 대상 PR을 열어야 자동 테스트가 실행된다.
-  자동 테스트 통과 판정은 이 CI 결과로 한다 (링크는 실행 후 기입).
+  `033e818` (BUILD_PLAN에 passwordHash) · `7fddfab` (compose 수동 검증) ·
+  `7a3b7d2`→`9dd16c7` (Testcontainers 1.21.3 시도 후 되돌림) · **`82b2890` (싱글턴 컨테이너, R7 — CI 통과의 핵심)**
+- CI: ✅ **통과** — [Actions run 33402109933](https://github.com/Yekapark/bandApp/actions/runs/33402109933)
+  (`82b2890`, `BUILD SUCCESSFUL in 45s`, 31개 테스트 전부 통과). 자동 테스트 통과 판정은 이 결과로 한다.
 
 ## 9. 다음 Phase 예고 — Phase 2 (밴드 · 초대 · 멤버)
 
