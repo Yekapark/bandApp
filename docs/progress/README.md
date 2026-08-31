@@ -21,4 +21,5 @@
 | Phase | 문서 | 상태 |
 |---|---|---|
 | 0 | [phase-00-scaffolding.md](phase-00-scaffolding.md) — 프로젝트 뼈대 | ✅ 완료 |
-| 1 | 인증 (이메일 / 카카오 / JWT / 탈퇴) | 예정 |
+| 1 | [phase-01-auth.md](phase-01-auth.md) — 인증 (이메일 / 카카오 / JWT / 탈퇴) · [사람 잔여작업](phase-01-TODO.md) | ✅ 완료 — CI 통과, `main` 머지 (사람 잔여작업 별도) |
+| 2 | 밴드 · 초대 · 멤버 | 예정 |

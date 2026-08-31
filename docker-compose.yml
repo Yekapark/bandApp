@@ -41,6 +41,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-bandapp}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-}
+      KAKAO_APP_ID: ${KAKAO_APP_ID:-}
+      KAKAO_ADMIN_KEY: ${KAKAO_ADMIN_KEY:-}
     ports:
       - "8080:8080"
     healthcheck:

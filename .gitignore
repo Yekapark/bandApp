@@ -9,6 +9,7 @@ build/
 *.ipr
 *.iws
 .vscode/
+bin/
 
 # OS
 .DS_Store
