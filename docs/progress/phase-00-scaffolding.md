@@ -154,7 +154,8 @@ docker compose up
 프로젝트 폴더(`C:\band\bandApp`)에서 터미널을 열고:
 
 ```bash
-cp .env.example .env          # 최초 1회만
+cp .env.example .env          # 최초 1회만. 이후 .env 의 JWT_SECRET 에 32자 이상 값을 채운다
+                              # (Phase 1 머지 이후로 JWT_SECRET 없이는 앱이 기동하지 않는다)
 docker compose up --build -d  # 빌드 + 3개 컨테이너 백그라운드 실행 (첫 실행은 몇 분)
 
 docker compose ps             # 세 개 모두 STATUS가 "healthy" 인지 확인
