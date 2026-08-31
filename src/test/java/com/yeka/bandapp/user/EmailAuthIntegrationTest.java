@@ -6,6 +6,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class EmailAuthIntegrationTest extends ApiIntegrationTest {
@@ -58,6 +64,32 @@ class EmailAuthIntegrationTest extends ApiIntegrationTest {
         String hash = userRepository.findByEmailAndSocialProviderIsNullAndDeletedAtIsNull("a@band.app")
                 .orElseThrow().getPasswordHash();
         assertThat(hash).startsWith("{bcrypt}").doesNotContain("pw12345678");
+    }
+
+    @Test
+    void concurrent_duplicate_signup_yields_one_created_and_rest_conflict_never_500() throws Exception {
+        int threads = 8;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<Integer>> calls = java.util.Collections.nCopies(threads,
+                    () -> post("/api/v1/auth/signup", SIGNUP).getStatusCode().value());
+            List<Future<Integer>> results = pool.invokeAll(calls);
+
+            List<Integer> codes = results.stream().map(f -> {
+                try {
+                    return f.get();
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }).toList();
+
+            // 선검사와 부분 유니크 인덱스 사이의 경합에서도 500 이 새지 않고, 정확히 하나만 생성된다.
+            assertThat(codes).allSatisfy(c -> assertThat(c).isIn(201, 409));
+            assertThat(codes.stream().filter(c -> c == 201).count()).isEqualTo(1);
+            assertThat(userRepository.existsByEmailAndSocialProviderIsNullAndDeletedAtIsNull("a@band.app")).isTrue();
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test

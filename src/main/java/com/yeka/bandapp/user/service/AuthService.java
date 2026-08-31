@@ -17,6 +17,7 @@ import com.yeka.bandapp.user.kakao.KakaoProperties;
 import com.yeka.bandapp.user.kakao.KakaoTokenInfo;
 import com.yeka.bandapp.user.kakao.KakaoUserInfo;
 import com.yeka.bandapp.user.repository.UserRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,8 +57,15 @@ public class AuthService {
         if (userRepository.existsByEmailAndSocialProviderIsNullAndDeletedAtIsNull(request.email())) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }
-        User user = userRepository.save(User.ofEmail(
-                request.email(), passwordEncoder.encode(request.password()), request.name()));
+        User user;
+        try {
+            user = userRepository.saveAndFlush(User.ofEmail(
+                    request.email(), passwordEncoder.encode(request.password()), request.name()));
+        } catch (DataIntegrityViolationException e) {
+            // 위 선검사와 INSERT 사이의 경합. 부분 유니크 인덱스 ux_users_email_active 가 최종 방어선이고,
+            // 위반은 여기서 409 로 변환한다(변환이 없으면 공통 Exception 핸들러에 걸려 500).
+            throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
+        }
         return AuthResponse.of(user, issue(user.getId()), true);
     }
 
