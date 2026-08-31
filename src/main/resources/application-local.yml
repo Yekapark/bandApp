@@ -2,3 +2,8 @@ management:
   endpoint:
     health:
       show-details: always
+
+app:
+  jwt:
+    # 로컬 개발 전용. 운영에서는 절대 쓰지 않는다 (기본/도커 프로파일에는 기본값이 없다).
+    secret: ${JWT_SECRET:local-only-dev-secret-do-not-use-in-production-0123456789}
