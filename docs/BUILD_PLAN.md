@@ -72,7 +72,9 @@
 ## 3. 도메인 모델
 
 ```
-User { id, email, name, socialProvider, socialId, createdAt, deletedAt }
+User { id, email, passwordHash, name, socialProvider, socialId, createdAt, deletedAt }
+  - passwordHash: 이메일 가입자만 값이 있다(소셜 가입자는 NULL). BCrypt 해시로만 저장한다.
+  - email: 소셜 가입자는 제공 동의가 없으면 NULL일 수 있다.
 
 Band { id, name, leaderId,
        reservationPermission(LEADER_ONLY | ANYONE | APPROVAL_REQUIRED),
