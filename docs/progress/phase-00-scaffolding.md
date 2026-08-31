@@ -151,7 +151,7 @@ docker compose up
 
 ### 방법 A — 전체 스택 실행 (권장, 가장 확실)
 
-프로젝트 폴더(`E:\project\band`)에서 터미널을 열고:
+프로젝트 폴더(`C:\band\bandApp`)에서 터미널을 열고:
 
 ```bash
 cp .env.example .env          # 최초 1회만
