@@ -58,7 +58,48 @@
 `BUILD_PLAN.md` Phase 0의 패키지 경로를 실제 값으로 바꿔야 한다. 나중에 변경하면
 패키지·리포지토리·앱 ID를 모두 손봐야 하므로 시작 전에 정한다.
 
----
+### 1.8 Phase 0·1 코드 리뷰 후속 (2026-08-31)
+
+Phase 1 머지 후 보안·인프라 리뷰에서 나온 항목. `.env.example` 안전화(JWT_SECRET 미설정 시
+부팅 실패)와 Dependabot 추가는 이미 반영됨. 나머지:
+
+**보안 — 배포 전 처리**
+
+- **레이트리밋을 `/api/v1/auth/**` 전체에 적용.** `/login`(무차별 대입), `/signup`·`/login`
+  (이메일 열거), `/kakao`(요청마다 카카오 API 호출), `/refresh`. BUILD_PLAN상 Phase 2에서
+  초대코드 레이트리밋 인프라를 만들 때 **이 4개 엔드포인트도 함께 넣는다** (계정/IP 기준 분당 제한).
+- **운영 프로파일 분리.** `application-docker.yml`의 `management.endpoint.health.show-details: always`가
+  운영에서도 적용되면 `/actuator/health`(비인증)가 DB·Redis 버전, 디스크, SSL 체인을 노출한다.
+  운영은 `when-authorized` 또는 `never`. 별도 `prod` 프로파일 권장.
+- **운영 Redis·Postgres 포트 비공개 + Redis 비밀번호.** 로컬 `docker-compose.yml`은 5432/6379를
+  호스트에 게시하고 Redis에 비밀번호가 없다. 단일 VM에서 이 포트가 열려 있으면 전체 리프레시
+  토큰·차단목록이 노출된다. 운영 compose(Phase 11)에서는 포트를 게시하지 않거나 `127.0.0.1`
+  바인딩하고 Redis `requirepass`를 건다.
+- **로그인 타이밍 기반 계정 열거 방어.** `AuthService.login`은 이메일이 없으면 즉시 반환,
+  있으면 bcrypt(~100ms)를 돈다. 사용자 미발견 시에도 더미 bcrypt를 한 번 수행해 응답 시간을 맞춘다.
+- **사용자당 리프레시 세션 수 상한.** `RefreshTokenStore`의 `auth:refresh:{userId}` 해시에
+  세션이 무제한 쌓인다(로그인 반복 시 메모리 증가). 최신 N개만 유지.
+
+**인프라 · 운영**
+
+- **Spring Boot 버전 상향.** `3.4.1`은 OSS 지원 종료(2025-12-31). `3.4.x` 최신 패치 또는 `3.5.x`로.
+- **CI 액션 상향 + 리포트 업로드.** `actions/*@v4`가 Node 20 폐기 경고. 실패 시 `build/reports`를
+  아티팩트로 올려 CI 로그만으로 원인 파악이 되게.
+- **Dockerfile 하드닝.** 런타임 이미지에서 헬스체크용 `curl` 설치 제거 검토, 베이스 이미지 다이제스트 고정.
+- `main` 브랜치 보호(리뷰·CI 필수), 정적 분석(spotless/checkstyle) 도입은 선택.
+
+**제품 갭 (BUILD_PLAN에 없지만 출시 전 필요)**
+
+- **비밀번호 재설정("비밀번호 찾기") 플로우.** 현재 이메일 계정 사용자가 비번을 분실하면 복구
+  수단이 전혀 없다. 이메일 발송 인프라(Phase 9 알림)와 함께 설계.
+- **이메일 인증(가입 확인 메일)** — 현재 가입 즉시 토큰 발급. 실사용자 서비스면 추후 고려.
+- **애플 로그인** — `users.social_provider` CHECK가 `KAKAO`만 허용. iOS 심사에서 애플 로그인이
+  요구될 수 있으니 확인. 추가 시 마이그레이션 필요.
+
+**개인정보**
+
+- 개인정보처리방침에 **탈퇴 후 90일간 이메일·이름·카카오번호 보관 후 파기** 정책을 명시한다
+  (1.3 페이지에 포함). PIPA 대응.
 
 ## 2. Claude Design 프롬프트
 

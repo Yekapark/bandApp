@@ -109,10 +109,10 @@
 ### 사전 준비
 
 1. Docker Desktop 실행
-2. `.env` 파일에 `JWT_SECRET` 한 줄이 있어야 한다(없으면 앱이 안 뜬다).
-   `.env.example`을 복사해서 쓰면 이미 들어 있다:
+2. `.env` 준비 — **`JWT_SECRET`을 반드시 채워야 앱이 뜬다**(빈 값이면 부팅 실패, 의도된 동작):
    ```bash
    cp .env.example .env
+   # .env 를 열어 JWT_SECRET 에 32자 이상 문자열을 넣는다 (운영: openssl rand -base64 48)
    ```
    (카카오 로그인까지 실제로 확인하려면 `KAKAO_APP_ID`, `KAKAO_ADMIN_KEY`도 채운다.
     안 채워도 이메일 로그인 전 과정은 확인된다.)
@@ -166,7 +166,7 @@ curl -s -o /dev/null -w '%{http_code}\n' $B/v3/api-docs               # → 200
 
 | 증상 | 원인 / 해결 |
 |---|---|
-| 앱 컨테이너가 바로 죽음, 로그에 `JWT secret` 관련 오류 | `.env`에 `JWT_SECRET`이 없음. `cp .env.example .env` |
+| 앱 컨테이너가 바로 죽음, 로그에 `JWT secret` / `jwt.secret` 관련 오류 | `.env`의 `JWT_SECRET`이 비어 있음. 32자 이상 값을 채운다 |
 | 카카오 로그인이 항상 503 | `KAKAO_APP_ID` / `KAKAO_ADMIN_KEY` 미설정. 의도된 동작 |
 | `docker compose up`이 포트 충돌 | 8080/5432/6379를 쓰는 다른 프로세스 종료 |
 
