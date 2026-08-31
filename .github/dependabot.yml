@@ -1,26 +1,37 @@
 version: 2
 updates:
+  # Gradle 의존성 — 마이너/패치만, 메이저는 사람이 의도적으로 올린다.
   - package-ecosystem: gradle
     directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     groups:
-      spring:
-        patterns:
-          - "org.springframework*"
-          - "io.spring.*"
-      test:
-        patterns:
-          - "org.testcontainers*"
-          - "*junit*"
+      gradle-minor-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
 
+  # GitHub Actions — 하나의 PR로 묶어서. 메이저 포함(대체로 안전, CI가 검증).
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
 
+  # Docker 베이스 이미지 — Java 21 LTS 고정이라 메이저(21→25 등)는 무시.
   - package-ecosystem: docker
     directory: "/"
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "eclipse-temurin"
+        update-types:
+          - version-update:semver-major
