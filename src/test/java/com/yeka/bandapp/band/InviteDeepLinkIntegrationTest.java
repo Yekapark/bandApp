@@ -2,7 +2,13 @@ package com.yeka.bandapp.band;
 
 import com.yeka.bandapp.support.ApiIntegrationTest;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,5 +50,20 @@ class InviteDeepLinkIntegrationTest extends ApiIntegrationTest {
         assertThat(res.getStatusCode().value()).isEqualTo(200);
         assertThat(body(res).at("/0/target/package_name").asText()).isEqualTo("com.yeka.bandapp");
         assertThat(body(res).at("/0/target/sha256_cert_fingerprints/0").asText()).isEqualTo("AA:BB:CC");
+    }
+
+    /** produces 를 걸면 여기서 406 이 났다 — 검증 파일 페처가 특이한 Accept 를 보내도 200 이어야 한다. */
+    @Test
+    void well_known_files_ignore_a_restrictive_accept_header() {
+        assertThat(getWithAccept("/.well-known/apple-app-site-association", MediaType.TEXT_PLAIN)
+                .getStatusCode().value()).isEqualTo(200);
+        assertThat(getWithAccept("/.well-known/assetlinks.json", MediaType.APPLICATION_XML)
+                .getStatusCode().value()).isEqualTo(200);
+    }
+
+    private ResponseEntity<String> getWithAccept(String path, MediaType accept) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(List.of(accept));
+        return rest.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), String.class);
     }
 }

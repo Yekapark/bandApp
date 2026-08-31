@@ -65,9 +65,9 @@ Phase 1 머지 후 보안·인프라 리뷰에서 나온 항목. `.env.example` 
 
 **보안 — 배포 전 처리**
 
-- **레이트리밋을 `/api/v1/auth/**` 전체에 적용.** `/login`(무차별 대입), `/signup`·`/login`
-  (이메일 열거), `/kakao`(요청마다 카카오 API 호출), `/refresh`. BUILD_PLAN상 Phase 2에서
-  초대코드 레이트리밋 인프라를 만들 때 **이 4개 엔드포인트도 함께 넣는다** (계정/IP 기준 분당 제한).
+- ~~**레이트리밋을 `/api/v1/auth/**` 전체에 적용.**~~ **완료** — Phase 2(PR #16)에서 `AuthRateLimitInterceptor`로
+  `/api/v1/auth/**`의 POST에 엔드포인트별 IP 분당 제한을 걸었다. 단, IP 판정이 `X-Forwarded-For`를
+  무조건 신뢰해 위조로 우회 가능 → §1.9 참조.
 - **운영 프로파일 분리.** `application-docker.yml`의 `management.endpoint.health.show-details: always`가
   운영에서도 적용되면 `/actuator/health`(비인증)가 DB·Redis 버전, 디스크, SSL 체인을 노출한다.
   운영은 `when-authorized` 또는 `never`. 별도 `prod` 프로파일 권장.
@@ -100,6 +100,40 @@ Phase 1 머지 후 보안·인프라 리뷰에서 나온 항목. `.env.example` 
 
 - 개인정보처리방침에 **탈퇴 후 90일간 이메일·이름·카카오번호 보관 후 파기** 정책을 명시한다
   (1.3 페이지에 포함). PIPA 대응.
+
+### 1.9 Phase 2 코드 리뷰 후속 (2026-09-01)
+
+Phase 2(밴드·초대·멤버, PR #16) 머지 후 리뷰에서 나온 항목. `.well-known` 엔드포인트의
+`produces` 이슈는 이 리뷰 커밋에서 바로 수정함. 나머지:
+
+**보안 — 배포 전 처리**
+
+- **`X-Forwarded-For` 무조건 신뢰.** `common/web/ClientIp`가 XFF 첫 홉을 그대로 클라이언트 IP로
+  쓴다. 그 결과 (1) 초대 참여 레이트리밋과 (2) §1.8에서 넣은 인증 브루트포스 레이트리밋이
+  둘 다 XFF 위조로 우회 가능하고, 피해자 IP를 XFF에 넣어 그 사람의 IP 버킷을 고갈시켜
+  참여를 막는 것도 가능하다. 프록시 없는 환경(로컬)에서는 완전 우회. 조치: 신뢰 프록시 IP에서
+  온 XFF만 사용하거나, `server.forward-headers-strategy` + 신뢰 프록시 목록, 또는 가장 바깥
+  신뢰 홉에서 IP를 추출한다. 운영 Nginx 구성(Phase 11)과 함께 확정.
+- 인증 레이트리밋 버킷 키가 정규화되지 않은 `request.getRequestURI()` 기반이라 `//login` 같은
+  변형으로 별도 버킷을 만들 수 있다(영향은 작음).
+- 초대코드 존재 여부 오라클: 없는 코드는 404, revoked 코드는 410. 코드 공간이 32^8이라 실질
+  위험은 없으나 응답을 통일할지 검토.
+- `POST /api/v1/bands`(밴드 생성)에 레이트리밋이 없다. 인증 사용자가 밴드를 무한 생성 가능.
+
+**제품 갭 (BUILD_PLAN에 없지만 필요)**
+
+- **탈퇴 ↔ 밴드 멤버십 미연동 (가장 큼).** Phase 1 `UserAccountService.withdraw`가 `band_members`를
+  전혀 건드리지 않는다. 밴드장이 탈퇴하면 그 밴드는 유령 밴드장 상태가 되고, 위임은 현 밴드장만
+  호출할 수 있어 아무도 넘겨받지 못해 밴드가 영구 정지된다. 제품 결정 필요: 탈퇴 시 전 밴드 자동
+  탈퇴 + 밴드장인 밴드 자동 처리(위임/해산) / 밴드장인 밴드가 있으면 탈퇴 차단 / 등.
+- **"내가 속한 밴드 목록" API 없음** (`GET /api/v1/bands`). 클라이언트가 어떤 밴드를 보여줄지 알
+  방법이 없다. `ix_band_members_user_active` 인덱스는 이 쿼리를 대비해 만들어 뒀으나 엔드포인트가
+  없다. Phase 3~4 클라이언트 작업 전에 추가 필요.
+
+**테스트 커버리지 갭 (사소)**
+
+- `CANNOT_DELEGATE_TO_SELF`, 위임 대상이 비멤버(`MEMBER_NOT_FOUND`), `maxUses:1` 동시 참여 레이스,
+  `GET .../invites/current`가 없을 때 404 — 미커버.
 
 ## 2. Claude Design 프롬프트
 
