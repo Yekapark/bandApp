@@ -33,10 +33,10 @@ public class RedisRateLimiter {
     public boolean tryAcquire(String bucket, String key, int limitPerMinute) {
         long window = Instant.now().getEpochSecond() / 60;
         String redisKey = KEY_PREFIX + bucket + ':' + key + ':' + window;
+        // SET key 0 EX 120 NX — 키가 없을 때만 값과 TTL을 원자적으로 함께 건다.
+        // 이후 INCR 은 TTL을 건드리지 않으므로, INCR/EXPIRE 사이에 죽어 TTL 없는 좀비 키가 남던 문제가 없다.
+        redis.opsForValue().setIfAbsent(redisKey, "0", WINDOW_TTL);
         Long count = redis.opsForValue().increment(redisKey);
-        if (count != null && count == 1L) {
-            redis.expire(redisKey, WINDOW_TTL);
-        }
         return count != null && count <= limitPerMinute;
     }
 
