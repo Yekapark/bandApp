@@ -6,8 +6,9 @@ import org.springframework.http.ResponseEntity;
 
 /**
  * 일정 통합 테스트 공통 헬퍼. 가입·밴드·초대·합주실 픽스처는 {@link RoomApiSupport} 계열에서 온다.
+ * 다른 도메인(정기 일정 등) 테스트가 일정 픽스처를 재사용하므로 {@code public}이다({@link RoomApiSupport}와 동일).
  */
-abstract class ReservationApiSupport extends RoomApiSupport {
+public abstract class ReservationApiSupport extends RoomApiSupport {
 
     protected static final String T10 = "2026-09-10T10:00:00Z";
     protected static final String T13 = "2026-09-10T13:00:00Z";
