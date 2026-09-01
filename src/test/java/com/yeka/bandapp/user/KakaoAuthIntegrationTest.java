@@ -131,4 +131,26 @@ class KakaoAuthIntegrationTest extends ApiIntegrationTest {
         kakao.willFailUnlinkWith(null);
         assertThat(body(kakaoLogin()).at("/data/newUser").asBoolean()).isTrue();
     }
+
+    /** 카카오 밴드장이 탈퇴하면 밴드 정리(자동 위임)와 카카오 unlink 가 한 트랜잭션에서 함께 일어난다. */
+    @Test
+    void kakao_leader_withdrawal_delegates_leadership_and_still_unlinks() {
+        kakao.willReturnUser("kakao-band-leader", "kl@band.app", "카카오리더");
+        String leader = body(kakaoLogin()).at("/data/tokens/accessToken").asText();
+        String member = body(post("/api/v1/auth/signup",
+                "{\"email\":\"kwd-member@band.app\",\"password\":\"pw12345678\",\"name\":\"멤버\"}"))
+                .at("/data/tokens/accessToken").asText();
+
+        long bandId = body(post("/api/v1/bands", "{\"name\":\"카카오밴드\"}", leader)).at("/data/id").asLong();
+        String code = body(post("/api/v1/bands/" + bandId + "/invites", null, leader)).at("/data/code").asText();
+        assertThat(post("/api/v1/bands/join", "{\"code\":\"" + code + "\"}", member).getStatusCode().value())
+                .isEqualTo(200);
+
+        assertThat(post("/api/v1/users/me/withdraw", "{}", leader).getStatusCode().value()).isEqualTo(204);
+
+        assertThat(kakao.unlinkedIds()).containsExactly("kakao-band-leader");
+        // 멤버가 밴드장으로 승격돼 초대코드를 발급할 수 있다.
+        assertThat(post("/api/v1/bands/" + bandId + "/invites", null, member).getStatusCode().value())
+                .isEqualTo(201);
+    }
 }

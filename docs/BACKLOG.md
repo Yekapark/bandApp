@@ -122,10 +122,12 @@ Phase 2(밴드·초대·멤버, PR #16) 머지 후 리뷰에서 나온 항목. `
 
 **제품 갭 (BUILD_PLAN에 없지만 필요)**
 
-- **탈퇴 ↔ 밴드 멤버십 미연동 (가장 큼).** Phase 1 `UserAccountService.withdraw`가 `band_members`를
-  전혀 건드리지 않는다. 밴드장이 탈퇴하면 그 밴드는 유령 밴드장 상태가 되고, 위임은 현 밴드장만
-  호출할 수 있어 아무도 넘겨받지 못해 밴드가 영구 정지된다. 제품 결정 필요: 탈퇴 시 전 밴드 자동
-  탈퇴 + 밴드장인 밴드 자동 처리(위임/해산) / 밴드장인 밴드가 있으면 탈퇴 차단 / 등.
+- ~~**탈퇴 ↔ 밴드 멤버십 미연동 (가장 큼).**~~ **완료 (2026-09-01, Phase 4 착수 전)** — 지시자 승인으로
+  다음 동작을 `UserAccountService.withdraw` → `BandMemberService.handleAccountWithdrawal`에 넣었다:
+  탈퇴 시 소속 전 밴드에서 자동으로 나간다(탈퇴는 절대 막지 않음 — §1.2). 탈퇴자가 밴드장인 밴드는
+  **가장 먼저 가입한 다른 활성 멤버**를 밴드장으로 자동 승격한다. 다른 멤버가 없으면 그 밴드는
+  활성 멤버 0인 상태로 남는다(`bands`·`rooms` 행은 유지되나 접근 불가라 사실상 소멸). 스키마 변경 없음.
+  같은 트랜잭션이라 밴드 정리 실패 시 탈퇴 전체가 롤백된다.
 - ~~**"내가 속한 밴드 목록" API 없음** (`GET /api/v1/bands`).~~ **완료** — Phase 3에서 추가했다.
   `{id, name, myRole, memberCount, joinedAt}`를 가입순으로 반환하고, 탈퇴한 밴드는 빠진다.
   `ix_band_members_user_active` 인덱스를 탄다.
@@ -164,6 +166,16 @@ Phase 3 PR 후 인증·밴드·초대·합주실 전 경로 점검. **A1~A4·B1~
 - `JwtAuthenticationFilter`가 `BusinessException`만 잡는다. Redis 장애 시 `blocklist.isBlocked`의
   `RedisConnectionFailureException`이 필터 밖으로 나가 모든 인증 요청이 스택트레이스 포함 500.
 - `WithdrawnUserPurgeJob` 분산 락 없음(단일 VM 전제라 지금은 무해, 스케일아웃 시 중복 실행).
+
+**탈퇴↔밴드 정리(§1.9 해결)에 딸린 잔여 엣지**
+
+- **빈 밴드(활성 멤버 0) 누적.** 1인 밴드장이 탈퇴하면 `bands`·`rooms` 행이 남는다(접근 불가라 무해).
+  진짜 빈 밴드를 주기적으로 하드 삭제하는 배치는 별도 과제 — Phase 4의 `Reservation` FK가 붙은 뒤
+  cascade 정책까지 정해서 만든다.
+- **같은 소규모 밴드에서 두 명이 거의 동시에 탈퇴.** A(밴드장)·B가 같은 순간 탈퇴하면, B의 트랜잭션이
+  A의 커밋 전에 B를 MEMBER로 보고 그냥 나가고, A는 B를 밴드장으로 승격하는 식으로 엇갈려 밴드가
+  밴드장 없이 남을 수 있다. 극히 드물고, `delegateLeadership` 동시 호출 레이스(C2)와 같은 계열.
+  필요하면 밴드별 정리에 `SELECT ... FOR UPDATE`로 직렬화.
 
 ## 2. Claude Design 프롬프트
 
