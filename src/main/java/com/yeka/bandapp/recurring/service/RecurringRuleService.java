@@ -92,7 +92,8 @@ public class RecurringRuleService {
         reservationDirectory.createOccurrences(bandId, rule.getRoomId(), userId, rule.getId(),
                 slots, rule.getCost(), rule.getNote());
 
-        List<Reservation> occurrences = reservationDirectory.occurrencesOf(rule.getId());
+        List<Reservation> occurrences = reservationDirectory.occurrencesSince(
+                rule.getId(), displayWindowStart());
         List<Reservation> overlaps = reservationDirectory.overlapsAmong(
                 bandId, rule.getId(), slots, OVERLAP_WARNING_LIMIT);
 
@@ -120,7 +121,8 @@ public class RecurringRuleService {
     public RecurringRuleDetailResponse get(long bandId, long ruleId, long userId) {
         accessGuard.requireActiveMember(bandId, userId);
         RecurringRule rule = activeRule(bandId, ruleId);
-        List<Reservation> occurrences = reservationDirectory.occurrencesOf(rule.getId());
+        List<Reservation> occurrences = reservationDirectory.occurrencesSince(
+                rule.getId(), displayWindowStart());
 
         Set<Long> roomIds = new LinkedHashSet<>();
         roomIds.add(rule.getRoomId());
@@ -135,12 +137,17 @@ public class RecurringRuleService {
 
     /**
      * 규칙 삭제. 등록자 본인 또는 밴드장만. 규칙에 {@code deletedAt}을 찍고, 아직 시작하지 않은
-     * 회차만 {@code CANCELLED}로 바꾼다. 과거·진행 중인 회차는 그대로 둔다(멱등: 이미 삭제된 규칙은 404).
+     * 회차만 {@code CANCELLED}로 바꾼다. 과거·진행 중인 회차는 그대로 둔다.
+     *
+     * <p>대상 규칙 행을 {@code FOR UPDATE}로 잠근다 — 같은 규칙에 대한 동시 DELETE(더블탭·재시도)를
+     * 직렬화해, 미래 회차 취소와 그에 딸린 합주실 {@code usageCount} 감소가 정확히 한 번만 일어나게 한다.
+     * 두 번째 요청은 락을 기다렸다가 이미 삭제된 것을 보고 404({@code RECURRING_RULE_NOT_FOUND}).
      */
     @Transactional
     public void delete(long bandId, long ruleId, long userId) {
         BandMember member = accessGuard.requireActiveMember(bandId, userId);
-        RecurringRule rule = activeRule(bandId, ruleId);
+        RecurringRule rule = ruleRepository.findActiveByIdAndBandIdForUpdate(ruleId, bandId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RECURRING_RULE_NOT_FOUND));
         if (!rule.isCreatedBy(userId) && !member.isLeader()) {
             throw new BusinessException(ErrorCode.NOT_RECURRING_RULE_OWNER);
         }
@@ -162,11 +169,14 @@ public class RecurringRuleService {
      * 규칙 하나의 회차를 지평선까지 이어서 만든다. 이미 만든 마지막 회차 <b>다음</b>부터 계산하므로
      * 여러 번 호출해도 회차 수가 늘지 않는다(멱등). 규칙이 그 사이 삭제됐으면 0.
      *
+     * <p>규칙 행을 {@code FOR UPDATE}로 잠근다 — 연장 도중 사용자가 같은 규칙을 삭제하면,
+     * 소프트 삭제된 규칙에 새 {@code CONFIRMED} 회차가 붙어 고아가 되는 레이스를 막는다.
+     *
      * @return 이번 호출에서 새로 만든 회차 수
      */
     @Transactional
     public int extendRule(long ruleId) {
-        RecurringRule rule = ruleRepository.findById(ruleId).orElse(null);
+        RecurringRule rule = ruleRepository.findByIdForUpdate(ruleId).orElse(null);
         if (rule == null || rule.isDeleted()) {
             return 0;
         }
@@ -181,11 +191,23 @@ public class RecurringRuleService {
 
     // --- 내부 헬퍼 ----------------------------------------------------------
 
-    /** 지평선까지의 회차 중 아직 존재하지 않는 슬롯만. */
+    /**
+     * 생성 대상 슬롯 계산. 회차는 <b>오늘 ± {@code horizonWeeks}</b> 구간에서만 만든다 —
+     * {@code startDate}를 과거로 멀리 잡아도 한 요청에 수백 개 회차를 백필하지 않는다.
+     * 배치({@code extendRule})는 이미 만든 마지막 회차 다음({@code exclusiveAfter})부터 앞으로만
+     * 이어가므로 이 바닥에 걸리지 않는다.
+     */
     private List<OccurrenceSlot> freshSlots(RecurringRule rule, LocalDate exclusiveAfter) {
         ZoneId zone = properties.zoneId();
-        LocalDate horizonEnd = LocalDate.now(zone).plusWeeks(properties.horizonWeeks());
-        List<LocalDate> dates = OccurrenceGenerator.occurrenceDates(rule, horizonEnd, exclusiveAfter);
+        LocalDate today = LocalDate.now(zone);
+        LocalDate horizonEnd = today.plusWeeks(properties.horizonWeeks());
+        // 이 날짜(포함)보다 이전 회차는 만들지 않는다. occurrenceDates 의 exclusiveAfter 는
+        // "이 날짜 다음부터"라, 바닥을 포함시키려면 하루 앞선 값을 넘긴다.
+        LocalDate floorExclusive = today.minusWeeks(properties.horizonWeeks()).minusDays(1);
+        LocalDate effectiveAfter = (exclusiveAfter == null || exclusiveAfter.isBefore(floorExclusive))
+                ? floorExclusive : exclusiveAfter;
+
+        List<LocalDate> dates = OccurrenceGenerator.occurrenceDates(rule, horizonEnd, effectiveAfter);
         if (dates.isEmpty()) {
             return List.of();
         }
@@ -196,6 +218,12 @@ public class RecurringRuleService {
                         OccurrenceGenerator.toInstant(d, rule.getEndTime(), zone)))
                 .filter(slot -> !existing.contains(slot.startAt()))
                 .toList();
+    }
+
+    /** 규칙 상세·등록 응답에 실을 회차의 시작 하한(오늘 − {@code horizonWeeks}, 해당 지역 자정). */
+    private Instant displayWindowStart() {
+        ZoneId zone = properties.zoneId();
+        return LocalDate.now(zone).minusWeeks(properties.horizonWeeks()).atStartOfDay(zone).toInstant();
     }
 
     private void requireRuleCreationAllowed(long bandId, BandMember member) {

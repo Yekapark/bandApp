@@ -48,7 +48,8 @@ public class RecurringRuleController {
                     + "뒤여야 하고(400 INVALID_RECURRING_TIME), endDate 는 startDate 이상이어야 한다(400 "
                     + "INVALID_RECURRING_DATE_RANGE). ANYONE 이 아닌 밴드에서 일반 멤버가 등록하면 403 NOT_BAND_LEADER. "
                     + "다른 밴드/삭제된 roomId 면 404 ROOM_NOT_FOUND. 겹치는 일정이 있어도 201이며 overlaps 에 담긴다. "
-                    + "생성된 회차 수만큼 해당 합주실 usageCount 가 증가한다.")
+                    + "회차는 오늘 ± horizonWeeks(기본 8주) 구간에서만 생성되므로 startDate 를 과거로 멀리 잡아도 "
+                    + "대량 백필되지 않는다. 생성된 회차 수만큼 해당 합주실 usageCount 가 증가한다.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<RecurringRuleWriteResponse> create(@AuthenticationPrincipal AuthPrincipal principal,
@@ -66,7 +67,8 @@ public class RecurringRuleController {
     }
 
     @Operation(summary = "정기 일정 규칙 상세",
-            description = "규칙과 그로부터 만들어진 회차 전체(취소분 포함, 시작 시각 오름차순). 다른 밴드/삭제된 "
+            description = "규칙과 최근 구간(오늘 − horizonWeeks 이후)의 회차(취소분 포함, 시작 시각 오름차순). "
+                    + "그 이전 회차는 GET .../reservations?from=&to= 캘린더 API 로 조회한다. 다른 밴드/삭제된 "
                     + "ruleId 면 404 RECURRING_RULE_NOT_FOUND.")
     @GetMapping("/{ruleId}")
     public ApiResponse<RecurringRuleDetailResponse> get(@AuthenticationPrincipal AuthPrincipal principal,
