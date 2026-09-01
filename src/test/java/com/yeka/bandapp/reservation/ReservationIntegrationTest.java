@@ -4,6 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -339,5 +345,97 @@ class ReservationIntegrationTest extends ReservationApiSupport {
                 "/api/v1/bands/" + aliceBand + "/reservations?from=" + SEP_09 + "&to=" + SEP_11, bob);
         assertThat(crossList.getStatusCode().value()).isEqualTo(403);
         assertThat(errorCode(crossList)).isEqualTo("NOT_BAND_MEMBER");
+    }
+
+    @Test
+    void malformed_date_param_is_400_not_500() {
+        String leader = signup("resv-badparam@band.app", "리더");
+        long bandId = createBand(leader, "쏜애플쓰리");
+
+        ResponseEntity<String> res = get(
+                "/api/v1/bands/" + bandId + "/reservations?from=not-a-date&to=" + SEP_11, leader);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(400);
+        assertThat(errorCode(res)).isEqualTo("INVALID_INPUT");
+    }
+
+    @Test
+    void calendar_range_wider_than_400_days_is_400() {
+        String leader = signup("resv-widerange@band.app", "리더");
+        long bandId = createBand(leader, "새소년쓰리");
+
+        ResponseEntity<String> res = get("/api/v1/bands/" + bandId
+                + "/reservations?from=2026-01-01T00:00:00Z&to=2027-06-01T00:00:00Z", leader);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(400);
+        assertThat(errorCode(res)).isEqualTo("RESERVATION_RANGE_TOO_WIDE");
+    }
+
+    // --- 동시성: 상태 전이·usageCount 증감이 정확히 한 번 -----------------------
+
+    /** 같은 일정을 여러 번 동시에 취소해도 합주실 usageCount 는 1만 줄고, 모두 204. */
+    @Test
+    void concurrent_cancel_decrements_usage_exactly_once() throws Exception {
+        String leader = signup("resv-cc@band.app", "리더");
+        long bandId = createBand(leader, "실리카겔투");
+        setPermission(leader, bandId, "ANYONE");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        assertThat(usageCount(leader, bandId, roomId)).isEqualTo(1);
+
+        int threads = 6;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<Integer>> calls = Collections.nCopies(threads, () ->
+                    delete("/api/v1/bands/" + bandId + "/reservations/" + reservationId, leader)
+                            .getStatusCode().value());
+            List<Integer> codes = pool.invokeAll(calls).stream().map(f -> {
+                try {
+                    return f.get();
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }).toList();
+
+            assertThat(codes).allSatisfy(c -> assertThat(c).isEqualTo(204));
+            assertThat(usageCount(leader, bandId, roomId)).isZero();
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** 같은 대기 일정을 여러 번 동시에 거절해도 정확히 하나만 200, 나머지 409, usageCount 는 1만 줄어든다. */
+    @Test
+    void concurrent_reject_decrements_usage_exactly_once() throws Exception {
+        String leader = signup("resv-cr-l@band.app", "리더");
+        String member = signup("resv-cr-m@band.app", "멤버");
+        long bandId = createBand(leader, "국카스텐쓰리");
+        join(member, issueInvite(leader, bandId, null));
+        setPermission(leader, bandId, "APPROVAL_REQUIRED");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = data(post("/api/v1/bands/" + bandId + "/reservations",
+                reservationBody(roomId, T10, T13), member)).get("reservation").get("id").asLong();
+        assertThat(usageCount(leader, bandId, roomId)).isEqualTo(1);
+
+        int threads = 6;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<Integer>> calls = Collections.nCopies(threads, () ->
+                    post("/api/v1/bands/" + bandId + "/reservations/" + reservationId + "/reject", null, leader)
+                            .getStatusCode().value());
+            List<Integer> codes = pool.invokeAll(calls).stream().map(f -> {
+                try {
+                    return f.get();
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }).toList();
+
+            assertThat(codes).allSatisfy(c -> assertThat(c).isIn(200, 409));
+            assertThat(codes.stream().filter(c -> c == 200).count()).isEqualTo(1);
+            assertThat(usageCount(leader, bandId, roomId)).isZero();
+        } finally {
+            pool.shutdownNow();
+        }
     }
 }

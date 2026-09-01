@@ -317,7 +317,8 @@ GitHub Actions `build` 잡: `./gradlew build --no-daemon` → `Build & test` 통
 테스트 클래스:
 - `reservation/ReservationIntegrationTest` — 완료 기준(권한 3모드·겹침 저장/경고) + 반열림 경계,
   취소된 일정 제외, `usageCount` 증감·취소 멱등·합주실 이동, 수정 권한, 재승인 조건, 취소 후 수정 409,
-  기간 검증, 캘린더 범위·`includeInactive`, 타 밴드 격리(roomId·reservationId·목록)
+  기간 검증, 캘린더 범위·`includeInactive`, 타 밴드 격리(roomId·reservationId·목록).
+  §8.1 후속: 동시 취소/거절이 `usageCount`를 한 번만 깎음, 잘못된 파라미터 400, 400일 초과 조회 400
 - `reservation/ReservationApiSupport` — 일정 픽스처 헬퍼. `RoomApiSupport`를 `public`으로 올려 재사용
 
 ## 7. 알려진 이슈 / 제약
@@ -333,11 +334,10 @@ GitHub Actions `build` 잡: `./gradlew build --no-daemon` → `Build & test` 통
   기록용 도구라는 전제 때문이다.
 - **`cost`는 정산과 아직 연결되지 않는다.** 참고용 숫자일 뿐이고, N빵 계산은 Phase 7에서 `Settlement`가
   별도로 받는다.
-- **일정 개수·기간 길이에 상한이 없다.** 10년짜리 일정도, 밴드당 수만 건도 막지 않는다. 남용 신호가
-  보이면 Phase 8의 레이트리밋 인프라로 추가.
+- **일정 개수·개별 일정 길이에 상한이 없다.** 10년짜리 일정도, 밴드당 수만 건도 막지 않는다(기록용
+  도구라 저장 자체는 거부하지 않는다). 대신 캘린더 조회 기간은 400일로 제한하고, 겹침 경고 목록은
+  20건으로 잘라 응답이 무한정 커지지 않게 한다(§8.1 fix 3). 일정 생성 레이트리밋은 Phase 8로.
 - **`recurring_rule_id`는 컬럼만 있고 안 쓴다.** 정기 일정 생성·회차 관리는 Phase 5 전체가 담당한다.
-- **캘린더 조회는 페이지네이션이 없다.** `from`~`to`를 넓게 잡으면 그 구간 전부를 한 번에 준다.
-  월 단위 조회를 가정한 설계라 당장은 문제없다.
 - Testcontainers 통합 테스트는 이 PC에서 실행 불가 — CI로만 확인.
 
 ## 8. 커밋 · CI
@@ -349,6 +349,21 @@ GitHub Actions `build` 잡: `./gradlew build --no-daemon` → `Build & test` 통
   3. `feat(reservation): 등록·승인·수정·취소·캘린더 조회 API`
   4. `test(reservation): Phase 4 통합 테스트 + 진행 기록`
 - CI: [actions/runs/33488006395](https://github.com/Yekapark/bandApp/actions/runs/33488006395) — pass
+
+### 8.1 머지 후 코드 재검토 후속 수정 (2026-09-01, 별도 PR — Phase 5 시작 전)
+
+PR #22 머지 뒤 Phase 4 전 경로를 다시 훑어 나온 3건을 별도 브랜치 `fix/phase-4-followup`에서 고쳤다.
+
+| # | 문제 | 수정 |
+|---|---|---|
+| 1 | **동시 취소/거절 시 `usageCount` 이중 차감.** 같은 일정에 DELETE(또는 reject)가 병렬로 들어오면 두 트랜잭션이 각자 `CONFIRMED`를 읽고 각자 `-1`을 실행 → 한 번의 논리적 취소에 카운터가 2 감소. | 상태를 바꾸는 명령(승인·거절·수정·취소)이 대상 일정 행을 `SELECT … FOR UPDATE`(`ReservationRepository.findByIdAndBandIdForUpdate`, `@Lock(PESSIMISTIC_WRITE)`)로 잠근다. 두 번째 요청은 락을 기다렸다가 이미 바뀐 상태를 읽어 `cancel()`이 `false`를 반환하거나 `requirePending`이 409를 던진다 → 감소는 정확히 한 번. 합주실 이동 시 두 방 UPDATE는 방 id 오름차순으로 실행해 AB-BA 교착도 피한다(`shiftUsage`). |
+| 2 | **잘못된 쿼리 파라미터 → 500.** `?from=엉터리`, `?includeInactive=huh`, 오프셋 없는 날짜가 `MethodArgumentTypeMismatchException`을 던지는데 `GlobalExceptionHandler`에 매핑이 없어 catch-all이 500으로 처리. Phase 4가 타입 있는 `@RequestParam`을 쓴 첫 엔드포인트라 이제 노출. | `GlobalExceptionHandler`에 `MethodArgumentTypeMismatchException`·`MissingServletRequestParameterException` → `INVALID_INPUT`(400) 핸들러 추가. |
+| 3 | **조회 범위·응답 크기 상한 없음.** `list`가 `from=1970..to=2999`도 그대로 처리하고, 넓은 구간 일정 하나가 모든 캘린더 창·모든 `overlaps`에 걸림. | `list` 조회 기간을 400일로 제한(`RESERVATION_RANGE_TOO_WIDE`, 400). 겹침 경고는 `PageRequest`로 20건까지만 조회. |
+
+검증(`docker compose`, 2026-09-01): fix smoke 스크립트 10개 assertion 전부 PASS —
+`?from=not-a-date` → 400 `INVALID_INPUT`, 범위 401일 → 400 `RESERVATION_RANGE_TOO_WIDE`, 364일 → 200,
+같은 일정 8-스레드 동시 취소 → 전부 204 + `usageCount` 1→0, 8-스레드 동시 거절 → 정확히 1건 200·나머지 409 + `usageCount` 1→0.
+동시성은 통합 테스트(`concurrent_cancel_decrements_usage_exactly_once`, `concurrent_reject_decrements_usage_exactly_once`)로 CI 재검증.
 
 ## 9. 다음 Phase 예고 — Phase 5 (정기 일정)
 
