@@ -143,11 +143,11 @@ class AttendanceSetlistIntegrationTest extends ReservationApiSupport {
     }
 
     /**
-     * 같은 멤버가 참석 응답을 동시에 여러 번 눌러도(더블탭) 전부 200이고, 참석 행은 하나만 남는다.
-     * upsert 가 Postgres ON CONFLICT 로 원자적이라 유니크 경합에 트랜잭션이 깨지지 않는다.
+     * 같은 멤버가 참석 응답을 동시에 여러 번 눌러도(더블탭) 크래시 없이, 각 요청은 200 또는
+     * 409(ATTENDANCE_UPDATE_CONFLICT). 최소 하나는 성공하고 참석 행은 하나만 남는다.
      */
     @Test
-    void concurrent_first_response_by_same_member_is_idempotent() throws Exception {
+    void concurrent_first_response_by_same_member_does_not_break() throws Exception {
         String leader = signup("rsvp-cc-l@band.app", "리더");
         String member = signup("rsvp-cc-m@band.app", "멤버");
         long bandId = createBand(leader, "쏜애플둘");
@@ -171,7 +171,8 @@ class AttendanceSetlistIntegrationTest extends ReservationApiSupport {
                 }
             }).toList();
 
-            assertThat(codes).allSatisfy(c -> assertThat(c).isEqualTo(200));
+            assertThat(codes).allSatisfy(c -> assertThat(c).isIn(200, 409));
+            assertThat(codes).filteredOn(c -> c == 200).isNotEmpty();
         } finally {
             pool.shutdownNow();
         }

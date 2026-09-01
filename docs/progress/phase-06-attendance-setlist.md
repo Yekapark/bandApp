@@ -162,7 +162,7 @@
 
 | 발견 | 심각도 | 조치 |
 |---|---|---|
-| **참석 응답 upsert 가 "조회 → save/flush, 유니크 경합 시 catch 후 재시도"** 방식이었다. flush 실패 후 같은 트랜잭션에서 추가 작업을 하면 트랜잭션이 rollback-only로 오염돼, 같은 멤버의 동시 최초 응답(더블탭)에서 한쪽이 500이 될 수 있었다(CLAUDE.md 규칙 위반). | **중** — 기능 오작동(드묾), 보안 아님 | Postgres `INSERT … ON CONFLICT (reservation_id, user_id) DO UPDATE` 네이티브 upsert로 교체. 한 문장·원자적이라 경합에 트랜잭션이 깨지지 않는다. 동시 더블탭 회귀 테스트 추가(`concurrent_first_response_by_same_member_is_idempotent`) |
+| **참석 응답 upsert 가 "조회 → save/flush, 유니크 경합 시 catch 후 같은 트랜잭션에서 재시도"** 방식이었다. `flush` 실패 후 그 트랜잭션은 rollback-only로 오염되므로 재시도가 무의미하고, 같은 멤버의 동시 최초 응답(더블탭)에서 한쪽이 500이 될 수 있었다(CLAUDE.md "유니크 경합은 도메인 예외로 변환" 규칙 위반). | **중** — 기능 오작동(드묾), 보안 아님 | 행이 있으면 더티 업데이트만(명시적 flush 없음 → 예외 여지 없음), 없으면 INSERT 하고 경합에 진 쪽은 `DataIntegrityViolationException` → 409 `ATTENDANCE_UPDATE_CONFLICT`로 변환(클라이언트 재시도 시 갱신 경로로 처리). 동시 더블탭 회귀 테스트 추가(`concurrent_first_response_by_same_member_does_not_break` — 각 요청 200/409, 최소 1건 성공, 최종 참석 1). |
 | 한 일정의 셋리스트 항목 수에 상한이 없었다(밴드 멤버가 자기 밴드에 대량 등록 → 응답 크기 증가). | 하 | `SetlistService`에 항목 수 상한 300, 초과 시 409 `SETLIST_LIMIT_EXCEEDED`. `ReorderSetlistRequest.itemIds`에 `@Size(max=300)` |
 | **타 밴드 격리** — 모든 엔드포인트가 `requireActiveMember(bandId, …)` + `findByIdAndBandId`로 일정의 밴드 소속을 대조. 경로에 남의 `reservationId`/`itemId`를 끼워도 404. | — | 문제 없음(설계대로) |
 | **본인만 참석 변경** — `PUT .../attendances/{userId}`에서 `{userId}≠요청자`면 403. 성공 경로는 언제나 요청자 본인 id뿐이라, 타인의 참석 행을 만들거나 바꿀 수 없다. | — | 문제 없음 |

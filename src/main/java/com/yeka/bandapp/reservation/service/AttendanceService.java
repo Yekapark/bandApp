@@ -12,6 +12,7 @@ import com.yeka.bandapp.reservation.entity.Reservation;
 import com.yeka.bandapp.reservation.entity.ReservationAttendance;
 import com.yeka.bandapp.reservation.repository.ReservationAttendanceRepository;
 import com.yeka.bandapp.reservation.repository.ReservationRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,7 +81,7 @@ public class AttendanceService {
         if (!reservation.isActive()) {
             throw new BusinessException(ErrorCode.RESERVATION_NOT_EDITABLE);
         }
-        attendanceRepository.upsertResponse(reservationId, callerUserId, status.name(), Instant.now());
+        upsert(reservationId, callerUserId, status);
         return boardFor(bandId, reservationId);
     }
 
@@ -118,6 +119,35 @@ public class AttendanceService {
     }
 
     // --- 내부 헬퍼 -----------------------------------------------------------
+
+    /**
+     * 본인 참석 행 upsert.
+     *
+     * <p>행이 이미 있으면 더티 업데이트만 하고(커밋 시 flush) 끝낸다 — 명시적 flush 를 하지 않아
+     * 예외가 날 여지가 없다.
+     *
+     * <p>행이 없으면(일정 생성 이후 합류한 멤버) INSERT 한다. 같은 멤버의 <b>동시 최초 응답</b>(더블탭)이
+     * 경합하면 {@code (reservation_id, user_id)} 유니크 제약에 걸려 진 쪽은
+     * {@code DataIntegrityViolationException}을 받는다. 이때 같은 트랜잭션에서 복구를 시도하지 않고
+     * ({@code flush} 실패로 트랜잭션이 이미 rollback-only) 도메인 예외(409)로 변환한다 —
+     * 클라이언트가 다시 시도하면 그때는 행이 있어 갱신 경로로 처리된다(CLAUDE.md 규칙).
+     */
+    private void upsert(long reservationId, long userId, AttendanceStatus status) {
+        ReservationAttendance existing = attendanceRepository
+                .findByReservationIdAndUserId(reservationId, userId)
+                .orElse(null);
+        if (existing != null) {
+            existing.respond(status, Instant.now());
+            return;
+        }
+        ReservationAttendance row = ReservationAttendance.pending(reservationId, userId);
+        row.respond(status, Instant.now());
+        try {
+            attendanceRepository.saveAndFlush(row);
+        } catch (DataIntegrityViolationException race) {
+            throw new BusinessException(ErrorCode.ATTENDANCE_UPDATE_CONFLICT);
+        }
+    }
 
     /** 타 밴드의 일정은 존재를 알리지 않고 {@code RESERVATION_NOT_FOUND}. */
     private Reservation requireReservation(long bandId, long reservationId) {
