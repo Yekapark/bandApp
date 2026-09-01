@@ -3,6 +3,7 @@ package com.yeka.bandapp.recurring;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yeka.bandapp.recurring.service.RecurringRuleService;
 import com.yeka.bandapp.reservation.entity.Reservation;
+import com.yeka.bandapp.reservation.repository.ReservationAttendanceRepository;
 import com.yeka.bandapp.reservation.repository.ReservationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,21 @@ class RecurringExtensionJobTest extends RecurringApiSupport {
     @Autowired
     ReservationRepository reservationRepository;
 
+    @Autowired
+    ReservationAttendanceRepository attendanceRepository;
+
+    /**
+     * 회차를 raw 로 하드 삭제해 "아직 안 만든 미래분"을 흉내 낸다. Phase 6 부터 회차마다
+     * PENDING 참석 행이 딸리므로(FK, cascade 없음) 그 자식 행부터 지운다. 운영엔 회차 하드 삭제
+     * 경로가 없다(규칙·회차 삭제는 soft cancel).
+     */
+    private void hardDeleteOccurrences(List<Reservation> occurrences) {
+        for (Reservation r : occurrences) {
+            attendanceRepository.deleteAll(attendanceRepository.findByReservationId(r.getId()));
+        }
+        reservationRepository.deleteAll(occurrences);
+    }
+
     @Test
     void extend_fills_missing_future_occurrences_and_is_idempotent() {
         String leader = signup("rec-job-l@band.app", "리더");
@@ -41,7 +57,7 @@ class RecurringExtensionJobTest extends RecurringApiSupport {
         assertThat(full).isGreaterThanOrEqualTo(4);
 
         // 뒤쪽 3건을 지운다 = "아직 만들지 않은 미래분".
-        reservationRepository.deleteAll(occ.subList(full - 3, full));
+        hardDeleteOccurrences(occ.subList(full - 3, full));
         assertThat(reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId)).hasSize(full - 3);
 
         int created = recurringRuleService.extendRule(ruleId);
@@ -70,7 +86,7 @@ class RecurringExtensionJobTest extends RecurringApiSupport {
         }
 
         int fullCount = occ.size();
-        reservationRepository.deleteAll(occ.subList(fullCount - 1, fullCount));
+        hardDeleteOccurrences(occ.subList(fullCount - 1, fullCount));
         int created = recurringRuleService.extendRule(ruleId);
         assertThat(created).isEqualTo(1);   // 지운 1건만 복구, endDate 너머로는 안 만든다
 
@@ -93,6 +109,7 @@ class RecurringExtensionJobTest extends RecurringApiSupport {
 
         JsonNode occ = ruleDetail(leader, bandId, ruleId).get("occurrences");
         long anyFuture = occ.get(occ.size() - 1).get("id").asLong();
+        attendanceRepository.deleteAll(attendanceRepository.findByReservationId(anyFuture));
         reservationRepository.deleteById(anyFuture);
 
         delete("/api/v1/bands/" + bandId + "/recurring-rules/" + ruleId, leader);
