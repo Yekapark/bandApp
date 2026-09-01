@@ -2,7 +2,10 @@ package com.yeka.bandapp.reservation.repository;
 
 import com.yeka.bandapp.reservation.entity.Reservation;
 import com.yeka.bandapp.reservation.entity.ReservationStatus;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,8 +16,19 @@ import java.util.Optional;
 
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
-    /** 상세·수정·승인용. 경로의 {@code bandId}와 대조해 타 밴드 일정 접근을 차단한다. */
+    /** 상세·목록 조회용(잠금 없음). 경로의 {@code bandId}와 대조해 타 밴드 일정 접근을 차단한다. */
     Optional<Reservation> findByIdAndBandId(Long id, Long bandId);
+
+    /**
+     * 상태를 바꾸는 명령(승인·거절·수정·취소)용 — 행에 {@code PESSIMISTIC_WRITE}(=Postgres {@code SELECT … FOR UPDATE})를
+     * 건다. 같은 일정에 대한 동시 요청(예: 취소 더블탭, 거절과 취소가 겹침)을 직렬화해, 상태 전이가 한 번만
+     * 일어나고 그에 따른 합주실 {@code usageCount} 증감도 한 번만 반영되게 한다.
+     *
+     * <p>트랜잭션 안에서만 호출해야 한다(호출 측 서비스 메서드가 {@code @Transactional}).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from Reservation r where r.id = :id and r.bandId = :bandId")
+    Optional<Reservation> findByIdAndBandIdForUpdate(@Param("id") long id, @Param("bandId") long bandId);
 
     /**
      * 캘린더 조회: 밴드의 일정 중 반열림 구간 {@code [from, to)}와 조금이라도 겹치는 것.
@@ -34,6 +48,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
      *
      * <p>이 결과는 <b>등록/수정을 거부하는 데 쓰지 않는다</b>. 응답에 경고로만 싣는다(BUILD_PLAN 2장 2번).
      * 수정 시 자기 자신이 잡히지 않도록 {@code excludeId}로 제외한다(신규 등록은 존재할 수 없는 값을 넘긴다).
+     * 경고 목록이 무한정 커지지 않도록 호출 측이 {@link Pageable}로 상한을 준다.
      */
     @Query("""
             select r from Reservation r
@@ -46,7 +61,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
              order by r.startAt asc
             """)
     List<Reservation> findOverlapping(@Param("bandId") long bandId,
-                                      @Param("startAt") Instant startAt,
-                                      @Param("endAt") Instant endAt,
-                                      @Param("excludeId") long excludeId);
+                                     @Param("startAt") Instant startAt,
+                                     @Param("endAt") Instant endAt,
+                                     @Param("excludeId") long excludeId,
+                                     Pageable limit);
 }
