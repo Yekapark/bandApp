@@ -316,10 +316,11 @@ endTime <= startTime 로 등록          → 400 INVALID_RECURRING_TIME
 
 배치 연장·격주/월간 간격·타 밴드 격리·멱등성은 통합 테스트에서 CI로 검증한다.
 
-### 6.3 CI — 자동 테스트 (2026-09-01, PR #NN)
+### 6.3 CI — 자동 테스트 (2026-09-01, PR #24)
 
-브랜치 `phase-5-recurring` → `main` [PR #NN](https://github.com/Yekapark/bandApp/pull/NN).
-[actions/runs/NN](https://github.com/Yekapark/bandApp/actions/runs/NN) — <결과 기입>
+브랜치 `phase-5-recurring` → `main` [PR #24](https://github.com/Yekapark/bandApp/pull/24).
+GitHub Actions `build` 잡: `./gradlew build` → `Build & test` **통과** (build in 90s).
+[actions/runs/33512584170](https://github.com/Yekapark/bandApp/actions/runs/33512584170)
 
 테스트 클래스:
 - `recurring/RecurringRuleIntegrationTest` — **완료 기준**(규칙 삭제 시 과거 회차 보존 / 미래만 취소) +
@@ -359,7 +360,7 @@ endTime <= startTime 로 등록          → 400 INVALID_RECURRING_TIME
 
 ## 8. 커밋 · CI
 
-- 브랜치 `phase-5-recurring` → **[PR #NN](https://github.com/Yekapark/bandApp/pull/NN)** (`main` 대상)
+- 브랜치 `phase-5-recurring` → **[PR #24](https://github.com/Yekapark/bandApp/pull/24)** (`main` 대상)
 - 커밋 (기능 단위):
   1. `feat(recurring): recurring_rules 테이블·FK 마이그레이션 (V5)`
   2. `feat(recurring): 반복 규칙 엔티티 + 회차 계산기(주간/격주/월간)`
@@ -373,7 +374,7 @@ endTime <= startTime 로 등록          → 400 INVALID_RECURRING_TIME
   10. `fix(recurring): 규칙 상세·등록 응답 회차를 최근 구간으로 제한 + 중복 인덱스 제거` (§8.1 F3·F5)
   11. `test(recurring): F1~F3 회귀 테스트`
   12. `docs(progress): Phase 5 리뷰 후속(§8.1)`
-- CI: [actions/runs/NN](https://github.com/Yekapark/bandApp/actions/runs/NN) — <결과 기입>
+- CI: [actions/runs/33512584170](https://github.com/Yekapark/bandApp/actions/runs/33512584170) — **통과** (build in 90s)
 
 ### 8.1 리뷰 후속 (2026-09-01, 머지 전 — 같은 브랜치)
 
