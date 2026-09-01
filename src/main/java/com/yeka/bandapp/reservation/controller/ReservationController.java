@@ -3,6 +3,7 @@ package com.yeka.bandapp.reservation.controller;
 import com.yeka.bandapp.common.response.ApiResponse;
 import com.yeka.bandapp.common.security.AuthPrincipal;
 import com.yeka.bandapp.reservation.dto.CreateReservationRequest;
+import com.yeka.bandapp.reservation.dto.ReservationDetailResponse;
 import com.yeka.bandapp.reservation.dto.ReservationListResponse;
 import com.yeka.bandapp.reservation.dto.ReservationResponse;
 import com.yeka.bandapp.reservation.dto.ReservationWriteResponse;
@@ -75,11 +76,13 @@ public class ReservationController {
     }
 
     @Operation(summary = "일정 상세",
-            description = "다른 밴드의 reservationId를 넣으면 존재 여부와 무관하게 404 RESERVATION_NOT_FOUND.")
+            description = "일정 정보에 더해 참석 현황(members: 현재 활성 멤버 전원, 미응답은 PENDING)과 집계"
+                    + "(attendingCount/memberCount), 셋리스트(setlist)를 함께 반환한다. 다른 밴드의 "
+                    + "reservationId를 넣으면 존재 여부와 무관하게 404 RESERVATION_NOT_FOUND.")
     @GetMapping("/{reservationId}")
-    public ApiResponse<ReservationResponse> get(@AuthenticationPrincipal AuthPrincipal principal,
-                                                @PathVariable long bandId,
-                                                @PathVariable long reservationId) {
+    public ApiResponse<ReservationDetailResponse> get(@AuthenticationPrincipal AuthPrincipal principal,
+                                                      @PathVariable long bandId,
+                                                      @PathVariable long reservationId) {
         return ApiResponse.ok(reservationService.get(bandId, reservationId, principal.userId()));
     }
 
