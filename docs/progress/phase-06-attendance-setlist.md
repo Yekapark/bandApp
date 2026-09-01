@@ -153,7 +153,10 @@
   검증은 **CI(GitHub Actions, 자체 Docker)** 에서 이뤄진다.
 - 신규 통합 테스트 `src/test/java/com/yeka/bandapp/reservation/AttendanceSetlistIntegrationTest.java` —
   완료 기준 2건(① 생성 이후 합류 멤버 응답 가능, ② 타인 변경 403) + 초기 PENDING 생성, 상세 응답 내장,
-  취소 일정 응답 거부, 타 밴드 격리, 셋리스트 CRUD·재정렬·권한. **CI 결과로 갱신 예정.**
+  취소 일정 응답 거부, 타 밴드 격리, 셋리스트 CRUD·재정렬·권한.
+- **CI 결과: `./gradlew build` (전체 테스트 포함) BUILD SUCCESSFUL** — PR #25,
+  [run 33515673906](https://github.com/Yekapark/bandApp/actions/runs/33515673906). Phase 0~5 기존
+  테스트도 함께 통과해 `GET /reservations/{id}` 응답 타입 변경(`ReservationDetailResponse`)의 회귀 없음이 확인됐다.
 
 ## 7. 알려진 이슈 / 제약
 
@@ -167,7 +170,8 @@
 ## 8. 커밋 · CI 링크
 
 - 브랜치: `phase-6-attendance-setlist`
-- 커밋 / PR / CI: **작성 예정**
+- PR: [#25](https://github.com/Yekapark/bandApp/pull/25)
+- CI: [run 33515673906](https://github.com/Yekapark/bandApp/actions/runs/33515673906) — ✅ BUILD SUCCESSFUL
 
 ## 9. 다음 Phase 예고
 

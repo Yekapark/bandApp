@@ -26,4 +26,4 @@
 | 3 | [phase-03-room.md](phase-03-room.md) — 합주실 CRUD · 네이버 지오코딩 · 내 밴드 목록 | ✅ 완료 — CI 통과 (PR #18) |
 | 4 | [phase-04-reservation.md](phase-04-reservation.md) — 일정 등록 · 권한 모드별 분기 · 승인/거절 · 겹침 경고 · 캘린더 조회 | ✅ 완료 — CI 통과 (PR #22) |
 | 5 | [phase-05-recurring.md](phase-05-recurring.md) — 정기 일정 규칙 · 회차 자동 생성(주간/격주/월간) · 규칙 삭제 시 미래 회차만 취소 · 회차 연장 배치 | ✅ 완료 — CI 통과 (PR #24) |
-| 6 | [phase-06-attendance-setlist.md](phase-06-attendance-setlist.md) — 참석 체크(RSVP) · 일정 상세의 참석 현황·집계 · 셋리스트 CRUD·재정렬 | 🚧 구현 완료 — CI 검증 대기 |
+| 6 | [phase-06-attendance-setlist.md](phase-06-attendance-setlist.md) — 참석 체크(RSVP) · 일정 상세의 참석 현황·집계 · 셋리스트 CRUD·재정렬 | ✅ 완료 — CI 통과 (PR #25) |
