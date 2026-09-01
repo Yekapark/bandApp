@@ -91,9 +91,10 @@ BandInvite { id, bandId, code, expiresAt, maxUses, usedCount, revoked, createdBy
   - 기본 만료 7일, 재발급 시 기존 코드 revoked 처리
   - createdAt: Phase 2에서 추가(승인됨). 활성 코드 최신순 조회·감사용
 
-Room { id, bandId, name, address, lat, lng, phone, memo, usageCount, createdBy }
+Room { id, bandId, name, address, lat, lng, phone, memo, usageCount, createdBy, createdAt, deletedAt }
   - 밴드별 독립 등록 (여러 밴드가 같은 장소를 각자 등록해도 별개 레코드)
-  - 주소 → 좌표 변환은 네이버 지도 지오코딩 API 사용
+  - 주소 → 좌표 변환은 네이버 지도 지오코딩 API 사용 (실패 시 lat/lng NULL 허용)
+  - deletedAt: Phase 3에서 추가(승인됨). 소프트 삭제 — 삭제 후에도 과거 일정이 합주실 정보를 참조할 수 있어야 한다
 
 Reservation { id, bandId, roomId, requestedBy,
               status(PENDING | CONFIRMED | CANCELLED | REJECTED),
