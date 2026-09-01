@@ -155,6 +155,20 @@ Phase 3 PR 후 인증·밴드·초대·합주실 전 경로 점검. **A1~A4·B1~
   **Phase 11 배포는 반드시 `SPRING_PROFILES_ACTIVE=prod`(또는 `docker,prod`)로 띄워야** 적용된다.
   §1.8의 "운영 프로파일 분리"도 이 파일로 흡수 — 필요한 다른 운영 전용 설정을 여기에 모은다.
 
+**Phase 3 집중 점검(2026-09-01) — 지오코딩**
+
+- ~~**지오코딩 HTTP를 `@Transactional` 안에서 호출** (`RoomService.create`/`update`).~~ **완료** —
+  `create`/`update`에서 `@Transactional` 제거, 지오코딩을 트랜잭션 밖으로. `update`는 엔티티 `merge`
+  대신 `RoomRepository.updateEditableFields` 부분 UPDATE로 써서 동시에 바뀔 수 있는 `usage_count` 보존.
+  재발 방지 규칙을 `CLAUDE.md` 규칙 절에 추가함.
+- ~~네이버 응답 좌표에 `Double.isFinite()`·WGS84 범위 검증 없음.~~ **완료** —
+  `NaverGeocodingClient.isValidWgs84` 가드 추가(비정상 응답이 DB·JSON을 깨뜨리지 않게).
+- **지오코딩 레이트리밋 헛소비(마이너, 미수정).** `RoomService.geocode`가 `NaverProperties.isConfigured()`
+  확인보다 먼저 레이트리밋을 태운다. 현재 배포엔 네이버 키가 없어서, 주소 있는 방을 분당 20개 넘게
+  만들면 429가 난다(지오코딩은 어차피 no-op). 키를 넣을 때 같이 정리하거나 `isConfigured` 선확인.
+- **지오코딩 실패 로그 다듬기(마이너, 미수정).** 네이버 장애 시 방 등록마다 사용자 주소를 WARN +
+  스택트레이스로 남긴다. 로그 스팸·약한 PII. 한 번만 집계 로그로 낮추는 것 검토.
+
 **별도 이슈로 남긴 것 (C절)**
 
 - 잘못된 경로 변수(`/api/v1/bands/abc`)·미존재 라우트·잘못된 HTTP 메서드가 공통 `ApiResponse` 봉투가
