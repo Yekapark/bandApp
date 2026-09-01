@@ -308,10 +308,11 @@ endAt <= startAt 로 등록          → 400 INVALID_RESERVATION_PERIOD
 
 동시성·타 밴드 격리·거절 시 `usageCount` 원복·`includeInactive`는 통합 테스트에서 CI로 검증한다.
 
-### 6.3 CI — 자동 테스트
+### 6.3 CI — 자동 테스트 (2026-09-01, PR #22)
 
-브랜치 `phase-4-reservation` → `main` PR. GitHub Actions `build` 잡 결과로 최종 확인.
-*(PR·runs 링크는 머지 시 갱신)*
+브랜치 `phase-4-reservation` → `main` [PR #22](https://github.com/Yekapark/bandApp/pull/22).
+GitHub Actions `build` 잡: `./gradlew build --no-daemon` → `Build & test` 통과, `build in 1m18s`.
+[actions/runs/33488006395](https://github.com/Yekapark/bandApp/actions/runs/33488006395)
 
 테스트 클래스:
 - `reservation/ReservationIntegrationTest` — 완료 기준(권한 3모드·겹침 저장/경고) + 반열림 경계,
@@ -341,13 +342,13 @@ endAt <= startAt 로 등록          → 400 INVALID_RESERVATION_PERIOD
 
 ## 8. 커밋 · CI
 
-- 브랜치 `phase-4-reservation` → `main` 대상 PR *(번호는 생성 후 기입)*
+- 브랜치 `phase-4-reservation` → **[PR #22](https://github.com/Yekapark/bandApp/pull/22)** (`main` 대상)
 - 커밋 (기능 단위):
   1. `feat(reservation): 일정 도메인 모델 + V4 마이그레이션`
   2. `feat(reservation): 밴드/합주실 참조 창구 + usageCount 증감 쿼리`
-  3. `feat(reservation): 등록·승인·수정·취소·캘린더 조회 API (겹침 경고 포함)`
+  3. `feat(reservation): 등록·승인·수정·취소·캘린더 조회 API`
   4. `test(reservation): Phase 4 통합 테스트 + 진행 기록`
-- CI: *(runs 링크는 실행 후 기입)*
+- CI: [actions/runs/33488006395](https://github.com/Yekapark/bandApp/actions/runs/33488006395) — pass
 
 ## 9. 다음 Phase 예고 — Phase 5 (정기 일정)
 
