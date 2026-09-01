@@ -93,6 +93,28 @@ class EmailAuthIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void email_is_case_insensitive_across_signup_and_login() {
+        assertThat(post("/api/v1/auth/signup",
+                "{\"email\":\"Mixed.Case@Band.APP\",\"password\":\"pw12345678\",\"name\":\"믹스\"}")
+                .getStatusCode().value()).isEqualTo(201);
+
+        // 다른 대소문자로 로그인 → 성공(정규화되어 같은 계정).
+        assertThat(post("/api/v1/auth/login",
+                "{\"email\":\"mixed.case@band.app\",\"password\":\"pw12345678\"}")
+                .getStatusCode().value()).isEqualTo(200);
+
+        // 다른 대소문자로 재가입 → 중복으로 거부.
+        ResponseEntity<String> dup = post("/api/v1/auth/signup",
+                "{\"email\":\"MIXED.CASE@BAND.APP\",\"password\":\"pw12345678\",\"name\":\"믹스2\"}");
+        assertThat(dup.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(dup)).isEqualTo("EMAIL_ALREADY_REGISTERED");
+
+        // 저장된 값은 소문자.
+        assertThat(userRepository.findByEmailAndSocialProviderIsNullAndDeletedAtIsNull("mixed.case@band.app"))
+                .isPresent();
+    }
+
+    @Test
     void withdrawn_email_can_register_again() {
         String access = body(post("/api/v1/auth/signup", SIGNUP)).at("/data/tokens/accessToken").asText();
         assertThat(post("/api/v1/users/me/withdraw", "{\"password\":\"pw12345678\"}", access)
