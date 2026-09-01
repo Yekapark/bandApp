@@ -46,11 +46,13 @@ class AuthLifecycleIntegrationTest extends ApiIntegrationTest {
         String newAccess = body(refreshed).at("/data/accessToken").asText();
         assertThat(newRefresh).isNotEqualTo(refresh);
 
-        // 5. 이전 refresh 재사용 → 401
-        ResponseEntity<String> reused = post("/api/v1/auth/refresh",
+        // 5. 방금 쓴 refresh 를 곧바로 재요청(네트워크 재시도·더블탭) → 유예창 안에서는 같은 결과를 다시 준다(멱등).
+        //    전 세션 로그아웃이 아니다 — 6·8단계가 4단계 토큰으로 계속 진행된다.
+        ResponseEntity<String> retried = post("/api/v1/auth/refresh",
                 "{\"refreshToken\":\"" + refresh + "\"}");
-        assertThat(reused.getStatusCode().value()).isEqualTo(401);
-        assertThat(errorCode(reused)).isEqualTo("REFRESH_TOKEN_INVALID");
+        assertThat(retried.getStatusCode().value()).isEqualTo(200);
+        assertThat(body(retried).at("/data/refreshToken").asText()).isEqualTo(newRefresh);
+        assertThat(body(retried).at("/data/accessToken").asText()).isEqualTo(newAccess);
 
         // 6. 탈퇴 → 204
         ResponseEntity<String> withdraw = post("/api/v1/users/me/withdraw",

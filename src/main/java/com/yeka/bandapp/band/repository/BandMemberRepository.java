@@ -15,5 +15,10 @@ public interface BandMemberRepository extends JpaRepository<BandMember, Long> {
 
     List<BandMember> findByBandIdAndLeftAtIsNullOrderByJoinedAtAsc(Long bandId);
 
+    /** "내가 속한 밴드 목록"용. {@code ix_band_members_user_active} 부분 인덱스를 탄다. */
+    List<BandMember> findByUserIdAndLeftAtIsNullOrderByJoinedAtAsc(Long userId);
+
     long countByBandIdAndRoleAndLeftAtIsNull(Long bandId, BandMemberRole role);
+
+    long countByBandIdAndLeftAtIsNull(Long bandId);
 }

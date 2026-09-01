@@ -3,6 +3,7 @@ package com.yeka.bandapp.band.controller;
 import com.yeka.bandapp.band.dto.BandResponse;
 import com.yeka.bandapp.band.dto.CreateBandRequest;
 import com.yeka.bandapp.band.dto.DelegateLeadershipRequest;
+import com.yeka.bandapp.band.dto.MyBandListResponse;
 import com.yeka.bandapp.band.dto.UpdateBandSettingsRequest;
 import com.yeka.bandapp.band.service.BandMemberService;
 import com.yeka.bandapp.band.service.BandService;
@@ -38,6 +39,12 @@ public class BandController {
     public ApiResponse<BandResponse> create(@AuthenticationPrincipal AuthPrincipal principal,
                                             @Valid @RequestBody CreateBandRequest request) {
         return ApiResponse.ok(bandService.create(principal.userId(), request));
+    }
+
+    /** 내가 속한 밴드 목록. 클라이언트의 밴드 스위처용. */
+    @GetMapping
+    public ApiResponse<MyBandListResponse> listMine(@AuthenticationPrincipal AuthPrincipal principal) {
+        return ApiResponse.ok(bandService.listMine(principal.userId()));
     }
 
     @GetMapping("/{bandId}")

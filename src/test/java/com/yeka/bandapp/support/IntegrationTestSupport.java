@@ -58,6 +58,9 @@ public abstract class IntegrationTestSupport {
         registry.add("app.jwt.refresh-token-ttl", () -> "P14D");
         registry.add("app.kakao.app-id", () -> "999999");
         registry.add("app.kakao.admin-key", () -> "test-admin-key");
+        // 네이버 지오코딩: 실제 호출은 FakeGeocodingClient 가 대체하므로 값은 형식만 맞추면 된다.
+        registry.add("app.naver.client-id", () -> "test-ncp-id");
+        registry.add("app.naver.client-secret", () -> "test-ncp-secret");
         // 통합 테스트 중 파기 배치가 끼어들지 않도록 비활성화한다("-").
         registry.add("app.withdrawal.purge-cron", () -> "-");
         // 초대 딥링크: 링크·검증 파일의 값을 고정해 assertion 을 쓸 수 있게 한다.
@@ -70,5 +73,6 @@ public abstract class IntegrationTestSupport {
         registry.add("app.ratelimit.invite-join-per-user-per-min", () -> "10");
         registry.add("app.ratelimit.invite-join-per-ip-per-min", () -> "10");
         registry.add("app.ratelimit.auth-per-ip-per-min", () -> "30");
+        registry.add("app.ratelimit.geocode-per-user-per-min", () -> "10");
     }
 }

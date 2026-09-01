@@ -1,6 +1,7 @@
 package com.yeka.bandapp.common.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.boot.actuate.info.InfoEndpoint;
@@ -35,7 +36,9 @@ public class SecurityConfig {
                                             JwtAuthenticationFilter jwtAuthenticationFilter,
                                             RestAuthenticationEntryPoint authenticationEntryPoint,
                                             RestAccessDeniedHandler accessDeniedHandler,
-                                            CorsConfigurationSource corsConfigurationSource) throws Exception {
+                                            CorsConfigurationSource corsConfigurationSource,
+                                            @Value("${springdoc.api-docs.enabled:true}") boolean apiDocsExposed)
+            throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
@@ -43,13 +46,18 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(EndpointRequest.to(HealthEndpoint.class, InfoEndpoint.class)).permitAll()
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        // 초대 딥링크: 랜딩 페이지와 Universal Link / App Link 검증 파일은 무인증.
-                        .requestMatchers(HttpMethod.GET, "/invite/**", "/.well-known/**").permitAll()
-                        .anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers(EndpointRequest.to(HealthEndpoint.class, InfoEndpoint.class)).permitAll();
+                    // springdoc 이 켜진 프로파일(로컬·docker)에서만 명세를 무인증 공개한다. prod 에서는 꺼져 있어
+                    // 이 경로들이 등록되지도, 열리지도 않는다.
+                    if (apiDocsExposed) {
+                        auth.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll();
+                    }
+                    auth.requestMatchers("/api/v1/auth/**").permitAll()
+                            // 초대 딥링크: 랜딩 페이지와 Universal Link / App Link 검증 파일은 무인증.
+                            .requestMatchers(HttpMethod.GET, "/invite/**", "/.well-known/**").permitAll()
+                            .anyRequest().authenticated();
+                })
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))

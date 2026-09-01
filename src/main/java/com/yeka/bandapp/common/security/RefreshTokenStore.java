@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 
 /**
  * refresh 토큰 세션 저장소 (Redis Hash).
@@ -22,6 +23,14 @@ import java.time.Instant;
 public class RefreshTokenStore {
 
     private static final String KEY_PREFIX = "auth:refresh:";
+    private static final String REPLAY_PREFIX = "auth:refresh:replay:";
+
+    /**
+     * refresh 회전 직후, 방금 소비된 토큰(jti)에 대해 그 회전이 돌려준 응답을 이만큼 보관한다.
+     * 네트워크 재시도·더블탭·탭 중복이 같은 토큰을 다시 보내도 전 세션 로그아웃 대신 같은 응답을 받게 한다.
+     * 이 창을 넘겨 오는 옛 토큰은 여전히 "재사용"으로 간주된다.
+     */
+    static final Duration ROTATION_REPLAY_GRACE = Duration.ofSeconds(60);
 
     private final StringRedisTemplate redis;
 
@@ -57,7 +66,24 @@ public class RefreshTokenStore {
         redis.delete(key(userId));
     }
 
+    /**
+     * 방금 회전에 성공한 토큰(jti)에 대해 그 회전 결과({@code payload})를 {@link #ROTATION_REPLAY_GRACE} 동안 보관.
+     * 같은 옛 토큰이 그 창 안에 다시 오면 {@link #recallRotation}로 같은 응답을 돌려줄 수 있다.
+     */
+    public void rememberRotation(long userId, String consumedJti, String payload) {
+        redis.opsForValue().set(replayKey(userId, consumedJti), payload, ROTATION_REPLAY_GRACE);
+    }
+
+    /** {@link #rememberRotation}로 저장해 둔 회전 결과. 창이 지났거나 없으면 empty. */
+    public Optional<String> recallRotation(long userId, String consumedJti) {
+        return Optional.ofNullable(redis.opsForValue().get(replayKey(userId, consumedJti)));
+    }
+
     private String key(long userId) {
         return KEY_PREFIX + userId;
+    }
+
+    private String replayKey(long userId, String jti) {
+        return REPLAY_PREFIX + userId + ':' + jti;
     }
 }

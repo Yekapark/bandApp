@@ -23,4 +23,4 @@
 | 0 | [phase-00-scaffolding.md](phase-00-scaffolding.md) — 프로젝트 뼈대 | ✅ 완료 |
 | 1 | [phase-01-auth.md](phase-01-auth.md) — 인증 (이메일 / 카카오 / JWT / 탈퇴) · [사람 잔여작업](phase-01-TODO.md) | ✅ 완료 — CI 통과, `main` 머지 (사람 잔여작업 별도) |
 | 2 | [phase-02-band.md](phase-02-band.md) — 밴드 · 초대 · 멤버 · 딥링크 · 레이트리밋 | ✅ 완료 — CI 통과, `main` 머지 (PR #16) |
-| 3 | 합주실 (Room) | 예정 |
+| 3 | [phase-03-room.md](phase-03-room.md) — 합주실 CRUD · 네이버 지오코딩 · 내 밴드 목록 | ✅ 완료 — CI 통과 (PR #18) |

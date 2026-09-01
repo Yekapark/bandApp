@@ -126,14 +126,44 @@ Phase 2(밴드·초대·멤버, PR #16) 머지 후 리뷰에서 나온 항목. `
   전혀 건드리지 않는다. 밴드장이 탈퇴하면 그 밴드는 유령 밴드장 상태가 되고, 위임은 현 밴드장만
   호출할 수 있어 아무도 넘겨받지 못해 밴드가 영구 정지된다. 제품 결정 필요: 탈퇴 시 전 밴드 자동
   탈퇴 + 밴드장인 밴드 자동 처리(위임/해산) / 밴드장인 밴드가 있으면 탈퇴 차단 / 등.
-- **"내가 속한 밴드 목록" API 없음** (`GET /api/v1/bands`). 클라이언트가 어떤 밴드를 보여줄지 알
-  방법이 없다. `ix_band_members_user_active` 인덱스는 이 쿼리를 대비해 만들어 뒀으나 엔드포인트가
-  없다. Phase 3~4 클라이언트 작업 전에 추가 필요.
+- ~~**"내가 속한 밴드 목록" API 없음** (`GET /api/v1/bands`).~~ **완료** — Phase 3에서 추가했다.
+  `{id, name, myRole, memberCount, joinedAt}`를 가입순으로 반환하고, 탈퇴한 밴드는 빠진다.
+  `ix_band_members_user_active` 인덱스를 탄다.
 
 **테스트 커버리지 갭 (사소)**
 
 - `CANNOT_DELEGATE_TO_SELF`, 위임 대상이 비멤버(`MEMBER_NOT_FOUND`), `maxUses:1` 동시 참여 레이스,
   `GET .../invites/current`가 없을 때 404 — 미커버.
+
+### 1.10 Phase 0~3 전체 점검 후속 (2026-09-01)
+
+Phase 3 PR 후 인증·밴드·초대·합주실 전 경로 점검. **A1~A4·B1~B3은 이 브랜치에서 바로 수정함.**
+아래는 그 수정에 딸린 잔여 메모와, 별도 이슈로 남긴 것.
+
+**수정에 딸린 잔여 작업**
+
+- **이메일 소문자 마이그레이션.** B2에서 `signup`/`login`이 이메일을 `trim().toLowerCase`로 정규화하도록
+  고쳤다. 운영 데이터가 쌓인 뒤라면 기존 행 소문자화 Flyway 마이그레이션이 필요하다
+  (`UPDATE users SET email = lower(email) ...` — 대소문자만 다른 중복 행이 있으면 유니크 인덱스 충돌하므로
+  선정리 필요). 지금은 데이터가 없어 코드 정규화만.
+- **refresh 회전 재시도 캐시(A2).** 60초 동안 `auth:refresh:replay:{userId}:{jti}`에 발급 토큰 문자열을
+  보관한다. Redis가 유출되면 그 60초 창의 토큰이 노출된다 — §1.8의 "운영 Redis 비밀번호·포트 비공개"와
+  함께 처리하면 실질 위험 없음. 창 길이는 `RefreshTokenStore.ROTATION_REPLAY_GRACE`.
+- **prod 프로파일.** B1에서 `application-prod.yml`을 추가했다(springdoc off, actuator health `never`).
+  **Phase 11 배포는 반드시 `SPRING_PROFILES_ACTIVE=prod`(또는 `docker,prod`)로 띄워야** 적용된다.
+  §1.8의 "운영 프로파일 분리"도 이 파일로 흡수 — 필요한 다른 운영 전용 설정을 여기에 모은다.
+
+**별도 이슈로 남긴 것 (C절)**
+
+- 잘못된 경로 변수(`/api/v1/bands/abc`)·미존재 라우트·잘못된 HTTP 메서드가 공통 `ApiResponse` 봉투가
+  아니라 스프링 기본 `/error` 형식으로 응답한다. `GlobalExceptionHandler`에 `MethodArgumentTypeMismatch`
+  등 핸들러 추가 또는 `ResponseEntityExceptionHandler` 상속.
+- `delegateLeadership`·`issue` 동일인 더블서브밋 시 `DataIntegrityViolationException` → 500(드묾, 자기 유발).
+- `maxUses:N` 초대코드를 한 사람이 join↔leave 반복으로 소진 가능. `usedCount`는 "성공한 참여 수"라
+  현재 멤버 수가 아님 — 의도면 문서화.
+- `JwtAuthenticationFilter`가 `BusinessException`만 잡는다. Redis 장애 시 `blocklist.isBlocked`의
+  `RedisConnectionFailureException`이 필터 밖으로 나가 모든 인증 요청이 스택트레이스 포함 500.
+- `WithdrawnUserPurgeJob` 분산 락 없음(단일 VM 전제라 지금은 무해, 스케일아웃 시 중복 실행).
 
 ## 2. Claude Design 프롬프트
 

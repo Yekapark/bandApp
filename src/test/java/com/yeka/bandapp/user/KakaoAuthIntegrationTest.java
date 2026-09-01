@@ -5,11 +5,19 @@ import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.support.ApiIntegrationTest;
 import com.yeka.bandapp.support.FakeKakaoClient;
 import com.yeka.bandapp.support.KakaoTestConfig;
+import com.yeka.bandapp.user.entity.SocialProvider;
+import com.yeka.bandapp.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.ResponseEntity;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,6 +26,9 @@ class KakaoAuthIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     FakeKakaoClient kakao;
+
+    @Autowired
+    UserRepository userRepository;
 
     @BeforeEach
     void resetKakao() {
@@ -40,6 +51,33 @@ class KakaoAuthIntegrationTest extends ApiIntegrationTest {
         ResponseEntity<String> second = kakaoLogin();
         assertThat(body(second).at("/data/newUser").asBoolean()).isFalse();
         assertThat(body(second).at("/data/user/id").asLong()).isEqualTo(firstId);
+    }
+
+    @Test
+    void concurrent_first_login_of_one_account_never_500() throws Exception {
+        kakao.willReturnUser("kakao-race-1", "race@band.app", "레이스");
+
+        int threads = 6;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<Integer>> calls = Collections.nCopies(threads,
+                    () -> kakaoLogin().getStatusCode().value());
+            List<Integer> codes = pool.invokeAll(calls).stream()
+                    .map(f -> {
+                        try {
+                            return f.get();
+                        } catch (Exception e) {
+                            throw new IllegalStateException(e);
+                        }
+                    }).toList();
+
+            // ux_users_social_active 경합에서도 500 이 새지 않는다 — 한 요청이 만들고 나머지는 그 계정으로 이어간다.
+            assertThat(codes).allSatisfy(c -> assertThat(c).isEqualTo(200));
+            assertThat(userRepository.findBySocialProviderAndSocialIdAndDeletedAtIsNull(
+                    SocialProvider.KAKAO, "kakao-race-1")).isPresent();
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test

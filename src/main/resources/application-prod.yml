@@ -1,0 +1,15 @@
+# 운영 프로파일. 배포(Phase 11)에서 SPRING_PROFILES_ACTIVE=prod 로 띄운다.
+# 로컬 docker compose 개발은 여전히 docker 프로파일이며 아래 제약을 받지 않는다.
+
+springdoc:
+  # API 명세·Swagger UI 를 무인증 공개하지 않는다. 끄면 엔드포인트 자체가 등록되지 않는다.
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoint:
+    health:
+      # 비인증 /actuator/health 가 DB·Redis 버전, 디스크, SSL 체인을 노출하지 않도록.
+      show-details: never

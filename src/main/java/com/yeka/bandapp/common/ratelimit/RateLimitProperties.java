@@ -9,7 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record RateLimitProperties(
         int inviteJoinPerUserPerMin,
         int inviteJoinPerIpPerMin,
-        int authPerIpPerMin
+        int authPerIpPerMin,
+        int geocodePerUserPerMin
 ) {
     public RateLimitProperties {
         if (inviteJoinPerUserPerMin <= 0) {
@@ -20,6 +21,9 @@ public record RateLimitProperties(
         }
         if (authPerIpPerMin <= 0) {
             authPerIpPerMin = 20;
+        }
+        if (geocodePerUserPerMin <= 0) {
+            geocodePerUserPerMin = 20;
         }
     }
 }

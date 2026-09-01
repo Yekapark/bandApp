@@ -35,7 +35,11 @@ management:
         enabled: true
 
 springdoc:
+  # 운영에서는 prod 프로파일이 이 둘을 false 로 덮어 API 명세 노출을 막는다(application-prod.yml).
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:true}
   swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:true}
     path: /swagger-ui.html
 
 app:
@@ -48,6 +52,12 @@ app:
     api-base-url: https://kapi.kakao.com
     app-id: ${KAKAO_APP_ID:}
     admin-key: ${KAKAO_ADMIN_KEY:}
+    connect-timeout: PT2S
+    read-timeout: PT3S
+  naver:
+    api-base-url: https://maps.apigw.ntruss.com                 # NCP 콘솔이 안내하는 주소로 코드 수정 없이 교체 가능
+    client-id: ${NAVER_MAP_CLIENT_ID:}                          # 비우면 지오코딩만 건너뛰고 좌표 없이 등록된다
+    client-secret: ${NAVER_MAP_CLIENT_SECRET:}
     connect-timeout: PT2S
     read-timeout: PT3S
   withdrawal:
@@ -68,3 +78,4 @@ app:
     invite-join-per-user-per-min: ${RL_INVITE_JOIN_USER:10}
     invite-join-per-ip-per-min: ${RL_INVITE_JOIN_IP:20}
     auth-per-ip-per-min: ${RL_AUTH_IP:20}
+    geocode-per-user-per-min: ${RL_GEOCODE_USER:20}         # 합주실 등록/수정 시 네이버 지오코딩 호출 계정당 분당 상한
