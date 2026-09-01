@@ -1,6 +1,9 @@
 package com.yeka.bandapp.band.controller;
 
 import com.yeka.bandapp.band.DeeplinkProperties;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +32,10 @@ import java.util.regex.Pattern;
  * 깨지지 않게 하기 위함이다. {@link ResponseEntity} 에 구체 Content-Type 을 지정하면
  * Accept 협상을 건너뛰고 그 타입으로 직렬화한다.
  */
+@Tag(name = "7. 초대 딥링크(무인증 웹)",
+        description = "브라우저·OS가 여는 무인증 표면 — 초대 링크 랜딩 페이지와 iOS/Android 링크 검증 파일. "
+                + "앱/서버 코드가 직접 호출할 일은 없다.")
+@SecurityRequirements
 @RestController
 public class InviteLandingController {
 
@@ -40,6 +47,9 @@ public class InviteLandingController {
         this.properties = properties;
     }
 
+    @Operation(summary = "초대 링크 랜딩 페이지",
+            description = "공유된 초대 링크(/invite/{code})를 브라우저로 열었을 때의 HTML. 앱이 있으면 앱을 열고, "
+                    + "없으면 스토어로 유도한다. 코드 형식이 아니면 404.")
     @GetMapping("/invite/{code}")
     public ResponseEntity<String> landing(@PathVariable String code) {
         if (!CODE.matcher(code).matches()) {
@@ -50,6 +60,8 @@ public class InviteLandingController {
                 .body(renderLanding(code));
     }
 
+    @Operation(summary = "iOS Universal Link 검증 파일 (AASA)",
+            description = "iOS가 앱 연결을 확인할 때 읽는 JSON. 서버 설정값으로 만들어진다.")
     @GetMapping("/.well-known/apple-app-site-association")
     public ResponseEntity<Map<String, Object>> appleAppSiteAssociation() {
         Map<String, Object> body = Map.of("applinks", Map.of(
@@ -60,6 +72,8 @@ public class InviteLandingController {
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(body);
     }
 
+    @Operation(summary = "Android App Link 검증 파일 (assetlinks)",
+            description = "Android가 앱 연결을 확인할 때 읽는 JSON. 서버 설정값으로 만들어진다.")
     @GetMapping("/.well-known/assetlinks.json")
     public ResponseEntity<List<Map<String, Object>>> assetLinks() {
         List<Map<String, Object>> body = List.of(Map.of(
