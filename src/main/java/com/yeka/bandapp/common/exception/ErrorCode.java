@@ -49,7 +49,15 @@ public enum ErrorCode {
     // 합주실 (Phase 3)
     // 지오코딩 실패는 예외가 아니다(좌표 없이 등록 성공) — 그래서 에러코드가 없다.
     ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "합주실을 찾을 수 없습니다."),
-    ROOM_NAME_DUPLICATED(HttpStatus.CONFLICT, "같은 이름의 합주실이 이미 있습니다.");
+    ROOM_NAME_DUPLICATED(HttpStatus.CONFLICT, "같은 이름의 합주실이 이미 있습니다."),
+
+    // 일정 (Phase 4)
+    // 시간대 겹침은 예외가 아니다(경고만 하고 등록은 성공) — 그래서 에러코드가 없다.
+    RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "일정을 찾을 수 없습니다."),
+    INVALID_RESERVATION_PERIOD(HttpStatus.BAD_REQUEST, "종료 시각은 시작 시각보다 뒤여야 합니다."),
+    NOT_RESERVATION_OWNER(HttpStatus.FORBIDDEN, "등록자 본인 또는 밴드장만 할 수 있는 작업입니다."),
+    RESERVATION_NOT_PENDING(HttpStatus.CONFLICT, "승인 대기 중인 일정이 아닙니다."),
+    RESERVATION_NOT_EDITABLE(HttpStatus.CONFLICT, "취소·거절된 일정은 수정할 수 없습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

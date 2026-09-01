@@ -24,3 +24,4 @@
 | 1 | [phase-01-auth.md](phase-01-auth.md) — 인증 (이메일 / 카카오 / JWT / 탈퇴) · [사람 잔여작업](phase-01-TODO.md) | ✅ 완료 — CI 통과, `main` 머지 (사람 잔여작업 별도) |
 | 2 | [phase-02-band.md](phase-02-band.md) — 밴드 · 초대 · 멤버 · 딥링크 · 레이트리밋 | ✅ 완료 — CI 통과, `main` 머지 (PR #16) |
 | 3 | [phase-03-room.md](phase-03-room.md) — 합주실 CRUD · 네이버 지오코딩 · 내 밴드 목록 | ✅ 완료 — CI 통과 (PR #18) |
+| 4 | [phase-04-reservation.md](phase-04-reservation.md) — 일정 등록 · 권한 모드별 분기 · 승인/거절 · 겹침 경고 · 캘린더 조회 | ✅ CI 통과, 머지 대기 (PR #22) |
