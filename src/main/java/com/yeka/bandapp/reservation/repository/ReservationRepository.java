@@ -65,4 +65,41 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                                      @Param("endAt") Instant endAt,
                                      @Param("excludeId") long excludeId,
                                      Pageable limit);
+
+    // --- 정기 일정(Phase 5) 회차 관리 -----------------------------------------
+
+    /** 규칙 상세·검증용. 취소된 회차도 포함해 start_at 오름차순. */
+    List<Reservation> findByRecurringRuleIdOrderByStartAtAsc(Long recurringRuleId);
+
+    /** 배치가 "이 시각 다음부터" 이어 만들도록, 규칙의 마지막 회차(상태 무관)를 준다. */
+    Optional<Reservation> findFirstByRecurringRuleIdOrderByStartAtDesc(Long recurringRuleId);
+
+    /** 규칙이 이미 만든 회차 시작 시각들(상태 무관). 재생성 시 이미 있는 슬롯을 걸러내는 데 쓴다. */
+    @Query("select r.startAt from Reservation r where r.recurringRuleId = :ruleId")
+    List<Instant> findOccurrenceStarts(@Param("ruleId") long recurringRuleId);
+
+    /** 규칙 삭제 시 취소 대상 — 아직 시작하지 않았고 살아 있는(PENDING·CONFIRMED) 회차. */
+    List<Reservation> findByRecurringRuleIdAndStartAtGreaterThanEqualAndStatusIn(
+            Long recurringRuleId, Instant from, Collection<ReservationStatus> statuses);
+
+    /**
+     * 정기 규칙 등록 응답의 겹침 경고용: 같은 밴드의 살아 있는 일정 중 주어진 구간과 겹치되
+     * <b>이 규칙이 만든 회차는 제외한</b> 것. 나머지 규칙은 여전히 서로의 겹침을 막지 않는다 —
+     * 경고로만 싣는다(BUILD_PLAN 2장 2번).
+     */
+    @Query("""
+            select r from Reservation r
+             where r.bandId = :bandId
+               and r.status in (com.yeka.bandapp.reservation.entity.ReservationStatus.PENDING,
+                                com.yeka.bandapp.reservation.entity.ReservationStatus.CONFIRMED)
+               and (r.recurringRuleId is null or r.recurringRuleId <> :excludeRuleId)
+               and r.startAt < :endAt
+               and r.endAt > :startAt
+             order by r.startAt asc
+            """)
+    List<Reservation> findOverlappingExcludingRule(@Param("bandId") long bandId,
+                                                   @Param("startAt") Instant startAt,
+                                                   @Param("endAt") Instant endAt,
+                                                   @Param("excludeRuleId") long excludeRuleId,
+                                                   Pageable limit);
 }

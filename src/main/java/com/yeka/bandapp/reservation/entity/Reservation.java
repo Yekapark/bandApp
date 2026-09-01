@@ -86,6 +86,19 @@ public class Reservation extends BaseTimeEntity {
         return new Reservation(bandId, roomId, requestedBy, status, startAt, endAt, cost, note);
     }
 
+    /**
+     * 정기 규칙(Phase 5)이 만든 회차. {@code recurringRuleId}로 규칙과 이어지며 status 는 항상
+     * {@code CONFIRMED}로 시작한다 — 규칙 등록 자체가 승인 행위이므로 회차마다 다시 승인받지 않는다.
+     * 개별 회차의 수정/취소는 일반 일정과 똑같이 다루고, 규칙은 그대로 유지된다.
+     */
+    public static Reservation ofRecurringRule(long bandId, long roomId, long createdBy, long recurringRuleId,
+                                              Instant startAt, Instant endAt, Integer cost, String note) {
+        Reservation reservation = new Reservation(bandId, roomId, createdBy, ReservationStatus.CONFIRMED,
+                startAt, endAt, cost, note);
+        reservation.recurringRuleId = recurringRuleId;
+        return reservation;
+    }
+
     /** 승인 대기 → 확정. */
     public void approve() {
         this.status = ReservationStatus.CONFIRMED;

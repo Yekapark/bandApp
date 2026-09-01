@@ -18,6 +18,8 @@ public record ReservationResponse(
         Instant endAt,
         Integer cost,
         String note,
+        /** 정기 규칙에서 만들어진 회차면 그 규칙 id, 단발 일정이면 {@code null}. */
+        Long recurringRuleId,
         Instant createdAt
 ) {
     public static ReservationResponse from(Reservation r, String roomName) {
@@ -31,6 +33,7 @@ public record ReservationResponse(
                 r.getEndAt(),
                 r.getCost(),
                 r.getNote(),
+                r.getRecurringRuleId(),
                 r.getCreatedAt());
     }
 }
