@@ -49,6 +49,20 @@ public class RoomDirectoryService {
         roomRepository.decreaseUsageCount(roomId);
     }
 
+    /** 정기 일정 회차 N건을 한 번에 등록할 때 사용 횟수 +N. {@code delta <= 0}이면 아무 일도 하지 않는다. */
+    public void increaseUsageBy(long roomId, int delta) {
+        if (delta > 0) {
+            roomRepository.increaseUsageCountBy(roomId, delta);
+        }
+    }
+
+    /** 규칙 삭제로 한 방의 미래 회차 N건이 취소될 때 사용 횟수 -N. {@code delta <= 0}이면 아무 일도 하지 않는다. */
+    public void decreaseUsageBy(long roomId, int delta) {
+        if (delta > 0) {
+            roomRepository.decreaseUsageCountBy(roomId, delta);
+        }
+    }
+
     /**
      * 주어진 id 들의 이름 맵. 소프트 삭제된 합주실도 포함한다 — 삭제된 방을 참조하는 과거 일정도
      * 이름은 그대로 보여야 하기 때문이다.

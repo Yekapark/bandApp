@@ -58,7 +58,13 @@ public enum ErrorCode {
     NOT_RESERVATION_OWNER(HttpStatus.FORBIDDEN, "등록자 본인 또는 밴드장만 할 수 있는 작업입니다."),
     RESERVATION_NOT_PENDING(HttpStatus.CONFLICT, "승인 대기 중인 일정이 아닙니다."),
     RESERVATION_NOT_EDITABLE(HttpStatus.CONFLICT, "취소·거절된 일정은 수정할 수 없습니다."),
-    RESERVATION_RANGE_TOO_WIDE(HttpStatus.BAD_REQUEST, "조회 기간이 너무 넓습니다. (최대 400일)");
+    RESERVATION_RANGE_TOO_WIDE(HttpStatus.BAD_REQUEST, "조회 기간이 너무 넓습니다. (최대 400일)"),
+
+    // 정기 일정 (Phase 5)
+    RECURRING_RULE_NOT_FOUND(HttpStatus.NOT_FOUND, "정기 일정 규칙을 찾을 수 없습니다."),
+    INVALID_RECURRING_TIME(HttpStatus.BAD_REQUEST, "종료 시각은 시작 시각보다 뒤여야 합니다."),
+    INVALID_RECURRING_DATE_RANGE(HttpStatus.BAD_REQUEST, "종료일은 시작일과 같거나 뒤여야 합니다."),
+    NOT_RECURRING_RULE_OWNER(HttpStatus.FORBIDDEN, "규칙 등록자 본인 또는 밴드장만 할 수 있는 작업입니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

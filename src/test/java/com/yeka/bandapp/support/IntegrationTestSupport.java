@@ -63,6 +63,8 @@ public abstract class IntegrationTestSupport {
         registry.add("app.naver.client-secret", () -> "test-ncp-secret");
         // 통합 테스트 중 파기 배치가 끼어들지 않도록 비활성화한다("-").
         registry.add("app.withdrawal.purge-cron", () -> "-");
+        // 정기 일정 회차 연장 배치도 비활성화한다 — 테스트는 서비스 메서드를 직접 호출해 검증한다.
+        registry.add("app.recurring.extend-cron", () -> "-");
         // 초대 딥링크: 링크·검증 파일의 값을 고정해 assertion 을 쓸 수 있게 한다.
         registry.add("app.deeplink.base-url", () -> "https://band.test");
         registry.add("app.deeplink.scheme", () -> "bandapp");

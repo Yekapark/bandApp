@@ -73,4 +73,30 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
     @Modifying
     @Query("update Room r set r.usageCount = r.usageCount - 1 where r.id = :id and r.usageCount > 0")
     int decreaseUsageCount(@Param("id") long id);
+
+    /**
+     * 정기 일정(Phase 5)이 회차 N건을 한 번에 만들 때, UPDATE 를 N번 치지 않도록 {@code delta}만큼
+     * 한 번에 올린다. {@link #increaseUsageCount}와 같은 계열(원자 UPDATE, {@code clearAutomatically} 없음).
+     *
+     * @return 갱신된 행 수(대상 방이 없으면 0)
+     */
+    @Transactional
+    @Modifying
+    @Query("update Room r set r.usageCount = r.usageCount + :delta where r.id = :id")
+    int increaseUsageCountBy(@Param("id") long id, @Param("delta") int delta);
+
+    /**
+     * 규칙 삭제로 미래 회차 여러 건이 한꺼번에 취소될 때 {@code delta}만큼 내린다. 어떤 경로로도 0 밑으로
+     * 내려가지 않도록 {@code CASE}로 바닥을 0에 맞춘다({@link #decreaseUsageCount}의 벌크 버전).
+     *
+     * @return 갱신된 행 수(대상이 없으면 0)
+     */
+    @Transactional
+    @Modifying
+    @Query("""
+            update Room r
+               set r.usageCount = case when r.usageCount > :delta then r.usageCount - :delta else 0 end
+             where r.id = :id
+            """)
+    int decreaseUsageCountBy(@Param("id") long id, @Param("delta") int delta);
 }

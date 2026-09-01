@@ -64,6 +64,10 @@ app:
     retention-days: ${WITHDRAWAL_RETENTION_DAYS:90}
     purge-cron: ${WITHDRAWAL_PURGE_CRON:0 30 4 * * *}
     purge-zone: Asia/Seoul
+  recurring:
+    zone: Asia/Seoul                                     # 정기 규칙의 요일·시각을 해석하는 기준 시간대
+    horizon-weeks: ${RECURRING_HORIZON_WEEKS:8}          # 미리 만들어 둘 기간 (BUILD_PLAN "향후 8주분")
+    extend-cron: ${RECURRING_EXTEND_CRON:0 0 5 * * *}    # 매일 05:00 KST 회차 이어 만들기 배치
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
   deeplink:
