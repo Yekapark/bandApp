@@ -21,7 +21,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 멤버 목록·자발적 탈퇴·추방·밴드장 위임.
+ * 멤버 목록·자발적 탈퇴·추방·밴드장 위임·계정 탈퇴 정리.
  */
 @Service
 public class BandMemberService {
@@ -98,5 +98,43 @@ public class BandMemberService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAND_NOT_FOUND));
         band.handOverLeadership(newLeaderUserId);
         return BandResponse.from(band);
+    }
+
+    /**
+     * 계정 탈퇴 정리. 탈퇴자의 활성 멤버십을 전부 종료한다.
+     *
+     * <p>탈퇴자가 밴드장인 밴드는 <b>가장 먼저 가입한 다른 활성 멤버</b>를 밴드장으로 자동 승격한다.
+     * 다른 멤버가 없으면 그 밴드는 활성 멤버 0인 상태로 남는다({@code bands} 행은 유지 —
+     * 활성 멤버가 없어 어떤 API 로도 접근되지 않으므로 사실상 소멸이다. 빈 밴드 정리는 이번 범위 밖).
+     *
+     * <p>밴드장 밴드에서는 {@code delegateLeadership} 과 같은 이유로 순서가 중요하다:
+     * 탈퇴자를 먼저 {@code leave} + flush 해 {@code ux_band_members_single_leader} 슬롯을 비운 뒤 승격한다.
+     *
+     * <p>{@link com.yeka.bandapp.user.service.UserAccountService#withdraw} 의 트랜잭션 안에서 호출된다 —
+     * 여기서 실패하면 탈퇴 전체가 롤백된다.
+     */
+    @Transactional
+    public void handleAccountWithdrawal(long userId, Instant when) {
+        for (BandMember me : bandMemberRepository.findByUserIdAndLeftAtIsNullOrderByJoinedAtAsc(userId)) {
+            if (!me.isLeader()) {
+                me.leave(when);
+                continue;
+            }
+            long bandId = me.getBandId();
+            BandMember successor = bandMemberRepository
+                    .findByBandIdAndLeftAtIsNullOrderByJoinedAtAsc(bandId).stream()
+                    .filter(bm -> !bm.getUserId().equals(userId))
+                    .findFirst()
+                    .orElse(null);
+
+            me.leave(when);
+            bandMemberRepository.saveAndFlush(me);
+            if (successor != null) {
+                successor.promoteToLeader();
+                bandMemberRepository.saveAndFlush(successor);
+                long newLeaderId = successor.getUserId();
+                bandRepository.findById(bandId).ifPresent(band -> band.handOverLeadership(newLeaderId));
+            }
+        }
     }
 }

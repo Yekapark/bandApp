@@ -45,6 +45,15 @@ public abstract class BandApiSupport extends ApiIntegrationTest {
         return post("/api/v1/bands/join", "{\"code\":\"" + code + "\"}", accessToken);
     }
 
+    /** 이메일 계정 탈퇴(비밀번호는 {@link #signup} 과 동일). 성공 시 204. */
+    protected void withdraw(String accessToken) {
+        ResponseEntity<String> res = post("/api/v1/users/me/withdraw",
+                "{\"password\":\"pw12345678\"}", accessToken);
+        if (res.getStatusCode().value() != 204) {
+            throw new IllegalStateException("탈퇴 실패: " + res.getBody());
+        }
+    }
+
     protected JsonNode data(ResponseEntity<String> res) {
         return body(res).get("data");
     }
