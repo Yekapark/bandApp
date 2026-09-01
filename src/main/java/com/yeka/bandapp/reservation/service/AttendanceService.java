@@ -12,7 +12,6 @@ import com.yeka.bandapp.reservation.entity.Reservation;
 import com.yeka.bandapp.reservation.entity.ReservationAttendance;
 import com.yeka.bandapp.reservation.repository.ReservationAttendanceRepository;
 import com.yeka.bandapp.reservation.repository.ReservationRepository;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,7 +80,7 @@ public class AttendanceService {
         if (!reservation.isActive()) {
             throw new BusinessException(ErrorCode.RESERVATION_NOT_EDITABLE);
         }
-        upsert(reservationId, callerUserId, status);
+        attendanceRepository.upsertResponse(reservationId, callerUserId, status.name(), Instant.now());
         return boardFor(bandId, reservationId);
     }
 
@@ -119,24 +118,6 @@ public class AttendanceService {
     }
 
     // --- 내부 헬퍼 -----------------------------------------------------------
-
-    private void upsert(long reservationId, long userId, AttendanceStatus status) {
-        ReservationAttendance row = attendanceRepository
-                .findByReservationIdAndUserId(reservationId, userId)
-                .orElseGet(() -> ReservationAttendance.pending(reservationId, userId));
-        row.respond(status, Instant.now());
-        try {
-            attendanceRepository.saveAndFlush(row);
-        } catch (DataIntegrityViolationException race) {
-            // 같은 멤버의 첫 응답이 동시에 들어와 (reservation_id, user_id) 유니크에 걸렸다 —
-            // 먼저 커밋된 행을 다시 읽어 이 요청의 값으로 갱신한다.
-            ReservationAttendance existing = attendanceRepository
-                    .findByReservationIdAndUserId(reservationId, userId)
-                    .orElseThrow(() -> race);
-            existing.respond(status, Instant.now());
-            attendanceRepository.saveAndFlush(existing);
-        }
-    }
 
     /** 타 밴드의 일정은 존재를 알리지 않고 {@code RESERVATION_NOT_FOUND}. */
     private Reservation requireReservation(long bandId, long reservationId) {

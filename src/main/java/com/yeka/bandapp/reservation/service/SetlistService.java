@@ -27,6 +27,9 @@ import java.util.stream.Collectors;
 @Service
 public class SetlistService {
 
+    /** 한 일정의 셋리스트 항목 수 상한. 응답 크기와 무의미한 대량 등록을 막는 방어선(넉넉하게 잡는다). */
+    static final int MAX_ITEMS_PER_RESERVATION = 300;
+
     private final SetlistItemRepository setlistRepository;
     private final ReservationRepository reservationRepository;
     private final BandAccessGuard accessGuard;
@@ -61,6 +64,9 @@ public class SetlistService {
                                    CreateSetlistItemRequest request) {
         accessGuard.requireActiveMember(bandId, userId);
         requireReservation(bandId, reservationId);
+        if (setlistRepository.countByReservationId(reservationId) >= MAX_ITEMS_PER_RESERVATION) {
+            throw new BusinessException(ErrorCode.SETLIST_LIMIT_EXCEEDED);
+        }
         int nextOrder = setlistRepository.maxOrderNo(reservationId) + 1;
         SetlistItem saved = setlistRepository.save(SetlistItem.create(
                 reservationId, request.title().trim(),

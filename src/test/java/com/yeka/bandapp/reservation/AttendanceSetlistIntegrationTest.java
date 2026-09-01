@@ -4,6 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -134,6 +140,46 @@ class AttendanceSetlistIntegrationTest extends ReservationApiSupport {
                 "{\"status\":\"ATTENDING\"}", leader);
         assertThat(res.getStatusCode().value()).isEqualTo(409);
         assertThat(errorCode(res)).isEqualTo("RESERVATION_NOT_EDITABLE");
+    }
+
+    /**
+     * 같은 멤버가 참석 응답을 동시에 여러 번 눌러도(더블탭) 전부 200이고, 참석 행은 하나만 남는다.
+     * upsert 가 Postgres ON CONFLICT 로 원자적이라 유니크 경합에 트랜잭션이 깨지지 않는다.
+     */
+    @Test
+    void concurrent_first_response_by_same_member_is_idempotent() throws Exception {
+        String leader = signup("rsvp-cc-l@band.app", "리더");
+        String member = signup("rsvp-cc-m@band.app", "멤버");
+        long bandId = createBand(leader, "쏜애플둘");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        // 일정 생성 이후 합류 → 이 멤버는 초기 참석 행이 없다(= 첫 응답이 INSERT).
+        assertThat(join(member, issueInvite(leader, bandId, null)).getStatusCode().value()).isEqualTo(200);
+        long memberId = myUserId(member);
+
+        int threads = 6;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<Integer>> calls = Collections.nCopies(threads, () ->
+                    put(attendancePath(bandId, reservationId, memberId), "{\"status\":\"ATTENDING\"}", member)
+                            .getStatusCode().value());
+            List<Integer> codes = pool.invokeAll(calls).stream().map(f -> {
+                try {
+                    return f.get();
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }).toList();
+
+            assertThat(codes).allSatisfy(c -> assertThat(c).isEqualTo(200));
+        } finally {
+            pool.shutdownNow();
+        }
+
+        JsonNode b = board(leader, bandId, reservationId);
+        assertThat(b.get("memberCount").asInt()).isEqualTo(2);
+        assertThat(b.get("attendingCount").asInt()).isEqualTo(1);
+        assertThat(entryFor(b, memberId).get("status").asText()).isEqualTo("ATTENDING");
     }
 
     /** 비멤버는 참석 현황을 볼 수 없고(403), 타 밴드 경로의 일정은 404. */

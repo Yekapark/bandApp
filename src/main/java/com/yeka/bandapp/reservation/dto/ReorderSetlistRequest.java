@@ -1,6 +1,7 @@
 package com.yeka.bandapp.reservation.dto;
 
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
@@ -9,6 +10,6 @@ import java.util.List;
  * 것이어야 한다(빠지거나 남거나 중복이면 400). 이 순서대로 {@code orderNo}가 1..N 으로 다시 매겨진다.
  */
 public record ReorderSetlistRequest(
-        @NotEmpty List<Long> itemIds
+        @NotEmpty @Size(max = 300) List<Long> itemIds
 ) {
 }

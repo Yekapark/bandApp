@@ -49,7 +49,8 @@ public class SetlistController {
     }
 
     @Operation(summary = "곡 추가",
-            description = "title 필수(최대 200자). artist·referenceUrl 선택. 목록 맨 뒤에 추가된다(orderNo = 현재 최대 + 1).")
+            description = "title 필수(최대 200자). artist·referenceUrl 선택. 목록 맨 뒤에 추가된다(orderNo = 현재 최대 + 1). "
+                    + "한 일정의 항목 수 상한(300)을 넘으면 409 SETLIST_LIMIT_EXCEEDED.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<SetlistItemResponse> add(@AuthenticationPrincipal AuthPrincipal principal,

@@ -158,13 +158,29 @@
   [run 33515673906](https://github.com/Yekapark/bandApp/actions/runs/33515673906). Phase 0~5 기존
   테스트도 함께 통과해 `GET /reservations/{id}` 응답 타입 변경(`ReservationDetailResponse`)의 회귀 없음이 확인됐다.
 
+## 6.1 구현 후 자체 점검(보안·누락) 결과
+
+| 발견 | 심각도 | 조치 |
+|---|---|---|
+| **참석 응답 upsert 가 "조회 → save/flush, 유니크 경합 시 catch 후 재시도"** 방식이었다. flush 실패 후 같은 트랜잭션에서 추가 작업을 하면 트랜잭션이 rollback-only로 오염돼, 같은 멤버의 동시 최초 응답(더블탭)에서 한쪽이 500이 될 수 있었다(CLAUDE.md 규칙 위반). | **중** — 기능 오작동(드묾), 보안 아님 | Postgres `INSERT … ON CONFLICT (reservation_id, user_id) DO UPDATE` 네이티브 upsert로 교체. 한 문장·원자적이라 경합에 트랜잭션이 깨지지 않는다. 동시 더블탭 회귀 테스트 추가(`concurrent_first_response_by_same_member_is_idempotent`) |
+| 한 일정의 셋리스트 항목 수에 상한이 없었다(밴드 멤버가 자기 밴드에 대량 등록 → 응답 크기 증가). | 하 | `SetlistService`에 항목 수 상한 300, 초과 시 409 `SETLIST_LIMIT_EXCEEDED`. `ReorderSetlistRequest.itemIds`에 `@Size(max=300)` |
+| **타 밴드 격리** — 모든 엔드포인트가 `requireActiveMember(bandId, …)` + `findByIdAndBandId`로 일정의 밴드 소속을 대조. 경로에 남의 `reservationId`/`itemId`를 끼워도 404. | — | 문제 없음(설계대로) |
+| **본인만 참석 변경** — `PUT .../attendances/{userId}`에서 `{userId}≠요청자`면 403. 성공 경로는 언제나 요청자 본인 id뿐이라, 타인의 참석 행을 만들거나 바꿀 수 없다. | — | 문제 없음 |
+| SQL 인젝션 / 대량 바인딩 — 모든 쿼리 파라미터 바인딩, 네이티브 upsert도 `:param`만 사용. DTO는 명시적 `record`(엔티티 바인딩 없음). | — | 문제 없음 |
+| `referenceUrl`은 `@Size(max=2000)`만 검사하고 URL 스킴 검증은 하지 않는다(자유 기재 허용). 백엔드는 이 값을 렌더링하지 않으므로 서버 측 위험은 없다. 클라이언트가 링크로 만들 때 스킴 화이트리스트(http/https)를 적용하면 된다. | 하(클라이언트 몫) | 문서화만 |
+| 참석 응답에 rate limit 없음 — 기존 일정 등록/수정도 rate limit 대상이 아니다(초대·인증·지오코딩만). 내부 저위험 쓰기라 일관되게 두었다. | 하 | 현행 유지 |
+
 ## 7. 알려진 이슈 / 제약
 
 - 정기 일정(Phase 5) 회차는 참석 행을 미리 만들지 않는다(§2 표 참조). 사용자에게 보이는 동작은
   단발 일정과 같다(모두 PENDING). 필요하면 회차 벌크 생성 경로에 `createPendingFor`를 추가하면 된다.
-- `respondedAt`은 서버 시각(`Instant.now()`)이며 클라이언트 시각을 신뢰하지 않는다.
+- `respondedAt`은 서버 시각이며 클라이언트 시각을 신뢰하지 않는다. `PENDING`(응답 취소)이면 비운다.
+- 멤버가 응답한 뒤 탈퇴 → 재가입하면 이전 참석 행(같은 `user_id`)이 그대로 보인다. 멤버십 세대를
+  추적하지 않아 생기는 드문 엣지케이스로, 재가입 시 PENDING 초기화는 하지 않는다.
 - 셋리스트 삭제 후 `order_no`에 빈 번호가 생길 수 있다(예: 1,3). 정렬에는 영향 없고, 연속 번호가
   필요하면 재정렬 API를 호출한다.
+- 셋리스트 `add`/`reorder`의 동시 실행은 `order_no` 중복을 만들 수 있으나(유니크 제약 없음) 크래시는
+  없고 조회는 `order_no, id` 순이라 결정적이다. 재정렬로 정리된다.
 - "참석 미응답 독촉"(BUILD_PLAN Phase 9 알림 트리거)은 이 Phase 범위 밖이다 — 여기서는 상태만 관리한다.
 
 ## 8. 커밋 · CI 링크

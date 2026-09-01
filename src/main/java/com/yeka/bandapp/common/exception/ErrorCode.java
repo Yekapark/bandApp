@@ -69,7 +69,8 @@ public enum ErrorCode {
     // 참석 체크(RSVP) · 셋리스트 (Phase 6)
     NOT_ATTENDANCE_OWNER(HttpStatus.FORBIDDEN, "본인의 참석 상태만 변경할 수 있습니다."),
     SETLIST_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "셋리스트 항목을 찾을 수 없습니다."),
-    SETLIST_REORDER_MISMATCH(HttpStatus.BAD_REQUEST, "재정렬 목록이 현재 셋리스트 항목과 일치하지 않습니다.");
+    SETLIST_REORDER_MISMATCH(HttpStatus.BAD_REQUEST, "재정렬 목록이 현재 셋리스트 항목과 일치하지 않습니다."),
+    SETLIST_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "한 일정의 셋리스트 항목 수 상한을 넘었습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;
