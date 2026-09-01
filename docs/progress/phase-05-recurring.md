@@ -56,8 +56,7 @@
 | CHECK | `frequency` 값 제한, `end_time > start_time`, `end_date IS NULL OR end_date >= start_date` |
 | `ix_recurring_rules_band` | `(band_id, created_at DESC) WHERE deleted_at IS NULL` — 활성 규칙 목록·배치 스캔 |
 | `fk_reservations_recurring_rule` | Phase 4가 컬럼만 뚫어 둔 `reservations.recurring_rule_id`에 이제 FK 부여 |
-| `ix_reservations_rule` | `(recurring_rule_id, start_at) WHERE recurring_rule_id IS NOT NULL` — 규칙별 회차 조회 |
-| `ux_reservations_rule_slot` | `(recurring_rule_id, start_at)` **UNIQUE** partial — 한 규칙이 같은 시각 회차를 두 번 만들지 못하게(배치 재실행 멱등성) |
+| `ux_reservations_rule_slot` | `(recurring_rule_id, start_at) WHERE recurring_rule_id IS NOT NULL` **UNIQUE** partial — 한 규칙이 같은 시각 회차를 두 번 만들지 못하게(배치 재실행 멱등성). 이 인덱스가 `(recurring_rule_id, start_at)` prefix 조회·정렬도 커버하므로 별도 non-unique 인덱스는 두지 않는다(§8.1 F5) |
 
 > `ux_reservations_rule_slot`은 **겹침 차단 제약이 아니다.** 서로 다른 규칙·수동 등록 일정끼리의
 > 시간대 겹침은 여전히 전혀 막지 않는다(BUILD_PLAN 2장 2번). "같은 규칙 + 같은 start_at" 중복만 막는다.
@@ -95,7 +94,8 @@
 | `createOccurrences(...)` | 회차 벌크 저장 + 합주실 `usageCount`를 **한 번에** +N |
 | `occurrenceStartsOf(ruleId)` | 이미 만든 회차 시작 시각들 — 재생성 시 중복 슬롯 제거용 |
 | `lastOccurrenceStartOf(ruleId)` | 규칙의 마지막 회차 시각 — 배치가 "그 다음부터" 이어 만든다 |
-| `occurrencesOf(ruleId)` | 규칙 상세용, 취소분 포함 |
+| `occurrencesSince(ruleId, from)` | **규칙 상세·등록 응답용** — `from` 이후 회차만(취소분 포함). 응답 크기 상한(§8.1 F3) |
+| `occurrencesOf(ruleId)` | 배치·테스트 내부 확인용 — 상한 없이 전체 |
 | `cancelFutureOccurrences(ruleId, from)` | 아직 시작 안 한 살아 있는 회차만 CANCELLED + 방별 `usageCount` -N |
 | `overlapsAmong(...)` | 등록 응답 겹침 경고 (규칙 자신의 회차는 제외) |
 
@@ -161,9 +161,12 @@ app:
 ### 규칙 등록과 회차 생성 (완료 기준의 전제)
 
 등록 흐름: **① 멤버십 검증 → ② 권한 모드 검증 → ③ 시간·날짜 검증 → ④ 합주실 검증 → ⑤ 규칙 저장
-→ ⑥ 지평선(오늘 + `horizonWeeks`)까지 회차 날짜 계산 → ⑦ 이미 있는 슬롯 제외하고 벌크 저장 +
+→ ⑥ 생성 구간의 회차 날짜 계산 → ⑦ 이미 있는 슬롯 제외하고 벌크 저장 +
 합주실 `usageCount` += N → ⑧ 회차·겹침 목록을 응답에 첨부.**
 
+- **생성 구간 = 오늘 ± `horizonWeeks`(기본 8주).** `startDate`를 과거로 멀리 잡아도 한 요청에
+  수백 건을 백필하지 않는다(§8.1 F1). 자연스러운 과거 회차는 "시간이 지나 미래 회차가 과거가 되는"
+  경로로 생긴다. 배치는 이미 만든 마지막 회차 다음부터 앞으로만 이어가므로 이 바닥에 걸리지 않는다.
 - **로컬 → UTC.** `day_of_week`·`start_time`은 Asia/Seoul 기준이다. `2026-09-05` 토요일 `15:00`은
   `2026-09-05T06:00:00Z`가 된다. 서울은 DST가 없어 항상 UTC+9다.
 - **주기별 회차.** WEEKLY=7일, BIWEEKLY=14일 간격. MONTHLY는 첫 회차가 "그 달의 몇 번째 요일"인지
@@ -185,6 +188,10 @@ app:
 방을 가리킬 수 있어 방별로 집계하고, 방 id 오름차순으로 UPDATE해 Phase 4 `shiftUsage`와 같은
 교착을 피한다).
 
+대상 규칙 행에 `SELECT … FOR UPDATE`(`findActiveByIdAndBandIdForUpdate`)를 걸어, 같은 규칙에
+동시에 들어온 DELETE를 직렬화한다. 두 번째 요청은 락을 기다렸다가 이미 `deleted_at`이 찍힌 것을
+보고 404 → 미래 회차 취소와 `usageCount` 감소가 정확히 한 번(§8.1 F2, Phase 4 §8.1 #1과 같은 처방).
+
 이 설계 덕에 Phase 7에서 `Settlement`가 과거 회차에 붙어도, 규칙 삭제가 그 회차 행이나 FK를
 건드리지 않는다.
 
@@ -193,6 +200,9 @@ app:
 회차 하나를 Phase 4 API로 취소하면 그 `Reservation`만 `CANCELLED`가 되고 규칙은 그대로다.
 배치가 다시 돌아도 그 회차는 **되살아나지 않는다** — 재생성 시 이미 존재하는 `start_at`
 (취소분 포함)을 슬롯 후보에서 빼기 때문이다.
+
+단, 회차를 **다른 시각으로 옮기면**(`PUT /reservations/{id}`) 원래 슬롯이 비어, 지평선 밖에서
+배치가 그 자리를 다시 만들 수 있다(§8.1 F4 — 알려진 이슈). 취소는 안전하고 이동만 해당된다.
 
 ### 회차 연장 배치 — `RecurringExtensionJob`
 
@@ -285,8 +295,8 @@ endTime <= startTime 로 등록          → 400 INVALID_RECURRING_TIME
 `docker compose up --build -d` 후 `/actuator/health` = `UP` (→ `ddl-auto: validate`가 V5 + 엔티티
 매핑을 통과). `flyway_schema_history`에 `5 | recurring | t`.
 `\d recurring_rules` — CHECK 3개, `ix_recurring_rules_band`, FK 3개 확인.
-`\d reservations` — `fk_reservations_recurring_rule` 추가로 FK 4개, `ix_reservations_rule` +
-`ux_reservations_rule_slot`(UNIQUE partial) 확인.
+`\d reservations` — `fk_reservations_recurring_rule` 추가로 FK 4개, `ux_reservations_rule_slot`
+(UNIQUE partial) 확인. (`ix_reservations_rule`은 §8.1 F5에서 제거 — 중복이었음.)
 
 `bash` 스모크 2종, 전부 관찰대로:
 
@@ -314,7 +324,10 @@ endTime <= startTime 로 등록          → 400 INVALID_RECURRING_TIME
 테스트 클래스:
 - `recurring/RecurringRuleIntegrationTest` — **완료 기준**(규칙 삭제 시 과거 회차 보존 / 미래만 취소) +
   주간 KST 로컬 시각 변환, 격주 14일 간격, 월간 주차·요일 반복, 권한 3모드 게이팅(회차는 항상 CONFIRMED),
-  겹침 경고, 개별 회차 취소 후 규칙 유지·비재생성, `usageCount` 증감, 타 밴드 격리
+  겹침 경고, 개별 회차 취소 후 규칙 유지·비재생성, `usageCount` 증감, 타 밴드 격리.
+  **§8.1 후속:** `create_does_not_backfill_far_past_occurrences`(F1),
+  `concurrent_rule_deletion_decrements_usage_exactly_once`(F2, 6스레드),
+  `rule_detail_omits_occurrences_older_than_horizon`(F3)
 - `recurring/RecurringExtensionJobTest` — 뒤쪽 회차 삭제 후 연장이 그만큼 복구 + **두 번 호출 멱등**,
   `endDate` 너머로 안 만듦, 삭제된 규칙엔 아무 것도 안 함 (스케줄러 대신 서비스 직접 호출)
 - `recurring/OccurrenceGeneratorTest` — 순수 단위. 주간/격주 간격, anchor 전진, `endDate` 상한,
@@ -333,8 +346,14 @@ endTime <= startTime 로 등록          → 400 INVALID_RECURRING_TIME
   않는다. 필요해지면 `recurring_rules`에 컬럼을 추가한다(도메인 모델 변경이라 승인 필요).
 - **회차별 cost/note를 등록 시 개별 지정할 수 없다.** 규칙의 값이 모든 회차에 복사된다. 특정 회차만
   다르게 하려면 그 회차를 Phase 4 일정 수정 API로 고친다.
-- **한 번에 만드는 회차에 상한(200)이 있다.** `startDate`를 아주 먼 과거로 잡아도 최대 200회차까지만
-  만든다(응답·배치 폭주 방지). 정상 사용(지평선 8주)에서는 걸리지 않는다.
+- **회차를 `PUT /reservations/{id}`로 다른 시각으로 옮기면 배치가 원래 슬롯을 다시 만들 수 있다**(§8.1 F4).
+  취소는 안전(슬롯 유지). 회차에 "규칙에서 분리됨" 표시가 없어서다. 실사용에선 지평선 밖 회차에만 발생.
+  필요해지면 회차 플래그나 규칙의 "예외 슬롯" 목록을 둔다(스키마 변경 → 승인 필요).
+- **규칙 등록에 레이트리밋이 없다.** Phase 8(일정 생성 레이트리밋)에서 함께 건다. F1 수정으로 한 요청당
+  회차 수가 `2 × horizonWeeks + 1`로 묶여 증폭은 억제된다.
+- **`DELETE` 재호출은 404**(Phase 4 취소의 204 멱등과 다름). 규칙은 실제로 사라졌으므로 의도된 동작.
+- **개별 회차 수정/취소는 회차의 등록자(규칙 생성자) 또는 밴드장만.** Phase 4 일정 권한 모델을 그대로 따른다.
+- `MAX_OCCURRENCES_PER_RUN`(200)은 F1 수정 뒤 정상 경로에서 도달할 수 없는 안전망으로만 남는다.
 - **"연결된 정산 기록" 검증은 Phase 7 이후로 미룸.** 지금은 회차 행·상태 보존까지 검증했다(2장 불일치 3).
 - Testcontainers 통합 테스트는 이 PC에서 실행 불가 — CI로만 확인.
 
@@ -349,7 +368,30 @@ endTime <= startTime 로 등록          → 400 INVALID_RECURRING_TIME
   5. `feat(recurring): 회차 연장 배치잡`
   6. `test(recurring): 완료 기준 통합 테스트 + 회차 계산 단위 테스트`
   7. `docs(progress): Phase 5 진행 기록`
+  8. `fix(recurring): create 회차 생성 구간을 오늘 ±horizonWeeks 로 제한` (§8.1 F1)
+  9. `fix(recurring): 규칙 삭제·연장에 비관적 락 — 동시 삭제 usageCount 이중 차감 방지` (§8.1 F2)
+  10. `fix(recurring): 규칙 상세·등록 응답 회차를 최근 구간으로 제한 + 중복 인덱스 제거` (§8.1 F3·F5)
+  11. `test(recurring): F1~F3 회귀 테스트`
+  12. `docs(progress): Phase 5 리뷰 후속(§8.1)`
 - CI: [actions/runs/NN](https://github.com/Yekapark/bandApp/actions/runs/NN) — <결과 기입>
+
+### 8.1 리뷰 후속 (2026-09-01, 머지 전 — 같은 브랜치)
+
+머지 전 정기 일정 전 경로를 다시 훑어 나온 5건을 이어서 고쳤다. Phase 4 §8.1과 **같은 두 부류**
+(동시 상태 전이 시 usageCount 이중 차감 · 무한정 커지는 응답)가 정기 일정 경로에 다시 들어와 있었다.
+
+| # | 문제 | 수정 |
+|---|---|---|
+| **F1** | `create` 시 `startDate`를 과거로 멀리 잡으면 한 요청·한 트랜잭션에 최대 200개 회차(200 INSERT + 최대 200 겹침 SELECT)를 생성. BUILD_PLAN의 "향후 N주분"과 어긋나고, 레이트리밋 없는 상태(Phase 8)에서 DB 부풀리기 벡터. | 회차 생성 구간을 **오늘 ± `horizonWeeks`(기본 8주)**로 제한. `RecurringRuleService.freshSlots`가 `exclusiveAfter`에 `오늘 − horizonWeeks − 1일` 바닥을 적용. `OccurrenceGenerator`는 그대로. 완료 기준 시나리오(3주 전)는 통과, `MAX_OCCURRENCES_PER_RUN`은 안전망으로만 남음. 스모크: `startDate` 1년 전 등록 → 17건(=2×8+1), 최소 `start_at` = 오늘−8주. |
+| **F2** | `delete`가 규칙 행을 잠그지 않음. 같은 규칙에 DELETE가 동시에 여러 번 들어오면 두 트랜잭션이 각자 미래 회차를 CONFIRMED로 읽고 각자 `usageCount`를 감소 → **이중 차감**(0까지 떨어짐). Phase 4 §8.1 #1과 동일. | `RecurringRuleRepository.findActiveByIdAndBandIdForUpdate`(`@Lock(PESSIMISTIC_WRITE)`)로 규칙 행을 잠그고 `delete`가 그것을 사용. 두 번째 요청은 대기 후 `deleted_at`이 찍힌 것을 보고 404. `extendRule`도 `findByIdForUpdate`로 잠가, 연장 도중 삭제와의 레이스(고아 회차)를 막음. 스모크: 6스레드 동시 DELETE → 1×204 / 5×404, `usageCount` 11 → 3(미래 8만 감소, 0 아님). |
+| **F3** | `GET /recurring-rules/{id}`가 규칙의 모든 회차를 무제한 반환(주간 규칙 몇 년 → 수백 건). Phase 4 §8.1 #3이 캘린더·겹침 응답에 상한을 둔 것과 배치. | 상세·등록 응답은 `ReservationDirectoryService.occurrencesSince(ruleId, 오늘 − horizonWeeks)`만 사용. 오래된 회차는 400일로 제한된 캘린더 API(`GET /reservations?from=&to=`)로. 스모크: 20주 전 회차를 심어도 상세엔 안 나오고 캘린더엔 나옴. |
+| **F4** | 회차를 `PUT /reservations/{id}`로 다른 시각으로 옮기면 원래 슬롯이 비어 배치가 다시 채울 수 있음(취소는 안전). | 코드 변경 없음. §7 알려진 이슈로 기록. 지평선 밖 회차에만 발생하며, 해결하려면 스키마 변경 필요. |
+| **F5** | `ix_reservations_rule (recurring_rule_id, start_at)`가 `ux_reservations_rule_slot`(같은 컬럼, UNIQUE partial)과 완전 중복. | V5 마이그레이션 미머지 상태라 `ix_reservations_rule` 생성문을 삭제(새 V6 안 만듦). `ux_reservations_rule_slot` 하나가 조회·정렬·중복 방지를 모두 커버. |
+
+검증(`docker compose`, 2026-09-01): F1·F2·F3 스모크 전부 관찰대로. `\d reservations`에서
+`ix_reservations_rule` 사라지고 `ux_reservations_rule_slot`만 남음. 회귀 테스트 3개는 CI로 확인
+(`create_does_not_backfill_far_past_occurrences`, `concurrent_rule_deletion_decrements_usage_exactly_once`,
+`rule_detail_omits_occurrences_older_than_horizon`).
 
 ## 9. 다음 Phase 예고 — Phase 6 (참석 체크 · 셋리스트)
 
