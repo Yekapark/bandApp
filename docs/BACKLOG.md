@@ -179,7 +179,9 @@ Phase 3 PR 후 인증·밴드·초대·합주실 전 경로 점검. **A1~A4·B1~
   현재 멤버 수가 아님 — 의도면 문서화.
 - `JwtAuthenticationFilter`가 `BusinessException`만 잡는다. Redis 장애 시 `blocklist.isBlocked`의
   `RedisConnectionFailureException`이 필터 밖으로 나가 모든 인증 요청이 스택트레이스 포함 500.
-- `WithdrawnUserPurgeJob` 분산 락 없음(단일 VM 전제라 지금은 무해, 스케일아웃 시 중복 실행).
+- `WithdrawnUserPurgeJob`·`RecurringExtensionJob`(Phase 5) 분산 락 없음(단일 VM 전제라 지금은 무해,
+  스케일아웃 시 중복 실행). `RecurringExtensionJob`은 `ux_reservations_rule_slot` 유니크 인덱스로
+  중복 회차 저장은 막히지만, 두 인스턴스가 동시에 돌면 한쪽 트랜잭션이 롤백될 수 있다(다음 실행이 메움).
 
 **탈퇴↔밴드 정리(§1.9 해결)에 딸린 잔여 엣지**
 
