@@ -50,14 +50,11 @@ ALTER TABLE reservations
     ADD CONSTRAINT fk_reservations_recurring_rule
     FOREIGN KEY (recurring_rule_id) REFERENCES recurring_rules(id);
 
--- 규칙별 회차 조회(상세·마지막 회차·미래 회차 취소).
-CREATE INDEX ix_reservations_rule ON reservations (recurring_rule_id, start_at)
-    WHERE recurring_rule_id IS NOT NULL;
-
--- 한 규칙이 같은 시작 시각의 회차를 두 번 만들지 못하게 한다(배치 재실행·동시 실행 멱등성).
--- 이것은 "겹침 차단"이 아니다 — 서로 다른 규칙·수동 등록 일정끼리의 시간대 겹침은 여전히 전혀 막지
--- 않는다(BUILD_PLAN 2장 2번). 오직 "같은 규칙 + 같은 start_at" 중복만 막는다. 개별 회차를 취소해도
--- 행은 남으므로 배치가 다시 돌아도 취소한 회차가 되살아나지 않는다.
+-- 규칙별 회차 조회(상세·마지막 회차·미래 회차 취소) + "같은 규칙 + 같은 start_at" 중복 방지를 한 인덱스로.
+-- 이 UNIQUE 는 "겹침 차단"이 아니다 — 서로 다른 규칙·수동 등록 일정끼리의 시간대 겹침은 여전히 전혀 막지
+-- 않는다(BUILD_PLAN 2장 2번). 오직 한 규칙이 같은 시작 시각의 회차를 두 번 만드는 것만 막는다
+-- (배치 재실행·동시 실행 멱등성). 개별 회차를 취소해도 행은 남으므로 배치가 다시 돌아도 취소한 회차가
+-- 되살아나지 않는다. (recurring_rule_id, start_at) prefix 조회·정렬도 이 인덱스로 처리된다.
 CREATE UNIQUE INDEX ux_reservations_rule_slot ON reservations (recurring_rule_id, start_at)
     WHERE recurring_rule_id IS NOT NULL;
 
