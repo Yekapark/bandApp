@@ -1,0 +1,52 @@
+package com.yeka.bandapp.reservation.repository;
+
+import com.yeka.bandapp.reservation.entity.Reservation;
+import com.yeka.bandapp.reservation.entity.ReservationStatus;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
+public interface ReservationRepository extends JpaRepository<Reservation, Long> {
+
+    /** 상세·수정·승인용. 경로의 {@code bandId}와 대조해 타 밴드 일정 접근을 차단한다. */
+    Optional<Reservation> findByIdAndBandId(Long id, Long bandId);
+
+    /**
+     * 캘린더 조회: 밴드의 일정 중 반열림 구간 {@code [from, to)}와 조금이라도 겹치는 것.
+     *
+     * <p>파라미터 순서 주의 — 구간 겹침 조건은 {@code startAt < to AND endAt > from}이라
+     * {@code StartAtLessThan}에 {@code to}, {@code EndAtGreaterThan}에 {@code from}이 들어간다.
+     * {@code statuses}로 활성(PENDING·CONFIRMED)만 볼지 전부 볼지를 호출 측이 정한다.
+     */
+    List<Reservation> findByBandIdAndStatusInAndStartAtLessThanAndEndAtGreaterThanOrderByStartAtAsc(
+            Long bandId, Collection<ReservationStatus> statuses, Instant to, Instant from);
+
+    /**
+     * 겹침 경고용: 같은 밴드의 <b>살아 있는</b>(PENDING·CONFIRMED) 일정 중 주어진 구간과 겹치는 것.
+     *
+     * <p>겹침 판정은 반열림 구간이다 — {@code startAt < :endAt AND endAt > :startAt}. 앞 일정의 종료와
+     * 뒤 일정의 시작이 정확히 같으면 겹치지 않는다.
+     *
+     * <p>이 결과는 <b>등록/수정을 거부하는 데 쓰지 않는다</b>. 응답에 경고로만 싣는다(BUILD_PLAN 2장 2번).
+     * 수정 시 자기 자신이 잡히지 않도록 {@code excludeId}로 제외한다(신규 등록은 존재할 수 없는 값을 넘긴다).
+     */
+    @Query("""
+            select r from Reservation r
+             where r.bandId = :bandId
+               and r.status in (com.yeka.bandapp.reservation.entity.ReservationStatus.PENDING,
+                                com.yeka.bandapp.reservation.entity.ReservationStatus.CONFIRMED)
+               and r.id <> :excludeId
+               and r.startAt < :endAt
+               and r.endAt > :startAt
+             order by r.startAt asc
+            """)
+    List<Reservation> findOverlapping(@Param("bandId") long bandId,
+                                      @Param("startAt") Instant startAt,
+                                      @Param("endAt") Instant endAt,
+                                      @Param("excludeId") long excludeId);
+}
