@@ -68,8 +68,16 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     // --- 정기 일정(Phase 5) 회차 관리 -----------------------------------------
 
-    /** 규칙 상세·검증용. 취소된 회차도 포함해 start_at 오름차순. */
+    /** 규칙 검증·내부 확인용(배치·테스트). 취소분 포함, 상한 없음 — 사용자 응답에는 쓰지 않는다. */
     List<Reservation> findByRecurringRuleIdOrderByStartAtAsc(Long recurringRuleId);
+
+    /**
+     * 규칙 상세·등록 응답용 — {@code from} 이후 회차만(취소분 포함), start_at 오름차순. 주간 규칙이
+     * 몇 년 쌓여도 응답이 무한정 커지지 않게 최근 구간만 준다(Phase 4 §8.1 #3과 같은 취지).
+     * 그 이전 이력은 400일로 제한된 캘린더 API 로 조회한다.
+     */
+    List<Reservation> findByRecurringRuleIdAndStartAtGreaterThanEqualOrderByStartAtAsc(
+            Long recurringRuleId, Instant from);
 
     /** 배치가 "이 시각 다음부터" 이어 만들도록, 규칙의 마지막 회차(상태 무관)를 준다. */
     Optional<Reservation> findFirstByRecurringRuleIdOrderByStartAtDesc(Long recurringRuleId);
