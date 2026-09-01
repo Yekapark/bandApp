@@ -73,12 +73,6 @@ public class ReservationDirectoryService {
                 .map(Reservation::getStartAt);
     }
 
-    /** 배치·테스트 내부 확인용 — 규칙의 모든 회차(취소분 포함, 상한 없음). 사용자 응답에는 쓰지 않는다. */
-    @Transactional(readOnly = true)
-    public List<Reservation> occurrencesOf(long ruleId) {
-        return reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId);
-    }
-
     /**
      * 규칙 상세·등록 응답용 — {@code from} 이후 회차만(취소분 포함, start_at 오름차순). 오래된 회차는
      * 응답에서 빠지며 캘린더 API 로 조회한다(Phase 4 §8.1 #3과 같은 취지 — 응답 크기 상한).

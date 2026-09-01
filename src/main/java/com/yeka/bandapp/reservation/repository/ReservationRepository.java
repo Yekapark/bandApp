@@ -68,7 +68,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     // --- 정기 일정(Phase 5) 회차 관리 -----------------------------------------
 
-    /** 규칙 검증·내부 확인용(배치·테스트). 취소분 포함, 상한 없음 — 사용자 응답에는 쓰지 않는다. */
+    /** 테스트 검증용 — 규칙의 모든 회차(취소분 포함, 상한 없음). 사용자 응답에는 {@code …StartAtGreaterThanEqual…}를 쓴다. */
     List<Reservation> findByRecurringRuleIdOrderByStartAtAsc(Long recurringRuleId);
 
     /**
