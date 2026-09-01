@@ -7,7 +7,7 @@ import org.springframework.http.ResponseEntity;
 /**
  * 밴드 통합 테스트 공통 헬퍼: 사용자 가입, 밴드 생성, 초대/참여.
  */
-abstract class BandApiSupport extends ApiIntegrationTest {
+public abstract class BandApiSupport extends ApiIntegrationTest {
 
     /** 이메일 계정을 만들고 access 토큰을 돌려준다. */
     protected String signup(String email, String name) {
