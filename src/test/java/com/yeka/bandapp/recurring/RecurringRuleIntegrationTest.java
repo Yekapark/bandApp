@@ -2,6 +2,8 @@ package com.yeka.bandapp.recurring;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yeka.bandapp.recurring.service.RecurringRuleService;
+import com.yeka.bandapp.reservation.entity.Reservation;
+import com.yeka.bandapp.reservation.repository.ReservationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -9,8 +11,13 @@ import org.springframework.http.ResponseEntity;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,6 +33,9 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
 
     @Autowired
     RecurringRuleService recurringRuleService;
+
+    @Autowired
+    ReservationRepository reservationRepository;
 
     // --- 완료 기준 -----------------------------------------------------------
 
@@ -307,5 +317,129 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
         ResponseEntity<String> crossBand = get("/api/v1/bands/" + bandA + "/recurring-rules/" + ruleId, b);
         assertThat(crossBand.getStatusCode().value()).isEqualTo(403);
         assertThat(errorCode(crossBand)).isEqualTo("NOT_BAND_MEMBER");
+    }
+
+    // --- 리뷰 후속(§8.1): F1 증폭 / F2 동시 삭제 / F3 응답 크기 --------------
+
+    /**
+     * F1 — startDate 를 과거로 멀리 잡아도 회차는 오늘 ± horizonWeeks(기본 8주) 구간에서만 생성된다.
+     * 한 요청에 수백 건을 백필하지 않는다.
+     */
+    @Test
+    void create_does_not_backfill_far_past_occurrences() {
+        String leader = signup("rec-f1-l@band.app", "리더");
+        long bandId = createBand(leader, "브로콜리");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+
+        LocalDate start = today().minusYears(1);   // 1년 전 → 제한 없으면 ~50+ 회차
+        ResponseEntity<String> res = postRule(leader, bandId, ruleBody(
+                roomId, "WEEKLY", start.getDayOfWeek(), "15:00", "18:00", start, null));
+        assertThat(res.getStatusCode().value()).isEqualTo(201);
+        long ruleId = data(res).get("rule").get("id").asLong();
+
+        // 실제로 DB 에 만들어진 회차 전체(응답 truncation 이 아니라 생성 자체를 확인)
+        List<Reservation> all = reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId);
+        int horizonWeeks = 8;
+        assertThat(all.size()).isLessThanOrEqualTo(2 * horizonWeeks + 1);
+
+        Instant floor = today().minusWeeks(horizonWeeks).atStartOfDay(SEOUL).toInstant();
+        assertThat(all).allSatisfy(r ->
+                assertThat(r.getStartAt()).isAfterOrEqualTo(floor));
+    }
+
+    /**
+     * F2 — 같은 규칙에 DELETE 가 동시에 여러 번 들어와도 정확히 하나만 204, 나머지는 404,
+     * 합주실 usageCount 는 미래 회차 수만큼만(한 번만) 줄어 과거 회차 수로 수렴한다(0 으로 떨어지지 않는다).
+     */
+    @Test
+    void concurrent_rule_deletion_decrements_usage_exactly_once() throws Exception {
+        String leader = signup("rec-f2-l@band.app", "리더");
+        long bandId = createBand(leader, "언니네");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+
+        LocalDate start = today().minusWeeks(3);   // 과거 + 미래 회차가 섞이도록
+        long ruleId = createRule(leader, bandId, ruleBody(
+                roomId, "WEEKLY", start.plusDays(1).getDayOfWeek(), "15:00", "18:00", start, null));
+
+        JsonNode occ = ruleDetail(leader, bandId, ruleId).get("occurrences");
+        int total = occ.size();
+        Instant now = Instant.now();
+        long past = 0;
+        for (JsonNode o : occ) {
+            if (Instant.parse(o.get("startAt").asText()).isBefore(now)) {
+                past++;
+            }
+        }
+        assertThat(past).as("과거·미래가 섞여야 의미 있는 테스트").isBetween(1L, (long) total - 1);
+        assertThat(usageCount(leader, bandId, roomId)).isEqualTo(total);
+
+        int threads = 6;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<Integer>> calls = Collections.nCopies(threads, () ->
+                    delete("/api/v1/bands/" + bandId + "/recurring-rules/" + ruleId, leader)
+                            .getStatusCode().value());
+            List<Integer> codes = pool.invokeAll(calls).stream().map(f -> {
+                try {
+                    return f.get();
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }).toList();
+
+            assertThat(codes).filteredOn(c -> c == 204).hasSize(1);
+            assertThat(codes).filteredOn(c -> c == 404).hasSize(threads - 1);
+            assertThat(usageCount(leader, bandId, roomId)).isEqualTo((int) past);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * F3 — 규칙 상세 응답은 오늘 − horizonWeeks 이후 회차만 담는다. 더 오래된 회차는 응답에서 빠지되
+     * 캘린더 API 로는 계속 조회된다.
+     */
+    @Test
+    void rule_detail_omits_occurrences_older_than_horizon() {
+        String leader = signup("rec-f3-l@band.app", "리더");
+        long bandId = createBand(leader, "9와숫자");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        LocalDate firstDate = today().plusDays(1);
+        long ruleId = createRule(leader, bandId, ruleBody(
+                roomId, "WEEKLY", firstDate.getDayOfWeek(), "15:00", "18:00", firstDate, null));
+        long myId = myUserId(leader);
+
+        // 표시 구간보다 오래된 회차 3건을 직접 심는다(배치가 몇 년 이어 만든 상황을 흉내).
+        List<Instant> oldStarts = List.of(
+                today().minusWeeks(20).atTime(15, 0).toInstant(ZoneOffset.ofHours(9)),
+                today().minusWeeks(15).atTime(15, 0).toInstant(ZoneOffset.ofHours(9)),
+                today().minusWeeks(12).atTime(15, 0).toInstant(ZoneOffset.ofHours(9)));
+        for (Instant s : oldStarts) {
+            reservationRepository.save(Reservation.ofRecurringRule(
+                    bandId, roomId, myId, ruleId, s, s.plusSeconds(3 * 3600), null, null));
+        }
+
+        // 상세: 오래된 3건은 빠지고, 나온 회차는 전부 (오늘 − 8주) 이후
+        JsonNode occ = ruleDetail(leader, bandId, ruleId).get("occurrences");
+        Instant floor = today().minusWeeks(8).atStartOfDay(SEOUL).toInstant();
+        for (JsonNode o : occ) {
+            assertThat(Instant.parse(o.get("startAt").asText())).isAfterOrEqualTo(floor);
+        }
+        assertThat(reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId).size())
+                .as("행 자체는 3건 더 있다")
+                .isEqualTo(occ.size() + 3);
+
+        // 캘린더 API 로는 오래된 회차도 보인다
+        String from = today().minusWeeks(21) + "T00:00:00Z";
+        String to = today().plusWeeks(1) + "T00:00:00Z";
+        JsonNode cal = data(get("/api/v1/bands/" + bandId + "/reservations?from=" + from
+                + "&to=" + to + "&includeInactive=true", leader)).get("reservations");
+        long oldSeen = 0;
+        for (JsonNode r : cal) {
+            if (Instant.parse(r.get("startAt").asText()).isBefore(floor)) {
+                oldSeen++;
+            }
+        }
+        assertThat(oldSeen).isEqualTo(3);
     }
 }
