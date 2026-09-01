@@ -64,7 +64,14 @@ public enum ErrorCode {
     RECURRING_RULE_NOT_FOUND(HttpStatus.NOT_FOUND, "정기 일정 규칙을 찾을 수 없습니다."),
     INVALID_RECURRING_TIME(HttpStatus.BAD_REQUEST, "종료 시각은 시작 시각보다 뒤여야 합니다."),
     INVALID_RECURRING_DATE_RANGE(HttpStatus.BAD_REQUEST, "종료일은 시작일과 같거나 뒤여야 합니다."),
-    NOT_RECURRING_RULE_OWNER(HttpStatus.FORBIDDEN, "규칙 등록자 본인 또는 밴드장만 할 수 있는 작업입니다.");
+    NOT_RECURRING_RULE_OWNER(HttpStatus.FORBIDDEN, "규칙 등록자 본인 또는 밴드장만 할 수 있는 작업입니다."),
+
+    // 참석 체크(RSVP) · 셋리스트 (Phase 6)
+    NOT_ATTENDANCE_OWNER(HttpStatus.FORBIDDEN, "본인의 참석 상태만 변경할 수 있습니다."),
+    ATTENDANCE_UPDATE_CONFLICT(HttpStatus.CONFLICT, "참석 응답이 동시에 처리되었습니다. 다시 시도해 주세요."),
+    SETLIST_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "셋리스트 항목을 찾을 수 없습니다."),
+    SETLIST_REORDER_MISMATCH(HttpStatus.BAD_REQUEST, "재정렬 목록이 현재 셋리스트 항목과 일치하지 않습니다."),
+    SETLIST_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "한 일정의 셋리스트 항목 수 상한을 넘었습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

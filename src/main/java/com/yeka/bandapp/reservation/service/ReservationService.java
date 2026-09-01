@@ -8,6 +8,7 @@ import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.reservation.dto.CreateReservationRequest;
 import com.yeka.bandapp.reservation.dto.OverlapWarning;
+import com.yeka.bandapp.reservation.dto.ReservationDetailResponse;
 import com.yeka.bandapp.reservation.dto.ReservationListResponse;
 import com.yeka.bandapp.reservation.dto.ReservationResponse;
 import com.yeka.bandapp.reservation.dto.ReservationWriteResponse;
@@ -58,13 +59,18 @@ public class ReservationService {
     private final BandAccessGuard accessGuard;
     private final BandDirectoryService bandDirectory;
     private final RoomDirectoryService roomDirectory;
+    private final AttendanceService attendanceService;
+    private final SetlistService setlistService;
 
     public ReservationService(ReservationRepository reservationRepository, BandAccessGuard accessGuard,
-                              BandDirectoryService bandDirectory, RoomDirectoryService roomDirectory) {
+                              BandDirectoryService bandDirectory, RoomDirectoryService roomDirectory,
+                              AttendanceService attendanceService, SetlistService setlistService) {
         this.reservationRepository = reservationRepository;
         this.accessGuard = accessGuard;
         this.bandDirectory = bandDirectory;
         this.roomDirectory = roomDirectory;
+        this.attendanceService = attendanceService;
+        this.setlistService = setlistService;
     }
 
     /**
@@ -83,6 +89,8 @@ public class ReservationService {
                 bandId, request.roomId(), userId, initialStatus,
                 request.startAt(), request.endAt(), request.cost(), trimToNull(request.note())));
         roomDirectory.increaseUsage(request.roomId());
+        // 일정 생성 시 그 시점의 활성 밴드 멤버 전원을 PENDING 참석으로 만든다(BUILD_PLAN Phase 6).
+        attendanceService.createPendingFor(saved.getId(), bandDirectory.activeMemberUserIds(bandId));
 
         return writeResponse(saved, findOverlaps(bandId, saved));
     }
@@ -116,11 +124,18 @@ public class ReservationService {
         return new ReservationListResponse(bandId, reservations.size(), reservations);
     }
 
+    /**
+     * 일정 상세. 일정 자체에 더해 참석 현황·집계("참석 N / 전체 M")와 셋리스트를 함께 싣는다
+     * (BUILD_PLAN Phase 6). 멤버십은 여기서 한 번만 확인하고, 참석/셋리스트 조립은 재검증하지 않는다.
+     */
     @Transactional(readOnly = true)
-    public ReservationResponse get(long bandId, long reservationId, long userId) {
+    public ReservationDetailResponse get(long bandId, long reservationId, long userId) {
         accessGuard.requireActiveMember(bandId, userId);
         Reservation r = reservation(bandId, reservationId);
-        return ReservationResponse.from(r, roomName(r.getRoomId()));
+        return ReservationDetailResponse.of(
+                ReservationResponse.from(r, roomName(r.getRoomId())),
+                attendanceService.boardFor(bandId, reservationId),
+                setlistService.itemsFor(reservationId));
     }
 
     /**

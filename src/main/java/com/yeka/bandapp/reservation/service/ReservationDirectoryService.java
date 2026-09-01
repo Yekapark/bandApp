@@ -1,5 +1,6 @@
 package com.yeka.bandapp.reservation.service;
 
+import com.yeka.bandapp.band.service.BandDirectoryService;
 import com.yeka.bandapp.reservation.entity.Reservation;
 import com.yeka.bandapp.reservation.entity.ReservationStatus;
 import com.yeka.bandapp.reservation.repository.ReservationRepository;
@@ -31,17 +32,25 @@ public class ReservationDirectoryService {
 
     private final ReservationRepository reservationRepository;
     private final RoomDirectoryService roomDirectory;
+    private final BandDirectoryService bandDirectory;
+    private final AttendanceService attendanceService;
 
     public ReservationDirectoryService(ReservationRepository reservationRepository,
-                                       RoomDirectoryService roomDirectory) {
+                                       RoomDirectoryService roomDirectory,
+                                       BandDirectoryService bandDirectory,
+                                       AttendanceService attendanceService) {
         this.reservationRepository = reservationRepository;
         this.roomDirectory = roomDirectory;
+        this.bandDirectory = bandDirectory;
+        this.attendanceService = attendanceService;
     }
 
     /**
-     * 정기 규칙이 만든 회차들을 저장하고 합주실 {@code usageCount}를 한 번에 올린다.
-     * 호출 측이 이미 있는 슬롯을 걸러 넘긴다는 전제이며, {@code ux_reservations_rule_slot}은
-     * 동시 실행 경합에 대한 DB 레벨 안전장치로만 남는다(그 경우 트랜잭션이 롤백되고 다음 실행이 메운다).
+     * 정기 규칙이 만든 회차들을 저장하고 합주실 {@code usageCount}를 한 번에 올리며, 각 회차에
+     * 그 시점 활성 밴드 멤버 전원의 {@code PENDING} 참석 행을 만든다(BUILD_PLAN Phase 6 — 회차도
+     * 단발 일정과 동일). 호출 측이 이미 있는 슬롯을 걸러 넘긴다는 전제이며,
+     * {@code ux_reservations_rule_slot}은 동시 실행 경합에 대한 DB 레벨 안전장치로만 남는다
+     * (그 경우 트랜잭션이 롤백되고 다음 실행이 메운다).
      *
      * @return 실제로 저장한 회차 수
      */
@@ -57,6 +66,9 @@ public class ReservationDirectoryService {
                 .toList();
         reservationRepository.saveAll(rows);
         roomDirectory.increaseUsageBy(roomId, rows.size());
+        attendanceService.createPendingFor(
+                rows.stream().map(Reservation::getId).toList(),
+                bandDirectory.activeMemberUserIds(bandId));
         return rows.size();
     }
 

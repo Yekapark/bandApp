@@ -3,6 +3,8 @@ package com.yeka.bandapp.recurring;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yeka.bandapp.recurring.service.RecurringRuleService;
 import com.yeka.bandapp.reservation.entity.Reservation;
+import com.yeka.bandapp.reservation.entity.ReservationAttendance;
+import com.yeka.bandapp.reservation.repository.ReservationAttendanceRepository;
 import com.yeka.bandapp.reservation.repository.ReservationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,9 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
 
     @Autowired
     ReservationRepository reservationRepository;
+
+    @Autowired
+    ReservationAttendanceRepository attendanceRepository;
 
     // --- 완료 기준 -----------------------------------------------------------
 
@@ -172,6 +177,34 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
                 assertThat(monthKey).isGreaterThan(prevMonthKey);
             }
             prevMonthKey = monthKey;
+        }
+    }
+
+    // --- 참석 체크(Phase 6): 회차도 생성 시점에 PENDING 참석 행을 갖는다 ----------
+
+    /**
+     * 정기 회차도 단발 일정과 똑같이, 만들어지는 시점에 밴드 멤버 전원의 PENDING 참석 행을 갖는다
+     * (아무도 응답하지 않았어도 행이 존재한다).
+     */
+    @Test
+    void recurring_occurrences_get_pending_attendance_rows_on_creation() {
+        String leader = signup("rec-att-l@band.app", "리더");
+        String member = signup("rec-att-m@band.app", "멤버");
+        long bandId = createBand(leader, "혁오참석");
+        join(member, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+
+        LocalDate firstDate = today().plusDays(1);
+        long ruleId = createRule(leader, bandId, ruleBody(
+                roomId, "WEEKLY", firstDate.getDayOfWeek(), "15:00", "18:00", firstDate, null));
+
+        List<Reservation> occ = reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId);
+        assertThat(occ).isNotEmpty();
+        for (Reservation r : occ) {
+            List<ReservationAttendance> rows = attendanceRepository.findByReservationId(r.getId());
+            assertThat(rows).as("회차 %s 의 참석 행", r.getId()).hasSize(2);
+            assertThat(rows).allSatisfy(a ->
+                    assertThat(a.getStatus().name()).isEqualTo("PENDING"));
         }
     }
 
