@@ -231,6 +231,39 @@ class RoomIntegrationTest extends RoomApiSupport {
     }
 
     @Test
+    void concurrent_rename_to_the_same_name_yields_one_ok_and_rest_409_never_500() throws Exception {
+        String leader = signup("room-rename-race@band.app", "리더");
+        long bandId = createBand(leader, "리네임레이스");
+        int threads = 6;
+        long[] roomIds = new long[threads];
+        for (int i = 0; i < threads; i++) {
+            roomIds[i] = createRoom(leader, bandId, "{\"name\":\"방-" + i + "\"}");
+        }
+
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<Integer>> calls = new java.util.ArrayList<>();
+            for (long roomId : roomIds) {
+                calls.add(() -> put("/api/v1/bands/" + bandId + "/rooms/" + roomId,
+                        "{\"name\":\"공통이름\"}", leader).getStatusCode().value());
+            }
+            List<Integer> codes = pool.invokeAll(calls).stream().map(f -> {
+                try {
+                    return f.get();
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }).toList();
+
+            // updateEditableFields 의 유니크 위반도 500 이 아니라 409 로 변환된다.
+            assertThat(codes).allSatisfy(c -> assertThat(c).isIn(200, 409));
+            assertThat(codes.stream().filter(c -> c == 200).count()).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     void invited_member_can_register_a_room() {
         String leader = signup("room-mem-l@band.app", "리더");
         String member = signup("room-mem-m@band.app", "멤버");

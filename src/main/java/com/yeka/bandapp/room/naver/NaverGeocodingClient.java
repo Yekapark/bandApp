@@ -91,9 +91,18 @@ public class NaverGeocodingClient implements GeocodingClient {
         try {
             double lng = Double.parseDouble(first.get("x").asText());
             double lat = Double.parseDouble(first.get("y").asText());
+            if (!isValidWgs84(lat, lng)) {
+                return Optional.empty();
+            }
             return Optional.of(new Coordinates(lat, lng));
         } catch (NumberFormatException e) {
             return Optional.empty();
         }
+    }
+
+    /** NaN·무한대·좌표 범위를 벗어난 값은 저장하지 않는다(비정상 응답이 DB·JSON 직렬화를 깨뜨리지 않게). */
+    private static boolean isValidWgs84(double lat, double lng) {
+        return Double.isFinite(lat) && Double.isFinite(lng)
+                && Math.abs(lat) <= 90.0 && Math.abs(lng) <= 180.0;
     }
 }

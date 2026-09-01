@@ -42,6 +42,12 @@ docker compose up    # 로컬 실행 (app + postgres + redis)
 - 상태 변경은 setter가 아니라 의미 있는 메서드로 표현한다 (`reservation.approve()`, `member.delegateLeadership()`)
 - DTO는 Java `record`, 엔티티↔DTO 변환은 DTO 쪽 정적 팩토리 메서드로 한다
 - 모든 API는 요청자의 밴드 소속 여부를 검증한다 (타 밴드 데이터 접근 차단)
+- **외부 HTTP 호출(카카오·네이버 등)은 `@Transactional` 안에서 하지 않는다.**
+  트랜잭션이 열려 있으면 첫 쿼리 시점에 잡은 DB 커넥션을 왕복 시간(타임아웃까지) 동안 붙잡아
+  커넥션 풀이 마른다. 멤버십 확인·지오코딩 같은 외부 I/O는 트랜잭션 밖에서 먼저 끝내고,
+  확정된 값만 들고 짧은 트랜잭션(또는 `@Modifying` 쿼리)으로 DB에 쓴다. 쓰기 중 유니크 경합은
+  `DataIntegrityViolationException`을 잡아 도메인 예외로 변환한다.
+  선례: `AuthService.kakaoLogin`, `RoomService.create`/`update`, `UserAccountService`의 unlink `afterCommit`.
 - 대용량 파일은 presigned URL로 클라이언트가 R2에 직접 업로드한다.
   백엔드를 경유하는 파일 스트림을 만들지 않는다.
 - 스펙에 없는 라이브러리 추가나 엔티티 변경은 먼저 제안하고 승인받는다

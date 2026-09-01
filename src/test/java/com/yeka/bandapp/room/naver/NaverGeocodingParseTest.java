@@ -54,4 +54,20 @@ class NaverGeocodingParseTest {
     void empty_when_body_is_null() {
         assertThat(NaverGeocodingClient.parseFirstCoordinates(null)).isEmpty();
     }
+
+    @Test
+    void empty_when_coordinates_are_out_of_wgs84_range_or_not_finite() throws Exception {
+        assertThat(NaverGeocodingClient.parseFirstCoordinates(
+                mapper.readTree("""
+                        {"addresses": [{"x": "999", "y": "37.5"}]}
+                        """))).isEmpty();
+        assertThat(NaverGeocodingClient.parseFirstCoordinates(
+                mapper.readTree("""
+                        {"addresses": [{"x": "126.9", "y": "91"}]}
+                        """))).isEmpty();
+        assertThat(NaverGeocodingClient.parseFirstCoordinates(
+                mapper.readTree("""
+                        {"addresses": [{"x": "Infinity", "y": "NaN"}]}
+                        """))).isEmpty();
+    }
 }

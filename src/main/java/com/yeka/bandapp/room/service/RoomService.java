@@ -27,6 +27,11 @@ import java.util.Optional;
  * (BUILD_PLAN Phase 3 — 밴드장 전용 작업이 아니다).
  *
  * <p>모든 메서드는 {@link BandAccessGuard#requireActiveMember}로 시작해 타 밴드 데이터 접근을 막는다.
+ *
+ * <p><b>지오코딩(외부 HTTP)은 어떤 트랜잭션 안에서도 호출하지 않는다</b>(CLAUDE.md 규칙). 그래서
+ * {@code create}/{@code update}에는 {@code @Transactional}이 없다 — 멤버십 확인·이름 검사·저장은
+ * 각각 저장소 호출 단위의 짧은 트랜잭션으로 처리되고, 이름 유니크 경합은 {@link #persist} /
+ * {@code RoomRepository#updateEditableFields}에서 409로 변환한다.
  */
 @Service
 public class RoomService {
@@ -51,9 +56,9 @@ public class RoomService {
 
     /**
      * 합주실 등록. 주소가 있으면 지오코딩을 시도하되, <b>실패해도 좌표 없이 저장한다</b>
-     * (Phase 3 완료 기준).
+     * (Phase 3 완료 기준). 지오코딩이 트랜잭션 밖이어야 하므로 {@code @Transactional} 없음 —
+     * 실제 쓰기는 {@link #persist}의 단일 INSERT 하나뿐이라 원자성 손실이 없다.
      */
-    @Transactional
     public RoomResponse create(long bandId, long userId, CreateRoomRequest request) {
         accessGuard.requireActiveMember(bandId, userId);
 
@@ -84,31 +89,41 @@ public class RoomService {
         return RoomResponse.from(room(bandId, roomId));
     }
 
-    /** 수정. 주소가 실제로 바뀐 경우에만 지오코딩을 다시 호출한다(외부 API 호출 절약). */
-    @Transactional
+    /**
+     * 수정. 주소가 실제로 바뀐 경우에만 지오코딩을 다시 호출한다(외부 API 호출 절약).
+     *
+     * <p>지오코딩을 트랜잭션 밖에서 끝낸 뒤, 확정된 좌표를 들고 {@code updateEditableFields} 부분 UPDATE
+     * 한 번으로 쓴다. 엔티티 {@code merge}(전체 컬럼 재기록)를 피해 동시에 바뀔 수 있는 {@code usageCount} 등을 보존한다.
+     */
     public RoomResponse update(long bandId, long roomId, long userId, UpdateRoomRequest request) {
         accessGuard.requireActiveMember(bandId, userId);
-        Room room = room(bandId, roomId);
+        Room snapshot = room(bandId, roomId);
 
         String name = request.name().trim();
         String address = trimToNull(request.address());
-        if (!name.equals(room.getName())) {
+        String phone = trimToNull(request.phone());
+        String memo = trimToNull(request.memo());
+
+        Double lat = snapshot.getLat();
+        Double lng = snapshot.getLng();
+        if (!Objects.equals(address, snapshot.getAddress())) {
+            // 주소가 바뀐 이상 옛 좌표는 더 이상 이 주소의 것이 아니다. 새로 얻지 못하면 비운다.
+            Optional<Coordinates> found = geocode(userId, address);
+            lat = found.map(Coordinates::lat).orElse(null);
+            lng = found.map(Coordinates::lng).orElse(null);
+        }
+        if (!name.equals(snapshot.getName())) {
             requireNameAvailable(bandId, name);
         }
 
-        boolean addressChanged = !Objects.equals(address, room.getAddress());
-        room.update(name, address, trimToNull(request.phone()), trimToNull(request.memo()));
-
-        if (addressChanged) {
-            // 주소가 바뀐 이상 옛 좌표는 더 이상 이 주소의 것이 아니다. 새로 얻지 못하면 비운다.
-            Optional<Coordinates> found = geocode(userId, address);
-            if (found.isPresent()) {
-                room.applyCoordinates(found.get());
-            } else {
-                room.clearCoordinates();
+        try {
+            if (roomRepository.updateEditableFields(roomId, name, address, lat, lng, phone, memo) == 0) {
+                throw new BusinessException(ErrorCode.ROOM_NOT_FOUND); // 조회와 UPDATE 사이에 삭제됨
             }
+        } catch (DataIntegrityViolationException e) {
+            throw new BusinessException(ErrorCode.ROOM_NAME_DUPLICATED); // 이름 경합
         }
-        return RoomResponse.from(persist(room));
+        return RoomResponse.from(room(bandId, roomId));
     }
 
     /** 소프트 삭제. 과거 일정이 참조할 수 있도록 행은 남긴다. */
