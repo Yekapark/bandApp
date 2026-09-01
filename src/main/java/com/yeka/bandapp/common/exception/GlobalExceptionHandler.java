@@ -8,8 +8,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.List;
 
@@ -40,6 +42,17 @@ public class GlobalExceptionHandler {
         ErrorCode code = ErrorCode.INVALID_INPUT;
         return ResponseEntity.status(code.status())
                 .body(ApiResponse.fail(ErrorPayload.of(code.name(), "요청 본문을 해석할 수 없습니다.")));
+    }
+
+    /**
+     * 쿼리·경로 파라미터가 빠졌거나 타입이 안 맞을 때(예: {@code ?from=엉터리}, 오프셋 없는 날짜).
+     * 이 매핑이 없으면 아래 {@link #handleUnexpected}가 먼저 잡아 500이 된다 — 400이 맞다.
+     */
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
+    public ResponseEntity<ApiResponse<Void>> handleBadRequestParam(Exception e) {
+        ErrorCode code = ErrorCode.INVALID_INPUT;
+        return ResponseEntity.status(code.status())
+                .body(ApiResponse.fail(ErrorPayload.of(code.name(), "요청 파라미터가 올바르지 않습니다.")));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

@@ -16,9 +16,11 @@ import com.yeka.bandapp.reservation.entity.Reservation;
 import com.yeka.bandapp.reservation.entity.ReservationStatus;
 import com.yeka.bandapp.reservation.repository.ReservationRepository;
 import com.yeka.bandapp.room.service.RoomDirectoryService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -39,11 +41,18 @@ import java.util.Set;
  *
  * <p>합주실 {@code usageCount}는 이 서비스가 관리한다: 등록 시 +1, 취소·거절 시 -1,
  * 수정으로 합주실이 바뀌면 이전 방 -1 / 새 방 +1. 증감은 {@link RoomDirectoryService}의 원자 UPDATE 로만 한다.
- * 외부 HTTP 호출이 없으므로 각 명령은 하나의 일반 {@code @Transactional}로 처리한다(지오코딩이 있는
- * {@code RoomService}와 달리 트랜잭션을 쪼갤 이유가 없다).
+ * 상태를 바꾸는 명령(승인·거절·수정·취소)은 대상 일정 행에 비관적 락을 걸어(같은 일정에 대한 동시 요청을
+ * 직렬화) 상태 전이와 그에 딸린 {@code usageCount} 증감이 정확히 한 번만 일어나게 한다.
+ * 외부 HTTP 호출이 없으므로 각 명령은 하나의 일반 {@code @Transactional}로 처리한다.
  */
 @Service
 public class ReservationService {
+
+    /** 겹침 경고에 담는 최대 건수. 넓은 구간을 잡은 일정이 응답을 무한정 키우지 못하게 한다. */
+    private static final int OVERLAP_WARNING_LIMIT = 20;
+
+    /** 캘린더 조회가 한 번에 볼 수 있는 최대 기간. 1년 + 여유. */
+    private static final long MAX_CALENDAR_RANGE_DAYS = 400;
 
     private final ReservationRepository reservationRepository;
     private final BandAccessGuard accessGuard;
@@ -78,7 +87,7 @@ public class ReservationService {
         return writeResponse(saved, findOverlaps(bandId, saved));
     }
 
-    /** 캘린더용 기간 조회. {@code from}/{@code to}는 필수이며 {@code to > from}이어야 한다. */
+    /** 캘린더용 기간 조회. {@code from}/{@code to}는 필수이며 {@code to > from}, 최대 {@value #MAX_CALENDAR_RANGE_DAYS}일이다. */
     @Transactional(readOnly = true)
     public ReservationListResponse list(long bandId, long userId, Instant from, Instant to, boolean includeInactive) {
         accessGuard.requireActiveMember(bandId, userId);
@@ -87,6 +96,9 @@ public class ReservationService {
         }
         if (!to.isAfter(from)) {
             throw new BusinessException(ErrorCode.INVALID_RESERVATION_PERIOD);
+        }
+        if (Duration.between(from, to).toDays() > MAX_CALENDAR_RANGE_DAYS) {
+            throw new BusinessException(ErrorCode.RESERVATION_RANGE_TOO_WIDE);
         }
 
         Collection<ReservationStatus> statuses = includeInactive
@@ -121,7 +133,7 @@ public class ReservationService {
     public ReservationWriteResponse update(long bandId, long reservationId, long userId,
                                            UpdateReservationRequest request) {
         BandMember member = accessGuard.requireActiveMember(bandId, userId);
-        Reservation r = reservation(bandId, reservationId);
+        Reservation r = lockedReservation(bandId, reservationId);
         requireOwnerOrLeader(r, member, userId);
         if (!r.isActive()) {
             throw new BusinessException(ErrorCode.RESERVATION_NOT_EDITABLE);
@@ -142,8 +154,7 @@ public class ReservationService {
         r.changeDetails(request.cost(), trimToNull(request.note()));
 
         if (roomChanged) {
-            roomDirectory.decreaseUsage(previousRoomId);
-            roomDirectory.increaseUsage(request.roomId());
+            shiftUsage(previousRoomId, request.roomId());
         }
         if (wasConfirmed && (roomChanged || timeChanged)
                 && bandDirectory.reservationPermissionOf(bandId) == ReservationPermission.APPROVAL_REQUIRED) {
@@ -176,11 +187,13 @@ public class ReservationService {
      * 일정 취소. 등록자 본인 또는 밴드장만. 행은 남고 status 만 {@code CANCELLED}가 된다.
      * 이미 취소된 일정에 다시 호출해도 멱등하게 아무 일도 일어나지 않는다(사용 횟수가 두 번 깎이지 않도록).
      * 이미 거절된 일정은 취소 대상이 아니다(409).
+     *
+     * <p>대상 행에 비관적 락을 걸어, 같은 일정을 향한 동시 취소(더블탭 등)에서도 감소가 한 번만 반영된다.
      */
     @Transactional
     public void cancel(long bandId, long reservationId, long userId) {
         BandMember member = accessGuard.requireActiveMember(bandId, userId);
-        Reservation r = reservation(bandId, reservationId);
+        Reservation r = lockedReservation(bandId, reservationId);
         requireOwnerOrLeader(r, member, userId);
         if (r.getStatus() == ReservationStatus.REJECTED) {
             throw new BusinessException(ErrorCode.RESERVATION_NOT_EDITABLE);
@@ -206,13 +219,20 @@ public class ReservationService {
         };
     }
 
+    /** 읽기 전용 조회(상세·목록). 타 밴드 일정은 존재를 알리지 않고 {@code RESERVATION_NOT_FOUND}. */
     private Reservation reservation(long bandId, long reservationId) {
         return reservationRepository.findByIdAndBandId(reservationId, bandId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
     }
 
+    /** 상태를 바꾸는 명령용 — 행에 {@code FOR UPDATE} 락을 걸어 같은 일정에 대한 동시 전이를 직렬화한다. */
+    private Reservation lockedReservation(long bandId, long reservationId) {
+        return reservationRepository.findByIdAndBandIdForUpdate(reservationId, bandId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
+    }
+
     private Reservation requirePending(long bandId, long reservationId) {
-        Reservation r = reservation(bandId, reservationId);
+        Reservation r = lockedReservation(bandId, reservationId);
         if (r.getStatus() != ReservationStatus.PENDING) {
             throw new BusinessException(ErrorCode.RESERVATION_NOT_PENDING);
         }
@@ -231,9 +251,24 @@ public class ReservationService {
         }
     }
 
+    /**
+     * 합주실 이동 시 사용 횟수 이전 방 -1 / 새 방 +1. 두 UPDATE 를 <b>방 id 오름차순</b>으로 실행해,
+     * 두 요청이 같은 두 방을 서로 반대로 옮길 때 생길 수 있는 교착(AB-BA)을 피한다.
+     */
+    private void shiftUsage(long previousRoomId, long newRoomId) {
+        if (previousRoomId < newRoomId) {
+            roomDirectory.decreaseUsage(previousRoomId);
+            roomDirectory.increaseUsage(newRoomId);
+        } else {
+            roomDirectory.increaseUsage(newRoomId);
+            roomDirectory.decreaseUsage(previousRoomId);
+        }
+    }
+
     private List<Reservation> findOverlaps(long bandId, Reservation self) {
         return reservationRepository.findOverlapping(
-                bandId, self.getStartAt(), self.getEndAt(), self.getId());
+                bandId, self.getStartAt(), self.getEndAt(), self.getId(),
+                PageRequest.of(0, OVERLAP_WARNING_LIMIT));
     }
 
     /** 일정 + 겹침 목록을 합주실 이름까지 채워 응답으로 만든다. 이름은 한 번의 조회로 모아 해결한다. */
