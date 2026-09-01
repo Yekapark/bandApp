@@ -280,10 +280,11 @@ BUILD SUCCESSFUL — 4 tests
 제거"는 통합 테스트(`RoomIntegrationTest`, `FakeGeocodingClient` 의 호출 횟수로 검증)에서 다룬다 —
 `docker compose` 로는 usageCount 를 올릴 수단(Phase 4 예약)이 아직 없기 때문이다.
 
-### 6.3 CI — 자동 테스트
+### 6.3 CI — 자동 테스트 (2026-09-01, PR #18)
 
-_(PR 생성 후 채운다.)_ 브랜치 `phase-3-room` → `main` PR. GitHub Actions `build` 잡이
-Testcontainers 통합 테스트를 돌린다.
+브랜치 `phase-3-room` → `main` PR #18. GitHub Actions `build` 잡: `./gradlew build --no-daemon`
+→ `> Task :test` 실행, `BUILD SUCCESSFUL in 50s`, `build` 체크 pass.
+[actions/runs/33457690625](https://github.com/Yekapark/bandApp/actions/runs/33457690625)
 
 테스트 클래스:
 - `RoomIntegrationTest` — 완료 기준 2건 + 지오코딩 성공/실패/미호출, 재지오코딩 조건, 소프트 삭제,
@@ -310,14 +311,14 @@ Testcontainers 통합 테스트를 돌린다.
 
 ## 8. 커밋 · CI
 
-- 브랜치 `phase-3-room` → **PR (main 대상)**
+- 브랜치 `phase-3-room` → **[PR #18](https://github.com/Yekapark/bandApp/pull/18)** (`main` 대상)
 - 커밋 (기능 단위):
   1. `feat(room): 합주실 도메인 모델 + V3 마이그레이션`
   2. `feat(room): 네이버 지오코딩 클라이언트 (실패 시 좌표 null)`
   3. `feat(room): 합주실 등록·수정·삭제·목록 API`
   4. `feat(band): 내가 속한 밴드 목록 API (BACKLOG §1.9)`
   5. `test(room): Phase 3 통합·단위 테스트 + 진행 기록`
-- CI: _(PR 링크·run 링크를 여기 채운다)_
+- CI: [actions/runs/33457690625](https://github.com/Yekapark/bandApp/actions/runs/33457690625) — pass
 
 ## 9. 다음 Phase 예고 — Phase 4 (일정 등록)
 
