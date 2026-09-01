@@ -320,6 +320,24 @@ BUILD SUCCESSFUL — 4 tests
   5. `test(room): Phase 3 통합·단위 테스트 + 진행 기록`
 - CI: [actions/runs/33457690625](https://github.com/Yekapark/bandApp/actions/runs/33457690625) — pass
 
+### 8.1 전체 점검 후속 수정 (2026-09-01, 같은 PR에 포함)
+
+Phase 0~3 전 경로 점검에서 나온 정합성·보안 항목을 이 브랜치에 이어서 고쳤다. 상세는 `docs/BACKLOG.md` §1.10.
+
+| 항목 | 내용 |
+|---|---|
+| A1 | 카카오 로그인의 외부 HTTP 호출을 트랜잭션 밖으로 분리 (`fetchKakaoIdentity`) |
+| A2 | `/auth/refresh` 재시도·더블탭이 전 세션 로그아웃을 유발하던 것 → 60초 유예 안에서는 같은 응답을 멱등 반환. 유예 밖 옛 토큰은 여전히 전 세션 차단 |
+| A3 | `RoomService` 이름 유니크 경합이 500 → 409 `ROOM_NAME_DUPLICATED` (`persist` 헬퍼) |
+| A4 | 카카오 최초 로그인 경합이 500 → 그 계정으로 이어감 |
+| B1 | `application-prod.yml` 추가 — 운영에서 Swagger/API 명세 비공개, actuator health 상세 `never`. **배포 시 `SPRING_PROFILES_ACTIVE=prod` 필수** |
+| B2 | 이메일 `trim().toLowerCase` 정규화 (대소문자 다른 별개 계정 방지) |
+| B3 | 레이트리밋 카운터 `SET NX EX` + `INCR` 로 원자화 (TTL 없는 좀비 키 방지) |
+
+검증(`docker compose`, 2026-09-01): B2 대소문자 무관 가입·로그인, A2 같은 refresh 2회 → 동일 응답 + 회전 토큰 유효,
+B3 25회 연타 → 429 + 키 TTL 100s, B1 `prod` 프로파일에서 `/v3/api-docs`·`/swagger-ui` → 401.
+동시성 항목(A3·A4 레이스, refresh 위조 토큰)은 통합 테스트에서 CI로 검증.
+
 ## 9. 다음 Phase 예고 — Phase 4 (일정 등록)
 
 `Band.reservationPermission` 에 따른 권한 분기와 초기 status 결정, 밴드장의 승인/거절
