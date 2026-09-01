@@ -44,7 +44,12 @@ public enum ErrorCode {
     INVITE_EXPIRED(HttpStatus.GONE, "만료된 초대코드입니다."),
     INVITE_REVOKED(HttpStatus.GONE, "무효화된 초대코드입니다."),
     INVITE_EXHAUSTED(HttpStatus.CONFLICT, "사용 가능 횟수를 모두 소진한 초대코드입니다."),
-    ALREADY_BAND_MEMBER(HttpStatus.CONFLICT, "이미 이 밴드에 속해 있습니다.");
+    ALREADY_BAND_MEMBER(HttpStatus.CONFLICT, "이미 이 밴드에 속해 있습니다."),
+
+    // 합주실 (Phase 3)
+    // 지오코딩 실패는 예외가 아니다(좌표 없이 등록 성공) — 그래서 에러코드가 없다.
+    ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "합주실을 찾을 수 없습니다."),
+    ROOM_NAME_DUPLICATED(HttpStatus.CONFLICT, "같은 이름의 합주실이 이미 있습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;
