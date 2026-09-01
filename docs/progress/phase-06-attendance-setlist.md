@@ -155,8 +155,8 @@
   완료 기준 2건(① 생성 이후 합류 멤버 응답 가능, ② 타인 변경 403) + 초기 PENDING 생성, 상세 응답 내장,
   취소 일정 응답 거부, 타 밴드 격리, 셋리스트 CRUD·재정렬·권한.
 - **CI 결과: `./gradlew build` (전체 테스트 포함) BUILD SUCCESSFUL** — PR #25,
-  [run 33515673906](https://github.com/Yekapark/bandApp/actions/runs/33515673906). Phase 0~5 기존
-  테스트도 함께 통과해 `GET /reservations/{id}` 응답 타입 변경(`ReservationDetailResponse`)의 회귀 없음이 확인됐다.
+  최종 [run 33517361994](https://github.com/Yekapark/bandApp/actions/runs/33517361994)(자체 점검 반영 후).
+  Phase 0~5 기존 테스트도 함께 통과해 `GET /reservations/{id}` 응답 타입 변경(`ReservationDetailResponse`)의 회귀 없음이 확인됐다.
 
 ## 6.1 구현 후 자체 점검(보안·누락) 결과
 
@@ -187,7 +187,7 @@
 
 - 브랜치: `phase-6-attendance-setlist`
 - PR: [#25](https://github.com/Yekapark/bandApp/pull/25)
-- CI: [run 33515673906](https://github.com/Yekapark/bandApp/actions/runs/33515673906) — ✅ BUILD SUCCESSFUL
+- CI: [run 33517361994](https://github.com/Yekapark/bandApp/actions/runs/33517361994) — ✅ BUILD SUCCESSFUL (자체 점검 반영 후)
 
 ## 9. 다음 Phase 예고
 
