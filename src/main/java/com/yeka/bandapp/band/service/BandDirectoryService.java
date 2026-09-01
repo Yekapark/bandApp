@@ -64,6 +64,17 @@ public class BandDirectoryService {
                 .toList();
     }
 
+    /**
+     * 밴드의 현재 활성 멤버 userId 목록(가입 순). 이름이 필요 없는 경로(참석 행 선생성 등)가
+     * {@link #activeMembers}의 사용자 요약 조회를 건너뛰도록 별도로 둔다.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> activeMemberUserIds(long bandId) {
+        return bandMemberRepository.findByBandIdAndLeftAtIsNullOrderByJoinedAtAsc(bandId).stream()
+                .map(BandMember::getUserId)
+                .toList();
+    }
+
     /** 활성 멤버 한 명의 표시용 요약. */
     public record MemberBrief(long userId, String name, String role) {
     }

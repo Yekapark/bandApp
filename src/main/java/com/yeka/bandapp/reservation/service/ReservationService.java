@@ -90,7 +90,7 @@ public class ReservationService {
                 request.startAt(), request.endAt(), request.cost(), trimToNull(request.note())));
         roomDirectory.increaseUsage(request.roomId());
         // 일정 생성 시 그 시점의 활성 밴드 멤버 전원을 PENDING 참석으로 만든다(BUILD_PLAN Phase 6).
-        attendanceService.createPendingFor(saved.getId(), bandDirectory.activeMembers(bandId));
+        attendanceService.createPendingFor(saved.getId(), bandDirectory.activeMemberUserIds(bandId));
 
         return writeResponse(saved, findOverlaps(bandId, saved));
     }

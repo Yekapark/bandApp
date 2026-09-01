@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -52,17 +53,31 @@ public class AttendanceService {
     }
 
     /**
-     * 일정 생성 직후 호출 — 넘겨받은 멤버 전원에 대해 {@code PENDING} 참석 행을 만든다.
+     * 일정 생성 직후 호출 — 그 시점 활성 멤버 전원에 대해 {@code PENDING} 참석 행을 만든다.
      * {@link com.yeka.bandapp.reservation.service.ReservationService#create}의 트랜잭션 안에서 돈다.
      */
     @Transactional
-    public void createPendingFor(long reservationId, List<MemberBrief> members) {
-        if (members.isEmpty()) {
+    public void createPendingFor(long reservationId, Collection<Long> memberUserIds) {
+        createPendingFor(List.of(reservationId), memberUserIds);
+    }
+
+    /**
+     * 정기 일정 회차(Phase 5) 여러 건 × 멤버 전원의 {@code PENDING} 참석 행을 한 번에 만든다.
+     * {@link com.yeka.bandapp.reservation.service.ReservationDirectoryService#createOccurrences}의
+     * 트랜잭션 안에서 돈다 — 회차 생성과 원자적이다. 넘어온 회차는 방금 만들어진 것이라 기존 참석 행이 없다.
+     */
+    @Transactional
+    public void createPendingFor(Collection<Long> reservationIds, Collection<Long> memberUserIds) {
+        if (reservationIds.isEmpty() || memberUserIds.isEmpty()) {
             return;
         }
-        attendanceRepository.saveAll(members.stream()
-                .map(m -> ReservationAttendance.pending(reservationId, m.userId()))
-                .toList());
+        List<ReservationAttendance> rows = new ArrayList<>(reservationIds.size() * memberUserIds.size());
+        for (Long reservationId : reservationIds) {
+            for (Long userId : memberUserIds) {
+                rows.add(ReservationAttendance.pending(reservationId, userId));
+            }
+        }
+        attendanceRepository.saveAll(rows);
     }
 
     /**

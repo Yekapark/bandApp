@@ -28,7 +28,7 @@
 | 취소·거절된 일정에 대한 응답 | 409 `RESERVATION_NOT_EDITABLE`로 거부 | 죽은 일정에 RSVP는 의미가 없다. 기존 일정 수정과 같은 에러코드 재사용 |
 | 셋리스트 편집 권한 | 밴드 멤버 **누구나** (등록자 제한 없음) | 셋리스트는 협업 산출물이다. BUILD_PLAN이 등록자 제한을 걸지 않았다 |
 | 셋리스트 순서 | 추가 시 맨 뒤(`order_no` = 현재 최대 + 1). 순서 변경은 별도 **재정렬 API**가 1..N을 다시 매김 | `order_no`에 유니크를 걸지 않아(재정렬 중 일시적 충돌 회피) 곡 수정 API는 순서를 건드리지 않고 곡 정보만 바꾼다 |
-| 정기 일정(Phase 5) 회차의 참석 행 | 회차 생성 시 **미리 만들지 않음** — 참석 현황·응답이 "현재 멤버 + upsert" 방식이라 회차도 자동으로 올바르게 동작한다 | 회차 벌크 생성/배치 경로에 밴드-멤버 조회를 끼우지 않기 위해서. 사용자에게 보이는 동작은 동일(모두 PENDING으로 시작) |
+| 정기 일정(Phase 5) 회차의 참석 행 | 회차 생성 시(규칙 등록·연장 배치 모두) **밴드 멤버 전원 PENDING 행을 미리 만든다** — 단발 일정과 동일 | `ReservationDirectoryService.createOccurrences`가 회차 저장·usageCount 증가와 같은 트랜잭션에서 `AttendanceService.createPendingFor(회차 id 목록, 멤버 userId 목록)` 호출 |
 
 ## 3. 무엇을 만들었나
 
@@ -58,9 +58,11 @@
 - **저장소** `repository/ReservationAttendanceRepository.java` — `findByReservationId`(현황),
   `findByReservationIdAndUserId`(upsert).
 - **서비스** `service/AttendanceService.java`
-  - `createPendingFor(reservationId, members)` — 일정 생성 직후 `ReservationService`가 호출.
+  - `createPendingFor(reservationId, memberUserIds)` / `createPendingFor(reservationIds, memberUserIds)`
+    — 단발 일정 생성 직후 `ReservationService`가, 정기 회차 생성 시 `ReservationDirectoryService`가 호출.
   - `respond(bandId, reservationId, targetUserId, callerUserId, status)` — 멤버십 → 본인 확인(아니면 403)
-    → 일정 밴드 대조(404) → 활성 여부(409) → upsert → 갱신된 전체 현황 반환.
+    → 일정 밴드 대조(404) → 활성 여부(409) → upsert(행 있으면 더티 업데이트, 없으면 INSERT·경합 시
+    409 `ATTENDANCE_UPDATE_CONFLICT`) → 갱신된 전체 현황 반환.
   - `getBoard(...)` / `boardFor(bandId, reservationId)` — **현재 활성 멤버 전원** + 각자의 저장된 응답
     (없으면 PENDING). `attendingCount` = ATTENDING 수, `memberCount` = 현재 활성 멤버 수.
 - **컨트롤러** `controller/AttendanceController.java` — `GET`/`PUT /api/v1/bands/{bandId}/reservations/{reservationId}/attendances[/{userId}]`.
@@ -80,10 +82,11 @@
 | 파일 | 변경 |
 |---|---|
 | `reservation/service/ReservationService.java` | `create`가 저장 직후 `attendanceService.createPendingFor(...)` 호출. `get`이 `ReservationResponse` → **`ReservationDetailResponse`** 반환(참석 현황·셋리스트 포함) |
+| `reservation/service/ReservationDirectoryService.java` | `createOccurrences`가 회차 저장·usageCount 증가와 같은 트랜잭션에서 각 회차에 멤버 전원 PENDING 참석 행 생성. `BandDirectoryService`·`AttendanceService` 주입 |
 | `reservation/controller/ReservationController.java` | `GET /reservations/{id}` 응답 타입을 `ReservationDetailResponse`로 |
 | `reservation/dto/ReservationDetailResponse.java` (신규) | 일정 필드를 그대로 펼치고(`id`, `status` … 목록 응답과 동일 위치) `attendance`, `setlist`를 더한 record |
-| `band/service/BandDirectoryService.java` | `activeMembers(bandId)` 추가 — 현재 활성 멤버 요약(userId·name·role). `BandMemberRepository`·`UserDirectoryService` 주입 |
-| `common/exception/ErrorCode.java` | `NOT_ATTENDANCE_OWNER`(403), `SETLIST_ITEM_NOT_FOUND`(404), `SETLIST_REORDER_MISMATCH`(400) |
+| `band/service/BandDirectoryService.java` | `activeMembers(bandId)`(userId·name·role) + `activeMemberUserIds(bandId)`(userId만, 참석 행 선생성용) 추가. `BandMemberRepository`·`UserDirectoryService` 주입 |
+| `common/exception/ErrorCode.java` | `NOT_ATTENDANCE_OWNER`(403), `ATTENDANCE_UPDATE_CONFLICT`(409), `SETLIST_ITEM_NOT_FOUND`(404), `SETLIST_REORDER_MISMATCH`(400), `SETLIST_LIMIT_EXCEEDED`(409) |
 
 > `GET /reservations/{id}` 응답은 기존 필드가 그대로 최상위에 남는다(`ReservationDetailResponse`가
 > `ReservationResponse`의 필드를 펼쳐 담는다) — Phase 4·5의 기존 테스트·클라이언트가 깨지지 않는다.
@@ -93,7 +96,9 @@
 ### 4.1 일정 생성 → 참석 행 생성
 
 `POST /reservations` → `ReservationService.create` 트랜잭션 안에서 일정 저장 → 합주실 usageCount +1 →
-`bandDirectory.activeMembers(bandId)`로 그 시점 활성 멤버를 모아 전원 `PENDING` 참석 행 생성.
+`bandDirectory.activeMemberUserIds(bandId)`로 그 시점 활성 멤버를 모아 전원 `PENDING` 참석 행 생성.
+정기 규칙 등록·연장 배치도 `ReservationDirectoryService.createOccurrences`가 같은 방식으로 각 회차에
+참석 행을 만든다(회차 저장과 한 트랜잭션).
 
 ### 4.2 참석 응답 (본인만)
 
@@ -153,7 +158,9 @@
   검증은 **CI(GitHub Actions, 자체 Docker)** 에서 이뤄진다.
 - 신규 통합 테스트 `src/test/java/com/yeka/bandapp/reservation/AttendanceSetlistIntegrationTest.java` —
   완료 기준 2건(① 생성 이후 합류 멤버 응답 가능, ② 타인 변경 403) + 초기 PENDING 생성, 상세 응답 내장,
-  취소 일정 응답 거부, 타 밴드 격리, 셋리스트 CRUD·재정렬·권한.
+  취소 일정 응답 거부, 동시 더블탭, 타 밴드 격리, 셋리스트 CRUD·재정렬·권한.
+- `RecurringRuleIntegrationTest.recurring_occurrences_get_pending_attendance_rows_on_creation` —
+  정기 회차도 생성 시점에 멤버 전원의 PENDING 참석 행을 갖는다.
 - **CI 결과: `./gradlew build` (전체 테스트 포함) BUILD SUCCESSFUL** — PR #25,
   최종 [run 33517361994](https://github.com/Yekapark/bandApp/actions/runs/33517361994)(자체 점검 반영 후).
   Phase 0~5 기존 테스트도 함께 통과해 `GET /reservations/{id}` 응답 타입 변경(`ReservationDetailResponse`)의 회귀 없음이 확인됐다.
@@ -166,14 +173,15 @@
 | 한 일정의 셋리스트 항목 수에 상한이 없었다(밴드 멤버가 자기 밴드에 대량 등록 → 응답 크기 증가). | 하 | `SetlistService`에 항목 수 상한 300, 초과 시 409 `SETLIST_LIMIT_EXCEEDED`. `ReorderSetlistRequest.itemIds`에 `@Size(max=300)` |
 | **타 밴드 격리** — 모든 엔드포인트가 `requireActiveMember(bandId, …)` + `findByIdAndBandId`로 일정의 밴드 소속을 대조. 경로에 남의 `reservationId`/`itemId`를 끼워도 404. | — | 문제 없음(설계대로) |
 | **본인만 참석 변경** — `PUT .../attendances/{userId}`에서 `{userId}≠요청자`면 403. 성공 경로는 언제나 요청자 본인 id뿐이라, 타인의 참석 행을 만들거나 바꿀 수 없다. | — | 문제 없음 |
-| SQL 인젝션 / 대량 바인딩 — 모든 쿼리 파라미터 바인딩, 네이티브 upsert도 `:param`만 사용. DTO는 명시적 `record`(엔티티 바인딩 없음). | — | 문제 없음 |
+| SQL 인젝션 / 대량 바인딩 — 전부 JPA 파생 쿼리·JPQL, 파라미터 바인딩만. DTO는 명시적 `record`(엔티티 바인딩 없음). | — | 문제 없음 |
 | `referenceUrl`은 `@Size(max=2000)`만 검사하고 URL 스킴 검증은 하지 않는다(자유 기재 허용). 백엔드는 이 값을 렌더링하지 않으므로 서버 측 위험은 없다. 클라이언트가 링크로 만들 때 스킴 화이트리스트(http/https)를 적용하면 된다. | 하(클라이언트 몫) | 문서화만 |
 | 참석 응답에 rate limit 없음 — 기존 일정 등록/수정도 rate limit 대상이 아니다(초대·인증·지오코딩만). 내부 저위험 쓰기라 일관되게 두었다. | 하 | 현행 유지 |
 
 ## 7. 알려진 이슈 / 제약
 
-- 정기 일정(Phase 5) 회차는 참석 행을 미리 만들지 않는다(§2 표 참조). 사용자에게 보이는 동작은
-  단발 일정과 같다(모두 PENDING). 필요하면 회차 벌크 생성 경로에 `createPendingFor`를 추가하면 된다.
+- 정기 일정(Phase 5) 회차도 생성 시점에 밴드 멤버 전원의 PENDING 참석 행을 갖는다(규칙 등록·연장
+  배치 공통). 규칙 등록 시 회차수 × 멤버수만큼 참석 행이 한 트랜잭션에 삽입된다(기본 지평선 8주 ×
+  밴드 규모라 소량).
 - `respondedAt`은 서버 시각이며 클라이언트 시각을 신뢰하지 않는다. `PENDING`(응답 취소)이면 비운다.
 - 멤버가 응답한 뒤 탈퇴 → 재가입하면 이전 참석 행(같은 `user_id`)이 그대로 보인다. 멤버십 세대를
   추적하지 않아 생기는 드문 엣지케이스로, 재가입 시 PENDING 초기화는 하지 않는다.
