@@ -162,8 +162,14 @@
 - `RecurringRuleIntegrationTest.recurring_occurrences_get_pending_attendance_rows_on_creation` —
   정기 회차도 생성 시점에 멤버 전원의 PENDING 참석 행을 갖는다.
 - **CI 결과: `./gradlew build` (전체 테스트 포함) BUILD SUCCESSFUL** — PR #25,
-  최종 [run 33517361994](https://github.com/Yekapark/bandApp/actions/runs/33517361994)(자체 점검 반영 후).
+  최종 [run 33521502528](https://github.com/Yekapark/bandApp/actions/runs/33521502528)
+  (정기 회차 참석 행 생성 + 그 회귀 수정까지 반영).
   Phase 0~5 기존 테스트도 함께 통과해 `GET /reservations/{id}` 응답 타입 변경(`ReservationDetailResponse`)의 회귀 없음이 확인됐다.
+- 정기 회차에도 참석 행을 만들면서(`41ee833` 직전 커밋) `RecurringExtensionJobTest` 3건이 깨졌다가
+  같은 PR 안에서 고쳤다. 원인: 이 테스트는 "아직 안 만든 미래 회차"를 흉내 내려고 `reservations`
+  행을 raw 로 하드 삭제하는데, `reservation_attendances` FK 에 `ON DELETE CASCADE` 가 없어 자식
+  참석 행이 있으면 삭제가 FK 위반이 된다. 운영엔 회차 하드 삭제 경로가 없으므로(규칙·회차 삭제는
+  soft cancel) 스키마는 두고, 테스트가 회차 삭제 전에 참석 행부터 지우도록 헬퍼를 추가했다.
 
 ## 6.1 구현 후 자체 점검(보안·누락) 결과
 
@@ -195,7 +201,8 @@
 
 - 브랜치: `phase-6-attendance-setlist`
 - PR: [#25](https://github.com/Yekapark/bandApp/pull/25)
-- CI: [run 33517361994](https://github.com/Yekapark/bandApp/actions/runs/33517361994) — ✅ BUILD SUCCESSFUL (자체 점검 반영 후)
+- CI: [run 33521502528](https://github.com/Yekapark/bandApp/actions/runs/33521502528) — ✅ BUILD SUCCESSFUL
+  (정기 회차 참석 행 생성 + `RecurringExtensionJobTest` 회귀 수정 반영)
 
 ## 9. 다음 Phase 예고
 
