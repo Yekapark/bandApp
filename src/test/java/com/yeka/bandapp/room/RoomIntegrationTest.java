@@ -11,6 +11,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.ResponseEntity;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -195,6 +201,33 @@ class RoomIntegrationTest extends RoomApiSupport {
 
         assertThat(res.getStatusCode().value()).isEqualTo(409);
         assertThat(errorCode(res)).isEqualTo("ROOM_NAME_DUPLICATED");
+    }
+
+    @Test
+    void concurrent_same_name_yields_one_created_and_rest_409_never_500() throws Exception {
+        String leader = signup("room-race@band.app", "리더");
+        long bandId = createBand(leader, "레이스");
+
+        int threads = 6;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            List<Callable<Integer>> calls = Collections.nCopies(threads, () ->
+                    post("/api/v1/bands/" + bandId + "/rooms", "{\"name\":\"동시등록방\"}", leader)
+                            .getStatusCode().value());
+            List<Integer> codes = pool.invokeAll(calls).stream().map(f -> {
+                try {
+                    return f.get();
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }).toList();
+
+            // 선검사와 ux_rooms_band_name_active 사이의 경합에서도 500 이 새지 않고, 정확히 하나만 생성된다.
+            assertThat(codes).allSatisfy(c -> assertThat(c).isIn(201, 409));
+            assertThat(codes.stream().filter(c -> c == 201).count()).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test

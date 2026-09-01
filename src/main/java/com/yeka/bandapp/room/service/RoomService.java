@@ -13,6 +13,7 @@ import com.yeka.bandapp.room.entity.Room;
 import com.yeka.bandapp.room.naver.Coordinates;
 import com.yeka.bandapp.room.naver.GeocodingClient;
 import com.yeka.bandapp.room.repository.RoomRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,7 +65,7 @@ public class RoomService {
                 trimToNull(request.phone()), trimToNull(request.memo()));
         geocode(userId, address).ifPresent(room::applyCoordinates);
 
-        return RoomResponse.from(roomRepository.save(room));
+        return RoomResponse.from(persist(room));
     }
 
     @Transactional(readOnly = true)
@@ -107,7 +108,7 @@ public class RoomService {
                 room.clearCoordinates();
             }
         }
-        return RoomResponse.from(room);
+        return RoomResponse.from(persist(room));
     }
 
     /** 소프트 삭제. 과거 일정이 참조할 수 있도록 행은 남긴다. */
@@ -135,6 +136,19 @@ public class RoomService {
 
     private void requireNameAvailable(long bandId, String name) {
         if (roomRepository.existsByBandIdAndNameAndDeletedAtIsNull(bandId, name)) {
+            throw new BusinessException(ErrorCode.ROOM_NAME_DUPLICATED);
+        }
+    }
+
+    /**
+     * 저장 + 이름 유니크 경합 방어. {@link #requireNameAvailable} 선검사와 이 저장 사이에 다른 요청이
+     * 같은 이름을 넣으면 {@code ux_rooms_band_name_active} 위반이 나는데, 그걸 500이 아니라 409로 바꾼다
+     * (signup·초대코드 생성과 같은 패턴). {@code saveAndFlush}로 위반을 이 메서드 안에서 잡는다.
+     */
+    private Room persist(Room room) {
+        try {
+            return roomRepository.saveAndFlush(room);
+        } catch (DataIntegrityViolationException e) {
             throw new BusinessException(ErrorCode.ROOM_NAME_DUPLICATED);
         }
     }
