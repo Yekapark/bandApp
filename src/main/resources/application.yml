@@ -50,6 +50,12 @@ app:
     admin-key: ${KAKAO_ADMIN_KEY:}
     connect-timeout: PT2S
     read-timeout: PT3S
+  naver:
+    api-base-url: https://maps.apigw.ntruss.com                 # NCP 콘솔이 안내하는 주소로 코드 수정 없이 교체 가능
+    client-id: ${NAVER_MAP_CLIENT_ID:}                          # 비우면 지오코딩만 건너뛰고 좌표 없이 등록된다
+    client-secret: ${NAVER_MAP_CLIENT_SECRET:}
+    connect-timeout: PT2S
+    read-timeout: PT3S
   withdrawal:
     retention-days: ${WITHDRAWAL_RETENTION_DAYS:90}
     purge-cron: ${WITHDRAWAL_PURGE_CRON:0 30 4 * * *}
@@ -68,3 +74,4 @@ app:
     invite-join-per-user-per-min: ${RL_INVITE_JOIN_USER:10}
     invite-join-per-ip-per-min: ${RL_INVITE_JOIN_IP:20}
     auth-per-ip-per-min: ${RL_AUTH_IP:20}
+    geocode-per-user-per-min: ${RL_GEOCODE_USER:20}         # 합주실 등록/수정 시 네이버 지오코딩 호출 계정당 분당 상한
