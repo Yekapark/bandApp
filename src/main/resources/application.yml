@@ -60,6 +60,16 @@ app:
     client-secret: ${NAVER_MAP_CLIENT_SECRET:}
     connect-timeout: PT2S
     read-timeout: PT3S
+  r2:
+    account-id: ${R2_ACCOUNT_ID:}                               # 비우면 미디어 업로드 API 만 503, 게시판·신고·차단은 정상
+    bucket: ${R2_BUCKET:}
+    access-key-id: ${R2_ACCESS_KEY_ID:}
+    secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+    endpoint: ${R2_ENDPOINT:}                                   # 비우면 https://{accountId}.r2.cloudflarestorage.com
+    upload-url-ttl: ${R2_UPLOAD_URL_TTL:PT15M}                  # 5~15분으로 clamp (BUILD_PLAN 제한값)
+    download-url-ttl: ${R2_DOWNLOAD_URL_TTL:PT10M}
+    connect-timeout: PT2S
+    read-timeout: PT5S
   withdrawal:
     retention-days: ${WITHDRAWAL_RETENTION_DAYS:90}
     purge-cron: ${WITHDRAWAL_PURGE_CRON:0 30 4 * * *}
@@ -83,3 +93,5 @@ app:
     invite-join-per-ip-per-min: ${RL_INVITE_JOIN_IP:20}
     auth-per-ip-per-min: ${RL_AUTH_IP:20}
     geocode-per-user-per-min: ${RL_GEOCODE_USER:20}         # 합주실 등록/수정 시 네이버 지오코딩 호출 계정당 분당 상한
+    media-upload-per-user-per-min: ${RL_MEDIA_UPLOAD_USER:30}   # 게시글 첨부 업로드 URL 발급 계정당 분당 상한
+    report-per-user-per-min: ${RL_REPORT_USER:10}               # 신고 접수 계정당 분당 상한

@@ -19,7 +19,8 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("밴드 합주 관리 앱 API")
                         .description("""
-                                밴드 단위 합주 일정 기록·참석·정산 서비스 (Phase 0~3: 인증 · 밴드 · 초대 · 멤버 · 합주실).
+                                밴드 단위 합주 일정 기록·참석·정산·게시판 서비스
+                                (인증 · 밴드 · 초대 · 멤버 · 합주실 · 일정 · 정기일정 · 참석 · 셋리스트 · 정산 · 게시판/미디어/신고/차단).
 
                                 **공통 응답 포맷**
                                 - 성공: `{"success": true, "data": <결과>, "error": null}`
@@ -32,7 +33,11 @@ public class OpenApiConfig {
                                 만료 시 `/api/v1/auth/refresh` 로 갱신.
 
                                 **로컬 기본값** — 카카오 키 미설정 시 `/api/v1/auth/kakao` 는 503,
-                                네이버 키 미설정 시 합주실 `lat`/`lng` 는 null 로 저장된다(정상).
+                                네이버 키 미설정 시 합주실 `lat`/`lng` 는 null 로 저장된다(정상),
+                                R2 키 미설정 시 게시글 첨부 업로드·조회 API 만 503(게시글·신고·차단은 정상).
+
+                                **미디어** — 사진·영상은 R2 presigned URL 로 클라이언트가 직접 업로드하며,
+                                서버는 파일 바이트를 중계하지 않는다.
                                 """)
                         .version("v0.0.1"))
                 .components(new Components().addSecuritySchemes(BEARER_SCHEME, new SecurityScheme()
