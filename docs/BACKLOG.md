@@ -198,6 +198,86 @@ Phase 3 PR 후 인증·밴드·초대·합주실 전 경로 점검. **A1~A4·B1~
   밴드장 없이 남을 수 있다. 극히 드물고, `delegateLeadership` 동시 호출 레이스(C2)와 같은 계열.
   필요하면 밴드별 정리에 `SELECT ... FOR UPDATE`로 직렬화.
 
+### 1.11 Phase 0~9 전체 보안 점검 후속 (2026-09-02)
+
+Phase 9(알림·배치잡, PR #30) 머지 후 인증·밴드·합주실·일정·정기일정·참석·정산·
+게시판/미디어·알림/배치 전 경로를 다시 점검. **심각도 "상"(인증 우회, 타 밴드 데이터
+유출, RCE 등)은 없음.** 멀티테넌시 격리(`BandAccessGuard`), IDOR 방지(요청자=토큰 주체),
+presigned 업로드(백엔드 파일 스트림 없음), JWT typ 분리·refresh 회전/재사용 탐지,
+비밀 미커밋, 트랜잭션 밖 외부 HTTP, 배치잡 R2 실패 내성 — 규칙대로 지켜졌고
+Phase 9 완료 기준도 충족. 아래는 잔여 항목(전부 중/하 등급).
+
+**보안 — 배포 전 처리**
+
+- **[중] `X-Forwarded-For` 무조건 신뢰 (§1.9 재확인, 아직 미조치).** `common/web/ClientIp`가
+  XFF 첫 홉을 검증 없이 클라이언트 IP로 쓴다. 로그인·회원가입(이메일 열거)·초대코드 대입·
+  지오코딩/미디어 업로드/신고 스팸 등 **모든 레이트리밋의 키**가 이 값이다. 그런데
+  `server.forward-headers-strategy`/신뢰 프록시 설정이 없고, `docker-compose.yml`이 `8080:8080`
+  으로 앱을 호스트에 직접 노출하며, XFF를 재작성할 Nginx는 Phase 11(미납품)이다. → 헤더만
+  바꿔가며 레이트리밋을 완전히 우회할 수 있다. 특히 로그인은 아래 계정 단위 제한이 없어
+  IP 제한만 뚫리면 무제한 비밀번호 추측이 가능하다.
+  조치: (1) `application-prod.yml`에 `server.forward-headers-strategy: NATIVE` +
+  `server.tomcat.remoteip.trusted-proxies`(내부 프록시 CIDR만). (2) `ClientIp`는 수동 XFF
+  파싱 대신 밸브가 정리한 `request.getRemoteAddr()` 사용, 또는 신뢰 피어에서 온 XFF만 인정.
+  (3) 프로덕션 compose에서 `8080`을 호스트로 게시하지 않기(내부 네트워크/`127.0.0.1`).
+  **착수 전 확정 필요한 정보:** Nginx 위치(같은 compose 컨테이너 / 호스트 설치),
+  Cloudflare 프록시 ON/OFF(ON이면 `CF-Connecting-IP` + Nginx `set_real_ip_from` 별도 필요),
+  Nginx가 `proxy_set_header X-Forwarded-For` 를 넣는지. 서버 공인 IP는 불필요
+  (`trusted-proxies`는 앱에 접속하는 프록시의 사설 IP이며 Tomcat 기본 사설 대역이 대개 커버).
+  Phase 11 Nginx 구성과 함께 확정.
+
+- **[중] 로그인 계정 단위 시도 제한·잠금 부재.** `AuthService.login`에 이메일 단위 실패
+  카운터·지수 백오프·CAPTCHA·잠금이 없다. 방어는 `auth-per-ip-per-min`(기본 20) IP 제한뿐이라,
+  프록시가 정상이어도 다수 IP 봇넷이 한 계정에 분당 20×N회 추측할 수 있다. 비밀번호 정책은
+  최소 8자·복잡도 없음. 조치: Redis `login:fail:{email}` 카운터 + 임계치 초과 시 점진적
+  지연/일시 잠금. 인프라 정보 불필요(코드+Redis만). (§1.8 "타이밍 기반 계정 열거 방어"와 함께.)
+
+- **[하] CORS 설정 취약 가능성.** `CorsProperties` 기본값 `http://localhost:*`,
+  `setAllowedOriginPatterns`라 `*` 패턴 허용, `allowedHeaders: *`. `CORS_ALLOWED_ORIGINS=*`
+  로 뜨면 전 오리진 허용. 현재는 credentials 미사용 + Bearer 헤더 인증이라 영향 제한적
+  (쿠키 탈취 불가)이나, 향후 쿠키 도입 시 위험. 조치: prod에서 `*` 값 거부/검증, 명시적
+  오리진만 설정하도록 문서화, credentials 비활성 유지.
+
+- **[하] 초대 랜딩 페이지 HTML 수동 조립.** `InviteLandingController.renderLanding`이
+  `%CODE%` 등을 HTML+인라인 JS에 문자열 치환한다. `code`는 `[A-Z2-9]{8}` 정규식으로
+  선검증되어 **현재는 인젝션 불가**. 나머지 값은 서버 설정. 정규식이 느슨해지거나 설정값이
+  오염되면 무인증 페이지 반사형 XSS가 된다. 조치: 삽입 값 HTML/JS 이스케이프, 또는 정적
+  페이지 + JSON으로 코드 전달. 엄격한 정규식 유지.
+
+- **[하] 비프로덕션 프로파일 actuator 상세 노출 (§1.8 재확인).** `application-docker.yml`·
+  `application-local.yml`이 `health.show-details: always`. `prod` 프로파일만 `never`.
+  프로덕션은 항상 `prod` 프로파일 사용 보장. 베이스 기본값을 `never`로 두고 로컬만 완화하는
+  방향 검토.
+
+**기능 결함 (보안 아님)**
+
+- **[하] 일정 재조정 시 리마인더가 재발송되지 않음.** `notification_dispatches` 멱등 키가
+  `(user, RESERVATION_REMINDER, reservationId, offset)`이라, 특정 offset의 리마인더가 발송(행
+  존재)된 뒤 일정이 **더 뒤로** 옮겨지면 그 offset은 새 시각 기준으로 다시 발송되지 않는다.
+  조치: `ReservationService.update`에서 시각이 바뀌면 해당 reservationId의 `RESERVATION_REMINDER`
+  dispatch 행(모든 variant) 삭제. 또는 멱등 키에 시작 시각 포함.
+  (`ReservationReminderJobTest`에 케이스 추가.)
+
+- **[하] Redis 장애 시 레이트리밋이 fail-closed(429).** `RedisRateLimiter.tryAcquire`가 Redis
+  불통 시 `increment` null → `check`가 429. 로그인·회원가입·토큰 회전 경로가 모두 막힌다
+  (refresh 세션 저장소도 Redis 하드 의존이긴 함). 레이트리밋 한정 fail-open(로깅 동반) 정책을
+  택하거나, 현재 fail-closed를 의도된 동작으로 문서화.
+
+**개인정보 / 데이터 정리**
+
+- **[하] 탈퇴 시 `notification_dispatches` 미삭제.** `DeviceTokenService.deleteAllOf`가
+  `device_tokens`·`notification_settings`는 지우지만 `notification_dispatches`(user_id + 알림
+  종류 + 대상 id)는 30일 보관 배치가 지울 때까지 남는다. `users` FK도 없어 정리 연쇄 안 걸림.
+  조치: `deleteAllOf`에 `NotificationDispatchRepository.deleteByUserId` 추가(메서드 신설), 또는
+  파기 배치가 탈퇴 계정 dispatch도 함께 제거. 보관 정책 문서화.
+
+- **[하] FCM 디바이스 토큰 소유권 탈취 가능(설계상 한계).** `DeviceTokenService.register`가
+  토큰 기준 last-writer-wins upsert. 인증 사용자가 임의 토큰 문자열을 등록할 수 있고, 존재하면
+  소유자를 자신으로 바꾼다(`reassign`). 피해자의 FCM 토큰을 알면 소유권을 가져가 피해자 푸시를
+  끊고 공격자 계정 알림을 피해자 기기로 보낼 수 있다. FCM 토큰이 완전한 비밀은 아니라 난이도는
+  있으나 소유 증명이 없다. 조치: 충돌 시 기존 소유자가 다르면 경고 로깅, 또는 등록에 검증 절차.
+  최소한 "알려진 이슈"로 문서화.
+
 ## 2. Claude Design 프롬프트
 
 아래 내용을 Claude Design 입력창에 그대로 붙여넣는다.
