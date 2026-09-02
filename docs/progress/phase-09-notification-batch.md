@@ -226,10 +226,9 @@ CI 에서 검증되는 통합 테스트:
 ## 7. 알려진 이슈 / 제약
 
 - **로컬 통합 테스트 불가** — 이 PC 는 Docker 데몬이 없어 Testcontainers 를 못 돌린다. 통합 테스트는
-  CI(우분투 러너)에서만 검증된다. 순수 단위 테스트와 컴파일·빌드는 로컬에서 확인했다.
+  CI(우분투 러너)에서 검증됐다. 순수 단위 테스트와 컴파일·빌드는 로컬에서 확인했다.
 - **`notification_settings.reminder_offsets` 의 `integer[]` 매핑** — Hibernate 6.6 `@JdbcTypeCode(SqlTypes.ARRAY)`
-  로 매핑하고 `ddl-auto: validate` 로 검증한다. 로컬에서 DB 로 부팅 검증을 못 했으므로, CI 의 첫 통합 테스트
-  기동에서 스키마 검증 통과를 확인해야 한다. 실패 시 대안은 `varchar` + `AttributeConverter`.
+  + `ddl-auto: validate` 조합이 CI 통합 테스트 기동에서 문제없이 통과함을 확인했다(별도 어댑터 불필요).
 - **배치 분산 락 없음** — 단일 VM 전제(`SchedulingConfig`). 다중 인스턴스로 확장하면 ShedLock 등이 필요하다.
 - **알림 발송이 요청 스레드에서 동기** — AFTER_COMMIT 리스너가 FCM 왕복(타임아웃 5초)만큼 응답을 늦출 수
   있다. 부하가 실측으로 문제되면 `@Async` 를 붙인다(후속 과제).
@@ -243,17 +242,19 @@ CI 에서 검증되는 통합 테스트:
 ## 8. 커밋 · CI 링크
 
 - 브랜치: `phase-9-notification-batch`
-- PR: (작성 후 채움)
-- CI: (작성 후 채움)
+- PR: [#30](https://github.com/Yekapark/bandApp/pull/30)
+- CI: [run 33607252084](https://github.com/Yekapark/bandApp/actions/runs/33607252084) — ✅ 통과 (261 tests)
 - 주요 커밋:
-  - `feat(notification): V9 마이그레이션 + 알림 설정·디바이스 토큰 엔티티`
-  - `feat(notification): 알림 설정·디바이스 토큰 API`
-  - `feat(notification): FCM 어댑터 + 발송 오케스트레이션`
-  - `feat(notification): 도메인 이벤트 트리거(일정·정산)`
-  - `feat(notification): 리마인더·참석 독촉 배치`
+  - `chore(notification): FCM 의존성·설정 추가`
+  - `feat(notification): V9 마이그레이션 + 엔티티 + FCM 어댑터`
+  - `feat(notification): 발송 서비스·이벤트 트리거·리마인더/독촉 배치`
   - `feat(board): 미디어 만료·고아 PENDING 정리 배치`
   - `test(notification/board): 통합·단위 테스트`
   - `docs(progress): Phase 9 기록`
+  - `fix(notification): AFTER_COMMIT 리스너의 이력 쓰기를 REQUIRES_NEW 로 분리` — CI 1차 실행에서
+    트리거 테스트 6건 실패로 발견. `@TransactionalEventListener(AFTER_COMMIT)` 안의 일반 트랜잭션
+    쓰기가 커밋되지 않던 문제.
+  - `test(notification): 참석 독촉 테스트에서 셋업 알림 리셋` — CI 2차 실행에서 발견한 테스트 격리 결함.
 
 ## 9. 다음 Phase 예고
 
