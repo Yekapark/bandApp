@@ -52,6 +52,7 @@ class AttendanceNudgeJobTest extends NotificationApiSupport {
         put("/api/v1/bands/" + bandId + "/reservations/" + reservationId + "/attendances/" + responderId,
                 "{\"status\":\"ATTENDING\"}", responder);
         join(latecomer, issueInvite(leader, bandId, null));
+        push.reset();   // 일정 등록 시 발생한 "새 일정" 알림은 이 테스트 관심 밖
 
         int sent = attendanceNudgeService.runOnce(Instant.now());
         assertThat(sent).isEqualTo(2);
