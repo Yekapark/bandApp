@@ -66,6 +66,21 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                                      @Param("excludeId") long excludeId,
                                      Pageable limit);
 
+    /**
+     * 알림 배치(Phase 9)용 — 곧 시작하는 확정 일정을 start_at 오름차순으로. 리마인더·참석 독촉이 훑는다.
+     * {@code ix_reservations_upcoming}(부분 인덱스, {@code status = 'CONFIRMED'})와 조건을 일치시킨다.
+     *
+     * <p>구간은 반열림 {@code (from, to]} — 이미 시작한 일정({@code startAt <= from})은 리마인더 대상이 아니다.
+     */
+    @Query("""
+            select r from Reservation r
+             where r.status = com.yeka.bandapp.reservation.entity.ReservationStatus.CONFIRMED
+               and r.startAt > :from
+               and r.startAt <= :to
+             order by r.startAt asc
+            """)
+    List<Reservation> findUpcomingConfirmed(@Param("from") Instant from, @Param("to") Instant to, Pageable limit);
+
     // --- 정기 일정(Phase 5) 회차 관리 -----------------------------------------
 
     /** 테스트 검증용 — 규칙의 모든 회차(취소분 포함, 상한 없음). 사용자 응답에는 {@code …StartAtGreaterThanEqual…}를 쓴다. */

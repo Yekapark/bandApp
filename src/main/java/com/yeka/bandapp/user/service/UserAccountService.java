@@ -6,6 +6,7 @@ import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.common.security.AccessTokenBlocklist;
 import com.yeka.bandapp.common.security.JwtProperties;
 import com.yeka.bandapp.common.security.RefreshTokenStore;
+import com.yeka.bandapp.notification.service.DeviceTokenService;
 import com.yeka.bandapp.user.dto.UserResponse;
 import com.yeka.bandapp.user.entity.User;
 import com.yeka.bandapp.user.kakao.KakaoClient;
@@ -40,11 +41,12 @@ public class UserAccountService {
     private final JwtProperties jwtProperties;
     private final KakaoClient kakaoClient;
     private final BandMemberService bandMemberService;
+    private final DeviceTokenService deviceTokenService;
 
     public UserAccountService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                               RefreshTokenStore refreshTokenStore, AccessTokenBlocklist accessTokenBlocklist,
                               JwtProperties jwtProperties, KakaoClient kakaoClient,
-                              BandMemberService bandMemberService) {
+                              BandMemberService bandMemberService, DeviceTokenService deviceTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokenStore = refreshTokenStore;
@@ -52,6 +54,7 @@ public class UserAccountService {
         this.jwtProperties = jwtProperties;
         this.kakaoClient = kakaoClient;
         this.bandMemberService = bandMemberService;
+        this.deviceTokenService = deviceTokenService;
     }
 
     @Transactional(readOnly = true)
@@ -79,6 +82,7 @@ public class UserAccountService {
 
         user.withdraw(now);
         bandMemberService.handleAccountWithdrawal(userId, now);
+        deviceTokenService.deleteAllOf(userId);
         refreshTokenStore.removeAll(userId);
         accessTokenBlocklist.block(userId, jwtProperties.accessTokenTtl());
 

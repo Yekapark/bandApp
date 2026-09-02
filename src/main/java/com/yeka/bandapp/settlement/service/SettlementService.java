@@ -6,6 +6,7 @@ import com.yeka.bandapp.band.service.BandDirectoryService;
 import com.yeka.bandapp.band.service.BandDirectoryService.MemberBrief;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import com.yeka.bandapp.notification.event.NotificationEvents;
 import com.yeka.bandapp.reservation.service.AttendanceService;
 import com.yeka.bandapp.reservation.service.ReservationDirectoryService;
 import com.yeka.bandapp.settlement.dto.CreateSettlementRequest;
@@ -17,6 +18,7 @@ import com.yeka.bandapp.settlement.entity.SettlementShare;
 import com.yeka.bandapp.settlement.entity.SplitType;
 import com.yeka.bandapp.settlement.repository.SettlementRepository;
 import com.yeka.bandapp.settlement.repository.SettlementShareRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -56,19 +58,22 @@ public class SettlementService {
     private final BandDirectoryService bandDirectory;
     private final ReservationDirectoryService reservationDirectory;
     private final AttendanceService attendanceService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public SettlementService(SettlementRepository settlementRepository,
                              SettlementShareRepository shareRepository,
                              BandAccessGuard accessGuard,
                              BandDirectoryService bandDirectory,
                              ReservationDirectoryService reservationDirectory,
-                             AttendanceService attendanceService) {
+                             AttendanceService attendanceService,
+                             ApplicationEventPublisher eventPublisher) {
         this.settlementRepository = settlementRepository;
         this.shareRepository = shareRepository;
         this.accessGuard = accessGuard;
         this.bandDirectory = bandDirectory;
         this.reservationDirectory = reservationDirectory;
         this.attendanceService = attendanceService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -99,6 +104,7 @@ public class SettlementService {
                 .toList();
         shareRepository.saveAll(shares);
 
+        publishRequestedEvent(bandId, reservationId, settlement.getTotalAmount(), amounts.keySet(), callerId);
         return assemble(bandId, reservationId, settlement, shares);
     }
 
@@ -156,7 +162,18 @@ public class SettlementService {
         }
         shareRepository.saveAll(added);
 
+        publishRequestedEvent(bandId, reservationId, settlement.getTotalAmount(), amounts.keySet(), callerId);
         return assemble(bandId, reservationId, settlement, result);
+    }
+
+    /** 정산 생성·재계산 시 분담 대상자(요청자 제외)에게 "정산 요청" 알림. 실제 발송은 커밋 후. */
+    private void publishRequestedEvent(long bandId, long reservationId, int totalAmount,
+                                      java.util.Set<Long> shareUserIds, long callerId) {
+        List<Long> recipients = shareUserIds.stream().filter(id -> id != callerId).toList();
+        if (!recipients.isEmpty()) {
+            eventPublisher.publishEvent(new NotificationEvents.SettlementRequested(
+                    bandId, reservationId, totalAmount, recipients));
+        }
     }
 
     /**

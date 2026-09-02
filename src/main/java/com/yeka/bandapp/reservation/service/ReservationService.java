@@ -6,6 +6,7 @@ import com.yeka.bandapp.band.service.BandAccessGuard;
 import com.yeka.bandapp.band.service.BandDirectoryService;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import com.yeka.bandapp.notification.event.NotificationEvents;
 import com.yeka.bandapp.reservation.dto.CreateReservationRequest;
 import com.yeka.bandapp.reservation.dto.OverlapWarning;
 import com.yeka.bandapp.reservation.dto.ReservationDetailResponse;
@@ -17,6 +18,7 @@ import com.yeka.bandapp.reservation.entity.Reservation;
 import com.yeka.bandapp.reservation.entity.ReservationStatus;
 import com.yeka.bandapp.reservation.repository.ReservationRepository;
 import com.yeka.bandapp.room.service.RoomDirectoryService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,16 +63,19 @@ public class ReservationService {
     private final RoomDirectoryService roomDirectory;
     private final AttendanceService attendanceService;
     private final SetlistService setlistService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ReservationService(ReservationRepository reservationRepository, BandAccessGuard accessGuard,
                               BandDirectoryService bandDirectory, RoomDirectoryService roomDirectory,
-                              AttendanceService attendanceService, SetlistService setlistService) {
+                              AttendanceService attendanceService, SetlistService setlistService,
+                              ApplicationEventPublisher eventPublisher) {
         this.reservationRepository = reservationRepository;
         this.accessGuard = accessGuard;
         this.bandDirectory = bandDirectory;
         this.roomDirectory = roomDirectory;
         this.attendanceService = attendanceService;
         this.setlistService = setlistService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -90,7 +95,9 @@ public class ReservationService {
                 request.startAt(), request.endAt(), request.cost(), trimToNull(request.note())));
         roomDirectory.increaseUsage(request.roomId());
         // 일정 생성 시 그 시점의 활성 밴드 멤버 전원을 PENDING 참석으로 만든다(BUILD_PLAN Phase 6).
-        attendanceService.createPendingFor(saved.getId(), bandDirectory.activeMemberUserIds(bandId));
+        List<Long> memberIds = bandDirectory.activeMemberUserIds(bandId);
+        attendanceService.createPendingFor(saved.getId(), memberIds);
+        publishCreationEvent(bandId, userId, saved, memberIds);
 
         return writeResponse(saved, findOverlaps(bandId, saved));
     }
@@ -174,6 +181,8 @@ public class ReservationService {
         if (wasConfirmed && (roomChanged || timeChanged)
                 && bandDirectory.reservationPermissionOf(bandId) == ReservationPermission.APPROVAL_REQUIRED) {
             r.revertToPending();
+            eventPublisher.publishEvent(new NotificationEvents.ReservationApprovalRequested(
+                    bandId, r.getId(), r.getStartAt(), bandDirectory.leaderUserIds(bandId)));
         }
 
         return writeResponse(r, findOverlaps(bandId, r));
@@ -185,6 +194,8 @@ public class ReservationService {
         accessGuard.requireLeader(bandId, userId);
         Reservation r = requirePending(bandId, reservationId);
         r.approve();
+        eventPublisher.publishEvent(new NotificationEvents.ReservationDecided(
+                bandId, r.getId(), r.getStartAt(), r.getRequestedBy(), true));
         return ReservationResponse.from(r, roomName(r.getRoomId()));
     }
 
@@ -195,6 +206,8 @@ public class ReservationService {
         Reservation r = requirePending(bandId, reservationId);
         r.reject();
         roomDirectory.decreaseUsage(r.getRoomId());
+        eventPublisher.publishEvent(new NotificationEvents.ReservationDecided(
+                bandId, r.getId(), r.getStartAt(), r.getRequestedBy(), false));
         return ReservationResponse.from(r, roomName(r.getRoomId()));
     }
 
@@ -215,10 +228,30 @@ public class ReservationService {
         }
         if (r.cancel()) {
             roomDirectory.decreaseUsage(r.getRoomId());
+            List<Long> others = bandDirectory.activeMemberUserIds(bandId).stream()
+                    .filter(id -> id != userId)
+                    .toList();
+            eventPublisher.publishEvent(new NotificationEvents.ReservationCancelled(
+                    bandId, r.getId(), r.getStartAt(), others));
         }
     }
 
     // --- 내부 헬퍼 -------------------------------------------------------------
+
+    /**
+     * 등록 직후 알림. 바로 확정된 일정(LEADER_ONLY / ANYONE)은 등록자를 뺀 멤버 전원에게 "새 일정",
+     * 승인 대기 일정(APPROVAL_REQUIRED)은 밴드장에게 "승인 요청"을 보낸다. 실제 발송은 커밋 후에 일어난다.
+     */
+    private void publishCreationEvent(long bandId, long userId, Reservation saved, List<Long> memberIds) {
+        if (saved.getStatus() == ReservationStatus.CONFIRMED) {
+            List<Long> others = memberIds.stream().filter(id -> id != userId).toList();
+            eventPublisher.publishEvent(new NotificationEvents.ReservationCreated(
+                    bandId, saved.getId(), saved.getStartAt(), others));
+        } else {
+            eventPublisher.publishEvent(new NotificationEvents.ReservationApprovalRequested(
+                    bandId, saved.getId(), saved.getStartAt(), bandDirectory.leaderUserIds(bandId)));
+        }
+    }
 
     private ReservationStatus initialStatusFor(long bandId, BandMember member) {
         ReservationPermission permission = bandDirectory.reservationPermissionOf(bandId);
