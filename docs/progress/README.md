@@ -30,3 +30,4 @@
 | 7 | [phase-07-settlement.md](phase-07-settlement.md) — 정산(N빵) · EQUAL/ATTENDEES_ONLY 분배 · 나머지 밴드장 부담 · 참석자 변경 시 재계산(자동 없음) · 본인 납부 셀프 체크 | ✅ 완료 — CI 통과, `main` 머지 (PR #27) |
 | 8 | [phase-08-board-media-report.md](phase-08-board-media-report.md) — 게시판 CRUD(커서 페이징) · R2 presigned 업로드(백엔드 미경유) · 완료 콜백 HEAD 크기·형식 검증 · 신고 접수 · 사용자 차단(양방향) | ✅ 완료 — CI 통과 (PR #29) |
 | 9 | [phase-09-notification-batch.md](phase-09-notification-batch.md) — FCM 푸시(디바이스 토큰·알림 on/off·리마인더 시점) · 트리거(새 일정·승인·정산·취소, AFTER_COMMIT 이벤트) · 리마인더·참석 독촉 배치(멱등) · 미디어 만료·고아 PENDING 정리 배치(R2 삭제 실패 재시도) | ✅ 완료 — CI 통과 (PR #30) |
+| 10 | [phase-10-plan.md](phase-10-plan.md) — 밴드 FREE/PREMIUM 요금제 · 미디어 보관기한을 현재 플랜에 연결(FREE 30일 / PREMIUM 무제한) · 티어 변경 시 기존 미디어 만료일 재계산(업그레이드=NULL, 다운그레이드=30일 유예) · `PaymentGateway` 인터페이스 + no-op 구현체 · 동시 전환 `SELECT … FOR UPDATE` 직렬화 | 🚧 구현 완료 — CI 검증 대기 |
