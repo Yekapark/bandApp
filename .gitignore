@@ -15,8 +15,9 @@ bin/
 .DS_Store
 Thumbs.db
 
-# Env
+# Env / secrets
 .env
+*firebase-adminsdk*.json
 
 # Logs
 *.log
