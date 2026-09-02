@@ -25,3 +25,5 @@ Thumbs.db
 # JVM crash artifacts
 hs_err_pid*.log
 replay_pid*.log
+
+*firebase-adminsdk*.json
