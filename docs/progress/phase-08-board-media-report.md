@@ -230,7 +230,9 @@ Phase 9 배치가 최종 정리). 소프트 삭제라 이미 접수된 신고가
     중복 409·미차단 해제 404, 차단 목록 최근순.
 - `NoFileStreamArchitectureTest` 가 **완료 기준 ①**(백엔드 경유 파일 스트림이 코드상 없음)을
   자동으로 지킨다 — 앞으로 누가 멀티파트 업로드를 추가하면 이 테스트가 깨진다.
-- **CI 결과**: _(push 후 채운다 — Phase 7 과 동일 절차)_
+- **CI 결과: `./gradlew build`(전체 테스트 포함) BUILD SUCCESSFUL** — PR [#29](https://github.com/Yekapark/bandApp/pull/29),
+  [run 33593475898](https://github.com/Yekapark/bandApp/actions/runs/33593475898). `:test` 태스크가
+  정상 실행됐고 실패 없음. Phase 0~7 기존 테스트도 함께 통과해 회귀 없음.
 
 ## 6.1 구현 후 자체 점검(보안·누락) 결과
 
@@ -271,13 +273,14 @@ Phase 9 배치가 최종 정리). 소프트 삭제라 이미 접수된 신고가
 ## 8. 커밋 · CI 링크
 
 - 브랜치: `phase-8-board-media-report`
-- PR: _(push 후)_
-- CI: _(push 후)_
+- PR: [#29](https://github.com/Yekapark/bandApp/pull/29)
+- CI: [run 33593475898](https://github.com/Yekapark/bandApp/actions/runs/33593475898) — ✅ BUILD SUCCESSFUL
 - 주요 커밋:
-  - `feat(board): V8 스키마 + 게시판·미디어·신고·차단 엔티티 + R2 저장소 경계`
-  - `feat(board): 게시글 CRUD·미디어 presigned 업로드·신고·차단 API`
-  - `test(board): 완료 기준 통합(스트림 없음·크기 위조·차단) + 순수 단위 테스트`
-  - `docs(progress): Phase 8 게시판·미디어·신고 기록`
+  - `e7d88f3` `feat(board): V8 스키마 + 게시판·미디어·신고·차단 엔티티 + R2 저장소 경계`
+  - `92431df` `feat(board): 게시글 CRUD·미디어 presigned 업로드·신고·차단 API`
+  - `8b799d1` `test(board): 완료 기준 통합(스트림 없음·크기 위조·차단) + 순수 단위 테스트`
+  - `5bd60d6` `docs(progress): Phase 8 게시판·미디어·신고 기록`
+  - `7d9baae` `fix(board): 첨부 URL 서명 실패 시 목록·상세를 503 대신 링크 없이 응답`
 
 ## 9. 다음 Phase 예고
 
