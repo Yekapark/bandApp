@@ -53,6 +53,10 @@ services:
       FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
       FCM_CREDENTIALS_PATH: ${FCM_CREDENTIALS_PATH:-}
       FCM_CREDENTIALS_JSON: ${FCM_CREDENTIALS_JSON:-}
+    volumes:
+      # FCM 서비스 계정 JSON 을 컨테이너 안으로 read-only 마운트한다. FCM 을 안 쓰면
+      # 기본값 /dev/null 이 마운트되고, FCM_CREDENTIALS_PATH 가 비어 있으면 앱이 읽지 않는다.
+      - ${FCM_CREDENTIALS_HOST_PATH:-/dev/null}:/run/secrets/fcm-credentials.json:ro
     ports:
       - "8080:8080"
     healthcheck:
