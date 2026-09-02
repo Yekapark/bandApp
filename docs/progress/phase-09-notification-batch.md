@@ -72,7 +72,8 @@
 | `service/NotificationMessages` | 트리거별 푸시 문구·data 페이로드(`type`,`bandId`,`reservationId`) 조립. 순수 함수. |
 | `service/DeviceTokenService` | 토큰 upsert/해제, 계정 탈퇴 시 토큰·설정 삭제. 레이트리밋. 순수 DB 라 일반 `@Transactional`. |
 | `service/NotificationSettingService` | 설정 조회(없으면 기본값 행 생성)·변경. 배치가 쓸 "푸시 끈 사용자"·"사용자별 시점" 조회. |
-| `service/NotificationSender` | **발송 오케스트레이션 — `@Transactional` 금지**(FCM HTTP). 수신자 필터 → 멱등 이력 기록(유니크 경합은 `DataIntegrityViolationException` 으로 걸러 건너뜀) → 토큰 모아 1회 발송 → 무효 토큰 삭제. 새로 발송 처리한 수신자 수를 반환. |
+| `service/NotificationSender` | **발송 오케스트레이션 — `@Transactional` 금지**(FCM HTTP). 수신자 필터 → 멱등 이력 기록 → 토큰 모아 1회 발송 → 무효 토큰 삭제. 새로 발송 처리한 수신자 수를 반환. |
+| `service/NotificationDispatchRecorder` | 이력 기록·무효 토큰 삭제만 담는 `REQUIRES_NEW` 트랜잭션 조각. 트리거 알림은 `AFTER_COMMIT` 리스너에서 불리는데, 그때는 방금 커밋된 트랜잭션의 동기화가 정리 중이라 일반(REQUIRED) 트랜잭션으로 시작한 쓰기가 커밋되지 않고 사라진다 — 새 트랜잭션을 강제한다. 유니크 경합(이미 발송)이 나머지를 막지 않도록 **수신자당 한 번씩** 호출한다. |
 | `service/ReminderService` | 리마인더 발송 로직. `now` 기준 발송 시점이 도래한 (수신자 × 시점)을 모아 offset 별로 발송. |
 | `service/AttendanceNudgeService` | 리드타임 안에 시작하는 확정 일정의 미응답자에게 독촉(일정당 1회). |
 | `event/NotificationEvents` (record 모음) + `event/NotificationEventListener` | 도메인 이벤트와 `@TransactionalEventListener(AFTER_COMMIT)` 핸들러. 모든 핸들러를 try/catch 로 감싸 발송 실패가 커밋된 본 작업을 되돌리지 않게 한다. |
@@ -213,7 +214,8 @@ CI 에서 검증되는 통합 테스트:
 | 발견 | 심각도 | 조치 |
 |---|---|---|
 | 발송(FCM HTTP)이 `ReservationService`/`SettlementService` 의 트랜잭션·비관적 락 안에서 일어나면 커넥션 풀이 마른다 | 높음 | `@TransactionalEventListener(AFTER_COMMIT)` 로 커밋 후 발송. `NotificationSender`·`ReminderService`·`AttendanceNudgeService`·`MediaMaintenanceService` 에 `@Transactional` 을 달지 않음(클래스 주석에 명시). |
-| 리마인더 배치가 서버 재시작·중복 실행에서 같은 알림을 두 번 보낼 수 있다 | 높음 | `notification_dispatches` 유니크 제약을 멱등 키로. `notify` 가 `DataIntegrityViolationException` 을 잡아 "이미 보냄" 으로 처리. 배치 테스트마다 멱등 단언. |
+| 리마인더 배치가 서버 재시작·중복 실행에서 같은 알림을 두 번 보낼 수 있다 | 높음 | `notification_dispatches` 유니크 제약을 멱등 키로. `NotificationDispatchRecorder` 가 `DataIntegrityViolationException` 을 잡아 "이미 보냄" 으로 처리. 배치 테스트마다 멱등 단언. |
+| `@TransactionalEventListener(AFTER_COMMIT)` 안에서 일반 `@Transactional`(REQUIRED)로 시작한 DB 쓰기가 커밋되지 않고 사라진다 (CI 첫 실행에서 트리거 테스트 6건 실패로 발견) | 높음 | 이력 기록을 `NotificationDispatchRecorder`(`REQUIRES_NEW`)로 분리. FCM 호출은 여전히 트랜잭션 밖. 배치 경로(트랜잭션 없음)에서도 그냥 새 트랜잭션 하나가 열릴 뿐이라 무해. |
 | 미디어 만료 배치가 R2 삭제 순서를 잘못 잡으면(먼저 EXPIRED) R2 객체가 영구 고아가 된다 | 중간 | **R2 삭제 → 그다음 DB EXPIRED** 순서 고정. 삭제 실패 시 READY 유지 → 다음 실행 재시도. 테스트로 고정(`failNextDelete`). |
 | FCM 키 미설정 시 앱이 안 뜨거나 알림 API 가 막히면 로컬·CI 개발이 어려워진다 | 중간 | `FcmPushSender` 가 키 없이 조용히 뜨고 발송만 no-op. 설정·토큰 API 는 정상. `IntegrationTestSupport` 는 `FakePushSender(@Primary)` 로 대체. |
 | 발송 실패(FCM 오류)가 이미 커밋된 일정 등록·정산을 되돌리면 안 된다 | 중간 | 리스너 핸들러를 try/catch(RuntimeException)+log 로 감쌈. `NotificationSender.pushToDevices` 도 발송 예외를 삼킴(이력은 이미 남아 재발송 안 됨). |
