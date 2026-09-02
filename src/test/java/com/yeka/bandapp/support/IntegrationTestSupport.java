@@ -76,5 +76,9 @@ public abstract class IntegrationTestSupport {
         registry.add("app.ratelimit.invite-join-per-ip-per-min", () -> "10");
         registry.add("app.ratelimit.auth-per-ip-per-min", () -> "30");
         registry.add("app.ratelimit.geocode-per-user-per-min", () -> "10");
+        registry.add("app.ratelimit.media-upload-per-user-per-min", () -> "10");
+        registry.add("app.ratelimit.report-per-user-per-min", () -> "10");
+        // R2: 통합 테스트는 FakeStorageClient(@Primary)가 대체하므로 값은 비워 둔다.
+        // R2Properties 는 TTL 기본값(5~15분 clamp)만 쓰인다.
     }
 }
