@@ -27,6 +27,7 @@ public class FakeStorageClient implements StorageClient {
     private final List<String> presignedGetKeys = new ArrayList<>();
     private final List<String> deletedKeys = new ArrayList<>();
     private boolean failNextHead = false;
+    private boolean failNextDelete = false;
 
     public void reset() {
         objects.clear();
@@ -34,6 +35,7 @@ public class FakeStorageClient implements StorageClient {
         presignedGetKeys.clear();
         deletedKeys.clear();
         failNextHead = false;
+        failNextDelete = false;
     }
 
     /** 업로드 성공 시뮬레이션. */
@@ -44,6 +46,11 @@ public class FakeStorageClient implements StorageClient {
     /** 다음 {@link #head} 호출이 저장소 통신 실패로 터지게 한다. */
     public void failNextHead() {
         this.failNextHead = true;
+    }
+
+    /** 다음 {@link #delete} 호출이 저장소 통신 실패로 터지게 한다(만료 배치의 "삭제 실패 후 재시도" 검증용). */
+    public void failNextDelete() {
+        this.failNextDelete = true;
     }
 
     public String lastPresignedPutKey() {
@@ -84,6 +91,10 @@ public class FakeStorageClient implements StorageClient {
 
     @Override
     public void delete(String storageKey) {
+        if (failNextDelete) {
+            failNextDelete = false;
+            throw new BusinessException(ErrorCode.MEDIA_STORAGE_ERROR);
+        }
         objects.remove(storageKey);
         deletedKeys.add(storageKey);
     }

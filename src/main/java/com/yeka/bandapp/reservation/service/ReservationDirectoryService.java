@@ -75,6 +75,22 @@ public class ReservationDirectoryService {
     }
 
     /**
+     * 알림 도메인(Phase 9)이 리마인더·참석 독촉을 보낼 대상 일정을 훑을 때 쓴다 — 반열림 구간
+     * {@code (from, to]}에 시작하는 확정 일정. 알림 패키지가 {@code Reservation} 엔티티를 몰라도 되도록
+     * 작은 레코드로 준다.
+     */
+    @Transactional(readOnly = true)
+    public List<UpcomingReservation> upcomingConfirmed(Instant from, Instant to, int limit) {
+        return reservationRepository.findUpcomingConfirmed(from, to, PageRequest.of(0, limit)).stream()
+                .map(r -> new UpcomingReservation(r.getId(), r.getBandId(), r.getStartAt()))
+                .toList();
+    }
+
+    /** 알림 배치가 훑는 "곧 시작하는 확정 일정" 한 건의 요약. */
+    public record UpcomingReservation(long reservationId, long bandId, Instant startAt) {
+    }
+
+    /**
      * 정산 도메인(Phase 7)이 일정의 등록자를 확인할 때 쓴다 — 정산 생성·재계산은 일정 등록자 본인 또는
      * 밴드장만 할 수 있다. 경로의 {@code bandId}와 대조해 타 밴드 일정이면 존재를 알리지 않고
      * {@code RESERVATION_NOT_FOUND}(404).

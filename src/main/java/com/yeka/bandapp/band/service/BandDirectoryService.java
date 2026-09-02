@@ -76,6 +76,18 @@ public class BandDirectoryService {
     }
 
     /**
+     * 밴드의 현재 LEADER userId(활성 LEADER 는 밴드당 정확히 하나 — DB 부분 유니크 인덱스가 강제).
+     * 알림(승인 요청)의 수신자 산출에 쓴다. 이론상 비어 있으면 빈 목록.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> leaderUserIds(long bandId) {
+        return bandMemberRepository.findByBandIdAndLeftAtIsNullOrderByJoinedAtAsc(bandId).stream()
+                .filter(BandMember::isLeader)
+                .map(BandMember::getUserId)
+                .toList();
+    }
+
+    /**
      * 주어진 사용자들의 표시 이름. 정산 현황(Phase 7)이 <b>과거</b> 분담자 — 정산 생성 이후 밴드를 떠나
      * {@link #activeMembers}에 안 잡히는 멤버 — 의 이름을 채울 때 쓴다. 조회 불가하면 "(알 수 없음)".
      */

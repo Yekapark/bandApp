@@ -70,6 +70,12 @@ app:
     download-url-ttl: ${R2_DOWNLOAD_URL_TTL:PT10M}
     connect-timeout: PT2S
     read-timeout: PT5S
+  fcm:
+    project-id: ${FCM_PROJECT_ID:}                              # 비우면 푸시 발송만 no-op, 설정·토큰 API 는 정상
+    credentials-path: ${FCM_CREDENTIALS_PATH:}                  # 서비스 계정 JSON 파일 경로 — 둘 다 있으면 이쪽 우선
+    credentials-json: ${FCM_CREDENTIALS_JSON:}                  # 파일 대신 JSON 문자열로도 주입 가능(경로가 없을 때만)
+    connect-timeout: PT2S
+    read-timeout: PT5S
   withdrawal:
     retention-days: ${WITHDRAWAL_RETENTION_DAYS:90}
     purge-cron: ${WITHDRAWAL_PURGE_CRON:0 30 4 * * *}
@@ -78,6 +84,20 @@ app:
     zone: Asia/Seoul                                     # 정기 규칙의 요일·시각을 해석하는 기준 시간대
     horizon-weeks: ${RECURRING_HORIZON_WEEKS:8}          # 미리 만들어 둘 기간 (BUILD_PLAN "향후 8주분")
     extend-cron: ${RECURRING_EXTEND_CRON:0 0 5 * * *}    # 매일 05:00 KST 회차 이어 만들기 배치
+  notification:
+    zone: Asia/Seoul                                     # 배치 cron 해석 기준 시간대
+    default-reminder-offsets: 60                         # 설정 행이 없는 사용자의 기본 리마인더 시점(분, 쉼표 구분)
+    max-reminder-offset-minutes: ${NOTI_MAX_OFFSET:1440} # 리마인더 시점 상한(분). 1440 = 24시간 전
+    max-reminder-offsets: 5                              # 사용자당 지정 가능한 리마인더 시점 개수
+    nudge-lead-hours: ${NOTI_NUDGE_LEAD_HOURS:24}        # N시간 뒤 시작하는 일정의 미응답자에게 독촉
+    dispatch-retention-days: ${NOTI_DISPATCH_RETENTION:30}   # 발송 이력 보관 기간
+    reminder-cron: ${NOTI_REMINDER_CRON:0 */5 * * * *}   # 5분마다 리마인더 발송 검사
+    nudge-cron: ${NOTI_NUDGE_CRON:0 0 19 * * *}          # 매일 19:00 KST 참석 미응답 독촉
+  media:
+    zone: Asia/Seoul
+    orphan-age: ${MEDIA_ORPHAN_AGE:PT1H}                 # 이 시간 이상 PENDING 인 첨부를 고아로 보고 정리
+    expire-cron: ${MEDIA_EXPIRE_CRON:0 15 4 * * *}       # 매일 04:15 KST 보관기한 만료 미디어 → R2 삭제 + EXPIRED
+    orphan-cron: ${MEDIA_ORPHAN_CRON:0 10 * * * *}       # 매시 10분 콜백 없는 고아 PENDING 정리
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
   deeplink:
@@ -95,3 +115,4 @@ app:
     geocode-per-user-per-min: ${RL_GEOCODE_USER:20}         # 합주실 등록/수정 시 네이버 지오코딩 호출 계정당 분당 상한
     media-upload-per-user-per-min: ${RL_MEDIA_UPLOAD_USER:30}   # 게시글 첨부 업로드 URL 발급 계정당 분당 상한
     report-per-user-per-min: ${RL_REPORT_USER:10}               # 신고 접수 계정당 분당 상한
+    device-token-per-user-per-min: ${RL_DEVICE_TOKEN_USER:30}   # 디바이스 토큰 등록 계정당 분당 상한

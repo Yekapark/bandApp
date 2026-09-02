@@ -102,7 +102,13 @@ public enum ErrorCode {
     REPORT_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 접수되어 처리 중인 신고입니다."),
     CANNOT_BLOCK_SELF(HttpStatus.BAD_REQUEST, "자기 자신은 차단할 수 없습니다."),
     ALREADY_BLOCKED(HttpStatus.CONFLICT, "이미 차단한 사용자입니다."),
-    BLOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "차단하지 않은 사용자입니다.");
+    BLOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "차단하지 않은 사용자입니다."),
+
+    // 알림 (Phase 9)
+    // FCM 키 미설정은 예외가 아니다 — 푸시 발송만 조용히 건너뛰고 설정·토큰 API 는 정상 동작한다.
+    INVALID_REMINDER_OFFSET(HttpStatus.BAD_REQUEST, "리마인더 시점은 1분 이상, 설정된 상한 이하의 값이어야 합니다."),
+    TOO_MANY_REMINDER_OFFSETS(HttpStatus.BAD_REQUEST, "리마인더 시점을 너무 많이 지정했습니다."),
+    DEVICE_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "등록되지 않은 디바이스 토큰입니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

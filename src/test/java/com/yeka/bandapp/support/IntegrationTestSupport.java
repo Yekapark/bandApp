@@ -65,6 +65,11 @@ public abstract class IntegrationTestSupport {
         registry.add("app.withdrawal.purge-cron", () -> "-");
         // 정기 일정 회차 연장 배치도 비활성화한다 — 테스트는 서비스 메서드를 직접 호출해 검증한다.
         registry.add("app.recurring.extend-cron", () -> "-");
+        // 알림·미디어 정리 배치도 비활성화한다("-"). 테스트는 각 서비스 메서드를 직접 호출해 검증한다.
+        registry.add("app.notification.reminder-cron", () -> "-");
+        registry.add("app.notification.nudge-cron", () -> "-");
+        registry.add("app.media.expire-cron", () -> "-");
+        registry.add("app.media.orphan-cron", () -> "-");
         // 초대 딥링크: 링크·검증 파일의 값을 고정해 assertion 을 쓸 수 있게 한다.
         registry.add("app.deeplink.base-url", () -> "https://band.test");
         registry.add("app.deeplink.scheme", () -> "bandapp");
@@ -78,7 +83,9 @@ public abstract class IntegrationTestSupport {
         registry.add("app.ratelimit.geocode-per-user-per-min", () -> "10");
         registry.add("app.ratelimit.media-upload-per-user-per-min", () -> "10");
         registry.add("app.ratelimit.report-per-user-per-min", () -> "10");
+        registry.add("app.ratelimit.device-token-per-user-per-min", () -> "10");
         // R2: 통합 테스트는 FakeStorageClient(@Primary)가 대체하므로 값은 비워 둔다.
         // R2Properties 는 TTL 기본값(5~15분 clamp)만 쓰인다.
+        // FCM: FakePushSender(@Primary)가 대체하므로 값은 비워 둔다(FcmPushSender 는 미설정으로 조용히 뜬다).
     }
 }

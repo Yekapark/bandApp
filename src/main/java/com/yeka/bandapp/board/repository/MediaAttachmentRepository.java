@@ -2,6 +2,7 @@ package com.yeka.bandapp.board.repository;
 
 import com.yeka.bandapp.board.entity.MediaAttachment;
 import com.yeka.bandapp.board.entity.MediaStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -64,4 +65,46 @@ public interface MediaAttachmentRepository extends JpaRepository<MediaAttachment
     int expireAllOfPost(@Param("boardPostId") long boardPostId);
 
     long countByBoardPostIdAndStatusIn(Long boardPostId, Collection<MediaStatus> statuses);
+
+    // --- 정리 배치(Phase 9) ------------------------------------------------
+
+    /**
+     * 보관기한이 지난 READY 미디어(오래된 것부터). 부분 인덱스 {@code ix_media_attachments_expires}
+     * ({@code status = 'READY' AND expires_at IS NOT NULL})와 조건을 일치시킨다.
+     */
+    @Query("""
+            select m from MediaAttachment m
+             where m.status = com.yeka.bandapp.board.entity.MediaStatus.READY
+               and m.expiresAt is not null
+               and m.expiresAt < :now
+             order by m.expiresAt asc
+            """)
+    List<MediaAttachment> findExpiredReady(@Param("now") Instant now, Pageable limit);
+
+    /**
+     * 한 건을 {@code READY → EXPIRED}로 돌리는 조건부 원자 UPDATE. R2 객체 삭제를 먼저 하고 이걸 부른다 —
+     * 삭제가 실패해 이걸 못 부르면 행이 READY 로 남아 다음 배치 실행에서 재시도된다.
+     *
+     * @return 1이면 전이됨, 0이면 그 사이 이미 EXPIRED/삭제됨
+     */
+    @Transactional
+    @Modifying
+    @Query("""
+            update MediaAttachment m
+               set m.status = com.yeka.bandapp.board.entity.MediaStatus.EXPIRED
+             where m.id = :id and m.status = com.yeka.bandapp.board.entity.MediaStatus.READY
+            """)
+    int markExpired(@Param("id") long id);
+
+    /**
+     * 콜백이 오지 않아 오래 PENDING 인 고아 첨부(오래된 것부터). 부분 인덱스
+     * {@code ix_media_attachments_pending}({@code status = 'PENDING'})와 조건을 일치시킨다.
+     */
+    @Query("""
+            select m from MediaAttachment m
+             where m.status = com.yeka.bandapp.board.entity.MediaStatus.PENDING
+               and m.createdAt < :threshold
+             order by m.createdAt asc
+            """)
+    List<MediaAttachment> findStalePending(@Param("threshold") Instant threshold, Pageable limit);
 }

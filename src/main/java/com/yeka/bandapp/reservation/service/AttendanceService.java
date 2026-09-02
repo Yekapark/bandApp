@@ -112,6 +112,15 @@ public class AttendanceService {
                 .collect(Collectors.toSet());
     }
 
+    /**
+     * 이 일정에 이미 응답한(ATTENDING/ABSENT) 멤버의 userId 집합. 참석 미응답 독촉 배치(Phase 9)가
+     * "현재 활성 멤버 − 이 집합"으로 미응답자를 구한다.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> respondedUserIds(long reservationId) {
+        return new java.util.HashSet<>(attendanceRepository.findRespondedUserIds(reservationId));
+    }
+
     /** 일정 참석 현황(GET). 그 밴드 멤버만 볼 수 있다. */
     @Transactional(readOnly = true)
     public AttendanceBoardResponse getBoard(long bandId, long reservationId, long userId) {
