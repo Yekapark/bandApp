@@ -75,6 +75,22 @@ public class BandDirectoryService {
                 .toList();
     }
 
+    /**
+     * 주어진 사용자들의 표시 이름. 정산 현황(Phase 7)이 <b>과거</b> 분담자 — 정산 생성 이후 밴드를 떠나
+     * {@link #activeMembers}에 안 잡히는 멤버 — 의 이름을 채울 때 쓴다. 조회 불가하면 "(알 수 없음)".
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, String> displayNamesOf(java.util.Collection<Long> userIds) {
+        Map<Long, UserSummary> byId = userDirectory.summariesOf(userIds).stream()
+                .collect(Collectors.toMap(UserSummary::userId, Function.identity()));
+        Map<Long, String> names = new java.util.HashMap<>();
+        for (Long id : userIds) {
+            UserSummary summary = byId.get(id);
+            names.put(id, summary != null ? summary.name() : "(알 수 없음)");
+        }
+        return names;
+    }
+
     /** 활성 멤버 한 명의 표시용 요약. */
     public record MemberBrief(long userId, String name, String role) {
     }

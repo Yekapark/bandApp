@@ -100,6 +100,18 @@ public class AttendanceService {
         return boardFor(bandId, reservationId);
     }
 
+    /**
+     * 참석({@code ATTENDING})으로 응답한 멤버의 userId 집합. 정산(Phase 7)의 {@code ATTENDEES_ONLY}
+     * 분배 대상 산출에 쓴다 — 저장된 참석 행만 보므로, 아직 응답하지 않은(행이 없는) 멤버는 빠진다.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> attendingUserIds(long reservationId) {
+        return attendanceRepository.findByReservationId(reservationId).stream()
+                .filter(ReservationAttendance::isAttending)
+                .map(ReservationAttendance::getUserId)
+                .collect(Collectors.toSet());
+    }
+
     /** 일정 참석 현황(GET). 그 밴드 멤버만 볼 수 있다. */
     @Transactional(readOnly = true)
     public AttendanceBoardResponse getBoard(long bandId, long reservationId, long userId) {
