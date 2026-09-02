@@ -79,7 +79,30 @@ public enum ErrorCode {
     SETTLEMENT_NO_ATTENDEES(HttpStatus.CONFLICT, "참석자가 없어 참석자 기준 정산을 만들 수 없습니다."),
     NOT_SETTLEMENT_MANAGER(HttpStatus.FORBIDDEN, "일정 등록자 본인 또는 밴드장만 정산을 만들거나 재계산할 수 있습니다."),
     SETTLEMENT_SHARE_NOT_FOUND(HttpStatus.NOT_FOUND, "본인의 분담 항목이 없습니다."),
-    NOT_SETTLEMENT_SHARE_OWNER(HttpStatus.FORBIDDEN, "본인의 납부 상태만 변경할 수 있습니다.");
+    NOT_SETTLEMENT_SHARE_OWNER(HttpStatus.FORBIDDEN, "본인의 납부 상태만 변경할 수 있습니다."),
+
+    // 게시판·미디어·신고·차단 (Phase 8)
+    // 파일 바이트는 서버를 지나지 않는다. 형식·크기 위반은 URL 발급 시(400) 걸러지고, 신고한 값과
+    // 실제 업로드가 다른 경우는 완료 콜백에서(409) 거부되며 R2 객체와 레코드가 함께 삭제된다.
+    POST_NOT_FOUND(HttpStatus.NOT_FOUND, "게시글을 찾을 수 없습니다."),
+    NOT_POST_OWNER(HttpStatus.FORBIDDEN, "작성자 본인 또는 밴드장만 할 수 있는 작업입니다."),
+    POST_CURSOR_INVALID(HttpStatus.BAD_REQUEST, "목록 커서 형식이 올바르지 않습니다."),
+    MEDIA_NOT_FOUND(HttpStatus.NOT_FOUND, "첨부 파일을 찾을 수 없습니다."),
+    MEDIA_TYPE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "지원하지 않는 파일 형식입니다."),
+    MEDIA_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "파일 크기 상한을 넘었습니다. (이미지 10MB, 영상 50MB)"),
+    MEDIA_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "한 게시글에 첨부할 수 있는 파일 수를 넘었습니다."),
+    MEDIA_NOT_PENDING(HttpStatus.CONFLICT, "이미 업로드가 완료되었거나 취소된 첨부입니다."),
+    MEDIA_NOT_UPLOADED(HttpStatus.CONFLICT, "업로드된 파일이 없습니다. 업로드를 마친 뒤 다시 시도해 주세요."),
+    MEDIA_SIZE_MISMATCH(HttpStatus.CONFLICT, "신고한 파일 크기와 실제 업로드된 크기가 다릅니다. 업로드가 취소되었습니다."),
+    MEDIA_CONTENT_TYPE_MISMATCH(HttpStatus.CONFLICT, "신고한 파일 형식과 실제 업로드된 형식이 다릅니다. 업로드가 취소되었습니다."),
+    MEDIA_STORAGE_ERROR(HttpStatus.BAD_GATEWAY, "파일 저장소와 통신하지 못했습니다."),
+    MEDIA_STORAGE_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "파일 업로드가 설정되지 않았습니다."),
+    REPORT_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "신고 대상을 찾을 수 없습니다."),
+    CANNOT_REPORT_SELF(HttpStatus.BAD_REQUEST, "자기 자신은 신고할 수 없습니다."),
+    REPORT_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 접수되어 처리 중인 신고입니다."),
+    CANNOT_BLOCK_SELF(HttpStatus.BAD_REQUEST, "자기 자신은 차단할 수 없습니다."),
+    ALREADY_BLOCKED(HttpStatus.CONFLICT, "이미 차단한 사용자입니다."),
+    BLOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "차단하지 않은 사용자입니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

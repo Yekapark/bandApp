@@ -28,3 +28,4 @@
 | 5 | [phase-05-recurring.md](phase-05-recurring.md) — 정기 일정 규칙 · 회차 자동 생성(주간/격주/월간) · 규칙 삭제 시 미래 회차만 취소 · 회차 연장 배치 | ✅ 완료 — CI 통과 (PR #24) |
 | 6 | [phase-06-attendance-setlist.md](phase-06-attendance-setlist.md) — 참석 체크(RSVP) · 일정 상세의 참석 현황·집계 · 셋리스트 CRUD·재정렬 | ✅ 완료 — CI 통과 (PR #25) |
 | 7 | [phase-07-settlement.md](phase-07-settlement.md) — 정산(N빵) · EQUAL/ATTENDEES_ONLY 분배 · 나머지 밴드장 부담 · 참석자 변경 시 재계산(자동 없음) · 본인 납부 셀프 체크 | ✅ 완료 — CI 통과, `main` 머지 (PR #27) |
+| 8 | [phase-08-board-media-report.md](phase-08-board-media-report.md) — 게시판 CRUD(커서 페이징) · R2 presigned 업로드(백엔드 미경유) · 완료 콜백 HEAD 크기·형식 검증 · 신고 접수 · 사용자 차단(양방향) | ✅ 완료 — CI 통과 (PR #29) |

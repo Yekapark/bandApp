@@ -38,6 +38,16 @@ dependencies {
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.13.0")
 
+    // Cloudflare R2(S3 호환) presigned URL 발급·업로드 검증용. S3Presigner(s3 아티팩트에 포함)는
+    // 오프라인 서명이라 네트워크를 타지 않고, S3Client 는 업로드 검증(headObject)·정리(deleteObject)에만
+    // 쓴다 — 파일 바이트는 서버를 지나지 않는다(BUILD_PLAN §2-5). 동기 호출만 하므로 기본 비동기 스택
+    // (netty-nio-client)은 빼고 가벼운 url-connection-client 를 sync HTTP 클라이언트로 쓴다.
+    implementation(platform("software.amazon.awssdk:bom:2.31.16"))
+    implementation("software.amazon.awssdk:s3") {
+        exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
+    }
+    implementation("software.amazon.awssdk:url-connection-client")
+
     runtimeOnly("org.postgresql:postgresql")
 
     compileOnly("org.projectlombok:lombok")

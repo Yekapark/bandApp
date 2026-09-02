@@ -10,7 +10,9 @@ public record RateLimitProperties(
         int inviteJoinPerUserPerMin,
         int inviteJoinPerIpPerMin,
         int authPerIpPerMin,
-        int geocodePerUserPerMin
+        int geocodePerUserPerMin,
+        int mediaUploadPerUserPerMin,
+        int reportPerUserPerMin
 ) {
     public RateLimitProperties {
         if (inviteJoinPerUserPerMin <= 0) {
@@ -24,6 +26,12 @@ public record RateLimitProperties(
         }
         if (geocodePerUserPerMin <= 0) {
             geocodePerUserPerMin = 20;
+        }
+        if (mediaUploadPerUserPerMin <= 0) {
+            mediaUploadPerUserPerMin = 30;
+        }
+        if (reportPerUserPerMin <= 0) {
+            reportPerUserPerMin = 10;
         }
     }
 }
