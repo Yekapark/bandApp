@@ -162,6 +162,9 @@ public class SettlementService {
     /**
      * 본인 몫의 납부 상태 변경. {@code targetUserId}가 요청자 본인이 아니면 403
      * {@code NOT_SETTLEMENT_SHARE_OWNER}. 요청자가 분담 대상이 아니면 404 {@code SETTLEMENT_SHARE_NOT_FOUND}.
+     *
+     * <p>{@link #recalculate}와 같은 정산 행 비관적 락을 잡아 직렬화한다 — 재계산이 이 멤버의 몫을
+     * 삭제/재산정하는 것과 납부 체크가 겹쳐 갱신이 유실되거나 사라진 몫이 응답에 실리는 레이스를 막는다.
      */
     @Transactional
     public SettlementResponse markPaid(long bandId, long reservationId, long targetUserId,
@@ -171,7 +174,8 @@ public class SettlementService {
             throw new BusinessException(ErrorCode.NOT_SETTLEMENT_SHARE_OWNER);
         }
         reservationDirectory.requesterOf(bandId, reservationId); // 타 밴드 일정이면 404
-        Settlement settlement = requireSettlement(reservationId);
+        Settlement settlement = settlementRepository.findByReservationIdForUpdate(reservationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SETTLEMENT_NOT_FOUND));
         SettlementShare share = shareRepository
                 .findBySettlementIdAndUserId(settlement.getId(), callerId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SETTLEMENT_SHARE_NOT_FOUND));

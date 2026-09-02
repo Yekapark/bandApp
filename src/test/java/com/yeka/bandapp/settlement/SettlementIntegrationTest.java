@@ -5,6 +5,12 @@ import com.yeka.bandapp.reservation.ReservationApiSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -241,6 +247,76 @@ class SettlementIntegrationTest extends ReservationApiSupport {
         JsonNode after = data(markPaid(leader, bandId, reservationId, leaderId, false));
         assertThat(shareOf(after, leaderId).get("paid").asBoolean()).isFalse();
         assertThat(shareOf(after, leaderId).get("paidAt").isNull()).isTrue();
+    }
+
+    /**
+     * 납부 체크와 재계산이 같은 정산에서 동시에 돌아도(재계산이 그 멤버의 몫을 지웠다 되살리는 사이에
+     * 납부 체크가 끼어들어도) 크래시(500) 없이, 각 요청은 깨끗한 상태를 본다 — 납부 체크는 200(몫이
+     * 있을 때) 또는 404 `SETTLEMENT_SHARE_NOT_FOUND`(그 순간 몫이 없을 때), 재계산은 200.
+     * 마지막에 정산을 안정 상태로 되돌리면 몫 합계는 총액과 일치한다. (markPaid 가 recalculate 와
+     * 같은 정산 행 락을 잡아 직렬화되는지 검증.)
+     */
+    @Test
+    void concurrent_mark_paid_and_recalculate_never_corrupt_state() throws Exception {
+        String leader = signup("stl-cc-l@band.app", "리더");
+        String m1 = signup("stl-cc-1@band.app", "멤버1");
+        String m2 = signup("stl-cc-2@band.app", "멤버2");
+        long bandId = createBand(leader, "혁오씨씨");
+        join(m1, issueInvite(leader, bandId, null));
+        join(m2, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        long leaderId = myUserId(leader);
+        long m1Id = myUserId(m1);
+        long m2Id = myUserId(m2);
+        setAttendance(leader, bandId, reservationId, leaderId, "ATTENDING");
+        setAttendance(m1, bandId, reservationId, m1Id, "ATTENDING");
+        setAttendance(m2, bandId, reservationId, m2Id, "ATTENDING");
+        createSettlement(leader, bandId, reservationId, 9_000, "ATTENDEES_ONLY"); // 3000 * 3
+
+        String sharePath = settlementPath(bandId, reservationId) + "/shares/" + m1Id;
+        String recalcPath = settlementPath(bandId, reservationId) + "/recalculate";
+        String m1AttPath = "/api/v1/bands/" + bandId + "/reservations/" + reservationId + "/attendances/" + m1Id;
+
+        int rounds = 12;
+        List<Callable<Integer>> tasks = new ArrayList<>();
+        for (int i = 0; i < rounds; i++) {
+            // m1 은 자기 몫을 껐다 켰다 한다
+            tasks.add(() -> put(sharePath, "{\"paid\":true}", m1).getStatusCode().value());
+            tasks.add(() -> put(sharePath, "{\"paid\":false}", m1).getStatusCode().value());
+            // 매니저는 m1 의 참석을 뒤집으며 재계산 → m1 몫이 삭제/재생성을 반복한다
+            tasks.add(() -> {
+                put(m1AttPath, "{\"status\":\"ABSENT\"}", m1);
+                return post(recalcPath, "{}", leader).getStatusCode().value();
+            });
+            tasks.add(() -> {
+                put(m1AttPath, "{\"status\":\"ATTENDING\"}", m1);
+                return post(recalcPath, "{}", leader).getStatusCode().value();
+            });
+        }
+
+        ExecutorService pool = Executors.newFixedThreadPool(8);
+        List<Integer> codes;
+        try {
+            codes = pool.invokeAll(tasks).stream().map(f -> {
+                try {
+                    return f.get();
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }).toList();
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // 어떤 요청도 500 이 아니고, 납부 체크는 200/404, 재계산은 200 만 나온다.
+        assertThat(codes).allSatisfy(c -> assertThat(c).isIn(200, 404));
+
+        // 안정 상태로 되돌리고 불변식 확인: 몫 합계 = 총액.
+        put(m1AttPath, "{\"status\":\"ATTENDING\"}", m1);
+        JsonNode s = data(recalculate(leader, bandId, reservationId, "{}"));
+        assertThat(s.get("shareCount").asInt()).isEqualTo(3);
+        assertThat(sumOfShares(s)).isEqualTo(9_000);
     }
 
     // --- 격리 / 조회 -------------------------------------------------
