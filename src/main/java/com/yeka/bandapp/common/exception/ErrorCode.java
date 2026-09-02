@@ -108,7 +108,13 @@ public enum ErrorCode {
     // FCM 키 미설정은 예외가 아니다 — 푸시 발송만 조용히 건너뛰고 설정·토큰 API 는 정상 동작한다.
     INVALID_REMINDER_OFFSET(HttpStatus.BAD_REQUEST, "리마인더 시점은 1분 이상, 설정된 상한 이하의 값이어야 합니다."),
     TOO_MANY_REMINDER_OFFSETS(HttpStatus.BAD_REQUEST, "리마인더 시점을 너무 많이 지정했습니다."),
-    DEVICE_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "등록되지 않은 디바이스 토큰입니다.");
+    DEVICE_TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "등록되지 않은 디바이스 토큰입니다."),
+
+    // 요금제 (Phase 10)
+    PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "밴드의 요금제 정보를 찾을 수 없습니다."),
+    PLAN_ALREADY_PREMIUM(HttpStatus.CONFLICT, "이미 프리미엄 요금제입니다."),
+    PLAN_ALREADY_FREE(HttpStatus.CONFLICT, "이미 무료 요금제입니다."),
+    PAYMENT_FAILED(HttpStatus.PAYMENT_REQUIRED, "결제 처리에 실패했습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

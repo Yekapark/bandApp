@@ -18,6 +18,7 @@ import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.common.ratelimit.RateLimitProperties;
 import com.yeka.bandapp.common.ratelimit.RedisRateLimiter;
+import com.yeka.bandapp.plan.service.PlanDirectoryService;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -49,6 +50,7 @@ public class MediaAttachmentService {
     private final R2Properties r2Properties;
     private final RedisRateLimiter rateLimiter;
     private final RateLimitProperties rateLimitProperties;
+    private final PlanDirectoryService planDirectory;
 
     public MediaAttachmentService(BoardPostRepository postRepository,
                                   MediaAttachmentRepository mediaRepository,
@@ -56,7 +58,8 @@ public class MediaAttachmentService {
                                   StorageClient storage,
                                   R2Properties r2Properties,
                                   RedisRateLimiter rateLimiter,
-                                  RateLimitProperties rateLimitProperties) {
+                                  RateLimitProperties rateLimitProperties,
+                                  PlanDirectoryService planDirectory) {
         this.postRepository = postRepository;
         this.mediaRepository = mediaRepository;
         this.accessGuard = accessGuard;
@@ -64,6 +67,7 @@ public class MediaAttachmentService {
         this.r2Properties = r2Properties;
         this.rateLimiter = rateLimiter;
         this.rateLimitProperties = rateLimitProperties;
+        this.planDirectory = planDirectory;
     }
 
     /**
@@ -111,7 +115,8 @@ public class MediaAttachmentService {
      *   <li>객체 없음 → 409 {@code MEDIA_NOT_UPLOADED} (행은 PENDING 유지, 재시도 가능)</li>
      *   <li>신고 크기·형식과 불일치 → <b>PENDING 행 삭제 커밋 + R2 객체 삭제</b> 후 409
      *       {@code MEDIA_SIZE_MISMATCH}/{@code MEDIA_CONTENT_TYPE_MISMATCH}</li>
-     *   <li>일치 → 조건부 UPDATE 로 READY 전이(보관기한 = 업로드 + 30일), presigned GET URL 을 붙여 반환</li>
+     *   <li>일치 → 조건부 UPDATE 로 READY 전이(보관기한 = 밴드 요금제 기준: FREE 는 업로드 + 30일,
+     *       PREMIUM 은 무제한/NULL), presigned GET URL 을 붙여 반환</li>
      * </ul>
      */
     public MediaResponse complete(long bandId, long postId, long mediaId, long callerId) {
@@ -141,7 +146,8 @@ public class MediaAttachmentService {
         }
 
         Instant now = Instant.now();
-        if (mediaRepository.markReady(mediaId, now, MediaPolicy.freePlanExpiresAt(now)) == 0) {
+        Instant expiresAt = planDirectory.mediaExpiresAt(bandId, now); // FREE=업로드+30일, PREMIUM=null(무제한)
+        if (mediaRepository.markReady(mediaId, now, expiresAt) == 0) {
             throw new BusinessException(ErrorCode.MEDIA_NOT_PENDING); // 그 사이 삭제/완료됨
         }
 
