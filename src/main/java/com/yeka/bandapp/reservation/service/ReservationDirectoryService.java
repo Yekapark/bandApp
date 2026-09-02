@@ -1,6 +1,8 @@
 package com.yeka.bandapp.reservation.service;
 
 import com.yeka.bandapp.band.service.BandDirectoryService;
+import com.yeka.bandapp.common.exception.BusinessException;
+import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.reservation.entity.Reservation;
 import com.yeka.bandapp.reservation.entity.ReservationStatus;
 import com.yeka.bandapp.reservation.repository.ReservationRepository;
@@ -70,6 +72,18 @@ public class ReservationDirectoryService {
                 rows.stream().map(Reservation::getId).toList(),
                 bandDirectory.activeMemberUserIds(bandId));
         return rows.size();
+    }
+
+    /**
+     * 정산 도메인(Phase 7)이 일정의 등록자를 확인할 때 쓴다 — 정산 생성·재계산은 일정 등록자 본인 또는
+     * 밴드장만 할 수 있다. 경로의 {@code bandId}와 대조해 타 밴드 일정이면 존재를 알리지 않고
+     * {@code RESERVATION_NOT_FOUND}(404).
+     */
+    @Transactional(readOnly = true)
+    public long requesterOf(long bandId, long reservationId) {
+        return reservationRepository.findByIdAndBandId(reservationId, bandId)
+                .map(Reservation::getRequestedBy)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
     }
 
     /** 규칙이 이미 만든 회차 시작 시각(상태 무관). 재생성 시 중복 슬롯을 걸러내는 데 쓴다. */

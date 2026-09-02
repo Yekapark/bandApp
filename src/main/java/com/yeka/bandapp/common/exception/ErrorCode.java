@@ -71,7 +71,15 @@ public enum ErrorCode {
     ATTENDANCE_UPDATE_CONFLICT(HttpStatus.CONFLICT, "참석 응답이 동시에 처리되었습니다. 다시 시도해 주세요."),
     SETLIST_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "셋리스트 항목을 찾을 수 없습니다."),
     SETLIST_REORDER_MISMATCH(HttpStatus.BAD_REQUEST, "재정렬 목록이 현재 셋리스트 항목과 일치하지 않습니다."),
-    SETLIST_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "한 일정의 셋리스트 항목 수 상한을 넘었습니다.");
+    SETLIST_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "한 일정의 셋리스트 항목 수 상한을 넘었습니다."),
+
+    // 정산(N빵) (Phase 7)
+    SETTLEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "정산 정보를 찾을 수 없습니다."),
+    SETTLEMENT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 정산이 생성된 일정입니다. 재계산 API 를 사용하세요."),
+    SETTLEMENT_NO_ATTENDEES(HttpStatus.CONFLICT, "참석자가 없어 참석자 기준 정산을 만들 수 없습니다."),
+    NOT_SETTLEMENT_MANAGER(HttpStatus.FORBIDDEN, "일정 등록자 본인 또는 밴드장만 정산을 만들거나 재계산할 수 있습니다."),
+    SETTLEMENT_SHARE_NOT_FOUND(HttpStatus.NOT_FOUND, "본인의 분담 항목이 없습니다."),
+    NOT_SETTLEMENT_SHARE_OWNER(HttpStatus.FORBIDDEN, "본인의 납부 상태만 변경할 수 있습니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;
