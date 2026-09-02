@@ -66,6 +66,37 @@ public interface MediaAttachmentRepository extends JpaRepository<MediaAttachment
 
     long countByBoardPostIdAndStatusIn(Long boardPostId, Collection<MediaStatus> statuses);
 
+    // --- 요금제 변경 시 보관기한 재계산(Phase 10) --------------------------
+
+    /**
+     * 밴드가 PREMIUM 으로 올라갈 때 — 그 밴드의 READY 미디어 보관기한을 모두 무제한(NULL)으로.
+     * {@code MediaAttachment} 는 {@code boardPostId} 만 갖고 밴드는 {@code BoardPost} 에 있어 서브쿼리로 건다.
+     * READY 만 대상 — EXPIRED(이미 R2 삭제됨)·PENDING(완료 콜백이 현재 요금제로 계산)은 건드리지 않는다.
+     */
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update MediaAttachment m
+               set m.expiresAt = null
+             where m.status = com.yeka.bandapp.board.entity.MediaStatus.READY
+               and m.boardPostId in (select p.id from BoardPost p where p.bandId = :bandId)
+            """)
+    int clearExpiryForBandReadyMedia(@Param("bandId") long bandId);
+
+    /**
+     * 밴드가 FREE 로 내려올 때 — 그 밴드의 READY 미디어 보관기한을 유예 종료 시각으로 덮어쓴다(교체).
+     * 대상은 {@link #clearExpiryForBandReadyMedia} 와 같다(READY 만).
+     */
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update MediaAttachment m
+               set m.expiresAt = :expiresAt
+             where m.status = com.yeka.bandapp.board.entity.MediaStatus.READY
+               and m.boardPostId in (select p.id from BoardPost p where p.bandId = :bandId)
+            """)
+    int setExpiryForBandReadyMedia(@Param("bandId") long bandId, @Param("expiresAt") Instant expiresAt);
+
     // --- 정리 배치(Phase 9) ------------------------------------------------
 
     /**
