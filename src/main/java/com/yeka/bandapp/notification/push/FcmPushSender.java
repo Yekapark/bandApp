@@ -68,13 +68,13 @@ public class FcmPushSender implements PushSender {
     }
 
     private static GoogleCredentials loadCredentials(FcmProperties properties) throws IOException {
-        if (properties.hasInlineCredentials()) {
-            return GoogleCredentials.fromStream(
-                    new ByteArrayInputStream(properties.credentialsJson().getBytes(StandardCharsets.UTF_8)));
+        if (properties.hasCredentialsFile()) {
+            try (FileInputStream in = new FileInputStream(properties.credentialsPath())) {
+                return GoogleCredentials.fromStream(in);
+            }
         }
-        try (FileInputStream in = new FileInputStream(properties.credentialsPath())) {
-            return GoogleCredentials.fromStream(in);
-        }
+        return GoogleCredentials.fromStream(
+                new ByteArrayInputStream(properties.credentialsJson().getBytes(StandardCharsets.UTF_8)));
     }
 
     @Override

@@ -82,6 +82,33 @@ class ReservationReminderJobTest extends NotificationApiSupport {
         assertThat(push.sentCount()).isZero();
     }
 
+    /**
+     * 회귀 방지 — 한 offset 이 이미 발송된 상태에서 다른 offset 이 뒤늦게 도래해도 그 건은 정상 발송된다.
+     * (이력 기록을 saveAndFlush+catch 로 하면 "이미 발송" 이 REQUIRES_NEW 를 rollback-only 로 만들어
+     * 같은 실행의 나머지 offset 이 통째로 누락됐다.)
+     */
+    @Test
+    void a_newly_due_offset_still_fires_after_another_offset_was_already_sent() {
+        String leader = signup("rmd-partial-l@band.app", "리더");
+        long bandId = createBand(leader, "실리카겔");
+        registerToken(leader, "leader-dev", "ANDROID");
+        putSettings(leader, true, 10, 30);
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+
+        Instant start = Instant.now().plus(Duration.ofMinutes(25));
+        createReservation(leader, bandId, roomId,
+                start.toString(), start.plus(Duration.ofHours(1)).toString());
+        push.reset();
+
+        // T-A: 30분 전 시점만 도래(10분 전은 아직).
+        assertThat(reminderService.runOnce(start.minus(Duration.ofMinutes(20)))).isEqualTo(1);
+        // T-B: 10분 전도 도래 → 30분 전은 이미 보냈고, 10분 전만 새로 나가야 한다.
+        assertThat(reminderService.runOnce(start.minus(Duration.ofMinutes(5)))).isEqualTo(1);
+
+        assertThat(push.sentCount()).isEqualTo(2);
+        assertThat(push.allTokens()).containsExactly("leader-dev", "leader-dev");
+    }
+
     @Test
     void cancelled_reservation_is_not_reminded() {
         String leader = signup("rmd-cx-l@band.app", "리더");

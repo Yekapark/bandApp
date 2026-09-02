@@ -30,12 +30,15 @@ public record FcmProperties(
     }
 
     public boolean isConfigured() {
-        return isNotBlank(projectId) && (isNotBlank(credentialsJson) || isNotBlank(credentialsPath));
+        return isNotBlank(projectId) && (isNotBlank(credentialsPath) || isNotBlank(credentialsJson));
     }
 
-    /** JSON 문자열이 있으면 그것을, 없으면 파일 경로를 쓴다. */
-    public boolean hasInlineCredentials() {
-        return isNotBlank(credentialsJson);
+    /**
+     * 파일 경로가 있으면 그것을 우선한다 — 파일 권한이 환경변수(프로세스 목록·크래시 덤프로 새기 쉬움)보다
+     * 안전하다. 경로가 없을 때만 JSON 문자열을 쓴다.
+     */
+    public boolean hasCredentialsFile() {
+        return isNotBlank(credentialsPath);
     }
 
     private static boolean isNotBlank(String value) {

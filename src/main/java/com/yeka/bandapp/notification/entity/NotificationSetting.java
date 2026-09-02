@@ -43,19 +43,12 @@ public class NotificationSetting extends BaseTimeEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    private NotificationSetting(long userId, boolean pushEnabled, int[] reminderOffsets, Instant now) {
-        this.userId = userId;
-        this.pushEnabled = pushEnabled;
-        this.reminderOffsets = reminderOffsets.clone();
-        this.updatedAt = now;
-    }
-
-    /** 설정을 처음 조회할 때 만드는 기본값 행(푸시 on + 기본 리마인더 시점). */
-    public static NotificationSetting defaults(long userId, int[] defaultOffsets, Instant now) {
-        return new NotificationSetting(userId, true, defaultOffsets, now);
-    }
-
-    /** 설정 변경(PUT 전체 교체). {@code offsets}는 이미 정규화된 값이어야 한다. */
+    /**
+     * 설정 변경(PUT 전체 교체). {@code offsets}는 이미 정규화된 값이어야 한다.
+     *
+     * <p>기본값 행은 저장소의 {@code insertDefaultsIfAbsent}(V9 컬럼 DEFAULT)가 만들고,
+     * 이 엔티티는 항상 로드된 뒤에만 다뤄진다 — 그래서 앱 코드가 {@code new} 하는 팩토리가 없다.
+     */
     public void update(boolean pushEnabled, int[] offsets, Instant now) {
         this.pushEnabled = pushEnabled;
         this.reminderOffsets = offsets.clone();

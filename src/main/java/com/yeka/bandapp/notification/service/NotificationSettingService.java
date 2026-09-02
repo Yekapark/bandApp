@@ -4,7 +4,6 @@ import com.yeka.bandapp.notification.NotificationProperties;
 import com.yeka.bandapp.notification.dto.NotificationSettingResponse;
 import com.yeka.bandapp.notification.entity.NotificationSetting;
 import com.yeka.bandapp.notification.repository.NotificationSettingRepository;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,12 +74,9 @@ public class NotificationSettingService {
 
     private NotificationSetting loadOrCreate(long userId) {
         return settingRepository.findById(userId).orElseGet(() -> {
-            try {
-                return settingRepository.saveAndFlush(NotificationSetting.defaults(
-                        userId, properties.defaultReminderOffsetsParsed(), Instant.now()));
-            } catch (DataIntegrityViolationException race) {
-                return settingRepository.findById(userId).orElseThrow(() -> race);
-            }
+            // ON CONFLICT DO NOTHING — 동시 최초 접근이 겹쳐도 예외 없이 한 행만 남는다.
+            settingRepository.insertDefaultsIfAbsent(userId);
+            return settingRepository.findById(userId).orElseThrow();
         });
     }
 }

@@ -63,6 +63,34 @@ class AttendanceNudgeJobTest extends NotificationApiSupport {
         assertThat(push.sentCount()).isEqualTo(1);
     }
 
+    /**
+     * 회귀 방지 — 1차 독촉 뒤 합류한 멤버는 2차 실행에서 독촉되고, 이미 독촉한 멤버가 그 처리를 막지 않는다.
+     */
+    @Test
+    void a_member_joining_between_runs_is_nudged_without_blocking_on_the_rest() {
+        String leader = signup("ndg-cross-l@band.app", "리더");
+        String early = signup("ndg-cross-e@band.app", "선참");
+        long bandId = createBand(leader, "국카스텐");
+        join(early, issueInvite(leader, bandId, null));
+        registerToken(leader, "leader-dev", "ANDROID");
+        registerToken(early, "early-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        createReservation(leader, bandId, roomId,
+                isoFromNow(Duration.ofHours(3)), isoFromNow(Duration.ofHours(4)));
+        push.reset();
+
+        assertThat(attendanceNudgeService.runOnce(Instant.now())).isEqualTo(2);
+        assertThat(push.allTokens()).containsExactlyInAnyOrder("leader-dev", "early-dev");
+
+        String late = signup("ndg-cross-late@band.app", "지각");
+        join(late, issueInvite(leader, bandId, null));
+        registerToken(late, "late-dev", "ANDROID");
+        push.reset();
+
+        assertThat(attendanceNudgeService.runOnce(Instant.now())).isEqualTo(1);
+        assertThat(push.allTokens()).containsExactly("late-dev");
+    }
+
     @Test
     void does_nothing_when_reservation_is_beyond_the_lead_window() {
         String leader = signup("ndg-far-l@band.app", "리더");

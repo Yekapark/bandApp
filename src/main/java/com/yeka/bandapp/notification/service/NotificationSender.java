@@ -72,8 +72,13 @@ public class NotificationSender {
 
         List<Long> fresh = new ArrayList<>();
         for (Long userId : recipients) {
-            if (dispatchRecorder.recordIfAbsent(type, targetId, variant, userId)) {
-                fresh.add(userId);
+            try {
+                if (dispatchRecorder.recordIfAbsent(type, targetId, variant, userId)) {
+                    fresh.add(userId);
+                }
+            } catch (RuntimeException e) {
+                // 한 수신자의 이력 기록 실패가 나머지 수신자를 막지 않는다.
+                log.warn("알림 이력 기록 실패 userId={} type={} targetId={}", userId, type, targetId, e);
             }
         }
         if (fresh.isEmpty()) {

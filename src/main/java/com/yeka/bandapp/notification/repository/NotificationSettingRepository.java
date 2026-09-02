@@ -22,4 +22,22 @@ public interface NotificationSettingRepository extends JpaRepository<Notificatio
     @Modifying
     @Query("delete from NotificationSetting s where s.userId = :userId")
     int deleteByUserId(@Param("userId") long userId);
+
+    /**
+     * 설정 행이 없을 때 기본값 행을 만든다. {@code push_enabled}·{@code reminder_offsets}는
+     * 마이그레이션 V9 의 컬럼 DEFAULT(각각 {@code TRUE}, {@code '{60}'})를 쓴다 —
+     * {@code app.notification.default-reminder-offsets}(기본 60)와 값을 맞춰 둔다.
+     * {@code ON CONFLICT DO NOTHING}이라 동시 최초 접근 경합이 예외 없이 흡수된다
+     * (그 뒤 호출 측이 {@code findById}로 확정 값을 읽는다).
+     *
+     * @return 새로 만들었으면 1, 이미 있었으면 0
+     */
+    @Transactional
+    @Modifying
+    @Query(value = """
+            insert into notification_settings (user_id, created_at, updated_at)
+            values (:userId, now(), now())
+            on conflict (user_id) do nothing
+            """, nativeQuery = true)
+    int insertDefaultsIfAbsent(@Param("userId") long userId);
 }

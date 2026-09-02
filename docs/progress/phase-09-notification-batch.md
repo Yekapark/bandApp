@@ -216,6 +216,8 @@ CI 에서 검증되는 통합 테스트:
 | 발송(FCM HTTP)이 `ReservationService`/`SettlementService` 의 트랜잭션·비관적 락 안에서 일어나면 커넥션 풀이 마른다 | 높음 | `@TransactionalEventListener(AFTER_COMMIT)` 로 커밋 후 발송. `NotificationSender`·`ReminderService`·`AttendanceNudgeService`·`MediaMaintenanceService` 에 `@Transactional` 을 달지 않음(클래스 주석에 명시). |
 | 리마인더 배치가 서버 재시작·중복 실행에서 같은 알림을 두 번 보낼 수 있다 | 높음 | `notification_dispatches` 유니크 제약을 멱등 키로. `NotificationDispatchRecorder` 가 `DataIntegrityViolationException` 을 잡아 "이미 보냄" 으로 처리. 배치 테스트마다 멱등 단언. |
 | `@TransactionalEventListener(AFTER_COMMIT)` 안에서 일반 `@Transactional`(REQUIRED)로 시작한 DB 쓰기가 커밋되지 않고 사라진다 (CI 첫 실행에서 트리거 테스트 6건 실패로 발견) | 높음 | 이력 기록을 `NotificationDispatchRecorder`(`REQUIRES_NEW`)로 분리. FCM 호출은 여전히 트랜잭션 밖. 배치 경로(트랜잭션 없음)에서도 그냥 새 트랜잭션 하나가 열릴 뿐이라 무해. |
+| 이력 기록을 `saveAndFlush` + `catch(DataIntegrityViolationException)` 로 하면, "이미 발송" 충돌의 flush 실패가 `REQUIRES_NEW` 트랜잭션을 rollback-only 로 만들어 커밋 시 `UnexpectedRollbackException` 이 난다 → **한 수신자의 "이미 발송됨"이 같은 `notify()` 의 나머지 수신자를 통째로 건너뛰게 한다**(리마인더에서 뒤늦게 도래한 offset, 독촉에서 나중에 합류한 멤버가 누락). 자체 검수에서 발견. | 높음 | `INSERT … ON CONFLICT DO NOTHING` 네이티브 쿼리로 교체 — 충돌이 예외 없이 흡수된다(0/1 반환). `NotificationSender.notify` 도 수신자별 try/catch 로 감싼다. 회귀 테스트 2건 추가(`a_newly_due_offset_still_fires_after_another_offset_was_already_sent`, `a_member_joining_between_runs_is_nudged_without_blocking_on_the_rest`). 같은 함정이 `NotificationSettingService.loadOrCreate`(동시 최초 접근)에도 있어 `insertDefaultsIfAbsent`(`ON CONFLICT (user_id) DO NOTHING`)로 교체. |
+| FCM 서비스 계정 개인키를 환경변수(`FCM_CREDENTIALS_JSON`)로 넣으면 프로세스 목록·크래시 덤프로 새기 쉽다 | 낮음 | 파일 경로(`FCM_CREDENTIALS_PATH`)와 둘 다 있으면 **파일 경로를 우선**하도록 정렬. `.env.example` 에도 명시. |
 | 미디어 만료 배치가 R2 삭제 순서를 잘못 잡으면(먼저 EXPIRED) R2 객체가 영구 고아가 된다 | 중간 | **R2 삭제 → 그다음 DB EXPIRED** 순서 고정. 삭제 실패 시 READY 유지 → 다음 실행 재시도. 테스트로 고정(`failNextDelete`). |
 | FCM 키 미설정 시 앱이 안 뜨거나 알림 API 가 막히면 로컬·CI 개발이 어려워진다 | 중간 | `FcmPushSender` 가 키 없이 조용히 뜨고 발송만 no-op. 설정·토큰 API 는 정상. `IntegrationTestSupport` 는 `FakePushSender(@Primary)` 로 대체. |
 | 발송 실패(FCM 오류)가 이미 커밋된 일정 등록·정산을 되돌리면 안 된다 | 중간 | 리스너 핸들러를 try/catch(RuntimeException)+log 로 감쌈. `NotificationSender.pushToDevices` 도 발송 예외를 삼킴(이력은 이미 남아 재발송 안 됨). |
@@ -230,6 +232,20 @@ CI 에서 검증되는 통합 테스트:
 - **`notification_settings.reminder_offsets` 의 `integer[]` 매핑** — Hibernate 6.6 `@JdbcTypeCode(SqlTypes.ARRAY)`
   + `ddl-auto: validate` 조합이 CI 통합 테스트 기동에서 문제없이 통과함을 확인했다(별도 어댑터 불필요).
 - **배치 분산 락 없음** — 단일 VM 전제(`SchedulingConfig`). 다중 인스턴스로 확장하면 ShedLock 등이 필요하다.
+- **`@Scheduled` 잡이 스레드 하나를 공유** — 스프링 기본 스케줄러는 단일 스레드다. 리마인더 잡이 FCM I/O
+  (타임아웃 5초)를 일정마다 동기로 도므로, 확정 일정이 많으면 실행이 길어져 다른 잡(자정 파기 등)이 밀린다.
+  `ThreadPoolTaskScheduler` 도입 또는 `@Async` 발송이 완화책(후속 과제).
+- **리마인더·독촉 배치의 스캔 상한(`SCAN_LIMIT = 500`)** — 페이지네이션 없이 시작 시각 오름차순 500건만
+  본다. 전 밴드 합산 미래 확정 일정이 창(24시간) 안에 500건을 넘으면 초과분 리마인더가 누락될 수 있다.
+  현재 규모에선 문제없으나 커지면 `RecurringExtensionJob` 처럼 id 커서 페이징으로 바꿔야 한다.
+- **디바이스 토큰 재등록 = 소유자 이전** — 같은 토큰 문자열을 다른 계정으로 등록하면 소유가 옮겨간다.
+  기기 핸드오버를 지원하는 표준 FCM 방식이지만, 토큰이 유출되면 표적 알림 리다이렉트가 가능하다.
+  클라이언트가 자기 현재 토큰만 보낸다는 전제다.
+- **토큰 해제가 쿼리 파라미터(`DELETE ?token=`)** — 통합 테스트 도구가 본문 있는 DELETE 를 못 해서다.
+  FCM 토큰이 접근 로그에 남을 수 있다(장기 비밀은 아니고 회전됨). 운영 클라이언트는 본문 DELETE 가 가능하니
+  필요하면 계약을 바꿀 수 있다.
+- **`notification_dispatches` 정리가 리마인더 잡에 묶여 있다** — 그 잡을 끄면 이력이 계속 쌓인다.
+  탈퇴 시에도 dispatch 행은 즉시 지우지 않고 보관기한(30일) 뒤 정리된다(개인정보는 `user_id` + 대상 id 뿐).
 - **알림 발송이 요청 스레드에서 동기** — AFTER_COMMIT 리스너가 FCM 왕복(타임아웃 5초)만큼 응답을 늦출 수
   있다. 부하가 실측으로 문제되면 `@Async` 를 붙인다(후속 과제).
 - **인앱 알림함 없음** — `notification_dispatches` 는 멱등 키·이력일 뿐, "받은 알림 목록" 조회 API 는 이번

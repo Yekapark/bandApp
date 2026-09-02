@@ -72,8 +72,8 @@ app:
     read-timeout: PT5S
   fcm:
     project-id: ${FCM_PROJECT_ID:}                              # 비우면 푸시 발송만 no-op, 설정·토큰 API 는 정상
-    credentials-path: ${FCM_CREDENTIALS_PATH:}                  # 서비스 계정 JSON 파일 경로 (우선)
-    credentials-json: ${FCM_CREDENTIALS_JSON:}                  # 파일 대신 JSON 문자열로도 주입 가능
+    credentials-path: ${FCM_CREDENTIALS_PATH:}                  # 서비스 계정 JSON 파일 경로 — 둘 다 있으면 이쪽 우선
+    credentials-json: ${FCM_CREDENTIALS_JSON:}                  # 파일 대신 JSON 문자열로도 주입 가능(경로가 없을 때만)
     connect-timeout: PT2S
     read-timeout: PT5S
   withdrawal:
