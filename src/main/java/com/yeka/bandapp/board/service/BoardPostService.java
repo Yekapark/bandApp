@@ -19,6 +19,8 @@ import com.yeka.bandapp.board.storage.R2Properties;
 import com.yeka.bandapp.board.storage.StorageClient;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -41,6 +43,8 @@ import java.util.Set;
  */
 @Service
 public class BoardPostService {
+
+    private static final Logger log = LoggerFactory.getLogger(BoardPostService.class);
 
     private static final int DEFAULT_LIMIT = 20;
     private static final int MAX_LIMIT = 50;
@@ -104,7 +108,7 @@ public class BoardPostService {
                     String thumbnailUrl = media.stream()
                             .filter(m -> m.getType() == MediaType.IMAGE)
                             .findFirst()
-                            .map(m -> presignGet(m).toString())
+                            .map(this::presignGetOrNull)
                             .orElse(null);
                     return PostSummaryResponse.of(p, names.get(p.getAuthorId()), media.size(), thumbnailUrl);
                 })
@@ -121,7 +125,7 @@ public class BoardPostService {
         BoardPost post = requireVisiblePost(bandId, postId, callerId);
 
         List<MediaResponse> media = mediaRepository.findByBoardPostIdOrderByIdAsc(postId).stream()
-                .map(m -> MediaResponse.of(m, m.isReady() ? presignGet(m).toString() : null))
+                .map(m -> MediaResponse.of(m, m.isReady() ? presignGetOrNull(m) : null))
                 .toList();
         boolean editable = post.isWrittenBy(callerId) || member.isLeader();
         return PostResponse.of(post, displayName(post.getAuthorId()), editable, media);
@@ -208,9 +212,20 @@ public class BoardPostService {
         return byPost;
     }
 
-    private java.net.URI presignGet(MediaAttachment media) {
-        return storage.presignGet(media.getStorageKey(), media.getContentType(),
-                r2Properties.downloadUrlTtl());
+    /**
+     * 다운로드용 presigned GET URL. 저장소 미설정·서명 실패({@link BusinessException})면 {@code null}을
+     * 돌려준다 — 첨부 하나 때문에 목록·상세 응답 전체가 503 으로 깨지지 않도록 degrade 한다. R2 가
+     * 정상이면 항상 URL 이 나온다({@code presignGet} 은 오프라인 서명이라 네트워크 장애로는 실패하지 않음).
+     */
+    private String presignGetOrNull(MediaAttachment media) {
+        try {
+            return storage.presignGet(media.getStorageKey(), media.getContentType(),
+                    r2Properties.downloadUrlTtl()).toString();
+        } catch (BusinessException e) {
+            log.warn("presigned GET URL 생성 실패 storageKey={} ({}) — 링크 없이 응답한다",
+                    media.getStorageKey(), e.getMessage());
+            return null;
+        }
     }
 
     private String displayName(long userId) {

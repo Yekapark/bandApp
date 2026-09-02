@@ -249,6 +249,7 @@ Phase 9 배치가 최종 정리). 소프트 삭제라 이미 접수된 신고가
 | **null 바인드 타입 추론** — `:cursor is null` 한 쿼리 분기는 PostgreSQL 이 `could not determine data type of parameter` 로 실패. 첫 페이지/이후 페이지 쿼리 메서드를 분리. | 낮음 | 조치 완료(`findFirstPage`/`findPageAfter`) |
 | **AWS SDK 크기** — 스펙에 없는 의존성. `netty-nio-client` 제외 + `url-connection-client`(sync) 로 최소화. `S3Presigner` 는 오프라인이라 런타임 네트워크 의존이 서명 경로엔 없음. | — | 근거를 커밋 메시지·이 문서에 명시(CLAUDE.md "스펙에 없는 라이브러리는 먼저 제안") |
 | **레이트리밋 부재 지점** — 글 CRUD·차단에는 레이트리밋이 없다(기존 일정·정산 쓰기와 동일 기준 — 내부 저위험). 외부 리소스를 만드는 `upload-url` 과 스팸 소지가 큰 `reports` 에만 걸었다. | 하 | 현행 유지 |
+| **썸네일·다운로드 URL 서명 실패가 목록/상세 전체를 깨뜨림** — R2 키가 있다가 빠진 상태에서 READY 첨부의 `presignGet` 이 503 을 던지면 `GET .../posts`·`GET .../posts/{id}` 응답 전체가 503 이 됐다(글 본문도 안 나옴). | 낮음 | `BoardPostService.presignGetOrNull` 이 `BusinessException` 을 삼키고 `null` 을 돌려주도록 degrade — 목록·상세는 정상 응답하고 그 첨부의 URL 만 빠진다(클라이언트는 플레이스홀더). `complete` 등 쓰기 경로는 그대로 저장소가 살아 있어야 진행된다 |
 | SQL 인젝션 / 대량 바인딩 — 전부 JPA 파생 쿼리·JPQL, 파라미터 바인딩만. DTO 는 명시적 `record`. | — | 문제 없음 |
 
 ## 7. 알려진 이슈 / 제약
