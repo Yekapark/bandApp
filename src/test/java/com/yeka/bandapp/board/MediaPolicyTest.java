@@ -6,15 +6,13 @@ import com.yeka.bandapp.board.storage.StoredObject;
 import com.yeka.bandapp.common.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * {@link MediaPolicy} 순수 단위 테스트 — Docker 불필요.
- * 형식 화이트리스트, 이미지 10MB / 영상 50MB 경계, 위조(크기·형식) 판정, 무료 플랜 30일 만료.
+ * 형식 화이트리스트, 이미지 10MB / 영상 50MB 경계, 위조(크기·형식) 판정.
+ * (보관기한 계산은 요금제 도메인으로 옮겨졌다 — {@code MediaRetentionTest} 참조.)
  */
 class MediaPolicyTest {
 
@@ -99,12 +97,5 @@ class MediaPolicyTest {
     @Test
     void verify_upload_tolerates_missing_actual_content_type() {
         MediaPolicy.verifyUpload(MediaType.IMAGE, 1_000, "image/jpeg", new StoredObject(1_000, null));
-    }
-
-    @Test
-    void free_plan_expiry_is_thirty_days_after_upload() {
-        Instant uploadedAt = Instant.parse("2026-03-01T12:00:00Z");
-        assertThat(MediaPolicy.freePlanExpiresAt(uploadedAt))
-                .isEqualTo(uploadedAt.plus(30, ChronoUnit.DAYS));
     }
 }

@@ -5,8 +5,6 @@ import com.yeka.bandapp.board.storage.StoredObject;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
 /**
@@ -22,7 +20,6 @@ public final class MediaPolicy {
     public static final long IMAGE_MAX_BYTES = 10L * 1024 * 1024; // 10MB
     public static final long VIDEO_MAX_BYTES = 50L * 1024 * 1024; // 50MB
     public static final int MAX_ATTACHMENTS_PER_POST = 10;
-    private static final int FREE_PLAN_RETENTION_DAYS = 30;
 
     /** 허용 MIME → 미디어 종류. image/svg+xml·image/gif·text/* 등은 의도적으로 뺀다. */
     private static final Map<String, MediaType> ALLOWED = Map.of(
@@ -73,11 +70,6 @@ public final class MediaPolicy {
         if (!actualType.isEmpty() && !actualType.equals(normalize(declaredContentType))) {
             throw new BusinessException(ErrorCode.MEDIA_CONTENT_TYPE_MISMATCH);
         }
-    }
-
-    /** 무료 플랜 보관기한. BandPlan(Phase 10)이 붙기 전까지 FREE 30일 고정. */
-    public static Instant freePlanExpiresAt(Instant uploadedAt) {
-        return uploadedAt.plus(FREE_PLAN_RETENTION_DAYS, ChronoUnit.DAYS);
     }
 
     private static String normalize(String contentType) {
