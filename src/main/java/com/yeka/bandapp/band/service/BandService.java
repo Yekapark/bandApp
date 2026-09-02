@@ -11,6 +11,7 @@ import com.yeka.bandapp.band.repository.BandMemberRepository;
 import com.yeka.bandapp.band.repository.BandRepository;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import com.yeka.bandapp.plan.service.PlanProvisioningService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,12 +30,14 @@ public class BandService {
     private final BandRepository bandRepository;
     private final BandMemberRepository bandMemberRepository;
     private final BandAccessGuard accessGuard;
+    private final PlanProvisioningService planProvisioningService;
 
     public BandService(BandRepository bandRepository, BandMemberRepository bandMemberRepository,
-                       BandAccessGuard accessGuard) {
+                       BandAccessGuard accessGuard, PlanProvisioningService planProvisioningService) {
         this.bandRepository = bandRepository;
         this.bandMemberRepository = bandMemberRepository;
         this.accessGuard = accessGuard;
+        this.planProvisioningService = planProvisioningService;
     }
 
     /** 밴드 생성. 생성자가 곧바로 활성 LEADER 멤버가 된다. */
@@ -43,6 +46,7 @@ public class BandService {
         Instant now = Instant.now();
         Band band = bandRepository.save(Band.create(request.name().trim(), userId));
         bandMemberRepository.save(BandMember.asLeader(band.getId(), userId, now));
+        planProvisioningService.createDefaultPlan(band.getId(), now);
         return BandResponse.from(band);
     }
 
