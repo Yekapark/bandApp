@@ -180,7 +180,10 @@
   권한(등록자/밴드장), 본인만 납부 체크(타인 403·비대상자 404), 중복 생성 409, 타 밴드 격리,
   **납부 체크 × 재계산 동시 실행**(재계산이 몫을 지웠다 되살리는 사이 납부 체크가 끼어들어도
   500 없이 200/404만, 최종 합계 = 총액).
-  **CI 실행 대기 중**(아래 링크는 PR 생성 후 갱신).
+- **CI 결과: `./gradlew build`(전체 테스트 포함) BUILD SUCCESSFUL** — PR [#27](https://github.com/Yekapark/bandApp/pull/27),
+  [run 33578731640](https://github.com/Yekapark/bandApp/actions/runs/33578731640). `main` 머지 후
+  push 트리거도 통과([run 33580395445](https://github.com/Yekapark/bandApp/actions/runs/33580395445)).
+  Phase 0~6 기존 테스트도 함께 통과해 회귀 없음이 확인됐다.
 
 ## 6.1 구현 후 자체 점검(보안·누락) 결과
 
@@ -216,9 +219,12 @@
 
 ## 8. 커밋 · CI 링크
 
-- 브랜치: `phase-7-settlement`
-- PR: _(생성 후 갱신)_
-- CI: _(생성 후 갱신)_
+- 브랜치: `phase-7-settlement` → `main` 머지 (merge commit `acc9393`)
+- PR: [#27](https://github.com/Yekapark/bandApp/pull/27)
+- CI: [run 33578731640](https://github.com/Yekapark/bandApp/actions/runs/33578731640) (PR) ·
+  [run 33580395445](https://github.com/Yekapark/bandApp/actions/runs/33580395445) (`main` push) — 둘 다 ✅ BUILD SUCCESSFUL
+- 주요 커밋: `fc10289`(스키마·엔티티·계산기) · `ec73431`(서비스·컨트롤러·DTO) ·
+  `5119723`(테스트) · `6ab2f42`(진행 문서) · `c458c91`(markPaid↔recalculate 직렬화 수정)
 
 ## 9. 다음 Phase 예고
 
