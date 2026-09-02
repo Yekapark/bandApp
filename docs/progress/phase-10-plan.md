@@ -238,17 +238,18 @@ CI 에서 검증되는 통합 테스트:
 
 ## 8. 커밋 · CI 링크
 
-- 브랜치: `phase-10-plan` *(푸시 후 갱신)*
-- PR: *(생성 후 갱신)*
-- CI: *(실행 후 갱신)*
+- 브랜치: `phase-10-plan`
+- PR: [#33](https://github.com/Yekapark/bandApp/pull/33)
+- CI: [run 33650220236](https://github.com/Yekapark/bandApp/actions/runs/33650220236) — ✅ 통과 (2m 14s)
 - 주요 커밋:
-  - `feat(plan): V10 마이그레이션 + BandPlan 엔티티 + MediaRetention + 기본 플랜 provisioning`
-  - `feat(plan): PaymentGateway 인터페이스 + no-op 구현체 + 설정`
-  - `feat(plan): 요금제 조회·전환 서비스·API (구독/해지/갱신)`
-  - `feat(plan): 요금제 변경 시 밴드 미디어 보관기한 재계산 (board 연동)`
-  - `refactor(board): 미디어 보관기한 계산을 요금제 도메인에 위임 (MediaPolicy 정리)`
+  - `feat(plan): V10 마이그레이션 + BandPlan 엔티티 + 기본 FREE 플랜 생성`
+  - `feat(plan): PaymentGateway 인터페이스 + no-op 구현체`
+  - `feat(plan): 요금제 조회·전환 API + 미디어 보관기한 재계산`
+  - `refactor(board): 미디어 보관기한 계산을 요금제 도메인에 위임`
   - `test(plan): 단위·통합 테스트`
   - `docs(progress): Phase 10 기록`
+
+> FCM 자격증명 파일 마운트 정리(Phase 10 과 무관)는 별도 PR [#32](https://github.com/Yekapark/bandApp/pull/32).
 
 ## 9. 다음 Phase 예고
 
