@@ -209,6 +209,50 @@ class ReservationRepository {
     }
   }
 
+  /// 셋리스트 곡 정보 수정 (PUT 전체 교체 — 순서는 안 바뀜).
+  Future<SetlistItem> updateSetlistItem({
+    required int bandId,
+    required int reservationId,
+    required int itemId,
+    required String title,
+    String? artist,
+    String? referenceUrl,
+  }) async {
+    try {
+      final res = await _dio.put<dynamic>(
+        '/bands/$bandId/reservations/$reservationId/setlist/$itemId',
+        data: {
+          'title': title,
+          if (artist != null && artist.isNotEmpty) 'artist': artist,
+          if (referenceUrl != null && referenceUrl.isNotEmpty)
+            'referenceUrl': referenceUrl,
+        },
+      );
+      return unwrap(
+        res,
+        (d) => SetlistItem.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 셋리스트 재정렬. [itemIds] 는 그 일정의 **모든** 항목 id 를 원하는 순서로 나열해야 한다.
+  Future<void> reorderSetlist({
+    required int bandId,
+    required int reservationId,
+    required List<int> itemIds,
+  }) async {
+    try {
+      await _dio.put<dynamic>(
+        '/bands/$bandId/reservations/$reservationId/setlist/reorder',
+        data: {'itemIds': itemIds},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// 셋리스트 곡 삭제.
   Future<void> deleteSetlistItem({
     required int bandId,

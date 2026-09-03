@@ -43,6 +43,8 @@
   설정 허브·밴드 설정에서 진입. 상세는 `client-10-invite.md`.
 - **C11 합주실 수정/삭제**(2026-09-04) — 합주실 선택 시트·지도 목록의 ⋯ 메뉴에서 수정(폼 재사용)·
   삭제. `PUT/DELETE /bands/{id}/rooms/{roomId}`. 상세는 `client-11-room-edit.md`.
+- **C12 셋리스트 재정렬 + 곡 수정**(2026-09-04) — 일정 상세 셋리스트 드래그 정렬(`onReorderItem` +
+  `PUT .../setlist/reorder`), 곡 탭 → 수정 다이얼로그(곡명·아티스트·참고 링크). 상세는 `client-12-setlist.md`.
 
 ---
 

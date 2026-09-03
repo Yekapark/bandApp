@@ -9,7 +9,7 @@
 > `flutter analyze`(에러 0) · `flutter test` · `flutter build web` 통과 후 커밋.
 > 이 PC Flutter: `C:\src\flutter\bin` / 저장소: `C:\band\bandApp`.
 >
-> 마지막 갱신: **2026-09-04** (C10·C11 완료)
+> 마지막 갱신: **2026-09-04** (C10·C11·C12 완료)
 
 ---
 
@@ -19,7 +19,7 @@
 |---|---|---|
 | C10 | 초대코드 발급/조회/무효화 (멤버 초대 화면) | ✅ 완료 — `client-10-invite.md` |
 | C11 | 합주실 수정/삭제 | ✅ 완료 — `client-11-room-edit.md` |
-| C12 | 셋리스트 재정렬 + 곡 수정 | ⬜ 미착수 |
+| C12 | 셋리스트 재정렬 + 곡 수정 | ✅ 완료 — `client-12-setlist.md` |
 | C13 | 정기 일정 규칙 상세 (회차 목록) | ⬜ 미착수 |
 | C14 | 밴드 요금제 (FREE/PREMIUM) | ⬜ 미착수 |
 | C15 | 미디어 신고 · 캘린더 취소건 표시 · 초대 링크 프리필 | ⬜ 미착수 |
@@ -110,9 +110,13 @@
 - `editable`(활성 일정)일 때만.
 
 **완료 기준**:
-- [ ] 드래그로 순서 바뀌고 서버 반영, 곡 정보 수정 반영
-- [ ] `analyze`/`test`/`build web` 통과
-- [ ] `client-12-setlist.md` + 문서 갱신
+- [x] 드래그로 순서 바뀌고 서버 반영, 곡 정보 수정 반영
+- [x] `analyze`/`test`/`build web` 통과
+- [x] `client-12-setlist.md` + 문서 갱신
+
+✅ **완료 (2026-09-04)** — `reservation_repository.reorderSetlist/updateSetlistItem`,
+`_SetlistBlock` 을 `ReorderableListView`(onReorderItem) 로, `_SongDialog` 추가/수정 겸용
++ 참고 링크 칸. 낙관적 재정렬(실패 시 invalidate 롤백).
 
 ---
 
