@@ -3,7 +3,7 @@
 > **새 세션에서 클라이언트 작업을 이어받을 때 이 파일부터 읽는다.**
 > 이 문서는 "지금 어디까지 됐고, 어떻게 이어가는지"를 담는 살아있는 문서다.
 > 작업을 진행하면 아래 "현재 상태"와 "다음 할 일"을 갱신한다.
-> 마지막 갱신: **2026-09-03** (알림 설정 화면 추가)
+> 마지막 갱신: **2026-09-04** (C6 게시판 추가)
 
 ---
 
@@ -24,7 +24,10 @@
 - **알림 설정 화면 `/settings/notifications` 구현 완료**(2026-09-03) — 푸시 on/off + "일정 시작 N분 전"
   리마인더 시점(프리셋 칩). 백엔드 `GET/PUT /api/v1/notifications/settings` 사용, 백엔드 변경 없음.
   홈 헤더 종 아이콘에서 진입. **디바이스 토큰 등록·실제 푸시 수신은 Firebase 설정 필요 → 미구현**(§7·PROBLEMS).
-- 다음: 게시판(#11·#12) → 설정 나머지(밴드/계정) → 알림 수신부(FCM).
+- **게시판 `/board` 구현 완료**(2026-09-04, C6) — 피드(커서 무한스크롤)·글 상세·작성/수정·
+  첨부 업로드(R2 presigned 직접 PUT)·신고·작성자 차단. 하단 탭바에 "게시판" 탭이 실제 화면으로
+  붙음. 백엔드 변경 없음(Phase 8 API). 신규 의존성 `image_picker`. 상세는 `client-06-board.md`.
+- 다음: (C7) 일정 수정·승인/거절·정기 일정 → (C8) 설정 나머지(밴드/계정/차단해제) → (C9) 알림 수신부(FCM)+클라 CI.
 
 ---
 
@@ -119,6 +122,19 @@
 2. 실행 시 dart-define: `--dart-define=NAVER_MAP_CLIENT_ID=<Client ID>`.
 3. Android 네이티브 빌드는 개발자 모드 필요(§3-D). 웹은 어차피 지도 미지원 → 목록만.
 
+### 구현 완료 (C6: 게시판) — 상세는 `client-06-board.md`
+
+| 화면 | 라우트 | 파일 | 백엔드 |
+|---|---|---|---|
+| 게시판 피드 | `/board` (탭) | `features/board/presentation/board_screen.dart` | `GET /bands/{id}/posts?cursor&limit` |
+| 게시글 상세 | `/board/:postId` | `.../post_detail_screen.dart` | `GET/DELETE …/posts/{id}`, `POST /reports`, `POST /users/me/blocks` |
+| 글 작성/수정 | `/board/new`, `/board/:postId/edit` | `.../post_compose_screen.dart` | `POST/PUT …/posts`, `POST …/media/upload-url` → R2 PUT → `…/media/{id}/complete`, `DELETE …/media/{id}` |
+
+- 상태: `features/board/application/board_providers.dart` (`boardFeedProvider` — `loadMore`/`refresh`, `postDetailProvider` family).
+- 첨부는 백엔드를 지나지 않는다 — presigned PUT URL로 R2에 직접 올린다(인터셉터 없는 별도 Dio).
+- 하단 탭 "게시판"이 `showSoon` → 실제 브랜치(인덱스 3)로 승격. 남은 `showSoon`은 "정산" 뿐.
+- **뺀 것**: 영상 인앱 재생(타일로만 표시), 개별 첨부(MEDIA) 신고 UI, 차단 해제 화면(C8).
+
 ### 구현 완료 (카카오 로그인 SDK)
 
 | 파일 | 역할 |
@@ -192,13 +208,17 @@
 
 ## 3. 로컬 환경 함정 (이 PC 기준 — 세션마다 다시 부딪힘)
 
-### A. Flutter 가 PATH 에 없음
+### A. Flutter 경로 · 저장소 경로가 PC 마다 다름
 
-- 설치 위치: **`C:\flutter\bin`** (Flutter 3.47.2 / Dart 3.13.2, stable).
-- `flutter` / `dart` 명령이 PATH 에 없어서 **전체 경로로 호출**해야 한다:
-  `& C:\flutter\bin\flutter.bat <명령>` (PowerShell).
-- Git Bash 쪽 PATH 에는 아예 안 잡힌다 → PowerShell 로 실행.
-- 영구 등록하려면 사용자가 직접: `setx PATH "%PATH%;C:\flutter\bin"` (새 터미널부터 적용).
+- **PC #1**: 저장소 `E:\project\band`, Flutter `C:\flutter\bin`.
+- **PC #2** (박장언, 2026-09-04~): 저장소 `C:\band\bandApp`, Flutter **`C:\src\flutter\bin`**
+  (Flutter 3.47.2 / Dart 3.13.2, stable). Git Bash PATH 에는 `/c/src/flutter/bin/flutter` 로 잡힌다.
+- 어느 쪽이든 PATH 등록이 없으면 **전체 경로로 호출**: `& C:\src\flutter\bin\flutter.bat <명령>`
+  (PowerShell) 또는 `/c/src/flutter/bin/flutter <명령>` (Git Bash).
+- `client/android`·`client/web`·`client/windows` 는 `.gitignore` 제외 → 새 PC/클론에서는
+  없다. `flutter build web` 전에 `flutter create . --platforms web,android,windows` 로
+  스캐폴딩을 한 번 생성한다(gitignore 라 커밋 안 됨). `flutter create` 가 만드는
+  `test/widget_test.dart`(기본 카운터 테스트)는 삭제한다 — `MyApp` 참조라 테스트가 깨진다.
 
 ### B. 포트 5432 충돌 — DB 접속 시 반드시 주의
 
@@ -274,15 +294,19 @@ cd E:\project\band\client
 4. ~~알림 **설정** 화면 (`/settings/notifications`)~~ ✅ 2026-09-03 — 푸시 on/off + 리마인더 시점.
    상세는 `client-05-notification-settings.md`. **남은 것**: 디바이스 토큰 등록(FCM),
    실제 푸시 수신 처리, 정산 화면의 "미납자 알림" 버튼(백엔드에 미납 독촉 트리거 API 없음 — PROBLEMS §3).
-5. (검토) **정기 일정** — 백엔드에 정기 규칙 생성 API 추가 vs 클라에서 N회 `POST` 반복.
-6. 일정 상세에 수정(PUT)·밴드장 승인/거절 UI. 정산 총액 변경 UI.
-7. (정리) analyze info 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.
-8. (검토) 클라이언트 CI — `flutter analyze` + `flutter test`.
+5. ~~**게시판**(#11·#12) — 피드·상세·작성/수정·첨부 업로드·신고·차단~~ ✅ 2026-09-04 (C6).
+   상세는 `client-06-board.md`. 남은 것: 영상 인앱 재생, 차단 해제 화면(C8).
+6. **(C7)** 정기 일정 규칙 등록/목록/삭제(백엔드 Phase 5 API 있음 — `POST /bands/{id}/recurring-rules`).
+   일정 상세에 수정(PUT: `/reservations/{id}` 존재)·밴드장 승인/거절(`/approve`·`/reject` 존재) UI.
+7. **(C8)** 설정 나머지 — 밴드 설정(권한 모드·밴드장 위임·멤버 추방), 계정(내 정보·탈퇴), 차단 해제.
+8. **(C9)** 알림 수신부(FCM: `firebase_messaging` + `POST /notifications/device-tokens`),
+   클라이언트 CI(`flutter analyze` + `flutter test` GitHub Actions).
+9. (정리) analyze info 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.
 
 ## 6. 열린 결정 / 확인 필요
 
-- **정기(반복) 일정**: 백엔드 `POST /reservations` 에 반복 필드가 없음(`recurringRuleId` 는 응답 전용).
-  규칙 생성 엔드포인트를 추가할지, 클라에서 반복 호출할지.
+- ~~**정기(반복) 일정**~~ (해결): 백엔드 Phase 5 에 `POST/GET/DELETE /bands/{id}/recurring-rules`
+  가 이미 있다(회차는 등록 시 8주분 자동 생성, 개별 회차 수정·취소는 일반 일정 API). C7 에서 붙인다.
 - 홈 "이번 달 정산" 카드: 밴드 단위 정산 합계 API 없음 → 현재 값 `—`. 집계 엔드포인트를
   백엔드에 추가할지, 화면에서 일정별로 합산할지 결정 필요.
 - 초대코드 UI: 백엔드는 8자 영숫자인데 목업은 6자리 숫자 키패드 → 현재 8자 텍스트 입력으로 구현.

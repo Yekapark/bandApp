@@ -26,6 +26,9 @@ dependencies:
   # 카카오 로그인 (user 모듈만 — 로그인 + 사용자 조회). 네이티브 앱 키 필요.
   kakao_flutter_sdk_user: ^1.9.6
 
+  # 게시판 첨부: 사진/영상 선택 → R2 presigned URL 로 직접 업로드.
+  image_picker: ^1.1.2
+
   # 합주실 지도 (네이버 지도). Android/iOS 전용 — 웹은 목록만 표시(kIsWeb 가드).
   # NCP 지도 클라이언트 ID 필요: --dart-define=NAVER_MAP_CLIENT_ID=xxxx
   flutter_naver_map: ^1.4.4
