@@ -39,6 +39,7 @@
 | 계정 | `/settings/account` `account_screen.dart` | 내 정보, 회원 탈퇴(이메일 계정은 비밀번호 재확인) |
 | 차단한 사용자 | `/settings/blocks` `blocked_users_screen.dart` | 차단 목록 + 해제 |
 | 멤버 초대 | `/band/invite` `invite_screen.dart` | 밴드장이 초대코드·링크 발급/재발급/무효화 (C10) |
+| 요금제 | `/settings/plan` `plan_screen.dart` | FREE/PREMIUM 조회·비교표·전환(밴드장). 실제 결제 연동 없음 (C14) |
 
 추가로 만든 화면(요구 목록엔 없지만 흐름상 필요):
 

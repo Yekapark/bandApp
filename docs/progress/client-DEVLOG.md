@@ -47,6 +47,8 @@
   `PUT .../setlist/reorder`), 곡 탭 → 수정 다이얼로그(곡명·아티스트·참고 링크). 상세는 `client-12-setlist.md`.
 - **C13 정기 규칙 상세**(2026-09-04) — 정기 일정 목록 카드 탭 → `/cal/recurring/:ruleId` 규칙 요약 +
   다가오는 회차 목록(탭 시 일정 상세로). `GET .../recurring-rules/{ruleId}`. 상세는 `client-13-recurring-detail.md`.
+- **C14 밴드 요금제**(2026-09-04) — `/settings/plan` FREE/PREMIUM 조회·비교표·전환(구독/해지/연장, 밴드장).
+  `16. 요금제` API. 실제 결제 연동은 없음(버튼만). 상세는 `client-14-plan.md`.
 
 ---
 

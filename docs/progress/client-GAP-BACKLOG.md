@@ -9,7 +9,7 @@
 > `flutter analyze`(에러 0) · `flutter test` · `flutter build web` 통과 후 커밋.
 > 이 PC Flutter: `C:\src\flutter\bin` / 저장소: `C:\band\bandApp`.
 >
-> 마지막 갱신: **2026-09-04** (C10~C13 완료)
+> 마지막 갱신: **2026-09-04** (C10~C14 완료)
 
 ---
 
@@ -21,7 +21,7 @@
 | C11 | 합주실 수정/삭제 | ✅ 완료 — `client-11-room-edit.md` |
 | C12 | 셋리스트 재정렬 + 곡 수정 | ✅ 완료 — `client-12-setlist.md` |
 | C13 | 정기 일정 규칙 상세 (회차 목록) | ✅ 완료 — `client-13-recurring-detail.md` |
-| C14 | 밴드 요금제 (FREE/PREMIUM) | ⬜ 미착수 |
+| C14 | 밴드 요금제 (FREE/PREMIUM) | ✅ 완료 — `client-14-plan.md` |
 | C15 | 미디어 신고 · 캘린더 취소건 표시 · 초대 링크 프리필 | ⬜ 미착수 |
 
 ---
@@ -174,10 +174,13 @@
 - (선택) 게시판/미디어 화면에 FREE 30일 보관 안내 배지 — 여유 되면
 
 **완료 기준**:
-- [ ] 요금제 조회, 밴드장이 구독/해지/연장, 상태 갱신
-- [ ] 일반 멤버는 읽기 전용
-- [ ] `analyze`/`test`/`build web` 통과
-- [ ] `client-14-plan.md` + 문서 갱신
+- [x] 요금제 조회, 밴드장이 구독/해지/연장, 상태 갱신
+- [x] 일반 멤버는 읽기 전용
+- [x] `analyze`/`test`/`build web` 통과
+- [x] `client-14-plan.md` + 문서 갱신
+
+✅ **완료 (2026-09-04)** — `features/plan/*`, `/settings/plan`, 설정 허브 "요금제" 진입.
+비교표(미디어 보관기한), 밴드장 전환 버튼. 스토어 결제 연동은 없음(버튼만). 미디어 화면 보관 배지는 미추가.
 
 ---
 

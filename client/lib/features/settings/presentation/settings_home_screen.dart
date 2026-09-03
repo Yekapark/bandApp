@@ -64,6 +64,12 @@ class SettingsHomeScreen extends ConsumerWidget {
             onTap: band == null ? null : () => context.push(Routes.invite),
           ),
           _Tile(
+            icon: Icons.workspace_premium_outlined,
+            label: '요금제',
+            sub: 'FREE / PREMIUM · 미디어 보관기한',
+            onTap: band == null ? null : () => context.push(Routes.plan),
+          ),
+          _Tile(
             icon: Icons.block_outlined,
             label: '차단한 사용자',
             sub: '게시판에서 서로의 글이 보이지 않는 사용자',

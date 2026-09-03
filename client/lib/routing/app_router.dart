@@ -16,6 +16,7 @@ import '../features/board/presentation/post_compose_screen.dart';
 import '../features/board/presentation/post_detail_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notification/presentation/notification_settings_screen.dart';
+import '../features/plan/presentation/plan_screen.dart';
 import '../features/recurring/presentation/recurring_detail_screen.dart';
 import '../features/recurring/presentation/recurring_form_screen.dart';
 import '../features/recurring/presentation/recurring_list_screen.dart';
@@ -69,6 +70,7 @@ class Routes {
   static const bandSettings = '/settings/band';
   static const account = '/settings/account';
   static const blockedUsers = '/settings/blocks';
+  static const plan = '/settings/plan';
   static const invite = '/band/invite';
 
   /// 일정 상세. [reservationId] 로 실제 경로를 만든다.
@@ -219,6 +221,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.blockedUsers,
         builder: (_, __) => const BlockedUsersScreen(),
+      ),
+      GoRoute(
+        path: Routes.plan,
+        builder: (_, __) => const PlanScreen(),
       ),
       GoRoute(
         path: Routes.invite,
