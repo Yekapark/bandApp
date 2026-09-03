@@ -3,7 +3,7 @@
 > **새 세션에서 클라이언트 작업을 이어받을 때 이 파일부터 읽는다.**
 > 이 문서는 "지금 어디까지 됐고, 어떻게 이어가는지"를 담는 살아있는 문서다.
 > 작업을 진행하면 아래 "현재 상태"와 "다음 할 일"을 갱신한다.
-> 마지막 갱신: **2026-09-03**
+> 마지막 갱신: **2026-09-04**
 
 ---
 
@@ -16,7 +16,12 @@
 - 2단계에 딸려: **백엔드 신규 엔드포인트** `GET /bands/{id}/rooms/search`(네이버 지역검색 프록시)
   + 한국어 로케일. PR #34.
 - 3단계 정산: 백엔드 변경 없음(Phase 7 API 사용). 백엔드 스모크(생성/납부/재계산) 통과. PR: `feat/client-settlement`.
-- 다음: 하단 탭바 ShellRoute화 → 합주실 지도(SDK/키 결정 필요) → 카카오 로그인 SDK → 알림 화면.
+- 카카오 로그인 SDK 배선 완료(`kakao_flutter_sdk_user`). 앱 키만 넣으면 동작. 백엔드 `/auth/kakao` 는 이미 있었음.
+- 하단 탭바 **`StatefulShellRoute` 전환 완료**(2026-09-04) — 홈·캘린더·지도 탭이 스택/스크롤을
+  각자 보존하고 탭바가 항상 떠 있다. 상세·폼·정산은 루트 네비게이터에 풀스크린으로 push.
+- **합주실 지도 `/map` 구현 완료**(2026-09-04) — 네이버 지도(`flutter_naver_map`). 좌표 있는 합주실
+  마커 + 하단 목록. **Android/iOS 전용**이라 웹에선 목록만(가드). `NAVER_MAP_CLIENT_ID` dart-define 필요.
+- 다음: 알림 화면(FCM) → 게시판 → 설정.
 
 ---
 
@@ -63,6 +68,7 @@
 | 합주실 등록 폼 | `/cal/rooms/new` | `.../room_form_screen.dart` | `POST /bands/{id}/rooms`, `GET /bands/{id}/rooms/search` |
 | 합주실 선택 시트 | (모달) | `.../widgets/room_picker_sheet.dart` | `GET /bands/{id}/rooms` |
 | 일정 상세 | `/reservations/:rid` | `.../reservation_detail_screen.dart` | `GET/DELETE …/{rid}`, `PUT …/attendances/{uid}`, `POST/DELETE …/setlist` |
+| 합주실 지도 | `/map` (탭) | `.../map_screen.dart` | `GET /bands/{id}/rooms` (`lat`/`lng` 사용) |
 
 - 상태: `features/reservation/application/calendar_providers.dart`
   (`calendarMonthProvider`, `monthReservationsProvider`, `roomsProvider`, `reservationDetailProvider`).
@@ -87,7 +93,74 @@
 - 일정 상세 화면에서 "정산 (N빵) 보기 · 만들기" 링크로 진입.
 - 백엔드 변경 없음 — Phase 7 API 그대로.
 
+### 구현 완료 (4단계: 합주실 지도 + 탭바 ShellRoute) — 상세는 `client-04-room-map.md`
+
+| 화면 | 라우트 | 파일 | 백엔드 |
+|---|---|---|---|
+| 합주실 지도 | `/map` (탭) | `features/reservation/presentation/map_screen.dart` | `GET /bands/{id}/rooms` |
+
+- 하단 탭바를 `StatefulShellRoute.indexedStack` 로 전환(`routing/tab_shell.dart`).
+  브랜치: **홈 · 캘린더 · 지도**. 정산·게시판 탭은 화면이 없어 `showSoon` 스낵바.
+  탭 전환 시 각 브랜치의 스택·스크롤 위치가 보존되고 탭바가 항상 떠 있다.
+- 지도: `flutter_naver_map`(네이버 지도, **Android/iOS 전용**). 좌표(`lat`/`lng`) 있는
+  합주실만 마커, 하단에 전체 목록(탭 시 카메라 이동). "＋ 새 합주실 등록" 버튼.
+- **웹 / 키 미설정**: 지도 자리에 안내 문구 + 목록만. `AppConfig.naverMapEnabled` 로 분기.
+- 클라이언트 `Room` 모델에 `lat`/`lng`·`hasLocation` 추가(백엔드 `RoomResponse` 는 이미 반환 중).
+- 백엔드 변경 없음.
+
+#### 네이버 지도를 실제로 켜려면 (사용자 작업)
+
+1. **NCP 콘솔**(https://console.ncloud.com) → AI·NAVER API → **Maps** → Application 등록.
+   Android 패키지명 `com.yeka.bandapp_client`, iOS 번들 ID 등록. → **Client ID** 복사.
+   (2단계 주소검색용 `NAVER_SEARCH_*` 는 네이버 개발자센터 앱으로 별개.)
+2. 실행 시 dart-define: `--dart-define=NAVER_MAP_CLIENT_ID=<Client ID>`.
+3. Android 네이티브 빌드는 개발자 모드 필요(§3-D). 웹은 어차피 지도 미지원 → 목록만.
+
+### 구현 완료 (카카오 로그인 SDK)
+
+| 파일 | 역할 |
+|---|---|
+| `pubspec.yaml` | `kakao_flutter_sdk_user: ^1.9.6` (설치된 건 1.10.0) |
+| `lib/core/config/app_config.dart` | `kakaoNativeAppKey`(`KAKAO_NATIVE_APP_KEY`), `kakaoJavaScriptAppKey`(`KAKAO_JS_APP_KEY`) dart-define, `kakaoEnabled` |
+| `lib/main.dart` | `kakaoEnabled` 일 때만 `KakaoSdk.init(...)` |
+| `lib/features/auth/data/kakao_sdk.dart` | `fetchKakaoAccessToken()` — 카톡 설치 시 앱 전환, 아니면 계정 로그인. access token 반환 |
+| `lib/features/auth/presentation/login_screen.dart` | "카카오로 계속하기" → `_kakao()` → 토큰 획득 → `AuthController.loginKakao(token)` → 백엔드 `POST /auth/kakao` |
+| `android/app/src/main/AndroidManifest.xml` | 카카오 리다이렉트 activity (`kakao${KAKAO_APP_KEY}://oauth`) |
+| `android/app/build.gradle.kts` | `local.properties` 의 `kakao.appKey` → manifestPlaceholder |
+
+- 백엔드 변경 없음 — `POST /auth/kakao {accessToken}` 는 이전부터 존재(`AuthController.kakao`, `AuthService.kakaoLogin`).
+- **앱 키 미설정이면** 카카오 버튼은 "준비 중" 스낵바만 뜬다. 로그인/이메일 흐름엔 영향 없음.
+- 검증: `flutter pub get` OK(23 deps), `flutter analyze` 에러 0 (기존 info/warning 수준 그대로).
+  실제 카카오 로그인 end-to-end 는 **앱 키 필요 → 미검증**.
+
+#### 카카오 로그인을 실제로 켜려면 (사용자 작업)
+
+1. **카카오 개발자센터**(https://developers.kakao.com) → 내 애플리케이션 → 앱 생성.
+2. **앱 키** 탭에서 복사:
+   - 웹 테스트 → **JavaScript 키**
+   - Android/iOS 빌드 → **네이티브 앱 키**
+3. **플랫폼 등록**:
+   - 웹: 앱 → 플랫폼 → Web → 사이트 도메인에 `http://localhost:<포트>` 추가
+     (`flutter run -d chrome` 은 포트가 매번 바뀌므로 `--web-port=5599` 고정 권장).
+   - Android: 패키지명 `com.yeka.bandapp_client` + 키 해시(`keytool` 로 디버그 키스토어에서 추출).
+4. **카카오 로그인 활성화**: 앱 → 카카오 로그인 → 활성화 ON, Redirect URI 는 SDK 가 자동 처리(웹은 도메인만).
+   동의항목에서 **닉네임**(필수), **카카오계정(이메일)** 은 선택으로 켜면 백엔드가 이메일까지 받아옴.
+5. **백엔드 `.env`** 에 카카오 키 (`app.kakao.app-id`, `app.kakao.admin-key` → `KAKAO_APP_ID`,
+   `KAKAO_ADMIN_KEY`). 안 넣으면 `/auth/kakao` 가 503 `KAKAO_NOT_CONFIGURED`.
+   `app-id` 는 앱 기본 정보의 **앱 ID(숫자)**, `admin-key` 는 어드민 키.
+6. **클라이언트 실행**:
+   ```powershell
+   & C:\flutter\bin\flutter.bat run -d chrome --web-port=5599 `
+     --dart-define=KAKAO_JS_APP_KEY=<자바스크립트 키>
+   # 네이티브: --dart-define=KAKAO_NATIVE_APP_KEY=<네이티브 키>
+   #   + client/android/local.properties 에  kakao.appKey=<네이티브 키>  한 줄 추가
+   ```
+- Android 네이티브 빌드는 여전히 개발자 모드 필요(§3-D).
+
 - 라우팅: `lib/routing/app_router.dart` — go_router + 로그인 상태 기반 redirect.
+  홈(`/home`)·캘린더(`/cal`)·지도(`/map`)는 `StatefulShellRoute.indexedStack`의 브랜치,
+  탭바 UI는 `lib/routing/tab_shell.dart`(`TabShell`). 화면 없는 탭(정산·게시판)은
+  브랜치 없이 `showSoon` 스낵바. 홈 내부에서 캘린더로 갈 땐 `context.go`(브랜치 전환).
 - 네트워크: `lib/core/network/dio_client.dart` — 토큰 자동 부착, 401→refresh 1회 재시도.
 - 상태관리: flutter_riverpod (코드젠 없음). 인증 상태: `features/auth/application/auth_controller.dart`.
 - 아직 없는 화면(캘린더·지도·정산·게시판·알림·멤버관리)은 하단 탭/버튼에서
@@ -189,11 +262,13 @@ cd E:\project\band\client
 - ~~일정 상세 (참석 체크 · 멤버별 현황 · 셋리스트)~~ ✅ 2단계
 - ~~정산 화면 (1인당 금액 · 납부 체크리스트 · 재계산)~~ ✅ 3단계 (`/reservations/:rid/settlement`)
 
-1. 하단 탭바를 실제 화면으로 연결 (`ShellRoute` 로 전환 검토).
-2. **합주실 지도** `/map` — 좌표 있는 합주실 마커 + 하단 목록. `GET /bands/{id}/rooms`.
-   지도 SDK·API 키 결정 필요(네이버 지도 / flutter_map / Google) → 사용자 확인.
-3. 카카오 로그인 SDK 연동 (`kakao_flutter_sdk` 추가 + 네이티브 설정). `AuthController.loginKakao` 자리는 있음.
-4. 알림 화면 + 미납 리마인더(정산 화면의 "미납자 알림" 버튼 포함).
+1. ~~하단 탭바를 실제 화면으로 연결 (`ShellRoute` 로 전환)~~ ✅ 2026-09-04
+   (`StatefulShellRoute.indexedStack`, `tab_shell.dart`).
+2. ~~**합주실 지도** `/map` — 좌표 있는 합주실 마커 + 하단 목록~~ ✅ 2026-09-04
+   네이버 지도(`flutter_naver_map`), Android/iOS 전용. 웹은 목록만. `NAVER_MAP_CLIENT_ID`
+   dart-define + (네이티브) 개발자 모드 필요. 상세는 `client-04-room-map.md`.
+3. ~~카카오 로그인 SDK 연동~~ ✅ 배선 완료. 앱 키 넣고 end-to-end 검증만 남음(위 "실제로 켜려면").
+4. 알림 화면 + 미납 리마인더(정산 화면의 "미납자 알림" 버튼 포함). FCM 자격증명은 §7 참조.
 5. (검토) **정기 일정** — 백엔드에 정기 규칙 생성 API 추가 vs 클라에서 N회 `POST` 반복.
 6. 일정 상세에 수정(PUT)·밴드장 승인/거절 UI. 정산 총액 변경 UI.
 7. (정리) analyze info 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.
@@ -210,3 +285,31 @@ cd E:\project\band\client
 - **합주실 주소 검색**(해결): `GET /bands/{id}/rooms/search` 추가함. 다만 실제 결과가 뜨려면
   `NAVER_SEARCH_CLIENT_ID/SECRET`(네이버 개발자센터 앱) 를 `.env` 에 넣고 재기동해야 한다 —
   현재 로컬엔 미설정이라 항상 빈 목록. 사용자가 크리덴셜 보유 중이라 함(2026-09-03).
+
+---
+
+## 7. FCM 자격증명 파일 어디서 받나
+
+두 종류가 있고 용도가 다르다. **지금 카카오 로그인 단계에선 둘 다 불필요** — 알림(§5-4) 갈 때 필요.
+
+### (A) 백엔드용 — Firebase Admin SDK 서비스 계정 키 (JSON 1개)
+
+`.env` 의 `FCM_CREDENTIALS_HOST_PATH` / `FCM_CREDENTIALS_PATH` 가 가리키는 그 파일 (§3-C 함정).
+
+1. https://console.firebase.google.com → 프로젝트 선택(없으면 생성).
+2. 좌측 상단 **⚙️ → 프로젝트 설정**.
+3. **서비스 계정** 탭 → "Firebase Admin SDK" 섹션 → **새 비공개 키 생성** 버튼 → 확인 → JSON 자동 다운로드.
+4. 그 JSON 을 저장소 루트에 두고(예: `E:\project\band\fcm-credentials.json`, `.gitignore` 확인),
+   `.env` 에 `FCM_CREDENTIALS_HOST_PATH=./fcm-credentials.json` (또는 절대경로) 지정 후
+   `docker compose up -d` 재기동. 이러면 §3-C 의 "빈 값으로 우회" 안 해도 됨.
+
+> 이 키는 서버가 FCM 으로 푸시를 **보낼** 때 쓰는 마스터 자격증명. 절대 클라이언트/저장소에 커밋 금지.
+
+### (B) 클라이언트용 — 앱 등록 설정 파일 (Flutter 푸시 수신)
+
+같은 Firebase 콘솔 → 프로젝트 설정 → **일반** 탭 → "내 앱" 에서 앱 추가:
+
+- **Android**: Android 앱 추가(패키지명 `com.yeka.bandapp_client`) → `google-services.json` 다운로드
+  → `client/android/app/` 에 배치.
+- **iOS**: iOS 앱 추가 → `GoogleService-Info.plist` → `client/ios/Runner/` 에 배치.
+- 그 다음 `flutterfire configure` 또는 `firebase_messaging` 플러그인 수동 설정. (알림 화면 작업 시 진행)

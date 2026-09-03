@@ -38,7 +38,6 @@ class HomeScreen extends ConsumerWidget {
           return _HomeBody(band: band);
         },
       ),
-      bottomNavigationBar: const _BottomTabs(),
     );
   }
 }
@@ -198,64 +197,6 @@ class _IconSquare extends StatelessWidget {
                   '$badgeCount',
                   style: AppTypography.mono(
                       fontSize: 10, color: AppColors.onPrimary),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BottomTabs extends StatelessWidget {
-  const _BottomTabs();
-
-  @override
-  Widget build(BuildContext context) {
-    // (라벨, 아이콘, 현재 탭 여부, 이동 경로 — null 이면 "다음 단계" 안내)
-    const tabs = <(String, IconData, bool, String?)>[
-      ('홈', Icons.home_filled, true, null),
-      ('캘린더', Icons.calendar_today, false, Routes.calendar),
-      ('지도', Icons.map_outlined, false, null),
-      ('정산', Icons.receipt_long, false, null),
-      ('게시판', Icons.grid_view, false, null),
-    ];
-    return Container(
-      padding: const EdgeInsets.only(top: 8, bottom: 26, left: 10, right: 10),
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          for (final (label, icon, active, route) in tabs)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: active
-                    ? null
-                    : () => route != null
-                        ? context.push(route)
-                        : showSoon(context, label),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon,
-                        size: 20,
-                        color:
-                            active ? AppColors.primary : AppColors.textFaint),
-                    const SizedBox(height: 5),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        color: active
-                            ? AppColors.textPrimary
-                            : AppColors.textFaint,
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),

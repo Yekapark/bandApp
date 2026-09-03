@@ -240,7 +240,7 @@ class SummaryRow extends StatelessWidget {
             value: upcomingCount == null ? '…' : '$upcomingCount회',
             hint: '앞으로 60일',
             valueColor: AppColors.textPrimary,
-            onTap: () => context.push(Routes.calendar),
+            onTap: () => context.go(Routes.calendar),
           ),
         ),
       ],
@@ -310,7 +310,7 @@ class UpcomingList extends StatelessWidget {
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
             ),
             GestureDetector(
-              onTap: () => context.push(Routes.calendar),
+              onTap: () => context.go(Routes.calendar),
               child: const Text('캘린더',
                   style: TextStyle(fontSize: 11.5, color: AppColors.primary)),
             ),

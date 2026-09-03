@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../routing/app_router.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/auth_controller.dart';
+import '../data/kakao_sdk.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -59,6 +61,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ..showSnackBar(SnackBar(content: Text('$what 은 준비 중입니다.')));
   }
 
+  Future<void> _kakao() async {
+    if (!AppConfig.kakaoEnabled) {
+      _todo('카카오 로그인 (앱 키 미설정)');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final token = await fetchKakaoAccessToken();
+      await ref.read(authControllerProvider.notifier).loginKakao(token);
+      // 성공 시 라우터 redirect 가 /home 으로 보낸다.
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      final canceled = msg.contains('cancel') || msg.contains('access_denied');
+      if (!canceled) setState(() => _error = '카카오 로그인 중 문제가 발생했습니다.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -85,7 +112,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(width: 10),
                       Text(
                         'STAGE ON',
-                        style: AppTypography.display(fontSize: 23, letterSpacing: 3.5),
+                        style: AppTypography.display(
+                            fontSize: 23, letterSpacing: 3.5),
                       ),
                     ],
                   ),
@@ -125,8 +153,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _submit(),
                     decoration: const InputDecoration(hintText: '비밀번호'),
-                    validator: (v) =>
-                        (v ?? '').isEmpty ? '비밀번호를 입력하세요.' : null,
+                    validator: (v) => (v ?? '').isEmpty ? '비밀번호를 입력하세요.' : null,
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
@@ -141,7 +168,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 12),
                   Center(
                     child: TextButton(
-                      onPressed: _loading ? null : () => context.push(Routes.terms),
+                      onPressed:
+                          _loading ? null : () => context.push(Routes.terms),
                       child: const Text(
                         '이메일로 회원가입',
                         style: TextStyle(color: AppColors.primary),
@@ -155,7 +183,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     label: '카카오로 계속하기',
                     background: AppColors.kakao,
                     foreground: AppColors.onKakao,
-                    onTap: _loading ? null : () => _todo('카카오 로그인'),
+                    onTap: _loading ? null : _kakao,
                   ),
                   const SizedBox(height: 9),
                   _SocialButton(
