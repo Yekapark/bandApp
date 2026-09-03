@@ -58,6 +58,12 @@ class SettingsHomeScreen extends ConsumerWidget {
                 band == null ? null : () => context.push(Routes.bandSettings),
           ),
           _Tile(
+            icon: Icons.person_add_alt,
+            label: '멤버 초대',
+            sub: '초대코드·링크 발급',
+            onTap: band == null ? null : () => context.push(Routes.invite),
+          ),
+          _Tile(
             icon: Icons.block_outlined,
             label: '차단한 사용자',
             sub: '게시판에서 서로의 글이 보이지 않는 사용자',

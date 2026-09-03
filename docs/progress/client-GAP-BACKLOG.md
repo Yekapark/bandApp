@@ -9,7 +9,7 @@
 > `flutter analyze`(에러 0) · `flutter test` · `flutter build web` 통과 후 커밋.
 > 이 PC Flutter: `C:\src\flutter\bin` / 저장소: `C:\band\bandApp`.
 >
-> 마지막 갱신: **2026-09-04** (백로그 최초 작성)
+> 마지막 갱신: **2026-09-04** (C10 완료)
 
 ---
 
@@ -17,7 +17,7 @@
 
 | 슬라이스 | 항목 | 상태 |
 |---|---|---|
-| C10 | 초대코드 발급/조회/무효화 (멤버 초대 화면) | ⬜ 미착수 |
+| C10 | 초대코드 발급/조회/무효화 (멤버 초대 화면) | ✅ 완료 — `client-10-invite.md` |
 | C11 | 합주실 수정/삭제 | ⬜ 미착수 |
 | C12 | 셋리스트 재정렬 + 곡 수정 | ⬜ 미착수 |
 | C13 | 정기 일정 규칙 상세 (회차 목록) | ⬜ 미착수 |
@@ -51,11 +51,14 @@
 - 진입점: ① 설정 → 밴드 설정 상단에 "멤버 초대" 항목, ② 밴드 홈 헤더 또는 멤버 레일 근처에 "초대" 버튼
 
 **완료 기준**:
-- [ ] 밴드장으로 코드 발급 → 코드·링크 표시, 복사 동작
-- [ ] 재발급 시 이전 코드가 바뀜, 무효화 시 "코드 없음" 상태로
-- [ ] 일반 멤버는 읽기 전용 안내
-- [ ] `flutter analyze` 에러 0 · `flutter test` · `flutter build web` 통과
-- [ ] `client-10-invite.md` 작성, 상단 표·DEVLOG·SCREENS·README 갱신
+- [x] 밴드장으로 코드 발급 → 코드·링크 표시, 복사 동작
+- [x] 재발급 시 이전 코드가 바뀜, 무효화 시 "코드 없음" 상태로
+- [x] 일반 멤버는 읽기 전용 안내
+- [x] `flutter analyze` 에러 0 · `flutter test` · `flutter build web` 통과
+- [x] `client-10-invite.md` 작성, 상단 표·DEVLOG·SCREENS·README 갱신
+
+✅ **완료 (2026-09-04)** — `features/band/{data/invite_*,application/invite_providers,presentation/invite_screen}.dart`,
+`/band/invite`, 진입점 설정 허브·밴드 설정. 만료일수·사용횟수 옵션 폼은 미노출(기본값 발급).
 
 ---
 

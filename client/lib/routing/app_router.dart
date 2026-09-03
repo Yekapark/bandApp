@@ -9,6 +9,7 @@ import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/terms_screen.dart';
 import '../features/band/presentation/band_gate_screen.dart';
 import '../features/band/presentation/create_band_screen.dart';
+import '../features/band/presentation/invite_screen.dart';
 import '../features/band/presentation/join_band_screen.dart';
 import '../features/board/presentation/board_screen.dart';
 import '../features/board/presentation/post_compose_screen.dart';
@@ -60,6 +61,7 @@ class Routes {
   static const bandSettings = '/settings/band';
   static const account = '/settings/account';
   static const blockedUsers = '/settings/blocks';
+  static const invite = '/band/invite';
 
   /// 일정 상세. [reservationId] 로 실제 경로를 만든다.
   static String reservation(int reservationId) =>
@@ -199,6 +201,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.blockedUsers,
         builder: (_, __) => const BlockedUsersScreen(),
+      ),
+      GoRoute(
+        path: Routes.invite,
+        builder: (_, __) => const InviteScreen(),
       ),
       GoRoute(
         path: '/reservations/:rid/edit',

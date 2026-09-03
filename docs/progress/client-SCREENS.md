@@ -13,7 +13,7 @@
 | # | 요구 화면 | 상태 | 실제 라우트 / 파일 | 메모 |
 |---|---|---|---|---|
 | 1 | 로그인 / 회원가입 (카카오 중심) | ✅ | `/login` `login_screen.dart`, `/signup` `signup_screen.dart` | 이메일 로그인·가입 동작. 카카오 SDK 배선 완료 — 앱 키 넣으면 동작, 미설정 시 "준비 중" 스낵바 |
-| 2 | 초대코드 입력 | ✅ | `/band-gate/join` `join_band_screen.dart` | 백엔드 8자 영숫자. 목업의 6자리 숫자 키패드 대신 텍스트 입력 |
+| 2 | 초대코드 입력 | ✅ | `/band-gate/join` `join_band_screen.dart` | 코드 입력해 참여. **코드 발급(밴드장)**은 `/band/invite` `invite_screen.dart` (C10) |
 | 3 | 밴드 미소속 상태 | ✅ | `/band-gate` `band_gate_screen.dart` | "밴드 만들기 / 초대코드로 참여" 선택 |
 | 4 | 밴드 홈 | ✅ | `/home` (탭) `home_screen.dart` | 밴드 전환 스위처, 다가오는 합주, 멤버 레일, 요약 카드 |
 | 5 | 합주 일정 캘린더 | ✅ | `/cal` (탭) `calendar_screen.dart` | 월간 뷰만. 주간 뷰 없음 |
@@ -37,6 +37,7 @@
 | 밴드 설정 | `/settings/band` `band_settings_screen.dart` | 일정 등록 권한 모드, 멤버 목록(밴드장 위임·추방), 밴드 나가기 |
 | 계정 | `/settings/account` `account_screen.dart` | 내 정보, 회원 탈퇴(이메일 계정은 비밀번호 재확인) |
 | 차단한 사용자 | `/settings/blocks` `blocked_users_screen.dart` | 차단 목록 + 해제 |
+| 멤버 초대 | `/band/invite` `invite_screen.dart` | 밴드장이 초대코드·링크 발급/재발급/무효화 (C10) |
 
 추가로 만든 화면(요구 목록엔 없지만 흐름상 필요):
 

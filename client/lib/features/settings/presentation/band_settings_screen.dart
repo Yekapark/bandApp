@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../routing/app_router.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../band/application/band_providers.dart';
 import '../../band/data/band_models.dart';
@@ -81,7 +82,17 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
             ),
           ),
           const SizedBox(height: 26),
-          const _SectionTitle('멤버'),
+          Row(
+            children: [
+              const _SectionTitle('멤버'),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => context.push(Routes.invite),
+                icon: const Icon(Icons.person_add_alt, size: 15),
+                label: const Text('초대'),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           membersAsync.when(
             loading: () => const Padding(
