@@ -64,6 +64,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           '캘린더',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
         ),
+        actions: [
+          IconButton(
+            tooltip: '정기 일정',
+            icon: const Icon(Icons.repeat, size: 20),
+            onPressed: () async {
+              await context.push(Routes.recurring);
+              if (!context.mounted) return;
+              ref.invalidate(monthReservationsProvider);
+            },
+          ),
+        ],
       ),
       body: RefreshIndicator(
         color: AppColors.primary,

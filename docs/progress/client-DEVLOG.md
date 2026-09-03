@@ -3,7 +3,7 @@
 > **새 세션에서 클라이언트 작업을 이어받을 때 이 파일부터 읽는다.**
 > 이 문서는 "지금 어디까지 됐고, 어떻게 이어가는지"를 담는 살아있는 문서다.
 > 작업을 진행하면 아래 "현재 상태"와 "다음 할 일"을 갱신한다.
-> 마지막 갱신: **2026-09-04** (C6 게시판 추가)
+> 마지막 갱신: **2026-09-04** (C7 일정 수정·승인/거절 + 정기 일정 추가)
 
 ---
 
@@ -27,7 +27,10 @@
 - **게시판 `/board` 구현 완료**(2026-09-04, C6) — 피드(커서 무한스크롤)·글 상세·작성/수정·
   첨부 업로드(R2 presigned 직접 PUT)·신고·작성자 차단. 하단 탭바에 "게시판" 탭이 실제 화면으로
   붙음. 백엔드 변경 없음(Phase 8 API). 신규 의존성 `image_picker`. 상세는 `client-06-board.md`.
-- 다음: (C7) 일정 수정·승인/거절·정기 일정 → (C8) 설정 나머지(밴드/계정/차단해제) → (C9) 알림 수신부(FCM)+클라 CI.
+- **일정 수정·승인/거절 + 정기 일정 구현 완료**(2026-09-04, C7) — 일정 상세에서 수정(PUT)·
+  밴드장 승인/거절. 정기 일정 화면 `/cal/recurring`(규칙 목록·등록·삭제, 캘린더 AppBar ↻ 진입).
+  백엔드 변경 없음(Phase 4·5 API). 상세는 `client-07-reservation-recurring.md`.
+- 다음: (C8) 설정 나머지(밴드/계정/차단해제) → (C9) 알림 수신부(FCM)+클라 CI.
 
 ---
 
@@ -121,6 +124,20 @@
    (2단계 주소검색용 `NAVER_SEARCH_*` 는 네이버 개발자센터 앱으로 별개.)
 2. 실행 시 dart-define: `--dart-define=NAVER_MAP_CLIENT_ID=<Client ID>`.
 3. Android 네이티브 빌드는 개발자 모드 필요(§3-D). 웹은 어차피 지도 미지원 → 목록만.
+
+### 구현 완료 (C7: 일정 수정·승인/거절 + 정기 일정) — 상세는 `client-07-reservation-recurring.md`
+
+| 화면 | 라우트 | 파일 | 백엔드 |
+|---|---|---|---|
+| 일정 수정 | `/reservations/:rid/edit` | `features/reservation/presentation/reservation_form_screen.dart`(수정 모드 겸용) | `PUT /bands/{id}/reservations/{rid}` |
+| 승인/거절 | (일정 상세 내 버튼) | `.../reservation_detail_screen.dart` | `POST …/{rid}/approve`·`/reject` (밴드장·PENDING) |
+| 정기 일정 목록 | `/cal/recurring` | `features/recurring/presentation/recurring_list_screen.dart` | `GET/DELETE /bands/{id}/recurring-rules[/{ruleId}]` |
+| 정기 일정 등록 | `/cal/recurring/new` | `.../recurring_form_screen.dart` | `POST /bands/{id}/recurring-rules` |
+
+- 상태: `features/recurring/application/recurring_providers.dart` (`recurringRulesProvider` family).
+- 진입: 캘린더 AppBar 의 ↻(repeat) 아이콘 → 정기 일정 목록.
+- 개별 회차 수정·취소는 일반 일정 상세를 그대로 사용(규칙 유지). 규칙 수정은 백엔드 미제공 → 삭제 후 재등록.
+- **뺀 것**: 정기 규칙 상세(회차 목록) 화면, 규칙 수정 UI, 셋리스트 재정렬 UI.
 
 ### 구현 완료 (C6: 게시판) — 상세는 `client-06-board.md`
 
@@ -294,11 +311,10 @@ cd E:\project\band\client
 4. ~~알림 **설정** 화면 (`/settings/notifications`)~~ ✅ 2026-09-03 — 푸시 on/off + 리마인더 시점.
    상세는 `client-05-notification-settings.md`. **남은 것**: 디바이스 토큰 등록(FCM),
    실제 푸시 수신 처리, 정산 화면의 "미납자 알림" 버튼(백엔드에 미납 독촉 트리거 API 없음 — PROBLEMS §3).
-5. ~~**게시판**(#11·#12) — 피드·상세·작성/수정·첨부 업로드·신고·차단~~ ✅ 2026-09-04 (C6).
-   상세는 `client-06-board.md`. 남은 것: 영상 인앱 재생, 차단 해제 화면(C8).
-6. **(C7)** 정기 일정 규칙 등록/목록/삭제(백엔드 Phase 5 API 있음 — `POST /bands/{id}/recurring-rules`).
-   일정 상세에 수정(PUT: `/reservations/{id}` 존재)·밴드장 승인/거절(`/approve`·`/reject` 존재) UI.
-7. **(C8)** 설정 나머지 — 밴드 설정(권한 모드·밴드장 위임·멤버 추방), 계정(내 정보·탈퇴), 차단 해제.
+5. ~~**게시판**(#11·#12)~~ ✅ 2026-09-04 (C6). 남은 것: 영상 인앱 재생, 차단 해제 화면(C8).
+6. ~~정기 일정 규칙 등록/목록/삭제 + 일정 수정(PUT)·밴드장 승인/거절 UI~~ ✅ 2026-09-04 (C7).
+   상세는 `client-07-reservation-recurring.md`.
+7. **(C8, 다음)** 설정 나머지 — 밴드 설정(권한 모드·밴드장 위임·멤버 추방·밴드 나가기), 계정(내 정보·탈퇴), 차단 해제.
 8. **(C9)** 알림 수신부(FCM: `firebase_messaging` + `POST /notifications/device-tokens`),
    클라이언트 CI(`flutter analyze` + `flutter test` GitHub Actions).
 9. (정리) analyze info 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.

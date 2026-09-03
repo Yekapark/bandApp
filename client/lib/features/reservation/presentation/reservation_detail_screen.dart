@@ -7,6 +7,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../routing/app_router.dart';
+import '../../../shared/widgets/primary_button.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../band/application/band_providers.dart';
 import '../../home/application/home_providers.dart';
@@ -166,7 +167,27 @@ class _ReservationDetailScreenState
                 _SettlementLink(
                   onTap: () => context.push(Routes.settlement(r.id)),
                 ),
+                if (r.isPending && band.isLeader) ...[
+                  const SizedBox(height: 16),
+                  const _SectionTitle('밴드장 승인'),
+                  const SizedBox(height: 10),
+                  _ApproveRejectRow(
+                    busy: _busy,
+                    onApprove: () => _decide(band.id, approve: true),
+                    onReject: () => _decide(band.id, approve: false),
+                  ),
+                ],
                 if (canManage && editable) ...[
+                  const SizedBox(height: 12),
+                  _EditButton(
+                    onTap: () async {
+                      await context.push(Routes.editReservation(r.id),
+                          extra: r);
+                      if (!context.mounted) return;
+                      _boardOverride = null;
+                      ref.invalidate(reservationDetailProvider(key));
+                    },
+                  ),
                   const SizedBox(height: 12),
                   _CancelButton(
                     busy: _busy,
@@ -292,11 +313,119 @@ class _ReservationDetailScreenState
     }
   }
 
+  Future<void> _decide(int bandId, {required bool approve}) async {
+    if (!approve) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('이 일정을 거절할까요?', style: TextStyle(fontSize: 16)),
+          content: const Text(
+            '거절하면 등록 시 잡았던 합주실 사용 횟수가 되돌아가고, 등록자에게 알림이 갑니다.',
+            style: TextStyle(
+                fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('그대로 두기'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child:
+                  const Text('거절하기', style: TextStyle(color: AppColors.danger)),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final repo = ref.read(reservationRepositoryProvider);
+      if (approve) {
+        await repo.approve(bandId: bandId, reservationId: widget.reservationId);
+      } else {
+        await repo.reject(bandId: bandId, reservationId: widget.reservationId);
+      }
+      _boardOverride = null;
+      ref.invalidate(monthReservationsProvider);
+      ref.invalidate(upcomingReservationsProvider(bandId));
+      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      _toast(approve ? '일정을 확정했어요.' : '일정을 거절했어요.');
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (_) {
+      _toast(approve ? '승인하지 못했습니다.' : '거절하지 못했습니다.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(msg)));
+  }
+}
+
+class _ApproveRejectRow extends StatelessWidget {
+  const _ApproveRejectRow({
+    required this.busy,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final bool busy;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: PrimaryButton(
+            label: '승인',
+            loading: busy,
+            onPressed: onApprove,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton(
+            onPressed: busy ? null : onReject,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(54),
+              side: const BorderSide(color: AppColors.danger),
+              foregroundColor: AppColors.danger,
+            ),
+            child: const Text('거절'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditButton extends StatelessWidget {
+  const _EditButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.edit_outlined, size: 16),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(50),
+        side: const BorderSide(color: AppColors.borderStrong),
+        foregroundColor: AppColors.textSecondary,
+      ),
+      label: const Text('일정 수정'),
+    );
   }
 }
 

@@ -18,11 +18,13 @@ import '../data/reservation_repository.dart';
 import '../data/room_models.dart';
 import 'widgets/room_picker_sheet.dart';
 
-/// 일정 등록 폼 — 이미 잡은 예약을 기록한다. 겹치는 시간대여도 등록은 성공한다.
+/// 일정 등록/수정 폼 — 이미 잡은 예약을 기록한다. 겹치는 시간대여도 성공한다.
+/// [existing] 이 있으면 수정 모드(PUT).
 class ReservationFormScreen extends ConsumerStatefulWidget {
-  const ReservationFormScreen({super.key, this.initialDate});
+  const ReservationFormScreen({super.key, this.initialDate, this.existing});
 
   final DateTime? initialDate;
+  final Reservation? existing;
 
   @override
   ConsumerState<ReservationFormScreen> createState() =>
@@ -42,11 +44,27 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
   static const _minHours = 0.5;
   static const _maxHours = 12.0;
 
+  bool get _isEdit => widget.existing != null;
+
   @override
   void initState() {
     super.initState();
-    final d = widget.initialDate ?? DateTime.now();
-    _date = DateTime(d.year, d.month, d.day);
+    final e = widget.existing;
+    if (e != null) {
+      final s = e.startAt.toLocal();
+      _date = DateTime(s.year, s.month, s.day);
+      _start = TimeOfDay(hour: s.hour, minute: s.minute);
+      _hours = (e.endAt.difference(e.startAt).inMinutes / 60)
+          .clamp(_minHours, _maxHours);
+      if (e.roomId != null) {
+        _room = Room(id: e.roomId!, name: e.roomName);
+      }
+      if (e.cost != null) _cost.text = e.cost.toString();
+      if ((e.note ?? '').isNotEmpty) _note.text = e.note!;
+    } else {
+      final d = widget.initialDate ?? DateTime.now();
+      _date = DateTime(d.year, d.month, d.day);
+    }
   }
 
   @override
@@ -108,28 +126,48 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
       _error = null;
     });
     try {
-      final result = await ref.read(reservationRepositoryProvider).create(
-            bandId: band.id,
-            roomId: room.id,
-            startAt: _startAt,
-            endAt: _endAt,
-            cost: _costValue,
-            note: _note.text.trim(),
-          );
+      final repo = ref.read(reservationRepositoryProvider);
+      final result = _isEdit
+          ? await repo.update(
+              bandId: band.id,
+              reservationId: widget.existing!.id,
+              roomId: room.id,
+              startAt: _startAt,
+              endAt: _endAt,
+              cost: _costValue,
+              note: _note.text.trim(),
+            )
+          : await repo.create(
+              bandId: band.id,
+              roomId: room.id,
+              startAt: _startAt,
+              endAt: _endAt,
+              cost: _costValue,
+              note: _note.text.trim(),
+            );
       ref.invalidate(monthReservationsProvider);
       ref.invalidate(upcomingReservationsProvider(band.id));
       ref.invalidate(roomsProvider(band.id));
+      if (_isEdit) {
+        ref.invalidate(reservationDetailProvider(
+          (bandId: band.id, reservationId: widget.existing!.id),
+        ));
+      }
 
       if (!mounted) return;
       if (result.overlaps.isNotEmpty) {
         await _showOverlapDialog(result.overlaps);
       }
       if (!mounted) return;
-      context.pushReplacement(Routes.reservation(result.reservation.id));
+      if (_isEdit) {
+        context.pop();
+      } else {
+        context.pushReplacement(Routes.reservation(result.reservation.id));
+      }
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = '일정을 등록하지 못했습니다.');
+      setState(() => _error = _isEdit ? '일정을 수정하지 못했습니다.' : '일정을 등록하지 못했습니다.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -191,10 +229,12 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              BackLink(label: '합주 등록', onTap: () => context.pop()),
+              BackLink(
+                  label: _isEdit ? '합주 수정' : '합주 등록',
+                  onTap: () => context.pop()),
               const SizedBox(height: 12),
               Text(
-                '이미 잡은 예약 기록하기',
+                _isEdit ? '일정 내용 고치기' : '이미 잡은 예약 기록하기',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 6),
@@ -347,7 +387,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
               ],
               const SizedBox(height: 22),
               PrimaryButton(
-                label: '합주 등록하기',
+                label: _isEdit ? '수정 저장하기' : '합주 등록하기',
                 loading: _loading,
                 enabled: _room != null,
                 onPressed: _submit,

@@ -15,6 +15,9 @@ import '../features/board/presentation/post_compose_screen.dart';
 import '../features/board/presentation/post_detail_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notification/presentation/notification_settings_screen.dart';
+import '../features/recurring/presentation/recurring_form_screen.dart';
+import '../features/recurring/presentation/recurring_list_screen.dart';
+import '../features/reservation/data/reservation_models.dart';
 import '../features/reservation/presentation/calendar_screen.dart';
 import '../features/reservation/presentation/map_screen.dart';
 import '../features/reservation/presentation/reservation_detail_screen.dart';
@@ -47,9 +50,16 @@ class Routes {
   /// 게시글 수정.
   static String editPost(int postId) => '/board/$postId/edit';
 
+  static const recurring = '/cal/recurring';
+  static const newRecurring = '/cal/recurring/new';
+
   /// 일정 상세. [reservationId] 로 실제 경로를 만든다.
   static String reservation(int reservationId) =>
       '/reservations/$reservationId';
+
+  /// 일정 수정.
+  static String editReservation(int reservationId) =>
+      '/reservations/$reservationId/edit';
 
   /// 일정 정산.
   static String settlement(int reservationId) =>
@@ -145,6 +155,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: Routes.newRecurring,
+        builder: (_, __) => const RecurringFormScreen(),
+      ),
+      GoRoute(
+        path: Routes.recurring,
+        builder: (_, __) => const RecurringListScreen(),
+      ),
+      GoRoute(
         path: Routes.newReservation,
         builder: (_, state) => ReservationFormScreen(
           initialDate: _parseDate(state.uri.queryParameters['date']),
@@ -157,6 +175,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.notificationSettings,
         builder: (_, __) => const NotificationSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/reservations/:rid/edit',
+        builder: (_, state) => ReservationFormScreen(
+          existing: state.extra as Reservation?,
+        ),
       ),
       GoRoute(
         path: '/reservations/:rid',

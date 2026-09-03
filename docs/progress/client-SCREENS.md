@@ -1,7 +1,7 @@
 # 클라이언트 화면 구현 현황
 
 > 지금까지 만든 Flutter 화면을 한눈에 보는 표. 진행하면서 갱신한다.
-> 마지막 갱신: **2026-09-04** (C6 게시판 추가)
+> 마지막 갱신: **2026-09-04** (C7 일정 수정·승인/거절 + 정기 일정 추가)
 > 상세 배경은 단계별 문서(`client-01`~`client-03`, `client-DEVLOG.md`) 참조.
 
 범례: ✅ 구현 완료 · 🟡 부분 구현 · ⛔ 미구현
@@ -17,8 +17,8 @@
 | 3 | 밴드 미소속 상태 | ✅ | `/band-gate` `band_gate_screen.dart` | "밴드 만들기 / 초대코드로 참여" 선택 |
 | 4 | 밴드 홈 | ✅ | `/home` (탭) `home_screen.dart` | 밴드 전환 스위처, 다가오는 합주, 멤버 레일, 요약 카드 |
 | 5 | 합주 일정 캘린더 | ✅ | `/cal` (탭) `calendar_screen.dart` | 월간 뷰만. 주간 뷰 없음 |
-| 6 | 일정 등록 폼 | 🟡 | `/cal/new` `reservation_form_screen.dart` | 합주실·날짜·시간·비용·메모. **반복(정기) 일정 제외** — 백엔드 생성 API 없음 |
-| 7 | 일정 상세 | 🟡 | `/reservations/:id` `reservation_detail_screen.dart` | 참석 체크(참석/불참/미정)·멤버별 현황·셋리스트(추가·삭제). 셋리스트 재정렬/완료체크·일정 수정·밴드장 승인/거절 UI 없음 |
+| 6 | 일정 등록/수정 폼 | ✅ | `/cal/new`, `/reservations/:id/edit` `reservation_form_screen.dart` | 합주실·날짜·시간·비용·메모. 수정(PUT) 겸용. **반복은 별도 정기 일정 화면**(#아래) |
+| 7 | 일정 상세 | 🟡 | `/reservations/:id` `reservation_detail_screen.dart` | 참석 체크·멤버별 현황·셋리스트(추가·삭제)·**일정 수정**·**밴드장 승인/거절**(C7). 셋리스트 재정렬/완료체크 없음 |
 | 8 | 합주실 목록 / 지도 | 🟡 | `/map` (탭) `map_screen.dart` | 네이버 지도(`flutter_naver_map`) 마커 + 하단 목록. **Android/iOS 전용** — 웹/키 미설정 시 목록만. `NAVER_MAP_CLIENT_ID` 필요 |
 | 9 | 합주실 등록 폼 | ✅ | `/cal/rooms/new` `room_form_screen.dart` | 이름·주소검색(네이버 지역검색 프록시)·연락처·메모 |
 | 10 | 정산 화면 | ✅ | `/reservations/:id/settlement` `settlement_screen.dart` | 1인당 금액·진행바·납부 체크리스트·재계산. 균등/참석자만 토글. 본인 몫만 셀프 체크 |
@@ -26,11 +26,13 @@
 | 12 | 게시글 상세 | 🟡 | `/board/:postId` `post_detail_screen.dart` | 본문·첨부 갤러리·이미지 전체화면 뷰어·수정/삭제·신고·차단. **영상 인앱 재생 없음**(타일 표시). 작성/수정은 `post_compose_screen.dart` (C6) |
 | 13 | 설정 (알림·밴드 설정·계정) | 🟡 | `/settings/notifications` `notification_settings_screen.dart` | 알림 설정(푸시 on/off·리마인더 시점)만. 밴드 설정·계정/탈퇴·차단 해제는 C8. FCM 수신부·미납 독촉 미구현 |
 
-추가로 만든 화면(C6 게시판):
+추가로 만든 화면(C6 게시판 · C7 정기 일정):
 
 | 화면 | 라우트 / 파일 | 메모 |
 |---|---|---|
 | 글 작성/수정 | `/board/new`, `/board/:postId/edit` `post_compose_screen.dart` | 새 글 등록 직후 같은 화면에서 첨부 추가. `image_picker` → R2 presigned PUT |
+| 정기 일정 목록 | `/cal/recurring` `recurring_list_screen.dart` | 규칙 카드·삭제(등록자/밴드장). 캘린더 AppBar ↻ 아이콘에서 진입 |
+| 정기 일정 등록 | `/cal/recurring/new` `recurring_form_screen.dart` | 주기(매주/격주/매월)·요일·시간·기간·비용·메모. 등록 시 8주분 회차 자동 생성 |
 
 추가로 만든 화면(요구 목록엔 없지만 흐름상 필요):
 
@@ -55,7 +57,10 @@
 | `/map` | 합주실 지도 | **탭 셸 브랜치 2** | 하단 탭 "지도" |
 | `/cal/new?date=` | 일정 등록 폼 | 루트 (풀스크린) | 캘린더 "＋ 등록", 홈 "일정 추가" |
 | `/cal/rooms/new` | 합주실 등록 폼 | 루트 (풀스크린) | 합주실 선택 시트 |
+| `/cal/recurring` | 정기 일정 목록 | 루트 (풀스크린) | 캘린더 AppBar ↻ 아이콘 |
+| `/cal/recurring/new` | 정기 일정 등록 | 루트 (풀스크린) | 정기 일정 목록 "＋" |
 | `/reservations/:id` | 일정 상세 | 루트 (풀스크린) | 캘린더·홈 일정 타일 |
+| `/reservations/:id/edit` | 일정 수정 | 루트 (풀스크린) | 일정 상세 "일정 수정" |
 | `/reservations/:id/settlement` | 정산 | 루트 (풀스크린) | 일정 상세 "정산 보기" |
 | `/board` | 게시판 피드 | **탭 셸 브랜치 3** | 하단 탭 "게시판" |
 | `/board/new` | 글 작성 | 루트 (풀스크린) | 게시판 "글쓰기" FAB |
@@ -78,10 +83,10 @@
 3. ~~알림 설정 (#13 일부)~~ 🟡 2026-09-03 — 푸시 on/off·리마인더 시점. `client-05-notification-settings.md`.
    남은 것: FCM 수신부(디바이스 토큰·`firebase_messaging`), 미납 독촉 → `client-PROBLEMS-2026-09-03.md`
 4. ~~게시판·게시글 상세 (#11·#12)~~ ✅ 2026-09-04 (C6) — `client-06-board.md`. 남은 것: 영상 재생, 차단 해제
-5. **(C7)** 일정 상세 보강 — 수정(PUT)·밴드장 승인/거절 + 정기(반복) 일정 (#6, 백엔드 Phase 5 API)
-6. **(C8)** 설정 나머지 (#13) — 밴드 권한·밴드장 위임·멤버 추방·계정/탈퇴·차단 해제
+5. ~~일정 상세 보강 — 수정(PUT)·밴드장 승인/거절 + 정기(반복) 일정~~ ✅ 2026-09-04 (C7) — `client-07-reservation-recurring.md`
+6. **(C8, 다음)** 설정 나머지 (#13) — 밴드 권한·밴드장 위임·멤버 추방·밴드 나가기·계정/탈퇴·차단 해제
 7. **(C9)** 알림 수신부(FCM 디바이스 토큰) + 클라이언트 CI
-8. (정리) 셋리스트 재정렬, 지도 보강(마커↔목록 하이라이트·현재 위치·클러스터링)
+8. (정리) 셋리스트 재정렬, 정기 규칙 상세/수정, 지도 보강(마커↔목록 하이라이트·현재 위치·클러스터링)
 
 ---
 

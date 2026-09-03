@@ -89,6 +89,64 @@ class ReservationRepository {
     }
   }
 
+  /// 일정 수정 (PUT 전체 교체). 등록자 본인 또는 밴드장. 겹침이 있어도 성공(200).
+  Future<ReservationWriteResult> update({
+    required int bandId,
+    required int reservationId,
+    required int roomId,
+    required DateTime startAt,
+    required DateTime endAt,
+    int? cost,
+    String? note,
+  }) async {
+    try {
+      final res = await _dio.put<dynamic>(
+        '/bands/$bandId/reservations/$reservationId',
+        data: {
+          'roomId': roomId,
+          'startAt': startAt.toUtc().toIso8601String(),
+          'endAt': endAt.toUtc().toIso8601String(),
+          if (cost != null) 'cost': cost,
+          if (note != null && note.isNotEmpty) 'note': note,
+        },
+      );
+      return unwrap(
+        res,
+        (d) => ReservationWriteResult.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 승인 대기 일정을 확정으로 (밴드장 전용, APPROVAL_REQUIRED 밴드).
+  Future<void> approve({
+    required int bandId,
+    required int reservationId,
+  }) async {
+    try {
+      await _dio.post<dynamic>(
+        '/bands/$bandId/reservations/$reservationId/approve',
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 승인 대기 일정을 거절로 (밴드장 전용). 합주실 usageCount 를 되돌린다.
+  Future<void> reject({
+    required int bandId,
+    required int reservationId,
+  }) async {
+    try {
+      await _dio.post<dynamic>(
+        '/bands/$bandId/reservations/$reservationId/reject',
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// 일정 취소 (등록자 본인 또는 밴드장).
   Future<void> cancel({
     required int bandId,
