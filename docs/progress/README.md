@@ -40,4 +40,5 @@
 |---|---|---|
 | — | [client-DEVLOG.md](client-DEVLOG.md) — 이어받기 가이드 (살아있는 문서) | 🔄 상시 갱신 |
 | C1 | [client-01-onboarding-home.md](client-01-onboarding-home.md) — 프로젝트 스캐폴딩 · 스플래시/로그인/약관/회원가입 · 밴드 생성·초대코드 가입 · 밴드 홈 (실제 API 연동) | 🔨 구현 완료, `analyze` 통과·웹 빌드 OK, end-to-end 검증 대기 |
-| C2 | [client-02-calendar-reservation.md](client-02-calendar-reservation.md) — 예약 캘린더(월간 뷰) · 합주실 목록/등록(네이버 주소검색) · 일정 등록 폼(겹침 경고) · 일정 상세(참석 RSVP·멤버별 현황·셋리스트) · 한국어 로케일 · (백엔드) `rooms/search` | 🔨 구현 완료, `analyze` 에러 0·웹 빌드 OK·백엔드 단위테스트 통과, 통합테스트 CI 대기·end-to-end 검증 대기 |
+| C2 | [client-02-calendar-reservation.md](client-02-calendar-reservation.md) — 예약 캘린더(월간 뷰) · 합주실 목록/등록(네이버 주소검색) · 일정 등록 폼(겹침 경고) · 일정 상세(참석 RSVP·멤버별 현황·셋리스트) · 한국어 로케일 · (백엔드) `rooms/search` | 🔨 구현 완료 (PR #34), `analyze` 에러 0·웹 빌드 OK·백엔드 단위테스트 통과, 통합테스트 CI 대기·end-to-end 검증 대기 |
+| C3 | [client-03-settlement.md](client-03-settlement.md) — 일정 정산(N빵) 화면: 총액 분배(전원/참석자) · 납부 셀프 체크 · 재계산. Phase 7 API 사용, 백엔드 변경 없음 | 🔨 구현 완료, `analyze` 에러 0·웹 빌드 OK·백엔드 스모크(생성/납부/재계산) 통과, UI end-to-end 대기 |
