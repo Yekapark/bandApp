@@ -9,9 +9,23 @@ import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/terms_screen.dart';
 import '../features/band/presentation/band_gate_screen.dart';
 import '../features/band/presentation/create_band_screen.dart';
+import '../features/band/presentation/invite_screen.dart';
 import '../features/band/presentation/join_band_screen.dart';
+import '../features/board/presentation/board_screen.dart';
+import '../features/board/presentation/post_compose_screen.dart';
+import '../features/board/presentation/post_detail_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notification/presentation/notification_settings_screen.dart';
+import '../features/plan/presentation/plan_screen.dart';
+import '../features/recurring/presentation/recurring_detail_screen.dart';
+import '../features/recurring/presentation/recurring_form_screen.dart';
+import '../features/recurring/presentation/recurring_list_screen.dart';
+import '../features/settings/presentation/account_screen.dart';
+import '../features/settings/presentation/band_settings_screen.dart';
+import '../features/settings/presentation/blocked_users_screen.dart';
+import '../features/settings/presentation/settings_home_screen.dart';
+import '../features/reservation/data/reservation_models.dart';
+import '../features/reservation/data/room_models.dart';
 import '../features/reservation/presentation/calendar_screen.dart';
 import '../features/reservation/presentation/map_screen.dart';
 import '../features/reservation/presentation/reservation_detail_screen.dart';
@@ -32,13 +46,40 @@ class Routes {
   static const home = '/home';
   static const calendar = '/cal';
   static const map = '/map';
+  static const board = '/board';
+  static const newPost = '/board/new';
   static const newReservation = '/cal/new';
   static const newRoom = '/cal/rooms/new';
+
+  /// 합주실 수정 (extra 로 Room 전달).
+  static String editRoom(int roomId) => '/cal/rooms/$roomId/edit';
   static const notificationSettings = '/settings/notifications';
+
+  /// 게시글 상세.
+  static String post(int postId) => '/board/$postId';
+
+  /// 게시글 수정.
+  static String editPost(int postId) => '/board/$postId/edit';
+
+  static const recurring = '/cal/recurring';
+  static const newRecurring = '/cal/recurring/new';
+
+  /// 정기 일정 규칙 상세.
+  static String recurringDetail(int ruleId) => '/cal/recurring/$ruleId';
+  static const settings = '/settings';
+  static const bandSettings = '/settings/band';
+  static const account = '/settings/account';
+  static const blockedUsers = '/settings/blocks';
+  static const plan = '/settings/plan';
+  static const invite = '/band/invite';
 
   /// 일정 상세. [reservationId] 로 실제 경로를 만든다.
   static String reservation(int reservationId) =>
       '/reservations/$reservationId';
+
+  /// 일정 수정.
+  static String editReservation(int reservationId) =>
+      '/reservations/$reservationId/edit';
 
   /// 일정 정산.
   static String settlement(int reservationId) =>
@@ -87,7 +128,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const CreateBandScreen(),
       ),
       GoRoute(
-          path: Routes.joinBand, builder: (_, __) => const JoinBandScreen()),
+        path: Routes.joinBand,
+        builder: (_, state) => JoinBandScreen(
+          initialCode: state.uri.queryParameters['code'],
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (_, __, shell) => TabShell(navigationShell: shell),
         branches: [
@@ -109,7 +154,43 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(path: Routes.map, builder: (_, __) => const MapScreen()),
             ],
           ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                  path: Routes.board, builder: (_, __) => const BoardScreen()),
+            ],
+          ),
         ],
+      ),
+      GoRoute(
+        path: Routes.newPost,
+        builder: (_, __) => const PostComposeScreen(),
+      ),
+      GoRoute(
+        path: '/board/:postId/edit',
+        builder: (_, state) => PostComposeScreen(
+          postId: int.parse(state.pathParameters['postId']!),
+        ),
+      ),
+      GoRoute(
+        path: '/board/:postId',
+        builder: (_, state) => PostDetailScreen(
+          postId: int.parse(state.pathParameters['postId']!),
+        ),
+      ),
+      GoRoute(
+        path: Routes.newRecurring,
+        builder: (_, __) => const RecurringFormScreen(),
+      ),
+      GoRoute(
+        path: Routes.recurring,
+        builder: (_, __) => const RecurringListScreen(),
+      ),
+      GoRoute(
+        path: '/cal/recurring/:ruleId',
+        builder: (_, state) => RecurringDetailScreen(
+          ruleId: int.parse(state.pathParameters['ruleId']!),
+        ),
       ),
       GoRoute(
         path: Routes.newReservation,
@@ -122,8 +203,42 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const RoomFormScreen(),
       ),
       GoRoute(
+        path: '/cal/rooms/:roomId/edit',
+        builder: (_, state) => RoomFormScreen(existing: state.extra as Room?),
+      ),
+      GoRoute(
         path: Routes.notificationSettings,
         builder: (_, __) => const NotificationSettingsScreen(),
+      ),
+      GoRoute(
+        path: Routes.settings,
+        builder: (_, __) => const SettingsHomeScreen(),
+      ),
+      GoRoute(
+        path: Routes.bandSettings,
+        builder: (_, __) => const BandSettingsScreen(),
+      ),
+      GoRoute(
+        path: Routes.account,
+        builder: (_, __) => const AccountScreen(),
+      ),
+      GoRoute(
+        path: Routes.blockedUsers,
+        builder: (_, __) => const BlockedUsersScreen(),
+      ),
+      GoRoute(
+        path: Routes.plan,
+        builder: (_, __) => const PlanScreen(),
+      ),
+      GoRoute(
+        path: Routes.invite,
+        builder: (_, __) => const InviteScreen(),
+      ),
+      GoRoute(
+        path: '/reservations/:rid/edit',
+        builder: (_, state) => ReservationFormScreen(
+          existing: state.extra as Reservation?,
+        ),
       ),
       GoRoute(
         path: '/reservations/:rid',

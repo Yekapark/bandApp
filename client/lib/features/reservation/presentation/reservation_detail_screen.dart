@@ -7,6 +7,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../routing/app_router.dart';
+import '../../../shared/widgets/primary_button.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../band/application/band_providers.dart';
 import '../../home/application/home_providers.dart';
@@ -143,7 +144,9 @@ class _ReservationDetailScreenState
                   items: detail.setlist.items,
                   editable: editable,
                   onAdd: () => _addSong(band.id),
+                  onEdit: (item) => _editSong(band.id, item),
                   onDelete: (item) => _deleteSong(band.id, item),
+                  onReorder: (ids) => _reorderSetlist(band.id, ids),
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -166,7 +169,27 @@ class _ReservationDetailScreenState
                 _SettlementLink(
                   onTap: () => context.push(Routes.settlement(r.id)),
                 ),
+                if (r.isPending && band.isLeader) ...[
+                  const SizedBox(height: 16),
+                  const _SectionTitle('밴드장 승인'),
+                  const SizedBox(height: 10),
+                  _ApproveRejectRow(
+                    busy: _busy,
+                    onApprove: () => _decide(band.id, approve: true),
+                    onReject: () => _decide(band.id, approve: false),
+                  ),
+                ],
                 if (canManage && editable) ...[
+                  const SizedBox(height: 12),
+                  _EditButton(
+                    onTap: () async {
+                      await context.push(Routes.editReservation(r.id),
+                          extra: r);
+                      if (!context.mounted) return;
+                      _boardOverride = null;
+                      ref.invalidate(reservationDetailProvider(key));
+                    },
+                  ),
                   const SizedBox(height: 12),
                   _CancelButton(
                     busy: _busy,
@@ -204,7 +227,7 @@ class _ReservationDetailScreenState
   Future<void> _addSong(int bandId) async {
     final song = await showDialog<_SongInput>(
       context: context,
-      builder: (_) => const _AddSongDialog(),
+      builder: (_) => const _SongDialog(),
     );
     if (song == null) return;
     setState(() => _busy = true);
@@ -214,6 +237,7 @@ class _ReservationDetailScreenState
             reservationId: widget.reservationId,
             title: song.title,
             artist: song.artist,
+            referenceUrl: song.referenceUrl,
           );
       ref.invalidate(reservationDetailProvider(_key(bandId)));
     } on ApiException catch (e) {
@@ -222,6 +246,49 @@ class _ReservationDetailScreenState
       _toast('곡을 추가하지 못했습니다.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _editSong(int bandId, SetlistItem item) async {
+    final song = await showDialog<_SongInput>(
+      context: context,
+      builder: (_) => _SongDialog(initial: item),
+    );
+    if (song == null) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(reservationRepositoryProvider).updateSetlistItem(
+            bandId: bandId,
+            reservationId: widget.reservationId,
+            itemId: item.id,
+            title: song.title,
+            artist: song.artist,
+            referenceUrl: song.referenceUrl,
+          );
+      ref.invalidate(reservationDetailProvider(_key(bandId)));
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (_) {
+      _toast('곡을 수정하지 못했습니다.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reorderSetlist(int bandId, List<int> itemIds) async {
+    try {
+      await ref.read(reservationRepositoryProvider).reorderSetlist(
+            bandId: bandId,
+            reservationId: widget.reservationId,
+            itemIds: itemIds,
+          );
+      ref.invalidate(reservationDetailProvider(_key(bandId)));
+    } on ApiException catch (e) {
+      _toast(e.message);
+      ref.invalidate(reservationDetailProvider(_key(bandId)));
+    } catch (_) {
+      _toast('순서를 바꾸지 못했습니다.');
+      ref.invalidate(reservationDetailProvider(_key(bandId)));
     }
   }
 
@@ -292,11 +359,119 @@ class _ReservationDetailScreenState
     }
   }
 
+  Future<void> _decide(int bandId, {required bool approve}) async {
+    if (!approve) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('이 일정을 거절할까요?', style: TextStyle(fontSize: 16)),
+          content: const Text(
+            '거절하면 등록 시 잡았던 합주실 사용 횟수가 되돌아가고, 등록자에게 알림이 갑니다.',
+            style: TextStyle(
+                fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('그대로 두기'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child:
+                  const Text('거절하기', style: TextStyle(color: AppColors.danger)),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final repo = ref.read(reservationRepositoryProvider);
+      if (approve) {
+        await repo.approve(bandId: bandId, reservationId: widget.reservationId);
+      } else {
+        await repo.reject(bandId: bandId, reservationId: widget.reservationId);
+      }
+      _boardOverride = null;
+      ref.invalidate(monthReservationsProvider);
+      ref.invalidate(upcomingReservationsProvider(bandId));
+      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      _toast(approve ? '일정을 확정했어요.' : '일정을 거절했어요.');
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (_) {
+      _toast(approve ? '승인하지 못했습니다.' : '거절하지 못했습니다.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(msg)));
+  }
+}
+
+class _ApproveRejectRow extends StatelessWidget {
+  const _ApproveRejectRow({
+    required this.busy,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final bool busy;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: PrimaryButton(
+            label: '승인',
+            loading: busy,
+            onPressed: onApprove,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton(
+            onPressed: busy ? null : onReject,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(54),
+              side: const BorderSide(color: AppColors.danger),
+              foregroundColor: AppColors.danger,
+            ),
+            child: const Text('거절'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditButton extends StatelessWidget {
+  const _EditButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.edit_outlined, size: 16),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(50),
+        side: const BorderSide(color: AppColors.borderStrong),
+        foregroundColor: AppColors.textSecondary,
+      ),
+      label: const Text('일정 수정'),
+    );
   }
 }
 
@@ -502,90 +677,150 @@ class _RsvpButtons extends StatelessWidget {
   }
 }
 
-class _SetlistBlock extends StatelessWidget {
+class _SetlistBlock extends StatefulWidget {
   const _SetlistBlock({
     required this.items,
     required this.editable,
     required this.onAdd,
+    required this.onEdit,
     required this.onDelete,
+    required this.onReorder,
   });
 
   final List<SetlistItem> items;
   final bool editable;
   final VoidCallback onAdd;
+  final ValueChanged<SetlistItem> onEdit;
   final ValueChanged<SetlistItem> onDelete;
 
+  /// 새 순서의 항목 id 목록.
+  final ValueChanged<List<int>> onReorder;
+
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (var i = 0; i < items.length; i++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 7),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: AppColors.borderFaint),
-              ),
-              child: Row(
+  State<_SetlistBlock> createState() => _SetlistBlockState();
+}
+
+class _SetlistBlockState extends State<_SetlistBlock> {
+  late List<SetlistItem> _local = List.of(widget.items);
+
+  @override
+  void didUpdateWidget(_SetlistBlock old) {
+    super.didUpdateWidget(old);
+    final incoming = widget.items.map((e) => e.id).toList();
+    final current = _local.map((e) => e.id).toList();
+    if (!_sameOrder(incoming, current)) {
+      _local = List.of(widget.items);
+    }
+  }
+
+  bool _sameOrder(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// [newIndex] 는 oldIndex 항목이 제거된 뒤 기준으로 이미 보정된 값이다(onReorderItem).
+  void _onReorderItem(int oldIndex, int newIndex) {
+    setState(() {
+      final moved = _local.removeAt(oldIndex);
+      _local.insert(newIndex, moved);
+    });
+    widget.onReorder(_local.map((e) => e.id).toList());
+  }
+
+  Widget _row(SetlistItem item, int index, {required bool draggable}) {
+    return Container(
+      key: ValueKey(item.id),
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: AppColors.borderFaint),
+      ),
+      child: Row(
+        children: [
+          Text(
+            '${index + 1}',
+            style: AppTypography.mono(fontSize: 11, color: AppColors.textFaint),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.editable ? () => widget.onEdit(item) : null,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${i + 1}',
-                    style: AppTypography.mono(
-                      fontSize: 11,
-                      color: AppColors.textFaint,
-                    ),
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13.5, fontWeight: FontWeight.w600),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          items[i].title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if ((items[i].artist ?? '').trim().isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            items[i].artist!.trim(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textDim,
-                            ),
-                          ),
-                        ],
-                      ],
+                  if ((item.artist ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      item.artist!.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textDim),
                     ),
-                  ),
-                  if (editable)
-                    GestureDetector(
-                      onTap: () => onDelete(items[i]),
-                      child: const Padding(
-                        padding: EdgeInsets.only(left: 8),
-                        child: Icon(
-                          Icons.close,
-                          size: 16,
-                          color: AppColors.textFaint,
-                        ),
-                      ),
-                    ),
+                  ],
                 ],
               ),
             ),
           ),
-        if (editable)
+          if (widget.editable) ...[
+            GestureDetector(
+              onTap: () => widget.onDelete(item),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(Icons.close, size: 16, color: AppColors.textFaint),
+              ),
+            ),
+            if (draggable)
+              ReorderableDragStartListener(
+                index: index,
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 2),
+                  child: Icon(Icons.drag_handle,
+                      size: 18, color: AppColors.textFaint),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canReorder = widget.editable && _local.length > 1;
+
+    return Column(
+      children: [
+        if (canReorder)
+          ReorderableListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            onReorderItem: _onReorderItem,
+            children: [
+              for (var i = 0; i < _local.length; i++)
+                _row(_local[i], i, draggable: true),
+            ],
+          )
+        else
+          for (var i = 0; i < _local.length; i++)
+            _row(_local[i], i, draggable: false),
+        if (widget.editable)
           GestureDetector(
-            onTap: onAdd,
+            onTap: widget.onAdd,
             child: Container(
               height: 46,
               alignment: Alignment.center,
@@ -604,7 +839,7 @@ class _SetlistBlock extends StatelessWidget {
               ),
             ),
           ),
-        if (!editable && items.isEmpty)
+        if (!widget.editable && _local.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Text(
@@ -794,29 +1029,39 @@ class _ErrorBody extends StatelessWidget {
   }
 }
 
-// ── 곡 추가 다이얼로그 ──────────────────────────────────────────────────
+// ── 곡 추가/수정 다이얼로그 ────────────────────────────────────────────
 
 class _SongInput {
-  const _SongInput({required this.title, this.artist});
+  const _SongInput({required this.title, this.artist, this.referenceUrl});
   final String title;
   final String? artist;
+  final String? referenceUrl;
 }
 
-class _AddSongDialog extends StatefulWidget {
-  const _AddSongDialog();
+class _SongDialog extends StatefulWidget {
+  const _SongDialog({this.initial});
+
+  /// null 이면 추가, 있으면 수정.
+  final SetlistItem? initial;
 
   @override
-  State<_AddSongDialog> createState() => _AddSongDialogState();
+  State<_SongDialog> createState() => _SongDialogState();
 }
 
-class _AddSongDialogState extends State<_AddSongDialog> {
-  final _title = TextEditingController();
-  final _artist = TextEditingController();
+class _SongDialogState extends State<_SongDialog> {
+  late final _title = TextEditingController(text: widget.initial?.title ?? '');
+  late final _artist =
+      TextEditingController(text: widget.initial?.artist ?? '');
+  late final _ref =
+      TextEditingController(text: widget.initial?.referenceUrl ?? '');
+
+  bool get _isEdit => widget.initial != null;
 
   @override
   void dispose() {
     _title.dispose();
     _artist.dispose();
+    _ref.dispose();
     super.dispose();
   }
 
@@ -824,7 +1069,8 @@ class _AddSongDialogState extends State<_AddSongDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppColors.surface,
-      title: const Text('곡 추가', style: TextStyle(fontSize: 16)),
+      title:
+          Text(_isEdit ? '곡 수정' : '곡 추가', style: const TextStyle(fontSize: 16)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -841,6 +1087,14 @@ class _AddSongDialogState extends State<_AddSongDialog> {
             decoration:
                 const InputDecoration(hintText: '아티스트 (선택)', counterText: ''),
           ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _ref,
+            maxLength: 2000,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+                hintText: '참고 링크 (선택, 유튜브 등)', counterText: ''),
+          ),
         ],
       ),
       actions: [
@@ -853,10 +1107,14 @@ class _AddSongDialogState extends State<_AddSongDialog> {
             final t = _title.text.trim();
             if (t.isEmpty) return;
             Navigator.of(context).pop(
-              _SongInput(title: t, artist: _artist.text.trim()),
+              _SongInput(
+                title: t,
+                artist: _artist.text.trim(),
+                referenceUrl: _ref.text.trim(),
+              ),
             );
           },
-          child: const Text('추가'),
+          child: Text(_isEdit ? '저장' : '추가'),
         ),
       ],
     );

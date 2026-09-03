@@ -25,7 +25,8 @@ class AuthRepository {
         '/auth/signup',
         data: {'email': email, 'password': password, 'name': name},
       );
-      return unwrap(res, (d) => AuthResult.fromJson(d! as Map<String, dynamic>));
+      return unwrap(
+          res, (d) => AuthResult.fromJson(d! as Map<String, dynamic>));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -40,7 +41,8 @@ class AuthRepository {
         '/auth/login',
         data: {'email': email, 'password': password},
       );
-      return unwrap(res, (d) => AuthResult.fromJson(d! as Map<String, dynamic>));
+      return unwrap(
+          res, (d) => AuthResult.fromJson(d! as Map<String, dynamic>));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -52,7 +54,8 @@ class AuthRepository {
         '/auth/kakao',
         data: {'accessToken': kakaoAccessToken},
       );
-      return unwrap(res, (d) => AuthResult.fromJson(d! as Map<String, dynamic>));
+      return unwrap(
+          res, (d) => AuthResult.fromJson(d! as Map<String, dynamic>));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -60,7 +63,8 @@ class AuthRepository {
 
   Future<void> logout({required String refreshToken}) async {
     try {
-      await _dio.post<dynamic>('/auth/logout', data: {'refreshToken': refreshToken});
+      await _dio
+          .post<dynamic>('/auth/logout', data: {'refreshToken': refreshToken});
     } on DioException catch (_) {
       // 로그아웃은 멱등 — 실패해도 로컬 토큰은 지운다.
     }
@@ -70,6 +74,19 @@ class AuthRepository {
     try {
       final res = await _dio.get<dynamic>('/users/me');
       return unwrap(res, (d) => AppUser.fromJson(d! as Map<String, dynamic>));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 회원 탈퇴. 이메일 계정은 [password] 재확인 필요, 소셜 계정은 null 로 호출한다.
+  /// 탈퇴 즉시 기존 토큰이 막히고 소속 밴드에서 자동 탈퇴한다.
+  Future<void> withdraw({String? password}) async {
+    try {
+      await _dio.post<dynamic>(
+        '/users/me/withdraw',
+        data: password == null ? <String, dynamic>{} : {'password': password},
+      );
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

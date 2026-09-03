@@ -16,12 +16,12 @@ class TabShell extends StatelessWidget {
     ('홈', Icons.home_filled),
     ('캘린더', Icons.calendar_today),
     ('지도', Icons.map_outlined),
+    ('게시판', Icons.grid_view),
   ];
 
   /// 아직 화면이 없는 탭.
   static const _soonTabs = <(String, IconData)>[
     ('정산', Icons.receipt_long),
-    ('게시판', Icons.grid_view),
   ];
 
   @override

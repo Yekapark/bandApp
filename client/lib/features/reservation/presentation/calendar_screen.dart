@@ -64,6 +64,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           '캘린더',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
         ),
+        actions: [
+          IconButton(
+            tooltip: '정기 일정',
+            icon: const Icon(Icons.repeat, size: 20),
+            onPressed: () async {
+              await context.push(Routes.recurring);
+              if (!context.mounted) return;
+              ref.invalidate(monthReservationsProvider);
+            },
+          ),
+        ],
       ),
       body: RefreshIndicator(
         color: AppColors.primary,
@@ -124,6 +135,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   dayItems.isEmpty ? '일정 없음' : '${dayItems.length}건',
                   style:
                       const TextStyle(fontSize: 11.5, color: AppColors.textDim),
+                ),
+                const Spacer(),
+                _ShowCancelledToggle(
+                  on: ref.watch(showCancelledReservationsProvider),
+                  onTap: () => ref
+                      .read(showCancelledReservationsProvider.notifier)
+                      .toggle(),
                 ),
               ],
             ),
@@ -344,7 +362,10 @@ class _DayReservationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final r = reservation;
-    final tint = r.isPending ? AppColors.purple : AppColors.primary;
+    final inactive = !r.isActive;
+    final tint = inactive
+        ? AppColors.textFaint
+        : (r.isPending ? AppColors.purple : AppColors.primary);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -372,9 +393,13 @@ class _DayReservationTile extends StatelessWidget {
                     r.roomName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
+                      color: inactive
+                          ? AppColors.textFaint
+                          : AppColors.textPrimary,
+                      decoration: inactive ? TextDecoration.lineThrough : null,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -392,8 +417,52 @@ class _DayReservationTile extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10.5,
                 fontWeight: FontWeight.w700,
-                color:
-                    r.isPending ? AppColors.purpleSoft : AppColors.primarySoft,
+                color: inactive
+                    ? AppColors.textFaint
+                    : (r.isPending
+                        ? AppColors.purpleSoft
+                        : AppColors.primarySoft),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShowCancelledToggle extends StatelessWidget {
+  const _ShowCancelledToggle({required this.on, required this.onTap});
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: on ? AppColors.surfaceAlt : Colors.transparent,
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(
+            color: on ? AppColors.borderStrong : AppColors.borderFaint,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              on ? Icons.check_box_outlined : Icons.check_box_outline_blank,
+              size: 13,
+              color: on ? AppColors.textSecondary : AppColors.textFaint,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '취소 포함',
+              style: TextStyle(
+                fontSize: 10.5,
+                color: on ? AppColors.textSecondary : AppColors.textFaint,
               ),
             ),
           ],

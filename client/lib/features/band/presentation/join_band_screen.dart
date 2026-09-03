@@ -13,8 +13,11 @@ import '../application/band_providers.dart';
 import '../data/band_repository.dart';
 
 /// 초대코드 8자(영숫자, 대소문자 무관) 입력 후 밴드 합류.
+/// [initialCode] 가 있으면(초대 링크로 진입) 입력칸에 미리 채운다.
 class JoinBandScreen extends ConsumerStatefulWidget {
-  const JoinBandScreen({super.key});
+  const JoinBandScreen({super.key, this.initialCode});
+
+  final String? initialCode;
 
   @override
   ConsumerState<JoinBandScreen> createState() => _JoinBandScreenState();
@@ -22,9 +25,17 @@ class JoinBandScreen extends ConsumerStatefulWidget {
 
 class _JoinBandScreenState extends ConsumerState<JoinBandScreen> {
   static const _codeLength = 8;
-  final _code = TextEditingController();
+  late final _code = TextEditingController(text: _sanitize(widget.initialCode));
   bool _loading = false;
   String? _error;
+
+  static String _sanitize(String? raw) {
+    if (raw == null) return '';
+    final cleaned = raw.toUpperCase().replaceAll(RegExp('[^A-Z0-9]'), '');
+    return cleaned.length > _codeLength
+        ? cleaned.substring(0, _codeLength)
+        : cleaned;
+  }
 
   String get _value => _code.text;
   bool get _full => _value.length == _codeLength;

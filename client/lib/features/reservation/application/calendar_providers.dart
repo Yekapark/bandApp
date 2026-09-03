@@ -32,15 +32,28 @@ const calendarGridDays = 42;
 
 typedef _MonthKey = ({int bandId, DateTime month});
 
-/// 캘린더 그리드에 걸치는 모든 활성 일정(취소·거절 제외).
+/// 캘린더에서 취소·거절된 일정도 표시할지. 기본 false.
+final showCancelledReservationsProvider =
+    NotifierProvider<ShowCancelledReservations, bool>(
+        ShowCancelledReservations.new);
+
+class ShowCancelledReservations extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void toggle() => state = !state;
+}
+
+/// 캘린더 그리드에 걸치는 일정. [showCancelledReservationsProvider] 가 true 면 취소·거절 건도 포함.
 final monthReservationsProvider =
     FutureProvider.family<List<Reservation>, _MonthKey>((ref, key) async {
   final start = calendarGridStart(key.month);
   final end = start.add(const Duration(days: calendarGridDays));
+  final includeInactive = ref.watch(showCancelledReservationsProvider);
   return ref.watch(reservationRepositoryProvider).list(
         bandId: key.bandId,
         from: start,
         to: end,
+        includeInactive: includeInactive,
       );
 });
 

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../routing/app_router.dart';
 import '../../application/calendar_providers.dart';
 import '../../data/room_models.dart';
+import '../../data/room_repository.dart';
 
 /// 합주실 선택 시트. 고른 [Room] 을 돌려준다(취소 시 null).
 Future<Room?> showRoomPickerSheet(BuildContext context, int bandId) {
@@ -32,6 +34,63 @@ class _RoomPickerSheetState extends ConsumerState<_RoomPickerSheet> {
   void dispose() {
     _query.dispose();
     super.dispose();
+  }
+
+  Future<void> _editRoom(Room room) async {
+    final updated =
+        await context.push<Room>(Routes.editRoom(room.id), extra: room);
+    if (updated != null && mounted) {
+      ref.invalidate(roomsProvider(widget.bandId));
+    }
+  }
+
+  Future<void> _deleteRoom(Room room) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title:
+            Text('${room.name} 삭제할까요?', style: const TextStyle(fontSize: 16)),
+        content: const Text(
+          '이미 등록된 일정에는 영향이 없어요(합주실 이름은 그대로 남습니다). '
+          '앞으로 이 합주실은 목록에서 고를 수 없어요.',
+          style:
+              TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제', style: TextStyle(color: AppColors.danger)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref
+          .read(roomRepositoryProvider)
+          .delete(bandId: widget.bandId, roomId: room.id);
+      ref.invalidate(roomsProvider(widget.bandId));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('합주실을 삭제했어요.')));
+      }
+    } on ApiException catch (e) {
+      _snack(e.message);
+    } catch (_) {
+      _snack('삭제하지 못했습니다.');
+    }
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -155,6 +214,8 @@ class _RoomPickerSheetState extends ConsumerState<_RoomPickerSheet> {
                     itemBuilder: (_, i) => _RoomTile(
                       room: filtered[i],
                       onTap: () => Navigator.of(context).pop(filtered[i]),
+                      onEdit: () => _editRoom(filtered[i]),
+                      onDelete: () => _deleteRoom(filtered[i]),
                     ),
                   );
                 },
@@ -194,9 +255,17 @@ class _RoomPickerSheetState extends ConsumerState<_RoomPickerSheet> {
 }
 
 class _RoomTile extends StatelessWidget {
-  const _RoomTile({required this.room, required this.onTap});
+  const _RoomTile({
+    required this.room,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
   final Room room;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -250,6 +319,19 @@ class _RoomTile extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            PopupMenuButton<String>(
+              color: AppColors.surface,
+              icon: const Icon(Icons.more_horiz,
+                  size: 18, color: AppColors.textDim),
+              onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: Text('수정')),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Text('삭제', style: TextStyle(color: AppColors.danger)),
+                ),
+              ],
             ),
           ],
         ),

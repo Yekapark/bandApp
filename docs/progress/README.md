@@ -40,8 +40,13 @@
 |---|---|---|
 | — | [client-DEVLOG.md](client-DEVLOG.md) — 이어받기 가이드 (살아있는 문서) | 🔄 상시 갱신 |
 | — | [client-SCREENS.md](client-SCREENS.md) — 화면 구현 현황 표 (요구 13개 대비, 라우트 표, 남은 작업) | 🔄 상시 갱신 |
+| — | [client-GAP-BACKLOG.md](client-GAP-BACKLOG.md) — 백엔드엔 있는데 클라에 없던 기능 체크리스트 (C10~C15) | ✅ 전부 완료 (2026-09-04) |
 | C1 | [client-01-onboarding-home.md](client-01-onboarding-home.md) — 프로젝트 스캐폴딩 · 스플래시/로그인/약관/회원가입 · 밴드 생성·초대코드 가입 · 밴드 홈 (실제 API 연동) | 🔨 구현 완료, `analyze` 통과·웹 빌드 OK, end-to-end 검증 대기 |
 | C2 | [client-02-calendar-reservation.md](client-02-calendar-reservation.md) — 예약 캘린더(월간 뷰) · 합주실 목록/등록(네이버 주소검색) · 일정 등록 폼(겹침 경고) · 일정 상세(참석 RSVP·멤버별 현황·셋리스트) · 한국어 로케일 · (백엔드) `rooms/search` | 🔨 구현 완료 (PR #34), `analyze` 에러 0·웹 빌드 OK·백엔드 단위테스트 통과, 통합테스트 CI 대기·end-to-end 검증 대기 |
 | C3 | [client-03-settlement.md](client-03-settlement.md) — 일정 정산(N빵) 화면: 총액 분배(전원/참석자) · 납부 셀프 체크 · 재계산. Phase 7 API 사용, 백엔드 변경 없음 | 🔨 구현 완료, `analyze` 에러 0·웹 빌드 OK·백엔드 스모크(생성/납부/재계산) 통과, UI end-to-end 대기 |
 | C4 | [client-04-room-map.md](client-04-room-map.md) — 하단 탭바 `StatefulShellRoute` 전환(홈·캘린더·지도) · 합주실 지도 `/map`(네이버 지도, Android/iOS 전용, 웹은 목록만). 백엔드 변경 없음 | 🔨 구현 완료, `analyze` 에러 0·웹 빌드 OK, 네이티브 지도 end-to-end 미검증(키·기기 없음) |
 | C5 | [client-05-notification-settings.md](client-05-notification-settings.md) — 알림 설정 화면 `/settings/notifications`: 푸시 on/off · "N분 전" 리마인더 시점. `notifications/settings` API 사용, 백엔드 변경 없음 | 🔨 구현 완료, `analyze` 에러 0·`flutter test` 통과·웹 빌드 OK, end-to-end 대기. 알림 수신부(FCM)·미납 독촉은 미구현 → [client-PROBLEMS-2026-09-03.md](client-PROBLEMS-2026-09-03.md) |
+| C6 | [client-06-board.md](client-06-board.md) — 게시판(#11·#12): 피드(커서 무한스크롤)·글 상세·작성/수정·첨부 업로드(R2 presigned 직접 PUT)·신고·작성자 차단. 하단 탭 "게시판" 승격. Phase 8 API 사용, 백엔드 변경 없음. 신규 의존성 `image_picker` | 🔨 구현 완료, `analyze` 에러 0·`flutter test`(신규 4개 포함) 통과·웹 빌드 OK, end-to-end 대기(로컬 R2 미설정). 영상 인앱 재생·차단 해제 화면은 미구현 |
+| C7 | [client-07-reservation-recurring.md](client-07-reservation-recurring.md) — 일정 수정(PUT)·밴드장 승인/거절 + 정기 일정 규칙 등록/목록/삭제(`/cal/recurring`). Phase 4·5 API 사용, 백엔드 변경 없음 | 🔨 구현 완료, `analyze` 에러 0·`flutter test`(신규 5개 포함, 총 14) 통과·웹 빌드 OK, end-to-end 대기. 정기 규칙 상세/수정 UI는 미구현 |
+| C8 | [client-08-settings.md](client-08-settings.md) — 설정 허브 `/settings` + 밴드 설정(일정 권한 모드·밴드장 위임·멤버 추방·밴드 나가기) + 계정(회원 탈퇴) + 차단한 사용자(해제). Phase 1~3·8 API 사용, 백엔드 변경 없음 | 🔨 구현 완료, `analyze` 에러 0·`flutter test`(총 16) 통과·웹 빌드 OK, end-to-end 대기. 밴드 이름 변경·프로필 편집은 백엔드 미제공 |
+| C9 | [client-09-fcm-ci.md](client-09-fcm-ci.md) — FCM 디바이스 토큰 등록·포그라운드 수신 배선(`push_service.dart`, 설정 파일 없으면 no-op) + 클라이언트 CI(`.github/workflows/client-ci.yml`). Phase 9 API 사용, 백엔드 변경 없음. 신규 의존성 `firebase_core`·`firebase_messaging` | 🔨 구현 완료, `analyze` 에러 0·`flutter test`(총 16) 통과·웹 빌드 OK. 실제 푸시는 Firebase 설정 파일 필요. **요구 화면 13개 모두 도달** |

@@ -14,12 +14,15 @@ import '../data/place_models.dart';
 import '../data/room_models.dart';
 import '../data/room_repository.dart';
 
-/// 합주실 등록 폼. 성공하면 생성된 [Room] 을 들고 pop 한다(선택 시트에서 바로 고르도록).
+/// 합주실 등록/수정 폼. 등록은 성공 시 생성된 [Room] 을 들고 pop 한다(선택 시트에서 바로 고르도록).
+/// [existing] 이 있으면 수정 모드(PUT).
 ///
 /// 주소 칸은 네이버 지역검색과 연결돼 있다 — 두 글자 이상 입력하면 후보가 뜨고, 고르면
 /// 이름·주소·연락처가 자동으로 채워진다. 서버에 검색 키가 없으면 후보가 안 뜰 뿐 직접 입력은 된다.
 class RoomFormScreen extends ConsumerStatefulWidget {
-  const RoomFormScreen({super.key});
+  const RoomFormScreen({super.key, this.existing});
+
+  final Room? existing;
 
   @override
   ConsumerState<RoomFormScreen> createState() => _RoomFormScreenState();
@@ -37,6 +40,20 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
   List<PlaceSuggestion> _suggestions = const [];
   bool _searching = false;
   int _searchSeq = 0;
+
+  bool get _isEdit => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final r = widget.existing;
+    if (r != null) {
+      _name.text = r.name;
+      _address.text = r.address ?? '';
+      _phone.text = r.phone ?? '';
+      _memo.text = r.memo ?? '';
+    }
+  }
 
   @override
   void dispose() {
@@ -110,19 +127,30 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
       _error = null;
     });
     try {
-      final room = await ref.read(roomRepositoryProvider).create(
-            bandId: band.id,
-            name: name,
-            address: _address.text.trim(),
-            phone: _phone.text.trim(),
-            memo: _memo.text.trim(),
-          );
+      final repo = ref.read(roomRepositoryProvider);
+      final room = _isEdit
+          ? await repo.update(
+              bandId: band.id,
+              roomId: widget.existing!.id,
+              name: name,
+              address: _address.text.trim(),
+              phone: _phone.text.trim(),
+              memo: _memo.text.trim(),
+            )
+          : await repo.create(
+              bandId: band.id,
+              name: name,
+              address: _address.text.trim(),
+              phone: _phone.text.trim(),
+              memo: _memo.text.trim(),
+            );
       ref.invalidate(roomsProvider(band.id));
       if (mounted) context.pop<Room>(room);
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = '합주실을 등록하지 못했습니다.');
+      setState(
+          () => _error = _isEdit ? '합주실을 수정하지 못했습니다.' : '합주실을 등록하지 못했습니다.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -137,10 +165,12 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              BackLink(label: '합주실 등록', onTap: () => context.pop()),
+              BackLink(
+                  label: _isEdit ? '합주실 수정' : '합주실 등록',
+                  onTap: () => context.pop()),
               const SizedBox(height: 14),
               Text(
-                '우리 밴드 합주실 추가',
+                _isEdit ? '합주실 정보 고치기' : '우리 밴드 합주실 추가',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 6),
@@ -230,7 +260,7 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
               ],
               const SizedBox(height: 22),
               PrimaryButton(
-                label: '합주실 저장',
+                label: _isEdit ? '수정 저장' : '합주실 저장',
                 loading: _loading,
                 enabled: _name.text.trim().isNotEmpty,
                 onPressed: _submit,

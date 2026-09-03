@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../routing/app_router.dart';
-import '../../../shared/widgets/soon.dart';
 import '../../band/application/band_providers.dart';
 import '../../band/data/band_models.dart';
 import '../application/home_providers.dart';
@@ -137,8 +136,8 @@ class _Header extends ConsumerWidget {
         ),
         const SizedBox(width: 8),
         _IconSquare(
-          label: '멤버',
-          onTap: () => showSoon(context, '멤버 관리'),
+          icon: Icons.settings_outlined,
+          onTap: () => context.push(Routes.settings),
         ),
       ],
     );
@@ -147,14 +146,12 @@ class _Header extends ConsumerWidget {
 
 class _IconSquare extends StatelessWidget {
   const _IconSquare({
-    this.icon,
-    this.label,
+    required this.icon,
     this.badgeCount = 0,
     required this.onTap,
   });
 
-  final IconData? icon;
-  final String? label;
+  final IconData icon;
   final int badgeCount;
   final VoidCallback onTap;
 
@@ -174,11 +171,7 @@ class _IconSquare extends StatelessWidget {
               border: Border.all(color: AppColors.borderStrong),
             ),
             alignment: Alignment.center,
-            child: icon != null
-                ? Icon(icon, size: 18, color: AppColors.textSecondary)
-                : Text(label ?? '',
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textSecondary)),
+            child: Icon(icon, size: 18, color: AppColors.textSecondary),
           ),
           if (badgeCount > 0)
             Positioned(

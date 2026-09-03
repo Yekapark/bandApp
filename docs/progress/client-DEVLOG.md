@@ -3,7 +3,7 @@
 > **새 세션에서 클라이언트 작업을 이어받을 때 이 파일부터 읽는다.**
 > 이 문서는 "지금 어디까지 됐고, 어떻게 이어가는지"를 담는 살아있는 문서다.
 > 작업을 진행하면 아래 "현재 상태"와 "다음 할 일"을 갱신한다.
-> 마지막 갱신: **2026-09-03** (알림 설정 화면 추가)
+> 마지막 갱신: **2026-09-04** (C10~C15 — 갭 백로그 `client-GAP-BACKLOG.md` 전부 완료)
 
 ---
 
@@ -24,7 +24,34 @@
 - **알림 설정 화면 `/settings/notifications` 구현 완료**(2026-09-03) — 푸시 on/off + "일정 시작 N분 전"
   리마인더 시점(프리셋 칩). 백엔드 `GET/PUT /api/v1/notifications/settings` 사용, 백엔드 변경 없음.
   홈 헤더 종 아이콘에서 진입. **디바이스 토큰 등록·실제 푸시 수신은 Firebase 설정 필요 → 미구현**(§7·PROBLEMS).
-- 다음: 게시판(#11·#12) → 설정 나머지(밴드/계정) → 알림 수신부(FCM).
+- **게시판 `/board` 구현 완료**(2026-09-04, C6) — 피드(커서 무한스크롤)·글 상세·작성/수정·
+  첨부 업로드(R2 presigned 직접 PUT)·신고·작성자 차단. 하단 탭바에 "게시판" 탭이 실제 화면으로
+  붙음. 백엔드 변경 없음(Phase 8 API). 신규 의존성 `image_picker`. 상세는 `client-06-board.md`.
+- **일정 수정·승인/거절 + 정기 일정 구현 완료**(2026-09-04, C7) — 일정 상세에서 수정(PUT)·
+  밴드장 승인/거절. 정기 일정 화면 `/cal/recurring`(규칙 목록·등록·삭제, 캘린더 AppBar ↻ 진입).
+  백엔드 변경 없음(Phase 4·5 API). 상세는 `client-07-reservation-recurring.md`.
+- **설정 완성**(2026-09-04, C8) — 설정 허브 `/settings`, 밴드 설정(일정 권한 모드·밴드장 위임·
+  멤버 추방·밴드 나가기), 계정(내 정보·회원 탈퇴), 차단한 사용자(목록·해제), 로그아웃.
+  홈 헤더의 톱니 아이콘에서 진입. 백엔드 변경 없음. 상세는 `client-08-settings.md`.
+- **FCM 수신부 배선 + 클라 CI**(2026-09-04, C9) — `PushService`가 로그인 시 디바이스 토큰을
+  `POST /notifications/device-tokens`로 등록, 포그라운드 메시지는 전역 SnackBar. **Firebase 설정
+  파일 없으면 조용히 no-op**(카카오·네이버와 동일). `.github/workflows/client-ci.yml`
+  (`flutter analyze --no-fatal-* ` + `flutter test`). 상세는 `client-09-fcm-ci.md`.
+- **요구 화면 13개(`BACKLOG.md` §2) 모두 ✅/🟡 도달.** 이후는 "백엔드엔 있는데 클라에 없던"
+  기능을 `client-GAP-BACKLOG.md` 체크리스트(C10~C15)대로 채우는 중.
+- **C10 멤버 초대**(2026-09-04) — 밴드장이 초대코드·링크를 발급/재발급/무효화(`/band/invite`).
+  설정 허브·밴드 설정에서 진입. 상세는 `client-10-invite.md`.
+- **C11 합주실 수정/삭제**(2026-09-04) — 합주실 선택 시트·지도 목록의 ⋯ 메뉴에서 수정(폼 재사용)·
+  삭제. `PUT/DELETE /bands/{id}/rooms/{roomId}`. 상세는 `client-11-room-edit.md`.
+- **C12 셋리스트 재정렬 + 곡 수정**(2026-09-04) — 일정 상세 셋리스트 드래그 정렬(`onReorderItem` +
+  `PUT .../setlist/reorder`), 곡 탭 → 수정 다이얼로그(곡명·아티스트·참고 링크). 상세는 `client-12-setlist.md`.
+- **C13 정기 규칙 상세**(2026-09-04) — 정기 일정 목록 카드 탭 → `/cal/recurring/:ruleId` 규칙 요약 +
+  다가오는 회차 목록(탭 시 일정 상세로). `GET .../recurring-rules/{ruleId}`. 상세는 `client-13-recurring-detail.md`.
+- **C14 밴드 요금제**(2026-09-04) — `/settings/plan` FREE/PREMIUM 조회·비교표·전환(구독/해지/연장, 밴드장).
+  `16. 요금제` API. 실제 결제 연동은 없음(버튼만). 상세는 `client-14-plan.md`.
+- **C15 잔여 3종**(2026-09-04) — 게시판 첨부 길게 눌러 미디어 신고(`targetType=MEDIA`),
+  캘린더 "취소 포함" 토글(`includeInactive`, 취소건 취소선), 초대 링크 `?code=` 프리필.
+  상세는 `client-15-misc.md`. **`client-GAP-BACKLOG.md` C10~C15 전부 완료.**
 
 ---
 
@@ -119,6 +146,61 @@
 2. 실행 시 dart-define: `--dart-define=NAVER_MAP_CLIENT_ID=<Client ID>`.
 3. Android 네이티브 빌드는 개발자 모드 필요(§3-D). 웹은 어차피 지도 미지원 → 목록만.
 
+### 구현 완료 (C9: FCM 수신부 배선 + 클라 CI) — 상세는 `client-09-fcm-ci.md`
+
+| 부분 | 파일 | 백엔드 |
+|---|---|---|
+| 디바이스 토큰 등록/해제 | `features/notification/data/push_service.dart`, `notification_repository.dart` | `POST/DELETE /notifications/device-tokens` |
+| 포그라운드 메시지 → SnackBar | `push_service.dart`(`scaffoldMessengerKey`), `app.dart` | — |
+| 클라이언트 CI | `.github/workflows/client-ci.yml` | — |
+
+- `pubspec.yaml`: `firebase_core`, `firebase_messaging` 추가(승인받음).
+- Firebase 설정 파일(`google-services.json` 등)이 없으면 `PushService`가 조용히 비활성 →
+  현재 상태에서 실제 푸시는 안 오지만 앱은 정상. 켜는 법은 `client-09-fcm-ci.md` §5 / 이 문서 §7.
+- **뺀 것**: 백그라운드 메시지 핸들러, 알림 클릭 딥링크(`onMessageOpenedApp`),
+  `flutter_local_notifications`, 정산 미납 독촉 버튼(백엔드 API 없음).
+
+### 구현 완료 (C8: 설정 나머지) — 상세는 `client-08-settings.md`
+
+| 화면 | 라우트 | 파일 | 백엔드 |
+|---|---|---|---|
+| 설정 허브 | `/settings` | `features/settings/presentation/settings_home_screen.dart` | — (로그아웃 `/auth/logout`) |
+| 밴드 설정 | `/settings/band` | `.../band_settings_screen.dart` | `GET/PUT /bands/{id}[/settings]`, `POST /bands/{id}/leader`, `DELETE /bands/{id}/members/{uid}`, `POST /bands/{id}/members/leave` |
+| 계정 | `/settings/account` | `.../account_screen.dart` | `POST /users/me/withdraw` |
+| 차단한 사용자 | `/settings/blocks` | `.../blocked_users_screen.dart` | `GET/DELETE /users/me/blocks[/{uid}]` |
+
+- 상태: `features/settings/application/settings_providers.dart`(`blockedUsersProvider`),
+  `features/band/application/band_providers.dart`에 `bandDetailProvider`(family) 추가.
+- 진입: 홈 헤더 ⚙ 아이콘(기존 "멤버" 버튼 대체). 홈의 마지막 `showSoon` 제거됨.
+- **뺀 것**: 밴드 이름 변경·삭제, 프로필 편집(백엔드 API 없음), 초대코드 재발급 UI.
+
+### 구현 완료 (C7: 일정 수정·승인/거절 + 정기 일정) — 상세는 `client-07-reservation-recurring.md`
+
+| 화면 | 라우트 | 파일 | 백엔드 |
+|---|---|---|---|
+| 일정 수정 | `/reservations/:rid/edit` | `features/reservation/presentation/reservation_form_screen.dart`(수정 모드 겸용) | `PUT /bands/{id}/reservations/{rid}` |
+| 승인/거절 | (일정 상세 내 버튼) | `.../reservation_detail_screen.dart` | `POST …/{rid}/approve`·`/reject` (밴드장·PENDING) |
+| 정기 일정 목록 | `/cal/recurring` | `features/recurring/presentation/recurring_list_screen.dart` | `GET/DELETE /bands/{id}/recurring-rules[/{ruleId}]` |
+| 정기 일정 등록 | `/cal/recurring/new` | `.../recurring_form_screen.dart` | `POST /bands/{id}/recurring-rules` |
+
+- 상태: `features/recurring/application/recurring_providers.dart` (`recurringRulesProvider` family).
+- 진입: 캘린더 AppBar 의 ↻(repeat) 아이콘 → 정기 일정 목록.
+- 개별 회차 수정·취소는 일반 일정 상세를 그대로 사용(규칙 유지). 규칙 수정은 백엔드 미제공 → 삭제 후 재등록.
+- **뺀 것**: 정기 규칙 상세(회차 목록) 화면, 규칙 수정 UI, 셋리스트 재정렬 UI.
+
+### 구현 완료 (C6: 게시판) — 상세는 `client-06-board.md`
+
+| 화면 | 라우트 | 파일 | 백엔드 |
+|---|---|---|---|
+| 게시판 피드 | `/board` (탭) | `features/board/presentation/board_screen.dart` | `GET /bands/{id}/posts?cursor&limit` |
+| 게시글 상세 | `/board/:postId` | `.../post_detail_screen.dart` | `GET/DELETE …/posts/{id}`, `POST /reports`, `POST /users/me/blocks` |
+| 글 작성/수정 | `/board/new`, `/board/:postId/edit` | `.../post_compose_screen.dart` | `POST/PUT …/posts`, `POST …/media/upload-url` → R2 PUT → `…/media/{id}/complete`, `DELETE …/media/{id}` |
+
+- 상태: `features/board/application/board_providers.dart` (`boardFeedProvider` — `loadMore`/`refresh`, `postDetailProvider` family).
+- 첨부는 백엔드를 지나지 않는다 — presigned PUT URL로 R2에 직접 올린다(인터셉터 없는 별도 Dio).
+- 하단 탭 "게시판"이 `showSoon` → 실제 브랜치(인덱스 3)로 승격. 남은 `showSoon`은 "정산" 뿐.
+- **뺀 것**: 영상 인앱 재생(타일로만 표시), 개별 첨부(MEDIA) 신고 UI, 차단 해제 화면(C8).
+
 ### 구현 완료 (카카오 로그인 SDK)
 
 | 파일 | 역할 |
@@ -192,13 +274,17 @@
 
 ## 3. 로컬 환경 함정 (이 PC 기준 — 세션마다 다시 부딪힘)
 
-### A. Flutter 가 PATH 에 없음
+### A. Flutter 경로 · 저장소 경로가 PC 마다 다름
 
-- 설치 위치: **`C:\flutter\bin`** (Flutter 3.47.2 / Dart 3.13.2, stable).
-- `flutter` / `dart` 명령이 PATH 에 없어서 **전체 경로로 호출**해야 한다:
-  `& C:\flutter\bin\flutter.bat <명령>` (PowerShell).
-- Git Bash 쪽 PATH 에는 아예 안 잡힌다 → PowerShell 로 실행.
-- 영구 등록하려면 사용자가 직접: `setx PATH "%PATH%;C:\flutter\bin"` (새 터미널부터 적용).
+- **PC #1**: 저장소 `E:\project\band`, Flutter `C:\flutter\bin`.
+- **PC #2** (박장언, 2026-09-04~): 저장소 `C:\band\bandApp`, Flutter **`C:\src\flutter\bin`**
+  (Flutter 3.47.2 / Dart 3.13.2, stable). Git Bash PATH 에는 `/c/src/flutter/bin/flutter` 로 잡힌다.
+- 어느 쪽이든 PATH 등록이 없으면 **전체 경로로 호출**: `& C:\src\flutter\bin\flutter.bat <명령>`
+  (PowerShell) 또는 `/c/src/flutter/bin/flutter <명령>` (Git Bash).
+- `client/android`·`client/web`·`client/windows` 는 `.gitignore` 제외 → 새 PC/클론에서는
+  없다. `flutter build web` 전에 `flutter create . --platforms web,android,windows` 로
+  스캐폴딩을 한 번 생성한다(gitignore 라 커밋 안 됨). `flutter create` 가 만드는
+  `test/widget_test.dart`(기본 카운터 테스트)는 삭제한다 — `MyApp` 참조라 테스트가 깨진다.
 
 ### B. 포트 5432 충돌 — DB 접속 시 반드시 주의
 
@@ -274,15 +360,22 @@ cd E:\project\band\client
 4. ~~알림 **설정** 화면 (`/settings/notifications`)~~ ✅ 2026-09-03 — 푸시 on/off + 리마인더 시점.
    상세는 `client-05-notification-settings.md`. **남은 것**: 디바이스 토큰 등록(FCM),
    실제 푸시 수신 처리, 정산 화면의 "미납자 알림" 버튼(백엔드에 미납 독촉 트리거 API 없음 — PROBLEMS §3).
-5. (검토) **정기 일정** — 백엔드에 정기 규칙 생성 API 추가 vs 클라에서 N회 `POST` 반복.
-6. 일정 상세에 수정(PUT)·밴드장 승인/거절 UI. 정산 총액 변경 UI.
-7. (정리) analyze info 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.
-8. (검토) 클라이언트 CI — `flutter analyze` + `flutter test`.
+5. ~~**게시판**(#11·#12)~~ ✅ 2026-09-04 (C6). 남은 것: 영상 인앱 재생, 차단 해제 화면(C8).
+6. ~~정기 일정 규칙 등록/목록/삭제 + 일정 수정(PUT)·밴드장 승인/거절 UI~~ ✅ 2026-09-04 (C7).
+   상세는 `client-07-reservation-recurring.md`.
+7. ~~설정 나머지 — 밴드 설정·계정(탈퇴)·차단 해제~~ ✅ 2026-09-04 (C8). 상세는 `client-08-settings.md`.
+8. ~~알림 수신부(FCM 디바이스 토큰) + 클라이언트 CI~~ ✅ 2026-09-04 (C9). 상세는 `client-09-fcm-ci.md`.
+9. ~~**갭 백로그 C10~C15**~~ ✅ 2026-09-04 — 백엔드엔 있는데 클라에 없던 기능 전부.
+   `client-GAP-BACKLOG.md` 참조: C10 멤버 초대, C11 합주실 수정/삭제, C12 셋리스트 재정렬/수정,
+   C13 정기 규칙 상세, C14 요금제, C15 미디어 신고·캘린더 취소건·초대 링크 프리필.
+10. **(정리, 다음)** 백엔드 붙여 전 화면 end-to-end 수동 검증, analyze info/warning 줄이기,
+   영상 인앱 재생·알림 딥링크·OS 딥링크 네이티브 등록, Firebase/카카오/네이버 키 넣고 실제 통합 테스트,
+   폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일, 캘린더 주간 뷰.
 
 ## 6. 열린 결정 / 확인 필요
 
-- **정기(반복) 일정**: 백엔드 `POST /reservations` 에 반복 필드가 없음(`recurringRuleId` 는 응답 전용).
-  규칙 생성 엔드포인트를 추가할지, 클라에서 반복 호출할지.
+- ~~**정기(반복) 일정**~~ (해결): 백엔드 Phase 5 에 `POST/GET/DELETE /bands/{id}/recurring-rules`
+  가 이미 있다(회차는 등록 시 8주분 자동 생성, 개별 회차 수정·취소는 일반 일정 API). C7 에서 붙인다.
 - 홈 "이번 달 정산" 카드: 밴드 단위 정산 합계 API 없음 → 현재 값 `—`. 집계 엔드포인트를
   백엔드에 추가할지, 화면에서 일정별로 합산할지 결정 필요.
 - 초대코드 UI: 백엔드는 8자 영숫자인데 목업은 6자리 숫자 키패드 → 현재 8자 텍스트 입력으로 구현.

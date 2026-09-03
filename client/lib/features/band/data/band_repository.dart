@@ -37,6 +37,16 @@ class BandRepository {
     }
   }
 
+  /// 밴드 기본 정보(일정 등록 권한 모드 포함).
+  Future<Band> band(int bandId) async {
+    try {
+      final res = await _dio.get<dynamic>('/bands/$bandId');
+      return unwrap(res, (d) => Band.fromJson(d! as Map<String, dynamic>));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   Future<Band> joinBand(String code) async {
     try {
       final res = await _dio.post<dynamic>('/bands/join', data: {'code': code});
@@ -55,6 +65,60 @@ class BandRepository {
             .map((e) => BandMember.fromJson(e as Map<String, dynamic>))
             .toList(growable: false);
       });
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 일정 등록 권한 모드 변경 (밴드장 전용).
+  /// [permission]: LEADER_ONLY | ANYONE | APPROVAL_REQUIRED.
+  Future<Band> updateSettings({
+    required int bandId,
+    required String permission,
+  }) async {
+    try {
+      final res = await _dio.put<dynamic>(
+        '/bands/$bandId/settings',
+        data: {'reservationPermission': permission},
+      );
+      return unwrap(res, (d) => Band.fromJson(d! as Map<String, dynamic>));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 밴드장 위임 (현재 밴드장만). 위임하면 나는 MEMBER 로 강등된다.
+  Future<Band> delegateLeadership({
+    required int bandId,
+    required int newLeaderUserId,
+  }) async {
+    try {
+      final res = await _dio.post<dynamic>(
+        '/bands/$bandId/leader',
+        data: {'newLeaderUserId': newLeaderUserId},
+      );
+      return unwrap(res, (d) => Band.fromJson(d! as Map<String, dynamic>));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 멤버 추방 (밴드장 전용).
+  Future<void> kickMember({
+    required int bandId,
+    required int targetUserId,
+  }) async {
+    try {
+      await _dio.delete<dynamic>('/bands/$bandId/members/$targetUserId');
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 밴드 나가기. 밴드장은 먼저 위임해야 한다(409 LEADER_MUST_DELEGATE_BEFORE_LEAVING).
+  Future<void> leaveBand(int bandId) async {
+    try {
+      await _dio.post<dynamic>('/bands/$bandId/members/leave');
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

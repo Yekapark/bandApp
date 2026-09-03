@@ -1,7 +1,7 @@
 # 클라이언트 화면 구현 현황
 
 > 지금까지 만든 Flutter 화면을 한눈에 보는 표. 진행하면서 갱신한다.
-> 마지막 갱신: **2026-09-03** (알림 설정 화면 추가)
+> 마지막 갱신: **2026-09-04** (C9 FCM 수신부 + 클라 CI — 요구 화면 13개 완료)
 > 상세 배경은 단계별 문서(`client-01`~`client-03`, `client-DEVLOG.md`) 참조.
 
 범례: ✅ 구현 완료 · 🟡 부분 구현 · ⛔ 미구현
@@ -13,18 +13,33 @@
 | # | 요구 화면 | 상태 | 실제 라우트 / 파일 | 메모 |
 |---|---|---|---|---|
 | 1 | 로그인 / 회원가입 (카카오 중심) | ✅ | `/login` `login_screen.dart`, `/signup` `signup_screen.dart` | 이메일 로그인·가입 동작. 카카오 SDK 배선 완료 — 앱 키 넣으면 동작, 미설정 시 "준비 중" 스낵바 |
-| 2 | 초대코드 입력 | ✅ | `/band-gate/join` `join_band_screen.dart` | 백엔드 8자 영숫자. 목업의 6자리 숫자 키패드 대신 텍스트 입력 |
+| 2 | 초대코드 입력 | ✅ | `/band-gate/join` `join_band_screen.dart` | 코드 입력해 참여. **코드 발급(밴드장)**은 `/band/invite` `invite_screen.dart` (C10) |
 | 3 | 밴드 미소속 상태 | ✅ | `/band-gate` `band_gate_screen.dart` | "밴드 만들기 / 초대코드로 참여" 선택 |
 | 4 | 밴드 홈 | ✅ | `/home` (탭) `home_screen.dart` | 밴드 전환 스위처, 다가오는 합주, 멤버 레일, 요약 카드 |
-| 5 | 합주 일정 캘린더 | ✅ | `/cal` (탭) `calendar_screen.dart` | 월간 뷰만. 주간 뷰 없음 |
-| 6 | 일정 등록 폼 | 🟡 | `/cal/new` `reservation_form_screen.dart` | 합주실·날짜·시간·비용·메모. **반복(정기) 일정 제외** — 백엔드 생성 API 없음 |
-| 7 | 일정 상세 | 🟡 | `/reservations/:id` `reservation_detail_screen.dart` | 참석 체크(참석/불참/미정)·멤버별 현황·셋리스트(추가·삭제). 셋리스트 재정렬/완료체크·일정 수정·밴드장 승인/거절 UI 없음 |
+| 5 | 합주 일정 캘린더 | ✅ | `/cal` (탭) `calendar_screen.dart` | 월간 뷰. "취소 포함" 토글(C15). 주간 뷰 없음 |
+| 6 | 일정 등록/수정 폼 | ✅ | `/cal/new`, `/reservations/:id/edit` `reservation_form_screen.dart` | 합주실·날짜·시간·비용·메모. 수정(PUT) 겸용. **반복은 별도 정기 일정 화면**(#아래) |
+| 7 | 일정 상세 | 🟡 | `/reservations/:id` `reservation_detail_screen.dart` | 참석 체크·멤버별 현황·셋리스트(추가·삭제·**재정렬**·**수정**, C12)·**일정 수정**·**밴드장 승인/거절**(C7). 셋리스트 완료체크 없음 |
 | 8 | 합주실 목록 / 지도 | 🟡 | `/map` (탭) `map_screen.dart` | 네이버 지도(`flutter_naver_map`) 마커 + 하단 목록. **Android/iOS 전용** — 웹/키 미설정 시 목록만. `NAVER_MAP_CLIENT_ID` 필요 |
-| 9 | 합주실 등록 폼 | ✅ | `/cal/rooms/new` `room_form_screen.dart` | 이름·주소검색(네이버 지역검색 프록시)·연락처·메모 |
+| 9 | 합주실 등록/수정 폼 | ✅ | `/cal/rooms/new`, `/cal/rooms/:id/edit` `room_form_screen.dart` | 이름·주소검색·연락처·메모. 수정·삭제는 합주실 선택 시트·지도 목록의 ⋯ 메뉴 (C11) |
 | 10 | 정산 화면 | ✅ | `/reservations/:id/settlement` `settlement_screen.dart` | 1인당 금액·진행바·납부 체크리스트·재계산. 균등/참석자만 토글. 본인 몫만 셀프 체크 |
-| 11 | 게시판 (사진/영상 피드) | ⛔ | — | 백엔드 Phase도 별도. 미착수 |
-| 12 | 게시글 상세 | ⛔ | — | 미착수 |
-| 13 | 설정 (알림·밴드 설정·계정) | 🟡 | `/settings/notifications` `notification_settings_screen.dart` | 알림 설정(푸시 on/off·리마인더 시점)만. 밴드 설정·계정/탈퇴 미착수. FCM 수신부·미납 독촉 미구현 |
+| 11 | 게시판 (사진/영상 피드) | ✅ | `/board` (탭) `board_screen.dart` | 커서 무한스크롤. 글쓰기 FAB. 대표 이미지 썸네일 (C6) |
+| 12 | 게시글 상세 | 🟡 | `/board/:postId` `post_detail_screen.dart` | 본문·첨부 갤러리·이미지 전체화면 뷰어·수정/삭제·신고(글·작성자·**첨부 길게눌러 C15**)·차단. **영상 인앱 재생 없음**. 작성/수정은 `post_compose_screen.dart` (C6) |
+| 13 | 설정 (알림·밴드 설정·계정) | ✅ | `/settings` `settings_home_screen.dart` (+ `/settings/band`, `/settings/account`, `/settings/blocks`, `/settings/notifications`) | 허브 + 밴드 설정(일정 권한·밴드장 위임·멤버 추방·나가기) + 계정(탈퇴) + 차단 해제 + 알림. FCM 디바이스 토큰 등록·포그라운드 수신은 C9(`push_service.dart`, 설정 파일 없으면 no-op) |
+
+추가로 만든 화면(C6 게시판 · C7 정기 일정):
+
+| 화면 | 라우트 / 파일 | 메모 |
+|---|---|---|
+| 글 작성/수정 | `/board/new`, `/board/:postId/edit` `post_compose_screen.dart` | 새 글 등록 직후 같은 화면에서 첨부 추가. `image_picker` → R2 presigned PUT |
+| 정기 일정 목록 | `/cal/recurring` `recurring_list_screen.dart` | 규칙 카드(탭 → 상세)·삭제. 캘린더 AppBar ↻ 아이콘에서 진입 |
+| 정기 일정 등록 | `/cal/recurring/new` `recurring_form_screen.dart` | 주기(매주/격주/매월)·요일·시간·기간·비용·메모. 등록 시 8주분 회차 자동 생성 |
+| 정기 일정 상세 | `/cal/recurring/:ruleId` `recurring_detail_screen.dart` | 규칙 요약 + 다가오는 회차 목록(탭 → 일정 상세). 삭제 (C13) |
+| 설정 허브 | `/settings` `settings_home_screen.dart` | 홈 헤더 ⚙ 아이콘. 알림/밴드/차단/계정/로그아웃 |
+| 밴드 설정 | `/settings/band` `band_settings_screen.dart` | 일정 등록 권한 모드, 멤버 목록(밴드장 위임·추방), 밴드 나가기 |
+| 계정 | `/settings/account` `account_screen.dart` | 내 정보, 회원 탈퇴(이메일 계정은 비밀번호 재확인) |
+| 차단한 사용자 | `/settings/blocks` `blocked_users_screen.dart` | 차단 목록 + 해제 |
+| 멤버 초대 | `/band/invite` `invite_screen.dart` | 밴드장이 초대코드·링크 발급/재발급/무효화 (C10) |
+| 요금제 | `/settings/plan` `plan_screen.dart` | FREE/PREMIUM 조회·비교표·전환(밴드장). 실제 결제 연동 없음 (C14) |
 
 추가로 만든 화면(요구 목록엔 없지만 흐름상 필요):
 
@@ -49,13 +64,23 @@
 | `/map` | 합주실 지도 | **탭 셸 브랜치 2** | 하단 탭 "지도" |
 | `/cal/new?date=` | 일정 등록 폼 | 루트 (풀스크린) | 캘린더 "＋ 등록", 홈 "일정 추가" |
 | `/cal/rooms/new` | 합주실 등록 폼 | 루트 (풀스크린) | 합주실 선택 시트 |
+| `/cal/recurring` | 정기 일정 목록 | 루트 (풀스크린) | 캘린더 AppBar ↻ 아이콘 |
+| `/cal/recurring/new` | 정기 일정 등록 | 루트 (풀스크린) | 정기 일정 목록 "＋" |
+| `/cal/recurring/:ruleId` | 정기 일정 상세 | 루트 (풀스크린) | 정기 일정 목록 카드 탭 |
 | `/reservations/:id` | 일정 상세 | 루트 (풀스크린) | 캘린더·홈 일정 타일 |
+| `/reservations/:id/edit` | 일정 수정 | 루트 (풀스크린) | 일정 상세 "일정 수정" |
 | `/reservations/:id/settlement` | 정산 | 루트 (풀스크린) | 일정 상세 "정산 보기" |
-| `/settings/notifications` | 알림 설정 | 루트 (풀스크린) | 홈 헤더 종 아이콘 |
+| `/board` | 게시판 피드 | **탭 셸 브랜치 3** | 하단 탭 "게시판" |
+| `/board/new` | 글 작성 | 루트 (풀스크린) | 게시판 "글쓰기" FAB |
+| `/board/:postId` | 게시글 상세 | 루트 (풀스크린) | 피드 카드 탭 |
+| `/board/:postId/edit` | 글 수정 | 루트 (풀스크린) | 상세 ⋮ → 수정 |
+| `/settings` | 설정 허브 | 루트 (풀스크린) | 홈 헤더 ⚙ 아이콘 |
+| `/settings/band` `/settings/account` `/settings/blocks` | 밴드·계정·차단 | 루트 (풀스크린) | 설정 허브 |
+| `/settings/notifications` | 알림 설정 | 루트 (풀스크린) | 홈 헤더 종 아이콘 · 설정 허브 |
 
 하단 탭바(`routing/tab_shell.dart`, `StatefulShellRoute.indexedStack`):
-**홈·캘린더·지도**는 브랜치 전환(스택·스크롤 각자 보존), **정산·게시판**은 화면이 없어
-`showSoon` 스낵바.
+**홈·캘린더·지도·게시판**은 브랜치 전환(스택·스크롤 각자 보존), **정산**만 화면이 없어
+`showSoon` 스낵바(정산은 일정 상세에서 진입).
 
 ---
 
@@ -67,11 +92,12 @@
 2. ~~**합주실 지도** `/map` (#8)~~ 🟡 2026-09-04 — 네이버 지도. 웹은 목록만, 네이티브 end-to-end 미검증
 3. ~~알림 설정 (#13 일부)~~ 🟡 2026-09-03 — 푸시 on/off·리마인더 시점. `client-05-notification-settings.md`.
    남은 것: FCM 수신부(디바이스 토큰·`firebase_messaging`), 미납 독촉 → `client-PROBLEMS-2026-09-03.md`
-4. 게시판·게시글 상세 (#11·#12) — 백엔드 Phase도 확인
-5. 설정 나머지 (#13) — 밴드 권한·계정 관리·탈퇴
-6. 일정 상세 보강 — 수정(PUT)·밴드장 승인/거절, 셋리스트 재정렬
-7. 정기(반복) 일정 (#6) — 백엔드 규칙 생성 API vs 클라 반복 호출
-8. 지도 보강 — 마커 탭 시 목록 하이라이트, 현재 위치, 클러스터링
+4. ~~게시판·게시글 상세 (#11·#12)~~ ✅ 2026-09-04 (C6) — `client-06-board.md`. 남은 것: 영상 재생, 차단 해제
+5. ~~일정 상세 보강 — 수정(PUT)·밴드장 승인/거절 + 정기(반복) 일정~~ ✅ 2026-09-04 (C7) — `client-07-reservation-recurring.md`
+6. ~~설정 나머지 (#13)~~ ✅ 2026-09-04 (C8) — `client-08-settings.md`
+7. ~~알림 수신부(FCM 디바이스 토큰) + 클라이언트 CI~~ ✅ 2026-09-04 (C9) — `client-09-fcm-ci.md`
+8. **(정리, 다음)** end-to-end 수동 검증, 영상 재생, 셋리스트 재정렬, 정기 규칙 상세/수정,
+   알림 딥링크, 지도 보강, analyze info 정리
 
 ---
 

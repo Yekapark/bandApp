@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../routing/app_router.dart';
 import '../../band/application/band_providers.dart';
 import '../application/calendar_providers.dart';
 import '../data/room_models.dart';
+import '../data/room_repository.dart';
 
 /// 합주실 지도 — 좌표가 있는 합주실을 네이버 지도 마커로, 아래에 목록.
 ///
@@ -68,6 +70,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 child: _RoomList(
                   rooms: rooms,
                   onTapLocated: _mapAvailable ? _moveTo : null,
+                  onEdit: (r) async {
+                    final updated = await context
+                        .push<Room>(Routes.editRoom(r.id), extra: r);
+                    if (updated != null && context.mounted) {
+                      ref.invalidate(roomsProvider(band.id));
+                    }
+                  },
+                  onDelete: (r) => _deleteRoom(band.id, r),
                 ),
               ),
             ],
@@ -102,6 +112,54 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
+  Future<void> _deleteRoom(int bandId, Room room) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title:
+            Text('${room.name} 삭제할까요?', style: const TextStyle(fontSize: 16)),
+        content: const Text(
+          '이미 등록된 일정에는 영향이 없어요. 앞으로 이 합주실은 목록·지도에서 빠집니다.',
+          style:
+              TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제', style: TextStyle(color: AppColors.danger)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref
+          .read(roomRepositoryProvider)
+          .delete(bandId: bandId, roomId: room.id);
+      ref.invalidate(roomsProvider(bandId));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('합주실을 삭제했어요.')));
+      }
+    } on ApiException catch (e) {
+      _snack(e.message);
+    } catch (_) {
+      _snack('삭제하지 못했습니다.');
+    }
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   void _moveTo(Room room) {
     _map?.updateCamera(
       NCameraUpdate.scrollAndZoomTo(
@@ -113,12 +171,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 }
 
 class _RoomList extends StatelessWidget {
-  const _RoomList({required this.rooms, this.onTapLocated});
+  const _RoomList({
+    required this.rooms,
+    this.onTapLocated,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final List<Room> rooms;
 
   /// 좌표가 있는 합주실을 탭했을 때(지도 사용 가능 시에만). null 이면 탭 비활성.
   final void Function(Room)? onTapLocated;
+  final void Function(Room) onEdit;
+  final void Function(Room) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -143,6 +208,8 @@ class _RoomList extends StatelessWidget {
             onTap: (r.hasLocation && onTapLocated != null)
                 ? () => onTapLocated!(r)
                 : null,
+            onEdit: () => onEdit(r),
+            onDelete: () => onDelete(r),
           );
         },
       ),
@@ -151,9 +218,16 @@ class _RoomList extends StatelessWidget {
 }
 
 class _RoomTile extends StatelessWidget {
-  const _RoomTile({required this.room, this.onTap});
+  const _RoomTile({
+    required this.room,
+    this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
   final Room room;
   final VoidCallback? onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -206,10 +280,26 @@ class _RoomTile extends StatelessWidget {
               ),
             ),
             if (!room.hasLocation)
-              const Text(
-                '위치 없음',
-                style: TextStyle(fontSize: 10, color: AppColors.textFaint),
+              const Padding(
+                padding: EdgeInsets.only(right: 4),
+                child: Text(
+                  '위치 없음',
+                  style: TextStyle(fontSize: 10, color: AppColors.textFaint),
+                ),
               ),
+            PopupMenuButton<String>(
+              color: AppColors.surface,
+              icon: const Icon(Icons.more_horiz,
+                  size: 18, color: AppColors.textDim),
+              onSelected: (v) => v == 'edit' ? onEdit() : onDelete(),
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: Text('수정')),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Text('삭제', style: TextStyle(color: AppColors.danger)),
+                ),
+              ],
+            ),
           ],
         ),
       ),

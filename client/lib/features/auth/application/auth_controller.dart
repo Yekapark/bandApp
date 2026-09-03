@@ -86,6 +86,16 @@ class AuthController extends Notifier<AuthState> {
     state = const AuthState.signedOut();
   }
 
+  /// 회원 탈퇴. 성공하면 로그아웃과 같은 로컬 정리를 한다. 실패 시 예외를 던진다.
+  Future<void> withdraw({String? password}) async {
+    await _repo.withdraw(password: password);
+    await _storage.clear();
+    state = const AuthState.signedOut();
+  }
+
+  /// 밴드 탈퇴·추방 등으로 밴드 목록이 바뀌었을 때 관련 provider 를 다시 읽게 한다.
+  bool get isEmailAccount => state.user?.socialProvider == null;
+
   Future<void> _apply(AuthResult result) async {
     await _storage.save(result.tokens);
     state = AuthState(status: AuthStatus.authenticated, user: result.user);
