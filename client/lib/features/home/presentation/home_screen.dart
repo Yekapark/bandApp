@@ -133,7 +133,7 @@ class _Header extends ConsumerWidget {
         _IconSquare(
           badgeCount: unread,
           icon: Icons.notifications_none,
-          onTap: () => showSoon(context, '알림'),
+          onTap: () => context.push(Routes.notificationSettings),
         ),
         const SizedBox(width: 8),
         _IconSquare(
