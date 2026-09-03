@@ -6,6 +6,7 @@ import '../../../core/format/formatters.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../routing/app_router.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../band/application/band_providers.dart';
 import '../../home/application/home_providers.dart';
@@ -161,8 +162,12 @@ class _ReservationDetailScreenState
                 ),
                 const SizedBox(height: 10),
                 _AttendanceList(entries: board.members),
+                const SizedBox(height: 24),
+                _SettlementLink(
+                  onTap: () => context.push(Routes.settlement(r.id)),
+                ),
                 if (canManage && editable) ...[
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
                   _CancelButton(
                     busy: _busy,
                     onTap: () => _confirmCancel(band.id),
@@ -693,6 +698,43 @@ class _AttendanceList extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _SettlementLink extends StatelessWidget {
+  const _SettlementLink({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.purple.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: AppColors.purple.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                '정산 (N빵) 보기 · 만들기',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.purpleSoft,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right,
+                size: 18, color: AppColors.purpleSoft),
+          ],
+        ),
+      ),
     );
   }
 }

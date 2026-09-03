@@ -11,11 +11,12 @@
 
 - 백엔드는 Phase 0~10 완료(`docs/progress/README.md` 참조). 지금은 **Flutter 클라이언트 트랙**.
 - 클라이언트 코드 위치: **`client/`** (이 저장소 안, 모노레포).
-- 1단계(온보딩 → 밴드 홈), 2단계(캘린더 → 합주실 → 일정 등록 → 일정 상세)는 **코드 구현 완료**,
-  `flutter analyze` 에러 0, 웹 빌드 성공. 백엔드 붙인 end-to-end 는 아직 미검증.
+- 1단계(온보딩→홈), 2단계(캘린더·합주실·일정), 3단계(정산 N빵)는 **코드 구현 완료**,
+  `flutter analyze` 에러 0, 웹 빌드 성공. 백엔드 붙인 UI end-to-end 는 아직 미검증.
 - 2단계에 딸려: **백엔드 신규 엔드포인트** `GET /bands/{id}/rooms/search`(네이버 지역검색 프록시)
-  + 한국어 로케일. 백엔드 순수 단위 테스트·컴파일 통과, 통합 테스트는 CI 대기.
-- 다음: 하단 탭바 ShellRoute화 → 합주실 지도 → 정산 화면 → 카카오 로그인 SDK.
+  + 한국어 로케일. PR #34.
+- 3단계 정산: 백엔드 변경 없음(Phase 7 API 사용). 백엔드 스모크(생성/납부/재계산) 통과. PR: `feat/client-settlement`.
+- 다음: 하단 탭바 ShellRoute화 → 합주실 지도(SDK/키 결정 필요) → 카카오 로그인 SDK → 알림 화면.
 
 ---
 
@@ -26,6 +27,7 @@
 | 1 | **이 파일** (`docs/progress/client-DEVLOG.md`) | 현재 상태·다음 할 일·로컬 환경 함정 |
 | 2 | `docs/progress/client-01-onboarding-home.md` | 1단계에서 만든 것 상세, 목업↔백엔드 차이 표 |
 | 2b | `docs/progress/client-02-calendar-reservation.md` | 2단계(캘린더·합주실·일정 등록·상세) 상세, 뺀 것/열린 결정 |
+| 2c | `docs/progress/client-03-settlement.md` | 3단계(정산 N빵 화면) 상세 |
 | 3 | `client/README.md` | 실행법, 폴더 구조, 상태관리/패키지 선택 |
 | 4 | `docs/BACKLOG.md` §2 (286~318줄) | 전체 화면 정의 13개 (사람이 준 요구사항 원문) |
 | 5 | `example/BandScreen.dc.html` | 화면 목업(디자인 기준). 색/폰트/레이아웃 |
@@ -72,6 +74,18 @@
 - **한국어 로케일**: `app.dart`에 `flutter_localizations`+`locale: ko` → 날짜/시간 피커 등 한국어.
   `intl`을 `^0.20.2`로 올림.
 - **뺀 것**: 정기(반복) 일정 — 백엔드에 생성 API 없음. 일정 수정/승인/거절 UI. 캘린더 주간 뷰.
+
+### 구현 완료 (3단계: 정산 N빵) — 상세는 `client-03-settlement.md`
+
+| 화면 | 라우트 | 파일 | 백엔드 |
+|---|---|---|---|
+| 일정 정산 | `/reservations/:rid/settlement` | `features/settlement/presentation/settlement_screen.dart` | `GET/POST …/settlement`, `POST …/settlement/recalculate`, `PUT …/settlement/shares/{uid}` |
+
+- 상태: `features/settlement/application/settlement_providers.dart` (`settlementProvider` family, 없으면 null).
+- 정산 없으면 생성 폼(총액·분배방식), 있으면 현황(1인당·진행바·납부 체크리스트·재계산).
+  본인 몫만 셀프 체크. 생성·재계산은 등록자/밴드장만.
+- 일정 상세 화면에서 "정산 (N빵) 보기 · 만들기" 링크로 진입.
+- 백엔드 변경 없음 — Phase 7 API 그대로.
 
 - 라우팅: `lib/routing/app_router.dart` — go_router + 로그인 상태 기반 redirect.
 - 네트워크: `lib/core/network/dio_client.dart` — 토큰 자동 부착, 401→refresh 1회 재시도.
@@ -170,16 +184,18 @@ cd E:\project\band\client
 
 ## 5. 다음 할 일 (우선순위)
 
-- ~~예약 캘린더 `/cal`~~ ✅ 2단계 완료
-- ~~일정 등록 폼 + 합주실 목록/등록~~ ✅ 2단계 완료 (반복 설정은 제외 — 백엔드 API 없음)
-- ~~일정 상세 (참석 체크 · 멤버별 현황 · 셋리스트)~~ ✅ 2단계 완료
+- ~~예약 캘린더 `/cal`~~ ✅ 2단계
+- ~~일정 등록 폼 + 합주실 목록/등록(+주소 검색)~~ ✅ 2단계 (반복 설정 제외 — 백엔드 API 없음)
+- ~~일정 상세 (참석 체크 · 멤버별 현황 · 셋리스트)~~ ✅ 2단계
+- ~~정산 화면 (1인당 금액 · 납부 체크리스트 · 재계산)~~ ✅ 3단계 (`/reservations/:rid/settlement`)
 
 1. 하단 탭바를 실제 화면으로 연결 (`ShellRoute` 로 전환 검토).
 2. **합주실 지도** `/map` — 좌표 있는 합주실 마커 + 하단 목록. `GET /bands/{id}/rooms`.
-3. **정산 화면** `/split` — 일정별 1인당 금액, 멤버별 납부 체크리스트. Phase 7 API.
-4. 카카오 로그인 SDK 연동 (`kakao_flutter_sdk` 추가 + 네이티브 설정). `AuthController.loginKakao` 자리는 있음.
+   지도 SDK·API 키 결정 필요(네이버 지도 / flutter_map / Google) → 사용자 확인.
+3. 카카오 로그인 SDK 연동 (`kakao_flutter_sdk` 추가 + 네이티브 설정). `AuthController.loginKakao` 자리는 있음.
+4. 알림 화면 + 미납 리마인더(정산 화면의 "미납자 알림" 버튼 포함).
 5. (검토) **정기 일정** — 백엔드에 정기 규칙 생성 API 추가 vs 클라에서 N회 `POST` 반복.
-6. 일정 상세에 수정(PUT)·밴드장 승인/거절 UI.
+6. 일정 상세에 수정(PUT)·밴드장 승인/거절 UI. 정산 총액 변경 UI.
 7. (정리) analyze info 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.
 8. (검토) 클라이언트 CI — `flutter analyze` + `flutter test`.
 
