@@ -66,6 +66,23 @@ class RecurringRepository {
     }
   }
 
+  /// 규칙 상세 — 규칙 + 최근 구간 회차 목록(취소 포함, start_at 오름차순).
+  Future<RecurringRuleDetail> detail({
+    required int bandId,
+    required int ruleId,
+  }) async {
+    try {
+      final res =
+          await _dio.get<dynamic>('/bands/$bandId/recurring-rules/$ruleId');
+      return unwrap(
+        res,
+        (d) => RecurringRuleDetail.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// 규칙 삭제 — 아직 시작하지 않은 회차만 취소된다(과거 회차는 유지).
   Future<void> delete({required int bandId, required int ruleId}) async {
     try {

@@ -9,7 +9,7 @@
 > `flutter analyze`(에러 0) · `flutter test` · `flutter build web` 통과 후 커밋.
 > 이 PC Flutter: `C:\src\flutter\bin` / 저장소: `C:\band\bandApp`.
 >
-> 마지막 갱신: **2026-09-04** (C10·C11·C12 완료)
+> 마지막 갱신: **2026-09-04** (C10~C13 완료)
 
 ---
 
@@ -20,7 +20,7 @@
 | C10 | 초대코드 발급/조회/무효화 (멤버 초대 화면) | ✅ 완료 — `client-10-invite.md` |
 | C11 | 합주실 수정/삭제 | ✅ 완료 — `client-11-room-edit.md` |
 | C12 | 셋리스트 재정렬 + 곡 수정 | ✅ 완료 — `client-12-setlist.md` |
-| C13 | 정기 일정 규칙 상세 (회차 목록) | ⬜ 미착수 |
+| C13 | 정기 일정 규칙 상세 (회차 목록) | ✅ 완료 — `client-13-recurring-detail.md` |
 | C14 | 밴드 요금제 (FREE/PREMIUM) | ⬜ 미착수 |
 | C15 | 미디어 신고 · 캘린더 취소건 표시 · 초대 링크 프리필 | ⬜ 미착수 |
 
@@ -140,9 +140,13 @@
 - 진입점: `recurring_list_screen.dart` 의 규칙 카드 탭 → 상세
 
 **완료 기준**:
-- [ ] 규칙 탭 → 회차 목록 표시, 회차 탭 → 일정 상세로 이동
-- [ ] `analyze`/`test`/`build web` 통과
-- [ ] `client-13-recurring-detail.md` + 문서 갱신
+- [x] 규칙 탭 → 회차 목록 표시, 회차 탭 → 일정 상세로 이동
+- [x] `analyze`/`test`/`build web` 통과
+- [x] `client-13-recurring-detail.md` + 문서 갱신
+
+✅ **완료 (2026-09-04)** — `RecurringRuleDetail` 모델, `recurringRuleDetailProvider`,
+`recurring_detail_screen.dart` (`/cal/recurring/:ruleId`), 목록 카드 탭 진입.
+규칙 수정 UI 는 백엔드 미제공이라 없음.
 
 ---
 

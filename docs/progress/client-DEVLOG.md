@@ -45,6 +45,8 @@
   삭제. `PUT/DELETE /bands/{id}/rooms/{roomId}`. 상세는 `client-11-room-edit.md`.
 - **C12 셋리스트 재정렬 + 곡 수정**(2026-09-04) — 일정 상세 셋리스트 드래그 정렬(`onReorderItem` +
   `PUT .../setlist/reorder`), 곡 탭 → 수정 다이얼로그(곡명·아티스트·참고 링크). 상세는 `client-12-setlist.md`.
+- **C13 정기 규칙 상세**(2026-09-04) — 정기 일정 목록 카드 탭 → `/cal/recurring/:ruleId` 규칙 요약 +
+  다가오는 회차 목록(탭 시 일정 상세로). `GET .../recurring-rules/{ruleId}`. 상세는 `client-13-recurring-detail.md`.
 
 ---
 

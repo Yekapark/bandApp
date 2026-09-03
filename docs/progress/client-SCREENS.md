@@ -31,8 +31,9 @@
 | 화면 | 라우트 / 파일 | 메모 |
 |---|---|---|
 | 글 작성/수정 | `/board/new`, `/board/:postId/edit` `post_compose_screen.dart` | 새 글 등록 직후 같은 화면에서 첨부 추가. `image_picker` → R2 presigned PUT |
-| 정기 일정 목록 | `/cal/recurring` `recurring_list_screen.dart` | 규칙 카드·삭제(등록자/밴드장). 캘린더 AppBar ↻ 아이콘에서 진입 |
+| 정기 일정 목록 | `/cal/recurring` `recurring_list_screen.dart` | 규칙 카드(탭 → 상세)·삭제. 캘린더 AppBar ↻ 아이콘에서 진입 |
 | 정기 일정 등록 | `/cal/recurring/new` `recurring_form_screen.dart` | 주기(매주/격주/매월)·요일·시간·기간·비용·메모. 등록 시 8주분 회차 자동 생성 |
+| 정기 일정 상세 | `/cal/recurring/:ruleId` `recurring_detail_screen.dart` | 규칙 요약 + 다가오는 회차 목록(탭 → 일정 상세). 삭제 (C13) |
 | 설정 허브 | `/settings` `settings_home_screen.dart` | 홈 헤더 ⚙ 아이콘. 알림/밴드/차단/계정/로그아웃 |
 | 밴드 설정 | `/settings/band` `band_settings_screen.dart` | 일정 등록 권한 모드, 멤버 목록(밴드장 위임·추방), 밴드 나가기 |
 | 계정 | `/settings/account` `account_screen.dart` | 내 정보, 회원 탈퇴(이메일 계정은 비밀번호 재확인) |
@@ -64,6 +65,7 @@
 | `/cal/rooms/new` | 합주실 등록 폼 | 루트 (풀스크린) | 합주실 선택 시트 |
 | `/cal/recurring` | 정기 일정 목록 | 루트 (풀스크린) | 캘린더 AppBar ↻ 아이콘 |
 | `/cal/recurring/new` | 정기 일정 등록 | 루트 (풀스크린) | 정기 일정 목록 "＋" |
+| `/cal/recurring/:ruleId` | 정기 일정 상세 | 루트 (풀스크린) | 정기 일정 목록 카드 탭 |
 | `/reservations/:id` | 일정 상세 | 루트 (풀스크린) | 캘린더·홈 일정 타일 |
 | `/reservations/:id/edit` | 일정 수정 | 루트 (풀스크린) | 일정 상세 "일정 수정" |
 | `/reservations/:id/settlement` | 정산 | 루트 (풀스크린) | 일정 상세 "정산 보기" |

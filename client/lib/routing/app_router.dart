@@ -16,6 +16,7 @@ import '../features/board/presentation/post_compose_screen.dart';
 import '../features/board/presentation/post_detail_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 import '../features/notification/presentation/notification_settings_screen.dart';
+import '../features/recurring/presentation/recurring_detail_screen.dart';
 import '../features/recurring/presentation/recurring_form_screen.dart';
 import '../features/recurring/presentation/recurring_list_screen.dart';
 import '../features/settings/presentation/account_screen.dart';
@@ -61,6 +62,9 @@ class Routes {
 
   static const recurring = '/cal/recurring';
   static const newRecurring = '/cal/recurring/new';
+
+  /// 정기 일정 규칙 상세.
+  static String recurringDetail(int ruleId) => '/cal/recurring/$ruleId';
   static const settings = '/settings';
   static const bandSettings = '/settings/band';
   static const account = '/settings/account';
@@ -175,6 +179,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.recurring,
         builder: (_, __) => const RecurringListScreen(),
+      ),
+      GoRoute(
+        path: '/cal/recurring/:ruleId',
+        builder: (_, state) => RecurringDetailScreen(
+          ruleId: int.parse(state.pathParameters['ruleId']!),
+        ),
       ),
       GoRoute(
         path: Routes.newReservation,

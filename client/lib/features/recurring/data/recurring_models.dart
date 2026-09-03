@@ -121,6 +121,31 @@ class RecurringRule {
   }
 }
 
+/// GET /bands/{id}/recurring-rules/{ruleId} 응답 — 규칙 + 최근 구간 회차 목록(취소 포함).
+class RecurringRuleDetail {
+  const RecurringRuleDetail({
+    required this.rule,
+    required this.occurrenceCount,
+    required this.occurrences,
+  });
+
+  final RecurringRule rule;
+
+  /// 최근 구간(오늘 − horizonWeeks 이후) 회차 수.
+  final int occurrenceCount;
+  final List<Reservation> occurrences;
+
+  factory RecurringRuleDetail.fromJson(Map<String, dynamic> json) {
+    return RecurringRuleDetail(
+      rule: RecurringRule.fromJson(json['rule'] as Map<String, dynamic>),
+      occurrenceCount: (json['occurrenceCount'] as num?)?.toInt() ?? 0,
+      occurrences: (json['occurrences'] as List<dynamic>? ?? const [])
+          .map((e) => Reservation.fromJson(e as Map<String, dynamic>))
+          .toList(growable: false),
+    );
+  }
+}
+
 /// POST /bands/{id}/recurring-rules 응답 — 규칙 + 생성된 회차 수 + 겹침 경고.
 class RecurringWriteResult {
   const RecurringWriteResult({

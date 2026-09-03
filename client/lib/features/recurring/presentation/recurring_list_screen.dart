@@ -84,6 +84,12 @@ class RecurringListScreen extends ConsumerWidget {
                 return _RuleCard(
                   rule: rule,
                   canDelete: canDelete,
+                  onTap: () async {
+                    await context.push(Routes.recurringDetail(rule.id));
+                    if (context.mounted) {
+                      ref.invalidate(recurringRulesProvider(band.id));
+                    }
+                  },
                   onDelete: () => _confirmDelete(context, ref, band.id, rule),
                 );
               },
@@ -154,66 +160,71 @@ class _RuleCard extends StatelessWidget {
   const _RuleCard({
     required this.rule,
     required this.canDelete,
+    required this.onTap,
     required this.onDelete,
   });
 
   final RecurringRule rule;
   final bool canDelete;
+  final VoidCallback onTap;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  rule.summary,
-                  style: AppTypography.mono(
-                      fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  rule.roomName,
-                  style: const TextStyle(
-                      fontSize: 12.5, color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${rule.startDate} 부터'
-                  '${rule.endDate != null ? ' · ${rule.endDate} 까지' : ''}',
-                  style:
-                      const TextStyle(fontSize: 11, color: AppColors.textFaint),
-                ),
-                if ((rule.note ?? '').trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    rule.note!.trim(),
-                    style: const TextStyle(
-                        fontSize: 11.5, color: AppColors.textDim),
+                    rule.summary,
+                    style: AppTypography.mono(
+                        fontSize: 14, fontWeight: FontWeight.w700),
                   ),
+                  const SizedBox(height: 5),
+                  Text(
+                    rule.roomName,
+                    style: const TextStyle(
+                        fontSize: 12.5, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${rule.startDate} 부터'
+                    '${rule.endDate != null ? ' · ${rule.endDate} 까지' : ''}',
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.textFaint),
+                  ),
+                  if ((rule.note ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      rule.note!.trim(),
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppColors.textDim),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          if (canDelete)
-            IconButton(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline,
-                  size: 20, color: AppColors.textDim),
-              visualDensity: VisualDensity.compact,
-            ),
-        ],
+            if (canDelete)
+              IconButton(
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline,
+                    size: 20, color: AppColors.textDim),
+                visualDensity: VisualDensity.compact,
+              ),
+          ],
+        ),
       ),
     );
   }

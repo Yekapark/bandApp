@@ -8,3 +8,14 @@ final recurringRulesProvider =
     FutureProvider.family<List<RecurringRule>, int>((ref, bandId) async {
   return ref.watch(recurringRepositoryProvider).list(bandId);
 });
+
+typedef RecurringRuleKey = ({int bandId, int ruleId});
+
+/// 정기 일정 규칙 상세(회차 목록 포함).
+final recurringRuleDetailProvider =
+    FutureProvider.family<RecurringRuleDetail, RecurringRuleKey>(
+        (ref, key) async {
+  return ref
+      .watch(recurringRepositoryProvider)
+      .detail(bandId: key.bandId, ruleId: key.ruleId);
+});

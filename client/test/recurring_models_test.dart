@@ -62,6 +62,51 @@ void main() {
     });
   });
 
+  group('RecurringRuleDetail.fromJson', () {
+    test('parses rule + occurrence list', () {
+      final detail = RecurringRuleDetail.fromJson({
+        'rule': {
+          'id': 3,
+          'roomId': 1,
+          'roomName': '사운드박스 B',
+          'frequency': 'WEEKLY',
+          'dayOfWeek': 'SATURDAY',
+          'startTime': '15:00',
+          'endTime': '18:00',
+          'startDate': '2026-09-05',
+          'createdBy': 9,
+        },
+        'occurrenceCount': 2,
+        'occurrences': [
+          {
+            'id': 100,
+            'roomId': 1,
+            'roomName': '사운드박스 B',
+            'requestedBy': 9,
+            'status': 'CONFIRMED',
+            'startAt': '2026-09-05T06:00:00Z',
+            'endAt': '2026-09-05T09:00:00Z',
+          },
+          {
+            'id': 101,
+            'roomId': 1,
+            'roomName': '사운드박스 B',
+            'requestedBy': 9,
+            'status': 'CANCELLED',
+            'startAt': '2026-09-12T06:00:00Z',
+            'endAt': '2026-09-12T09:00:00Z',
+          },
+        ],
+      });
+
+      expect(detail.rule.id, 3);
+      expect(detail.occurrenceCount, 2);
+      expect(detail.occurrences, hasLength(2));
+      expect(detail.occurrences.first.isActive, isTrue);
+      expect(detail.occurrences[1].isActive, isFalse);
+    });
+  });
+
   group('RecurringWriteResult.fromJson', () {
     test('parses occurrence count and overlaps', () {
       final result = RecurringWriteResult.fromJson({
