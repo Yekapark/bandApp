@@ -11,11 +11,14 @@ import '../features/band/presentation/band_gate_screen.dart';
 import '../features/band/presentation/create_band_screen.dart';
 import '../features/band/presentation/join_band_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/notification/presentation/notification_settings_screen.dart';
 import '../features/reservation/presentation/calendar_screen.dart';
+import '../features/reservation/presentation/map_screen.dart';
 import '../features/reservation/presentation/reservation_detail_screen.dart';
 import '../features/reservation/presentation/reservation_form_screen.dart';
 import '../features/reservation/presentation/room_form_screen.dart';
 import '../features/settlement/presentation/settlement_screen.dart';
+import 'tab_shell.dart';
 
 class Routes {
   const Routes._();
@@ -28,8 +31,10 @@ class Routes {
   static const joinBand = '/band-gate/join';
   static const home = '/home';
   static const calendar = '/cal';
+  static const map = '/map';
   static const newReservation = '/cal/new';
   static const newRoom = '/cal/rooms/new';
+  static const notificationSettings = '/settings/notifications';
 
   /// 일정 상세. [reservationId] 로 실제 경로를 만든다.
   static String reservation(int reservationId) =>
@@ -83,7 +88,29 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
           path: Routes.joinBand, builder: (_, __) => const JoinBandScreen()),
-      GoRoute(path: Routes.home, builder: (_, __) => const HomeScreen()),
+      StatefulShellRoute.indexedStack(
+        builder: (_, __, shell) => TabShell(navigationShell: shell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                  path: Routes.home, builder: (_, __) => const HomeScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                  path: Routes.calendar,
+                  builder: (_, __) => const CalendarScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: Routes.map, builder: (_, __) => const MapScreen()),
+            ],
+          ),
+        ],
+      ),
       GoRoute(
         path: Routes.newReservation,
         builder: (_, state) => ReservationFormScreen(
@@ -95,8 +122,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const RoomFormScreen(),
       ),
       GoRoute(
-        path: Routes.calendar,
-        builder: (_, __) => const CalendarScreen(),
+        path: Routes.notificationSettings,
+        builder: (_, __) => const NotificationSettingsScreen(),
       ),
       GoRoute(
         path: '/reservations/:rid',

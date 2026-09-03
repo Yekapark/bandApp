@@ -23,6 +23,13 @@ dependencies:
   # 네트워크
   dio: ^5.7.0
 
+  # 카카오 로그인 (user 모듈만 — 로그인 + 사용자 조회). 네이티브 앱 키 필요.
+  kakao_flutter_sdk_user: ^1.9.6
+
+  # 합주실 지도 (네이버 지도). Android/iOS 전용 — 웹은 목록만 표시(kIsWeb 가드).
+  # NCP 지도 클라이언트 ID 필요: --dart-define=NAVER_MAP_CLIENT_ID=xxxx
+  flutter_naver_map: ^1.4.4
+
   # 토큰 보관 (KeyStore / Keychain)
   flutter_secure_storage: ^9.2.2
 
