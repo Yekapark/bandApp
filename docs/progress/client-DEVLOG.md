@@ -3,7 +3,7 @@
 > **새 세션에서 클라이언트 작업을 이어받을 때 이 파일부터 읽는다.**
 > 이 문서는 "지금 어디까지 됐고, 어떻게 이어가는지"를 담는 살아있는 문서다.
 > 작업을 진행하면 아래 "현재 상태"와 "다음 할 일"을 갱신한다.
-> 마지막 갱신: **2026-09-04** (C8 설정: 밴드·계정·차단 해제 추가)
+> 마지막 갱신: **2026-09-04** (C9 FCM 수신부 배선 + 클라이언트 CI — 요구 화면 13개 완료)
 
 ---
 
@@ -33,7 +33,11 @@
 - **설정 완성**(2026-09-04, C8) — 설정 허브 `/settings`, 밴드 설정(일정 권한 모드·밴드장 위임·
   멤버 추방·밴드 나가기), 계정(내 정보·회원 탈퇴), 차단한 사용자(목록·해제), 로그아웃.
   홈 헤더의 톱니 아이콘에서 진입. 백엔드 변경 없음. 상세는 `client-08-settings.md`.
-- 다음: (C9) 알림 수신부(FCM)+클라 CI.
+- **FCM 수신부 배선 + 클라 CI**(2026-09-04, C9) — `PushService`가 로그인 시 디바이스 토큰을
+  `POST /notifications/device-tokens`로 등록, 포그라운드 메시지는 전역 SnackBar. **Firebase 설정
+  파일 없으면 조용히 no-op**(카카오·네이버와 동일). `.github/workflows/client-ci.yml`
+  (`flutter analyze --no-fatal-* ` + `flutter test`). 상세는 `client-09-fcm-ci.md`.
+- **요구 화면 13개(`BACKLOG.md` §2) 모두 ✅/🟡 도달.** 남은 것은 정리·검증(§5).
 
 ---
 
@@ -127,6 +131,20 @@
    (2단계 주소검색용 `NAVER_SEARCH_*` 는 네이버 개발자센터 앱으로 별개.)
 2. 실행 시 dart-define: `--dart-define=NAVER_MAP_CLIENT_ID=<Client ID>`.
 3. Android 네이티브 빌드는 개발자 모드 필요(§3-D). 웹은 어차피 지도 미지원 → 목록만.
+
+### 구현 완료 (C9: FCM 수신부 배선 + 클라 CI) — 상세는 `client-09-fcm-ci.md`
+
+| 부분 | 파일 | 백엔드 |
+|---|---|---|
+| 디바이스 토큰 등록/해제 | `features/notification/data/push_service.dart`, `notification_repository.dart` | `POST/DELETE /notifications/device-tokens` |
+| 포그라운드 메시지 → SnackBar | `push_service.dart`(`scaffoldMessengerKey`), `app.dart` | — |
+| 클라이언트 CI | `.github/workflows/client-ci.yml` | — |
+
+- `pubspec.yaml`: `firebase_core`, `firebase_messaging` 추가(승인받음).
+- Firebase 설정 파일(`google-services.json` 등)이 없으면 `PushService`가 조용히 비활성 →
+  현재 상태에서 실제 푸시는 안 오지만 앱은 정상. 켜는 법은 `client-09-fcm-ci.md` §5 / 이 문서 §7.
+- **뺀 것**: 백그라운드 메시지 핸들러, 알림 클릭 딥링크(`onMessageOpenedApp`),
+  `flutter_local_notifications`, 정산 미납 독촉 버튼(백엔드 API 없음).
 
 ### 구현 완료 (C8: 설정 나머지) — 상세는 `client-08-settings.md`
 
@@ -332,9 +350,10 @@ cd E:\project\band\client
 6. ~~정기 일정 규칙 등록/목록/삭제 + 일정 수정(PUT)·밴드장 승인/거절 UI~~ ✅ 2026-09-04 (C7).
    상세는 `client-07-reservation-recurring.md`.
 7. ~~설정 나머지 — 밴드 설정·계정(탈퇴)·차단 해제~~ ✅ 2026-09-04 (C8). 상세는 `client-08-settings.md`.
-8. **(C9, 다음)** 알림 수신부(FCM: `firebase_messaging` + `POST /notifications/device-tokens`),
-   클라이언트 CI(`flutter analyze` + `flutter test` GitHub Actions).
-9. (정리) analyze info 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.
+8. ~~알림 수신부(FCM 디바이스 토큰) + 클라이언트 CI~~ ✅ 2026-09-04 (C9). 상세는 `client-09-fcm-ci.md`.
+9. **(정리, 다음)** 백엔드 붙여 전 화면 end-to-end 수동 검증, analyze info/warning 줄이기,
+   영상 인앱 재생·셋리스트 재정렬·알림 딥링크, Firebase/카카오/네이버 키 넣고 실제 통합 테스트,
+   폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.
 
 ## 6. 열린 결정 / 확인 필요
 

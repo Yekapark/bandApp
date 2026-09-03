@@ -1,7 +1,7 @@
 # 클라이언트 화면 구현 현황
 
 > 지금까지 만든 Flutter 화면을 한눈에 보는 표. 진행하면서 갱신한다.
-> 마지막 갱신: **2026-09-04** (C8 설정: 밴드·계정·차단 해제 추가)
+> 마지막 갱신: **2026-09-04** (C9 FCM 수신부 + 클라 CI — 요구 화면 13개 완료)
 > 상세 배경은 단계별 문서(`client-01`~`client-03`, `client-DEVLOG.md`) 참조.
 
 범례: ✅ 구현 완료 · 🟡 부분 구현 · ⛔ 미구현
@@ -24,7 +24,7 @@
 | 10 | 정산 화면 | ✅ | `/reservations/:id/settlement` `settlement_screen.dart` | 1인당 금액·진행바·납부 체크리스트·재계산. 균등/참석자만 토글. 본인 몫만 셀프 체크 |
 | 11 | 게시판 (사진/영상 피드) | ✅ | `/board` (탭) `board_screen.dart` | 커서 무한스크롤. 글쓰기 FAB. 대표 이미지 썸네일 (C6) |
 | 12 | 게시글 상세 | 🟡 | `/board/:postId` `post_detail_screen.dart` | 본문·첨부 갤러리·이미지 전체화면 뷰어·수정/삭제·신고·차단. **영상 인앱 재생 없음**(타일 표시). 작성/수정은 `post_compose_screen.dart` (C6) |
-| 13 | 설정 (알림·밴드 설정·계정) | ✅ | `/settings` `settings_home_screen.dart` (+ `/settings/band`, `/settings/account`, `/settings/blocks`, `/settings/notifications`) | 허브 + 밴드 설정(일정 권한·밴드장 위임·멤버 추방·나가기) + 계정(탈퇴) + 차단 해제 + 알림(기존). FCM 수신부는 C9 |
+| 13 | 설정 (알림·밴드 설정·계정) | ✅ | `/settings` `settings_home_screen.dart` (+ `/settings/band`, `/settings/account`, `/settings/blocks`, `/settings/notifications`) | 허브 + 밴드 설정(일정 권한·밴드장 위임·멤버 추방·나가기) + 계정(탈퇴) + 차단 해제 + 알림. FCM 디바이스 토큰 등록·포그라운드 수신은 C9(`push_service.dart`, 설정 파일 없으면 no-op) |
 
 추가로 만든 화면(C6 게시판 · C7 정기 일정):
 
@@ -91,8 +91,9 @@
 4. ~~게시판·게시글 상세 (#11·#12)~~ ✅ 2026-09-04 (C6) — `client-06-board.md`. 남은 것: 영상 재생, 차단 해제
 5. ~~일정 상세 보강 — 수정(PUT)·밴드장 승인/거절 + 정기(반복) 일정~~ ✅ 2026-09-04 (C7) — `client-07-reservation-recurring.md`
 6. ~~설정 나머지 (#13)~~ ✅ 2026-09-04 (C8) — `client-08-settings.md`
-7. **(C9, 다음)** 알림 수신부(FCM 디바이스 토큰) + 클라이언트 CI
-8. (정리) 셋리스트 재정렬, 정기 규칙 상세/수정, 지도 보강(마커↔목록 하이라이트·현재 위치·클러스터링)
+7. ~~알림 수신부(FCM 디바이스 토큰) + 클라이언트 CI~~ ✅ 2026-09-04 (C9) — `client-09-fcm-ci.md`
+8. **(정리, 다음)** end-to-end 수동 검증, 영상 재생, 셋리스트 재정렬, 정기 규칙 상세/수정,
+   알림 딥링크, 지도 보강, analyze info 정리
 
 ---
 

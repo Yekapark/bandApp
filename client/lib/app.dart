@@ -3,6 +3,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
+import 'features/auth/application/auth_controller.dart';
+import 'features/notification/data/push_service.dart';
 import 'routing/app_router.dart';
 
 class BandApp extends ConsumerWidget {
@@ -11,9 +13,21 @@ class BandApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+
+    // 로그인 상태에 따라 FCM 디바이스 토큰 등록/해제 (설정 없으면 조용히 no-op).
+    ref.listen(authControllerProvider.select((s) => s.status), (_, status) {
+      final push = ref.read(pushServiceProvider);
+      if (status == AuthStatus.authenticated) {
+        push.start();
+      } else if (status == AuthStatus.unauthenticated) {
+        push.stop();
+      }
+    });
+
     return MaterialApp.router(
       title: 'STAGE ON',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: scaffoldMessengerKey,
       theme: AppTheme.dark(),
       routerConfig: router,
       locale: const Locale('ko'),

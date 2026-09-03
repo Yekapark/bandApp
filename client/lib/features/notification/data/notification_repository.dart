@@ -15,6 +15,34 @@ class NotificationRepository {
   final Dio _dio;
 
   static const _settings = '/notifications/settings';
+  static const _deviceTokens = '/notifications/device-tokens';
+
+  /// FCM 디바이스 토큰 등록/갱신 (upsert). [platform]: IOS | ANDROID | WEB.
+  Future<void> registerDeviceToken({
+    required String token,
+    required String platform,
+  }) async {
+    try {
+      await _dio.post<dynamic>(
+        _deviceTokens,
+        data: {'token': token, 'platform': platform},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 디바이스 토큰 해제 (로그아웃 시).
+  Future<void> unregisterDeviceToken(String token) async {
+    try {
+      await _dio.delete<dynamic>(
+        _deviceTokens,
+        queryParameters: {'token': token},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
 
   /// 내 알림 설정. 서버는 없으면 기본값(pushEnabled=true, reminderOffsets=[60])을 만들어 준다.
   Future<NotificationSetting> get() async {
