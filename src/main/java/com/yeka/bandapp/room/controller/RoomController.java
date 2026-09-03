@@ -3,6 +3,7 @@ package com.yeka.bandapp.room.controller;
 import com.yeka.bandapp.common.response.ApiResponse;
 import com.yeka.bandapp.common.security.AuthPrincipal;
 import com.yeka.bandapp.room.dto.CreateRoomRequest;
+import com.yeka.bandapp.room.dto.PlaceSearchResponse;
 import com.yeka.bandapp.room.dto.RoomListResponse;
 import com.yeka.bandapp.room.dto.RoomResponse;
 import com.yeka.bandapp.room.dto.UpdateRoomRequest;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -56,6 +58,17 @@ public class RoomController {
     public ApiResponse<RoomListResponse> list(@AuthenticationPrincipal AuthPrincipal principal,
                                               @PathVariable long bandId) {
         return ApiResponse.ok(roomService.list(bandId, principal.userId()));
+    }
+
+    @Operation(summary = "합주실 주소 검색",
+            description = "네이버 지역검색으로 합주실 이름·주소 후보를 최대 5건 반환한다. 등록 폼에서 검색해 자동 입력하는 용도. "
+                    + "검색어가 비었거나 서버에 검색 키가 없으면 빈 목록(places=[])을 준다 — 이때도 200이다. "
+                    + "그 밴드 멤버만(비멤버 403 NOT_BAND_MEMBER). 계정당 분당 호출 상한이 있어 초과 시 429.")
+    @GetMapping("/search")
+    public ApiResponse<PlaceSearchResponse> search(@AuthenticationPrincipal AuthPrincipal principal,
+                                                   @PathVariable long bandId,
+                                                   @RequestParam(defaultValue = "") String query) {
+        return ApiResponse.ok(roomService.searchPlaces(bandId, principal.userId(), query));
     }
 
     @Operation(summary = "합주실 상세",

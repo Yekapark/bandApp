@@ -338,6 +338,25 @@ Phase 0~3 전 경로 점검에서 나온 정합성·보안 항목을 이 브랜�
 B3 25회 연타 → 429 + 키 TTL 100s, B1 `prod` 프로파일에서 `/v3/api-docs`·`/swagger-ui` → 401.
 동시성 항목(A3·A4 레이스, refresh 위조 토큰)은 통합 테스트에서 CI로 검증.
 
+### 8.2 후속 추가 — 합주실 주소 검색 (2026-09-03, 클라이언트 2단계와 함께)
+
+클라이언트 합주실 등록 폼에서 "이름으로 검색 → 후보 목록에서 골라 자동 입력"을 하려면
+서버 프록시가 필요해 엔드포인트를 하나 추가했다. **지오코딩(주소→좌표)과는 다른 API**다.
+
+| 항목 | 내용 |
+|---|---|
+| 엔드포인트 | `GET /api/v1/bands/{bandId}/rooms/search?query=` — 밴드 멤버만. 네이버 지역검색 후보 최대 5건. 응답 `{query, placeCount, places:[{name, roadAddress, address, category, phone, lat, lng}]}` |
+| 실패 처리 | 검색어 공백·서버에 검색 키 없음·네이버 오류 → **200 + 빈 목록**(에러 아님). 등록은 주소 직접 입력으로 항상 가능 |
+| 외부 연동 | `PlaceSearchClient` 인터페이스 + `NaverLocalSearchClient`(개발자센터 지역검색 `GET /v1/search/local.json`). 기존 `GeocodingClient`와 동일 방침 — **예외를 던지지 않고** 빈 목록으로 통일. `@Transactional` 밖 |
+| 좌표 변환 | 네이버 `mapx`/`mapy`(WGS84×1e7 정수)를 나눠서 KR 대략 경계 안일 때만 채운다(구형 KATEC 값은 좌표 null, 후보는 유지) |
+| 자격증명 | `app.naver.search.client-id/secret` ← `NAVER_SEARCH_CLIENT_ID/SECRET`. **네이버 개발자센터(developers.naver.com) 앱, NCP 지도 키와 별개.** 비우면 검색만 빈 목록 |
+| 레이트리밋 | 지오코딩과 같은 `geocode-per-user-per-min` 상한을 `placesearch:user` 버킷으로 공유 |
+| 테스트 | `NaverLocalSearchParseTest`(순수 단위 — `<b>` 태그 제거·좌표 변환·범위 밖 제외), `RoomIntegrationTest`에 3건(후보 반환/공백 질의 무호출/비멤버 403). `FakePlaceSearchClient` 추가 |
+
+검증(2026-09-03): 순수 단위 테스트 통과. `docker compose`로 앱 기동 후 `rooms/search` —
+키 미설정 시 `200 {placeCount:0}`, 공백 질의 `200` 빈 목록, 비멤버 `403` 확인.
+통합 테스트(Testcontainers)는 이 PC에서 실행 불가 → CI에서 확인 필요.
+
 ## 9. 다음 Phase 예고 — Phase 4 (일정 등록)
 
 `Band.reservationPermission` 에 따른 권한 분기와 초기 status 결정, 밴드장의 승인/거절

@@ -2,8 +2,10 @@ package com.yeka.bandapp.room;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yeka.bandapp.room.entity.Room;
+import com.yeka.bandapp.room.naver.PlaceSuggestion;
 import com.yeka.bandapp.room.repository.RoomRepository;
 import com.yeka.bandapp.support.FakeGeocodingClient;
+import com.yeka.bandapp.support.FakePlaceSearchClient;
 import com.yeka.bandapp.support.GeocodingTestConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,11 +36,15 @@ class RoomIntegrationTest extends RoomApiSupport {
     FakeGeocodingClient geocoding;
 
     @Autowired
+    FakePlaceSearchClient placeSearch;
+
+    @Autowired
     RoomRepository roomRepository;
 
     @BeforeEach
-    void resetGeocoding() {
+    void resetExternalStubs() {
         geocoding.reset();
+        placeSearch.reset();
     }
 
     @Test
@@ -261,6 +267,56 @@ class RoomIntegrationTest extends RoomApiSupport {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    void place_search_returns_naver_candidates() {
+        String leader = signup("room-search1@band.app", "리더");
+        long bandId = createBand(leader, "검색밴드");
+        placeSearch.willReturn(
+                new PlaceSuggestion("사운드박스 합주실", "서울시 마포구 와우산로 29길 12",
+                        "서울시 마포구 서교동 400-1", "음악>연습실", "02-334-1082", 37.5561, 126.9227),
+                new PlaceSuggestion("사운드박스 B", "서울시 마포구 어딘가 2", null, null, null, null, null));
+
+        JsonNode body = data(get("/api/v1/bands/" + bandId + "/rooms/search?query=사운드박스", leader));
+
+        assertThat(body.get("placeCount").asInt()).isEqualTo(2);
+        assertThat(body.get("places").get(0).get("name").asText()).isEqualTo("사운드박스 합주실");
+        assertThat(body.get("places").get(0).get("roadAddress").asText())
+                .isEqualTo("서울시 마포구 와우산로 29길 12");
+        assertThat(body.get("places").get(0).get("lat").asDouble()).isEqualTo(37.5561);
+        assertThat(placeSearch.callCount()).isEqualTo(1);
+    }
+
+    @Test
+    void place_search_with_blank_query_returns_empty_without_calling_naver() {
+        String leader = signup("room-search2@band.app", "리더");
+        long bandId = createBand(leader, "빈검색밴드");
+        placeSearch.willReturn(
+                new PlaceSuggestion("불려선 안 되는 결과", null, null, null, null, null, null));
+
+        // query 파라미터 자체를 생략 → 컨트롤러 기본값 "" → 검색 호출 없이 빈 목록
+        JsonNode omitted = data(get("/api/v1/bands/" + bandId + "/rooms/search", leader));
+        assertThat(omitted.get("placeCount").asInt()).isZero();
+
+        // 빈 문자열도 동일
+        JsonNode empty = data(get("/api/v1/bands/" + bandId + "/rooms/search?query=", leader));
+        assertThat(empty.get("placeCount").asInt()).isZero();
+
+        assertThat(placeSearch.callCount()).isZero();
+    }
+
+    @Test
+    void non_member_cannot_search_places() {
+        String leader = signup("room-search3@band.app", "리더");
+        String stranger = signup("room-search3-x@band.app", "낯선이");
+        long bandId = createBand(leader, "검색권한밴드");
+
+        ResponseEntity<String> res =
+                get("/api/v1/bands/" + bandId + "/rooms/search?query=합주실", stranger);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(403);
+        assertThat(errorCode(res)).isEqualTo("NOT_BAND_MEMBER");
     }
 
     @Test

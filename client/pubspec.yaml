@@ -1,0 +1,41 @@
+name: bandapp_client
+description: 밴드 합주 관리 앱 Flutter 클라이언트
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 한국어 로케일 (날짜/시간 피커 등 Material 위젯 번역)
+  flutter_localizations:
+    sdk: flutter
+
+  # 상태관리
+  flutter_riverpod: ^2.5.1
+
+  # 라우팅
+  go_router: ^14.2.7
+
+  # 네트워크
+  dio: ^5.7.0
+
+  # 토큰 보관 (KeyStore / Keychain)
+  flutter_secure_storage: ^9.2.2
+
+  # 폰트 (Noto Sans KR / Bebas Neue / JetBrains Mono)
+  google_fonts: ^6.2.1
+
+  # 날짜 포매팅 (flutter_localizations 가 0.20.x 를 요구)
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

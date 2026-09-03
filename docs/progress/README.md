@@ -23,7 +23,7 @@
 | 0 | [phase-00-scaffolding.md](phase-00-scaffolding.md) — 프로젝트 뼈대 | ✅ 완료 |
 | 1 | [phase-01-auth.md](phase-01-auth.md) — 인증 (이메일 / 카카오 / JWT / 탈퇴) · [사람 잔여작업](phase-01-TODO.md) | ✅ 완료 — CI 통과, `main` 머지 (사람 잔여작업 별도) |
 | 2 | [phase-02-band.md](phase-02-band.md) — 밴드 · 초대 · 멤버 · 딥링크 · 레이트리밋 | ✅ 완료 — CI 통과, `main` 머지 (PR #16) |
-| 3 | [phase-03-room.md](phase-03-room.md) — 합주실 CRUD · 네이버 지오코딩 · 내 밴드 목록 | ✅ 완료 — CI 통과 (PR #18) |
+| 3 | [phase-03-room.md](phase-03-room.md) — 합주실 CRUD · 네이버 지오코딩 · 내 밴드 목록 · (후속) 네이버 지역검색 프록시 `rooms/search` | ✅ 완료 — CI 통과 (PR #18) · 후속은 §8.2, 클라 2단계 PR에 포함 |
 | 4 | [phase-04-reservation.md](phase-04-reservation.md) — 일정 등록 · 권한 모드별 분기 · 승인/거절 · 겹침 경고 · 캘린더 조회 | ✅ 완료 — CI 통과 (PR #22) |
 | 5 | [phase-05-recurring.md](phase-05-recurring.md) — 정기 일정 규칙 · 회차 자동 생성(주간/격주/월간) · 규칙 삭제 시 미래 회차만 취소 · 회차 연장 배치 | ✅ 완료 — CI 통과 (PR #24) |
 | 6 | [phase-06-attendance-setlist.md](phase-06-attendance-setlist.md) — 참석 체크(RSVP) · 일정 상세의 참석 현황·집계 · 셋리스트 CRUD·재정렬 | ✅ 완료 — CI 통과 (PR #25) |
@@ -31,3 +31,13 @@
 | 8 | [phase-08-board-media-report.md](phase-08-board-media-report.md) — 게시판 CRUD(커서 페이징) · R2 presigned 업로드(백엔드 미경유) · 완료 콜백 HEAD 크기·형식 검증 · 신고 접수 · 사용자 차단(양방향) | ✅ 완료 — CI 통과 (PR #29) |
 | 9 | [phase-09-notification-batch.md](phase-09-notification-batch.md) — FCM 푸시(디바이스 토큰·알림 on/off·리마인더 시점) · 트리거(새 일정·승인·정산·취소, AFTER_COMMIT 이벤트) · 리마인더·참석 독촉 배치(멱등) · 미디어 만료·고아 PENDING 정리 배치(R2 삭제 실패 재시도) | ✅ 완료 — CI 통과 (PR #30) |
 | 10 | [phase-10-plan.md](phase-10-plan.md) — 밴드 FREE/PREMIUM 요금제 · 미디어 보관기한을 현재 플랜에 연결(FREE 30일 / PREMIUM 무제한) · 티어 변경 시 기존 미디어 만료일 재계산(업그레이드=NULL, 다운그레이드=30일 유예) · `PaymentGateway` 인터페이스 + no-op 구현체 · 동시 전환 `SELECT … FOR UPDATE` 직렬화 | ✅ 완료 — CI 통과 (PR #33) |
+
+### 클라이언트 (Flutter, `client/`)
+
+> **이어받기: [client-DEVLOG.md](client-DEVLOG.md) 를 먼저 읽는다.** 현재 상태·다음 할 일·로컬 환경 함정(Flutter PATH, DB 포트 5432 충돌 등).
+
+| 단계 | 문서 | 상태 |
+|---|---|---|
+| — | [client-DEVLOG.md](client-DEVLOG.md) — 이어받기 가이드 (살아있는 문서) | 🔄 상시 갱신 |
+| C1 | [client-01-onboarding-home.md](client-01-onboarding-home.md) — 프로젝트 스캐폴딩 · 스플래시/로그인/약관/회원가입 · 밴드 생성·초대코드 가입 · 밴드 홈 (실제 API 연동) | 🔨 구현 완료, `analyze` 통과·웹 빌드 OK, end-to-end 검증 대기 |
+| C2 | [client-02-calendar-reservation.md](client-02-calendar-reservation.md) — 예약 캘린더(월간 뷰) · 합주실 목록/등록(네이버 주소검색) · 일정 등록 폼(겹침 경고) · 일정 상세(참석 RSVP·멤버별 현황·셋리스트) · 한국어 로케일 · (백엔드) `rooms/search` | 🔨 구현 완료, `analyze` 에러 0·웹 빌드 OK·백엔드 단위테스트 통과, 통합테스트 CI 대기·end-to-end 검증 대기 |
