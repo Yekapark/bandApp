@@ -73,4 +73,38 @@ class RoomRepository {
       throw ApiException.fromDio(e);
     }
   }
+
+  /// 합주실 수정 (PUT 전체 교체). 주소가 실제로 바뀐 경우에만 서버가 좌표를 다시 계산한다.
+  Future<Room> update({
+    required int bandId,
+    required int roomId,
+    required String name,
+    String? address,
+    String? phone,
+    String? memo,
+  }) async {
+    try {
+      final res = await _dio.put<dynamic>(
+        '/bands/$bandId/rooms/$roomId',
+        data: {
+          'name': name,
+          if (address != null && address.isNotEmpty) 'address': address,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+          if (memo != null && memo.isNotEmpty) 'memo': memo,
+        },
+      );
+      return unwrap(res, (d) => Room.fromJson(d! as Map<String, dynamic>));
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 합주실 삭제(soft). 이미 등록된 일정에는 영향 없다(roomName 은 응답에 계속 채워짐).
+  Future<void> delete({required int bandId, required int roomId}) async {
+    try {
+      await _dio.delete<dynamic>('/bands/$bandId/rooms/$roomId');
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
 }

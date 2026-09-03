@@ -9,7 +9,7 @@
 > `flutter analyze`(에러 0) · `flutter test` · `flutter build web` 통과 후 커밋.
 > 이 PC Flutter: `C:\src\flutter\bin` / 저장소: `C:\band\bandApp`.
 >
-> 마지막 갱신: **2026-09-04** (C10 완료)
+> 마지막 갱신: **2026-09-04** (C10·C11 완료)
 
 ---
 
@@ -18,7 +18,7 @@
 | 슬라이스 | 항목 | 상태 |
 |---|---|---|
 | C10 | 초대코드 발급/조회/무효화 (멤버 초대 화면) | ✅ 완료 — `client-10-invite.md` |
-| C11 | 합주실 수정/삭제 | ⬜ 미착수 |
+| C11 | 합주실 수정/삭제 | ✅ 완료 — `client-11-room-edit.md` |
 | C12 | 셋리스트 재정렬 + 곡 수정 | ⬜ 미착수 |
 | C13 | 정기 일정 규칙 상세 (회차 목록) | ⬜ 미착수 |
 | C14 | 밴드 요금제 (FREE/PREMIUM) | ⬜ 미착수 |
@@ -82,9 +82,12 @@
 - 삭제 확인 다이얼로그(사용 중인 일정에는 영향 없음 안내). 삭제 후 `roomsProvider` 무효화.
 
 **완료 기준**:
-- [ ] 시트/지도에서 합주실 수정 → 반영, 삭제 → 목록에서 사라짐
-- [ ] `analyze`/`test`/`build web` 통과
-- [ ] `client-11-room-edit.md` + 문서 갱신
+- [x] 시트/지도에서 합주실 수정 → 반영, 삭제 → 목록에서 사라짐
+- [x] `analyze`/`test`/`build web` 통과
+- [x] `client-11-room-edit.md` + 문서 갱신
+
+✅ **완료 (2026-09-04)** — `room_repository.update/delete`, `room_form_screen` 수정 모드,
+`room_picker_sheet`·`map_screen` 목록에 ⋯ 메뉴, `/cal/rooms/:roomId/edit`.
 
 ---
 

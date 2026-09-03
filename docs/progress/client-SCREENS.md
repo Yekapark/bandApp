@@ -20,7 +20,7 @@
 | 6 | 일정 등록/수정 폼 | ✅ | `/cal/new`, `/reservations/:id/edit` `reservation_form_screen.dart` | 합주실·날짜·시간·비용·메모. 수정(PUT) 겸용. **반복은 별도 정기 일정 화면**(#아래) |
 | 7 | 일정 상세 | 🟡 | `/reservations/:id` `reservation_detail_screen.dart` | 참석 체크·멤버별 현황·셋리스트(추가·삭제)·**일정 수정**·**밴드장 승인/거절**(C7). 셋리스트 재정렬/완료체크 없음 |
 | 8 | 합주실 목록 / 지도 | 🟡 | `/map` (탭) `map_screen.dart` | 네이버 지도(`flutter_naver_map`) 마커 + 하단 목록. **Android/iOS 전용** — 웹/키 미설정 시 목록만. `NAVER_MAP_CLIENT_ID` 필요 |
-| 9 | 합주실 등록 폼 | ✅ | `/cal/rooms/new` `room_form_screen.dart` | 이름·주소검색(네이버 지역검색 프록시)·연락처·메모 |
+| 9 | 합주실 등록/수정 폼 | ✅ | `/cal/rooms/new`, `/cal/rooms/:id/edit` `room_form_screen.dart` | 이름·주소검색·연락처·메모. 수정·삭제는 합주실 선택 시트·지도 목록의 ⋯ 메뉴 (C11) |
 | 10 | 정산 화면 | ✅ | `/reservations/:id/settlement` `settlement_screen.dart` | 1인당 금액·진행바·납부 체크리스트·재계산. 균등/참석자만 토글. 본인 몫만 셀프 체크 |
 | 11 | 게시판 (사진/영상 피드) | ✅ | `/board` (탭) `board_screen.dart` | 커서 무한스크롤. 글쓰기 FAB. 대표 이미지 썸네일 (C6) |
 | 12 | 게시글 상세 | 🟡 | `/board/:postId` `post_detail_screen.dart` | 본문·첨부 갤러리·이미지 전체화면 뷰어·수정/삭제·신고·차단. **영상 인앱 재생 없음**(타일 표시). 작성/수정은 `post_compose_screen.dart` (C6) |

@@ -23,6 +23,7 @@ import '../features/settings/presentation/band_settings_screen.dart';
 import '../features/settings/presentation/blocked_users_screen.dart';
 import '../features/settings/presentation/settings_home_screen.dart';
 import '../features/reservation/data/reservation_models.dart';
+import '../features/reservation/data/room_models.dart';
 import '../features/reservation/presentation/calendar_screen.dart';
 import '../features/reservation/presentation/map_screen.dart';
 import '../features/reservation/presentation/reservation_detail_screen.dart';
@@ -47,6 +48,9 @@ class Routes {
   static const newPost = '/board/new';
   static const newReservation = '/cal/new';
   static const newRoom = '/cal/rooms/new';
+
+  /// 합주실 수정 (extra 로 Room 전달).
+  static String editRoom(int roomId) => '/cal/rooms/$roomId/edit';
   static const notificationSettings = '/settings/notifications';
 
   /// 게시글 상세.
@@ -181,6 +185,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.newRoom,
         builder: (_, __) => const RoomFormScreen(),
+      ),
+      GoRoute(
+        path: '/cal/rooms/:roomId/edit',
+        builder: (_, state) => RoomFormScreen(existing: state.extra as Room?),
       ),
       GoRoute(
         path: Routes.notificationSettings,

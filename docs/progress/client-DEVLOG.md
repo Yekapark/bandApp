@@ -41,6 +41,8 @@
   기능을 `client-GAP-BACKLOG.md` 체크리스트(C10~C15)대로 채우는 중.
 - **C10 멤버 초대**(2026-09-04) — 밴드장이 초대코드·링크를 발급/재발급/무효화(`/band/invite`).
   설정 허브·밴드 설정에서 진입. 상세는 `client-10-invite.md`.
+- **C11 합주실 수정/삭제**(2026-09-04) — 합주실 선택 시트·지도 목록의 ⋯ 메뉴에서 수정(폼 재사용)·
+  삭제. `PUT/DELETE /bands/{id}/rooms/{roomId}`. 상세는 `client-11-room-edit.md`.
 
 ---
 
