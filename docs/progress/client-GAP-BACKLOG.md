@@ -9,11 +9,11 @@
 > `flutter analyze`(에러 0) · `flutter test` · `flutter build web` 통과 후 커밋.
 > 이 PC Flutter: `C:\src\flutter\bin` / 저장소: `C:\band\bandApp`.
 >
-> 마지막 갱신: **2026-09-04** (C10~C14 완료)
+> 마지막 갱신: **2026-09-04** (C10~C15 전부 완료 — 백엔드엔 있는데 클라에 없던 기능 정리 끝)
 
 ---
 
-## 진행 요약
+## 진행 요약 — ✅ 전부 완료
 
 | 슬라이스 | 항목 | 상태 |
 |---|---|---|
@@ -22,7 +22,9 @@
 | C12 | 셋리스트 재정렬 + 곡 수정 | ✅ 완료 — `client-12-setlist.md` |
 | C13 | 정기 일정 규칙 상세 (회차 목록) | ✅ 완료 — `client-13-recurring-detail.md` |
 | C14 | 밴드 요금제 (FREE/PREMIUM) | ✅ 완료 — `client-14-plan.md` |
-| C15 | 미디어 신고 · 캘린더 취소건 표시 · 초대 링크 프리필 | ⬜ 미착수 |
+| C15 | 미디어 신고 · 캘린더 취소건 표시 · 초대 링크 프리필 | ✅ 완료 — `client-15-misc.md` |
+
+**남은 것은 "백엔드에도 없어서 못 하는 것"(맨 아래 목록)과 OS 레벨 딥링크 네이티브 등록뿐.**
 
 ---
 
@@ -208,8 +210,12 @@
 - [ ] (후속으로 남김) OS 딥링크 네이티브 등록
 
 ### 완료 기준
-- [ ] 위 3개 반영, `analyze`/`test`/`build web` 통과
-- [ ] `client-15-misc.md` + 문서 갱신
+- [x] 위 3개 반영, `analyze`/`test`/`build web` 통과
+- [x] `client-15-misc.md` + 문서 갱신
+
+✅ **완료 (2026-09-04)** — 15a: `_MediaBlock` onLongPress → MEDIA 신고. 15b:
+`showCancelledReservationsProvider` + "취소 포함" 토글, 취소건 취소선. 15c: `join_band_screen`
+`initialCode` + `/band-gate/join?code=` 라우트. OS 딥링크 네이티브 등록은 후속.
 
 ---
 

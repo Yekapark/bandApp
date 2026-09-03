@@ -16,14 +16,14 @@
 | 2 | 초대코드 입력 | ✅ | `/band-gate/join` `join_band_screen.dart` | 코드 입력해 참여. **코드 발급(밴드장)**은 `/band/invite` `invite_screen.dart` (C10) |
 | 3 | 밴드 미소속 상태 | ✅ | `/band-gate` `band_gate_screen.dart` | "밴드 만들기 / 초대코드로 참여" 선택 |
 | 4 | 밴드 홈 | ✅ | `/home` (탭) `home_screen.dart` | 밴드 전환 스위처, 다가오는 합주, 멤버 레일, 요약 카드 |
-| 5 | 합주 일정 캘린더 | ✅ | `/cal` (탭) `calendar_screen.dart` | 월간 뷰만. 주간 뷰 없음 |
+| 5 | 합주 일정 캘린더 | ✅ | `/cal` (탭) `calendar_screen.dart` | 월간 뷰. "취소 포함" 토글(C15). 주간 뷰 없음 |
 | 6 | 일정 등록/수정 폼 | ✅ | `/cal/new`, `/reservations/:id/edit` `reservation_form_screen.dart` | 합주실·날짜·시간·비용·메모. 수정(PUT) 겸용. **반복은 별도 정기 일정 화면**(#아래) |
 | 7 | 일정 상세 | 🟡 | `/reservations/:id` `reservation_detail_screen.dart` | 참석 체크·멤버별 현황·셋리스트(추가·삭제·**재정렬**·**수정**, C12)·**일정 수정**·**밴드장 승인/거절**(C7). 셋리스트 완료체크 없음 |
 | 8 | 합주실 목록 / 지도 | 🟡 | `/map` (탭) `map_screen.dart` | 네이버 지도(`flutter_naver_map`) 마커 + 하단 목록. **Android/iOS 전용** — 웹/키 미설정 시 목록만. `NAVER_MAP_CLIENT_ID` 필요 |
 | 9 | 합주실 등록/수정 폼 | ✅ | `/cal/rooms/new`, `/cal/rooms/:id/edit` `room_form_screen.dart` | 이름·주소검색·연락처·메모. 수정·삭제는 합주실 선택 시트·지도 목록의 ⋯ 메뉴 (C11) |
 | 10 | 정산 화면 | ✅ | `/reservations/:id/settlement` `settlement_screen.dart` | 1인당 금액·진행바·납부 체크리스트·재계산. 균등/참석자만 토글. 본인 몫만 셀프 체크 |
 | 11 | 게시판 (사진/영상 피드) | ✅ | `/board` (탭) `board_screen.dart` | 커서 무한스크롤. 글쓰기 FAB. 대표 이미지 썸네일 (C6) |
-| 12 | 게시글 상세 | 🟡 | `/board/:postId` `post_detail_screen.dart` | 본문·첨부 갤러리·이미지 전체화면 뷰어·수정/삭제·신고·차단. **영상 인앱 재생 없음**(타일 표시). 작성/수정은 `post_compose_screen.dart` (C6) |
+| 12 | 게시글 상세 | 🟡 | `/board/:postId` `post_detail_screen.dart` | 본문·첨부 갤러리·이미지 전체화면 뷰어·수정/삭제·신고(글·작성자·**첨부 길게눌러 C15**)·차단. **영상 인앱 재생 없음**. 작성/수정은 `post_compose_screen.dart` (C6) |
 | 13 | 설정 (알림·밴드 설정·계정) | ✅ | `/settings` `settings_home_screen.dart` (+ `/settings/band`, `/settings/account`, `/settings/blocks`, `/settings/notifications`) | 허브 + 밴드 설정(일정 권한·밴드장 위임·멤버 추방·나가기) + 계정(탈퇴) + 차단 해제 + 알림. FCM 디바이스 토큰 등록·포그라운드 수신은 C9(`push_service.dart`, 설정 파일 없으면 no-op) |
 
 추가로 만든 화면(C6 게시판 · C7 정기 일정):

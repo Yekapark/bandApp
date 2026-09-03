@@ -128,7 +128,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const CreateBandScreen(),
       ),
       GoRoute(
-          path: Routes.joinBand, builder: (_, __) => const JoinBandScreen()),
+        path: Routes.joinBand,
+        builder: (_, state) => JoinBandScreen(
+          initialCode: state.uri.queryParameters['code'],
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (_, __, shell) => TabShell(navigationShell: shell),
         branches: [

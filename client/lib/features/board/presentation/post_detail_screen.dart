@@ -113,9 +113,17 @@ class PostDetailScreen extends ConsumerWidget {
               if (d.media.isNotEmpty) ...[
                 const SizedBox(height: 22),
                 for (final m in d.media) ...[
-                  _MediaBlock(media: m),
+                  _MediaBlock(
+                    media: m,
+                    onReport: () => _report(context, ref, 'MEDIA', m.id),
+                  ),
                   const SizedBox(height: 10),
                 ],
+                const SizedBox(height: 2),
+                const Text(
+                  '첨부를 길게 누르면 신고할 수 있어요.',
+                  style: TextStyle(fontSize: 10.5, color: AppColors.textFaint),
+                ),
               ],
             ],
           ),
@@ -314,12 +322,20 @@ class _OverflowMenu extends StatelessWidget {
 }
 
 class _MediaBlock extends StatelessWidget {
-  const _MediaBlock({required this.media});
+  const _MediaBlock({required this.media, required this.onReport});
 
   final PostMedia media;
+  final VoidCallback onReport;
 
   @override
   Widget build(BuildContext context) {
+    return GestureDetector(
+      onLongPress: onReport,
+      child: _content(context),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     if (media.state == MediaState.expired) {
       return _frame(
         const _Note(icon: Icons.schedule, text: '보관기한이 지나 더 이상 볼 수 없는 첨부예요.'),
