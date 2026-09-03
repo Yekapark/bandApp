@@ -198,8 +198,11 @@ cd E:\project\band\client
 
 ## 9. 커밋 · CI 링크
 
-- 커밋: (이 문서와 함께 커밋 예정)
-- CI: 클라이언트용 워크플로 아직 없음 (`flutter analyze` + `flutter test` 추가 검토 — DEVLOG §5 7번).
+- PR: [#34](https://github.com/Yekapark/bandApp/pull/34) (`main` 대상). 커밋:
+  `feat(room): 합주실 주소 검색 API (네이버 지역검색 프록시)`,
+  `feat(client): 예약 캘린더·일정 등록/상세·합주실 등록(주소검색)·한국어 로케일`.
+- CI: 백엔드 워크플로가 `RoomIntegrationTest` 신규분을 검증한다. 클라이언트용 워크플로는
+  아직 없음(`flutter analyze` + `flutter test` 추가 검토 — DEVLOG §5).
 
 ## 10. 검증 결과 (요약)
 
