@@ -61,8 +61,7 @@ class _CreateBandScreenState extends ConsumerState<CreateBandScreen> {
             children: [
               BackLink(label: '밴드 만들기', onTap: () => context.pop()),
               const SizedBox(height: 16),
-              Text('밴드 정보',
-                  style: Theme.of(context).textTheme.headlineMedium),
+              Text('밴드 정보', style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 20),
               const Text('밴드 이름',
                   style: TextStyle(fontSize: 11.5, color: AppColors.textDim)),

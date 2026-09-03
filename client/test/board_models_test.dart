@@ -90,6 +90,27 @@ void main() {
     });
   });
 
+  group('BlockedUser.fromJson', () {
+    test('parses id and name', () {
+      final b = BlockedUser.fromJson({
+        'id': 1,
+        'blockedUserId': 7,
+        'blockedUserName': '차단이',
+        'createdAt': '2026-03-01T00:00:00Z',
+      });
+      expect(b.blockedUserId, 7);
+      expect(b.blockedUserName, '차단이');
+    });
+
+    test('falls back when name missing', () {
+      final b = BlockedUser.fromJson({
+        'blockedUserId': 7,
+        'createdAt': '2026-03-01T00:00:00Z',
+      });
+      expect(b.blockedUserName, '알 수 없는 사용자');
+    });
+  });
+
   group('UploadTicket.fromJson', () {
     test('stringifies required headers and defaults method to PUT', () {
       final ticket = UploadTicket.fromJson({

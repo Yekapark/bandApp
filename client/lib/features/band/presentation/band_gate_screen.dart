@@ -102,9 +102,7 @@ class _GateCard extends StatelessWidget {
                 )
               : null,
           color: filled ? null : AppColors.surfaceRaised,
-          border: filled
-              ? null
-              : Border.all(color: AppColors.borderStrong),
+          border: filled ? null : Border.all(color: AppColors.borderStrong),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

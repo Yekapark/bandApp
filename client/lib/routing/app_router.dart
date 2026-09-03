@@ -17,6 +17,10 @@ import '../features/home/presentation/home_screen.dart';
 import '../features/notification/presentation/notification_settings_screen.dart';
 import '../features/recurring/presentation/recurring_form_screen.dart';
 import '../features/recurring/presentation/recurring_list_screen.dart';
+import '../features/settings/presentation/account_screen.dart';
+import '../features/settings/presentation/band_settings_screen.dart';
+import '../features/settings/presentation/blocked_users_screen.dart';
+import '../features/settings/presentation/settings_home_screen.dart';
 import '../features/reservation/data/reservation_models.dart';
 import '../features/reservation/presentation/calendar_screen.dart';
 import '../features/reservation/presentation/map_screen.dart';
@@ -52,6 +56,10 @@ class Routes {
 
   static const recurring = '/cal/recurring';
   static const newRecurring = '/cal/recurring/new';
+  static const settings = '/settings';
+  static const bandSettings = '/settings/band';
+  static const account = '/settings/account';
+  static const blockedUsers = '/settings/blocks';
 
   /// 일정 상세. [reservationId] 로 실제 경로를 만든다.
   static String reservation(int reservationId) =>
@@ -175,6 +183,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.notificationSettings,
         builder: (_, __) => const NotificationSettingsScreen(),
+      ),
+      GoRoute(
+        path: Routes.settings,
+        builder: (_, __) => const SettingsHomeScreen(),
+      ),
+      GoRoute(
+        path: Routes.bandSettings,
+        builder: (_, __) => const BandSettingsScreen(),
+      ),
+      GoRoute(
+        path: Routes.account,
+        builder: (_, __) => const AccountScreen(),
+      ),
+      GoRoute(
+        path: Routes.blockedUsers,
+        builder: (_, __) => const BlockedUsersScreen(),
       ),
       GoRoute(
         path: '/reservations/:rid/edit',

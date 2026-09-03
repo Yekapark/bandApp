@@ -241,4 +241,28 @@ class BoardRepository {
       throw ApiException.fromDio(e);
     }
   }
+
+  /// 내가 차단한 사용자 목록(최근순).
+  Future<List<BlockedUser>> listBlocks() async {
+    try {
+      final res = await _dio.get<dynamic>('/users/me/blocks');
+      return unwrap(res, (d) {
+        final list = (d! as Map<String, dynamic>)['blocks'] as List<dynamic>;
+        return list
+            .map((e) => BlockedUser.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false);
+      });
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 차단 해제.
+  Future<void> unblock(int blockedUserId) async {
+    try {
+      await _dio.delete<dynamic>('/users/me/blocks/$blockedUserId');
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
 }

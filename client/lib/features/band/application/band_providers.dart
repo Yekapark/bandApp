@@ -40,3 +40,35 @@ final bandMembersProvider =
     FutureProvider.family<List<BandMember>, int>((ref, bandId) async {
   return ref.watch(bandRepositoryProvider).members(bandId);
 });
+
+/// 밴드 기본 정보(일정 등록 권한 모드 포함). 설정 화면에서 사용.
+final bandDetailProvider =
+    FutureProvider.family<Band, int>((ref, bandId) async {
+  return ref.watch(bandRepositoryProvider).band(bandId);
+});
+
+String reservationPermissionLabel(String permission) {
+  switch (permission) {
+    case 'LEADER_ONLY':
+      return '밴드장만 등록';
+    case 'ANYONE':
+      return '누구나 등록';
+    case 'APPROVAL_REQUIRED':
+      return '멤버 신청 → 밴드장 승인';
+    default:
+      return permission;
+  }
+}
+
+String reservationPermissionHint(String permission) {
+  switch (permission) {
+    case 'LEADER_ONLY':
+      return '일정은 밴드장만 만들 수 있어요.';
+    case 'ANYONE':
+      return '모든 멤버가 바로 일정을 만들 수 있어요.';
+    case 'APPROVAL_REQUIRED':
+      return '멤버가 만든 일정은 밴드장이 승인해야 확정돼요.';
+    default:
+      return '';
+  }
+}

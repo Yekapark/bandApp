@@ -68,7 +68,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                     height: 26,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF120806), width: 6),
+                      border:
+                          Border.all(color: const Color(0xFF120806), width: 6),
                     ),
                   ),
                 ),

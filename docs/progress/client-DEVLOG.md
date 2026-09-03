@@ -3,7 +3,7 @@
 > **새 세션에서 클라이언트 작업을 이어받을 때 이 파일부터 읽는다.**
 > 이 문서는 "지금 어디까지 됐고, 어떻게 이어가는지"를 담는 살아있는 문서다.
 > 작업을 진행하면 아래 "현재 상태"와 "다음 할 일"을 갱신한다.
-> 마지막 갱신: **2026-09-04** (C7 일정 수정·승인/거절 + 정기 일정 추가)
+> 마지막 갱신: **2026-09-04** (C8 설정: 밴드·계정·차단 해제 추가)
 
 ---
 
@@ -30,7 +30,10 @@
 - **일정 수정·승인/거절 + 정기 일정 구현 완료**(2026-09-04, C7) — 일정 상세에서 수정(PUT)·
   밴드장 승인/거절. 정기 일정 화면 `/cal/recurring`(규칙 목록·등록·삭제, 캘린더 AppBar ↻ 진입).
   백엔드 변경 없음(Phase 4·5 API). 상세는 `client-07-reservation-recurring.md`.
-- 다음: (C8) 설정 나머지(밴드/계정/차단해제) → (C9) 알림 수신부(FCM)+클라 CI.
+- **설정 완성**(2026-09-04, C8) — 설정 허브 `/settings`, 밴드 설정(일정 권한 모드·밴드장 위임·
+  멤버 추방·밴드 나가기), 계정(내 정보·회원 탈퇴), 차단한 사용자(목록·해제), 로그아웃.
+  홈 헤더의 톱니 아이콘에서 진입. 백엔드 변경 없음. 상세는 `client-08-settings.md`.
+- 다음: (C9) 알림 수신부(FCM)+클라 CI.
 
 ---
 
@@ -124,6 +127,20 @@
    (2단계 주소검색용 `NAVER_SEARCH_*` 는 네이버 개발자센터 앱으로 별개.)
 2. 실행 시 dart-define: `--dart-define=NAVER_MAP_CLIENT_ID=<Client ID>`.
 3. Android 네이티브 빌드는 개발자 모드 필요(§3-D). 웹은 어차피 지도 미지원 → 목록만.
+
+### 구현 완료 (C8: 설정 나머지) — 상세는 `client-08-settings.md`
+
+| 화면 | 라우트 | 파일 | 백엔드 |
+|---|---|---|---|
+| 설정 허브 | `/settings` | `features/settings/presentation/settings_home_screen.dart` | — (로그아웃 `/auth/logout`) |
+| 밴드 설정 | `/settings/band` | `.../band_settings_screen.dart` | `GET/PUT /bands/{id}[/settings]`, `POST /bands/{id}/leader`, `DELETE /bands/{id}/members/{uid}`, `POST /bands/{id}/members/leave` |
+| 계정 | `/settings/account` | `.../account_screen.dart` | `POST /users/me/withdraw` |
+| 차단한 사용자 | `/settings/blocks` | `.../blocked_users_screen.dart` | `GET/DELETE /users/me/blocks[/{uid}]` |
+
+- 상태: `features/settings/application/settings_providers.dart`(`blockedUsersProvider`),
+  `features/band/application/band_providers.dart`에 `bandDetailProvider`(family) 추가.
+- 진입: 홈 헤더 ⚙ 아이콘(기존 "멤버" 버튼 대체). 홈의 마지막 `showSoon` 제거됨.
+- **뺀 것**: 밴드 이름 변경·삭제, 프로필 편집(백엔드 API 없음), 초대코드 재발급 UI.
 
 ### 구현 완료 (C7: 일정 수정·승인/거절 + 정기 일정) — 상세는 `client-07-reservation-recurring.md`
 
@@ -314,8 +331,8 @@ cd E:\project\band\client
 5. ~~**게시판**(#11·#12)~~ ✅ 2026-09-04 (C6). 남은 것: 영상 인앱 재생, 차단 해제 화면(C8).
 6. ~~정기 일정 규칙 등록/목록/삭제 + 일정 수정(PUT)·밴드장 승인/거절 UI~~ ✅ 2026-09-04 (C7).
    상세는 `client-07-reservation-recurring.md`.
-7. **(C8, 다음)** 설정 나머지 — 밴드 설정(권한 모드·밴드장 위임·멤버 추방·밴드 나가기), 계정(내 정보·탈퇴), 차단 해제.
-8. **(C9)** 알림 수신부(FCM: `firebase_messaging` + `POST /notifications/device-tokens`),
+7. ~~설정 나머지 — 밴드 설정·계정(탈퇴)·차단 해제~~ ✅ 2026-09-04 (C8). 상세는 `client-08-settings.md`.
+8. **(C9, 다음)** 알림 수신부(FCM: `firebase_messaging` + `POST /notifications/device-tokens`),
    클라이언트 CI(`flutter analyze` + `flutter test` GitHub Actions).
 9. (정리) analyze info 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.
 

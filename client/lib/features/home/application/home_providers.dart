@@ -13,9 +13,7 @@ final upcomingReservationsProvider =
         to: now.add(const Duration(days: 60)),
       );
   // 서버가 startAt 오름차순으로 주지만, 과거로 걸친 항목은 제거.
-  return items
-      .where((r) => r.endAt.isAfter(now))
-      .toList(growable: false);
+  return items.where((r) => r.endAt.isAfter(now)).toList(growable: false);
 });
 
 /// 그 중 가장 가까운 한 건 (홈 상단 "다음 합주" 카드).

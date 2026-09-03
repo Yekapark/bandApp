@@ -176,6 +176,27 @@ class PostDetail {
   }
 }
 
+/// GET /users/me/blocks 의 항목.
+class BlockedUser {
+  const BlockedUser({
+    required this.blockedUserId,
+    required this.blockedUserName,
+    required this.createdAt,
+  });
+
+  final int blockedUserId;
+  final String blockedUserName;
+  final DateTime createdAt;
+
+  factory BlockedUser.fromJson(Map<String, dynamic> json) {
+    return BlockedUser(
+      blockedUserId: (json['blockedUserId'] as num).toInt(),
+      blockedUserName: json['blockedUserName'] as String? ?? '알 수 없는 사용자',
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
+}
+
 /// POST .../media/upload-url 응답 — presigned PUT URL 발급 결과.
 class UploadTicket {
   const UploadTicket({

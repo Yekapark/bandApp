@@ -1,7 +1,7 @@
 # 클라이언트 화면 구현 현황
 
 > 지금까지 만든 Flutter 화면을 한눈에 보는 표. 진행하면서 갱신한다.
-> 마지막 갱신: **2026-09-04** (C7 일정 수정·승인/거절 + 정기 일정 추가)
+> 마지막 갱신: **2026-09-04** (C8 설정: 밴드·계정·차단 해제 추가)
 > 상세 배경은 단계별 문서(`client-01`~`client-03`, `client-DEVLOG.md`) 참조.
 
 범례: ✅ 구현 완료 · 🟡 부분 구현 · ⛔ 미구현
@@ -24,7 +24,7 @@
 | 10 | 정산 화면 | ✅ | `/reservations/:id/settlement` `settlement_screen.dart` | 1인당 금액·진행바·납부 체크리스트·재계산. 균등/참석자만 토글. 본인 몫만 셀프 체크 |
 | 11 | 게시판 (사진/영상 피드) | ✅ | `/board` (탭) `board_screen.dart` | 커서 무한스크롤. 글쓰기 FAB. 대표 이미지 썸네일 (C6) |
 | 12 | 게시글 상세 | 🟡 | `/board/:postId` `post_detail_screen.dart` | 본문·첨부 갤러리·이미지 전체화면 뷰어·수정/삭제·신고·차단. **영상 인앱 재생 없음**(타일 표시). 작성/수정은 `post_compose_screen.dart` (C6) |
-| 13 | 설정 (알림·밴드 설정·계정) | 🟡 | `/settings/notifications` `notification_settings_screen.dart` | 알림 설정(푸시 on/off·리마인더 시점)만. 밴드 설정·계정/탈퇴·차단 해제는 C8. FCM 수신부·미납 독촉 미구현 |
+| 13 | 설정 (알림·밴드 설정·계정) | ✅ | `/settings` `settings_home_screen.dart` (+ `/settings/band`, `/settings/account`, `/settings/blocks`, `/settings/notifications`) | 허브 + 밴드 설정(일정 권한·밴드장 위임·멤버 추방·나가기) + 계정(탈퇴) + 차단 해제 + 알림(기존). FCM 수신부는 C9 |
 
 추가로 만든 화면(C6 게시판 · C7 정기 일정):
 
@@ -33,6 +33,10 @@
 | 글 작성/수정 | `/board/new`, `/board/:postId/edit` `post_compose_screen.dart` | 새 글 등록 직후 같은 화면에서 첨부 추가. `image_picker` → R2 presigned PUT |
 | 정기 일정 목록 | `/cal/recurring` `recurring_list_screen.dart` | 규칙 카드·삭제(등록자/밴드장). 캘린더 AppBar ↻ 아이콘에서 진입 |
 | 정기 일정 등록 | `/cal/recurring/new` `recurring_form_screen.dart` | 주기(매주/격주/매월)·요일·시간·기간·비용·메모. 등록 시 8주분 회차 자동 생성 |
+| 설정 허브 | `/settings` `settings_home_screen.dart` | 홈 헤더 ⚙ 아이콘. 알림/밴드/차단/계정/로그아웃 |
+| 밴드 설정 | `/settings/band` `band_settings_screen.dart` | 일정 등록 권한 모드, 멤버 목록(밴드장 위임·추방), 밴드 나가기 |
+| 계정 | `/settings/account` `account_screen.dart` | 내 정보, 회원 탈퇴(이메일 계정은 비밀번호 재확인) |
+| 차단한 사용자 | `/settings/blocks` `blocked_users_screen.dart` | 차단 목록 + 해제 |
 
 추가로 만든 화면(요구 목록엔 없지만 흐름상 필요):
 
@@ -66,7 +70,9 @@
 | `/board/new` | 글 작성 | 루트 (풀스크린) | 게시판 "글쓰기" FAB |
 | `/board/:postId` | 게시글 상세 | 루트 (풀스크린) | 피드 카드 탭 |
 | `/board/:postId/edit` | 글 수정 | 루트 (풀스크린) | 상세 ⋮ → 수정 |
-| `/settings/notifications` | 알림 설정 | 루트 (풀스크린) | 홈 헤더 종 아이콘 |
+| `/settings` | 설정 허브 | 루트 (풀스크린) | 홈 헤더 ⚙ 아이콘 |
+| `/settings/band` `/settings/account` `/settings/blocks` | 밴드·계정·차단 | 루트 (풀스크린) | 설정 허브 |
+| `/settings/notifications` | 알림 설정 | 루트 (풀스크린) | 홈 헤더 종 아이콘 · 설정 허브 |
 
 하단 탭바(`routing/tab_shell.dart`, `StatefulShellRoute.indexedStack`):
 **홈·캘린더·지도·게시판**은 브랜치 전환(스택·스크롤 각자 보존), **정산**만 화면이 없어
@@ -84,8 +90,8 @@
    남은 것: FCM 수신부(디바이스 토큰·`firebase_messaging`), 미납 독촉 → `client-PROBLEMS-2026-09-03.md`
 4. ~~게시판·게시글 상세 (#11·#12)~~ ✅ 2026-09-04 (C6) — `client-06-board.md`. 남은 것: 영상 재생, 차단 해제
 5. ~~일정 상세 보강 — 수정(PUT)·밴드장 승인/거절 + 정기(반복) 일정~~ ✅ 2026-09-04 (C7) — `client-07-reservation-recurring.md`
-6. **(C8, 다음)** 설정 나머지 (#13) — 밴드 권한·밴드장 위임·멤버 추방·밴드 나가기·계정/탈퇴·차단 해제
-7. **(C9)** 알림 수신부(FCM 디바이스 토큰) + 클라이언트 CI
+6. ~~설정 나머지 (#13)~~ ✅ 2026-09-04 (C8) — `client-08-settings.md`
+7. **(C9, 다음)** 알림 수신부(FCM 디바이스 토큰) + 클라이언트 CI
 8. (정리) 셋리스트 재정렬, 정기 규칙 상세/수정, 지도 보강(마커↔목록 하이라이트·현재 위치·클러스터링)
 
 ---
