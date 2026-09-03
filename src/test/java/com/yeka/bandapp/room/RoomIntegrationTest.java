@@ -295,9 +295,14 @@ class RoomIntegrationTest extends RoomApiSupport {
         placeSearch.willReturn(
                 new PlaceSuggestion("불려선 안 되는 결과", null, null, null, null, null, null));
 
-        JsonNode body = data(get("/api/v1/bands/" + bandId + "/rooms/search?query=%20%20", leader));
+        // query 파라미터 자체를 생략 → 컨트롤러 기본값 "" → 검색 호출 없이 빈 목록
+        JsonNode omitted = data(get("/api/v1/bands/" + bandId + "/rooms/search", leader));
+        assertThat(omitted.get("placeCount").asInt()).isZero();
 
-        assertThat(body.get("placeCount").asInt()).isZero();
+        // 빈 문자열도 동일
+        JsonNode empty = data(get("/api/v1/bands/" + bandId + "/rooms/search?query=", leader));
+        assertThat(empty.get("placeCount").asInt()).isZero();
+
         assertThat(placeSearch.callCount()).isZero();
     }
 
