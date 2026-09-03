@@ -60,6 +60,12 @@ app:
     client-secret: ${NAVER_MAP_CLIENT_SECRET:}
     connect-timeout: PT2S
     read-timeout: PT3S
+    search:                                                     # 지역검색(장소 검색) — 네이버 개발자센터 앱, 지도 API와 다른 자격증명
+      api-base-url: https://openapi.naver.com
+      client-id: ${NAVER_SEARCH_CLIENT_ID:}                     # 비우면 합주실 주소 검색이 항상 빈 목록을 반환한다
+      client-secret: ${NAVER_SEARCH_CLIENT_SECRET:}
+      connect-timeout: PT2S
+      read-timeout: PT3S
   r2:
     account-id: ${R2_ACCOUNT_ID:}                               # 비우면 미디어 업로드 API 만 503, 게시판·신고·차단은 정상
     bucket: ${R2_BUCKET:}

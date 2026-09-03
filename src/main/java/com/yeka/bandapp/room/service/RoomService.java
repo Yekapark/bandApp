@@ -6,12 +6,14 @@ import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.common.ratelimit.RateLimitProperties;
 import com.yeka.bandapp.common.ratelimit.RedisRateLimiter;
 import com.yeka.bandapp.room.dto.CreateRoomRequest;
+import com.yeka.bandapp.room.dto.PlaceSearchResponse;
 import com.yeka.bandapp.room.dto.RoomListResponse;
 import com.yeka.bandapp.room.dto.RoomResponse;
 import com.yeka.bandapp.room.dto.UpdateRoomRequest;
 import com.yeka.bandapp.room.entity.Room;
 import com.yeka.bandapp.room.naver.Coordinates;
 import com.yeka.bandapp.room.naver.GeocodingClient;
+import com.yeka.bandapp.room.naver.PlaceSearchClient;
 import com.yeka.bandapp.room.repository.RoomRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -37,19 +39,22 @@ import java.util.Optional;
 public class RoomService {
 
     private static final String GEOCODE_BUCKET = "geocode:user";
+    private static final String PLACE_SEARCH_BUCKET = "placesearch:user";
 
     private final RoomRepository roomRepository;
     private final BandAccessGuard accessGuard;
     private final GeocodingClient geocodingClient;
+    private final PlaceSearchClient placeSearchClient;
     private final RedisRateLimiter rateLimiter;
     private final RateLimitProperties rateLimitProperties;
 
     public RoomService(RoomRepository roomRepository, BandAccessGuard accessGuard,
-                       GeocodingClient geocodingClient, RedisRateLimiter rateLimiter,
-                       RateLimitProperties rateLimitProperties) {
+                       GeocodingClient geocodingClient, PlaceSearchClient placeSearchClient,
+                       RedisRateLimiter rateLimiter, RateLimitProperties rateLimitProperties) {
         this.roomRepository = roomRepository;
         this.accessGuard = accessGuard;
         this.geocodingClient = geocodingClient;
+        this.placeSearchClient = placeSearchClient;
         this.rateLimiter = rateLimiter;
         this.rateLimitProperties = rateLimitProperties;
     }
@@ -87,6 +92,25 @@ public class RoomService {
     public RoomResponse get(long bandId, long roomId, long userId) {
         accessGuard.requireActiveMember(bandId, userId);
         return RoomResponse.from(room(bandId, roomId));
+    }
+
+    /**
+     * 합주실 이름·주소 후보 검색(네이버 지역검색). 등록 폼에서 "검색해서 자동 입력"에 쓴다.
+     *
+     * <p>지오코딩과 같은 이유로 {@code @Transactional}이 없다 — 외부 HTTP 호출을 트랜잭션 안에서 하지
+     * 않는다. 멤버십 확인은 그 자체로 짧은 조회 트랜잭션이고, 검색 호출은 그 밖에서 이뤄진다.
+     * 검색어가 비었거나 검색 키가 없으면 빈 결과를 돌려준다(에러 아님). 외부 API 남용 방지를 위해
+     * 지오코딩과 동일한 계정당 분당 상한을 건다.
+     */
+    public PlaceSearchResponse searchPlaces(long bandId, long userId, String query) {
+        accessGuard.requireActiveMember(bandId, userId);
+        String q = trimToNull(query);
+        if (q == null) {
+            return PlaceSearchResponse.of("", List.of());
+        }
+        rateLimiter.check(PLACE_SEARCH_BUCKET, String.valueOf(userId),
+                rateLimitProperties.geocodePerUserPerMin());
+        return PlaceSearchResponse.of(q, placeSearchClient.search(q));
     }
 
     /**
