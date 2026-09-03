@@ -10,6 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # 한국어 로케일 (날짜/시간 피커 등 Material 위젯 번역)
+  flutter_localizations:
+    sdk: flutter
+
   # 상태관리
   flutter_riverpod: ^2.5.1
 
@@ -25,8 +29,8 @@ dependencies:
   # 폰트 (Noto Sans KR / Bebas Neue / JetBrains Mono)
   google_fonts: ^6.2.1
 
-  # 날짜 포매팅
-  intl: ^0.19.0
+  # 날짜 포매팅 (flutter_localizations 가 0.20.x 를 요구)
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:

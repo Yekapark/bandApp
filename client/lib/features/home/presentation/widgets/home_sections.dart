@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/format/formatters.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../routing/app_router.dart';
 import '../../../../shared/widgets/soon.dart';
 import '../../../band/data/band_models.dart';
 import '../../../reservation/data/reservation_models.dart';
@@ -135,7 +137,7 @@ class NextRehearsalCard extends StatelessWidget {
               ),
             ),
             TextButton(
-              onPressed: () => showSoon(context, '일정 등록'),
+              onPressed: () => context.push(Routes.newReservation),
               child: const Text('일정 추가',
                   style: TextStyle(color: AppColors.primary)),
             ),
@@ -207,8 +209,8 @@ class _MiniPill extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(
-            fontSize: 11, fontWeight: FontWeight.w700, color: color),
+        style:
+            TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
       ),
     );
   }
@@ -238,7 +240,7 @@ class SummaryRow extends StatelessWidget {
             value: upcomingCount == null ? '…' : '$upcomingCount회',
             hint: '앞으로 60일',
             valueColor: AppColors.textPrimary,
-            onTap: () => showSoon(context, '캘린더'),
+            onTap: () => context.push(Routes.calendar),
           ),
         ),
       ],
@@ -276,8 +278,7 @@ class _SummaryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(title,
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textDim)),
+                style: const TextStyle(fontSize: 11, color: AppColors.textDim)),
             const SizedBox(height: 6),
             Text(value,
                 style: AppTypography.mono(fontSize: 19, color: valueColor)),
@@ -306,11 +307,10 @@ class UpcomingList extends StatelessWidget {
           children: [
             const Expanded(
               child: Text('다가오는 일정',
-                  style:
-                      TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
             ),
             GestureDetector(
-              onTap: () => showSoon(context, '캘린더'),
+              onTap: () => context.push(Routes.calendar),
               child: const Text('캘린더',
                   style: TextStyle(fontSize: 11.5, color: AppColors.primary)),
             ),
@@ -333,8 +333,7 @@ class UpcomingList extends StatelessWidget {
                   border: Border.all(color: AppColors.borderFaint),
                 ),
                 child: const Text('예정된 일정이 없어요.',
-                    style:
-                        TextStyle(fontSize: 12.5, color: AppColors.textDim)),
+                    style: TextStyle(fontSize: 12.5, color: AppColors.textDim)),
               );
             }
             return Column(
@@ -361,7 +360,7 @@ class _UpcomingTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = reservation;
     return GestureDetector(
-      onTap: () => showSoon(context, '일정 상세'),
+      onTap: () => context.push(Routes.reservation(r.id)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
@@ -400,8 +399,8 @@ class _UpcomingTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '${Fmt.time(r.startAt)} · ${Fmt.durationKo(r.startAt, r.endAt)}',
-                    style: const TextStyle(
-                        fontSize: 11, color: AppColors.textDim),
+                    style:
+                        const TextStyle(fontSize: 11, color: AppColors.textDim),
                   ),
                 ],
               ),

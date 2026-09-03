@@ -212,12 +212,13 @@ class _BottomTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const tabs = [
-      ('홈', Icons.home_filled, true),
-      ('캘린더', Icons.calendar_today, false),
-      ('지도', Icons.map_outlined, false),
-      ('정산', Icons.receipt_long, false),
-      ('게시판', Icons.grid_view, false),
+    // (라벨, 아이콘, 현재 탭 여부, 이동 경로 — null 이면 "다음 단계" 안내)
+    const tabs = <(String, IconData, bool, String?)>[
+      ('홈', Icons.home_filled, true, null),
+      ('캘린더', Icons.calendar_today, false, Routes.calendar),
+      ('지도', Icons.map_outlined, false, null),
+      ('정산', Icons.receipt_long, false, null),
+      ('게시판', Icons.grid_view, false, null),
     ];
     return Container(
       padding: const EdgeInsets.only(top: 8, bottom: 26, left: 10, right: 10),
@@ -227,19 +228,22 @@ class _BottomTabs extends StatelessWidget {
       ),
       child: Row(
         children: [
-          for (final (label, icon, active) in tabs)
+          for (final (label, icon, active, route) in tabs)
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: active ? null : () => showSoon(context, label),
+                onTap: active
+                    ? null
+                    : () => route != null
+                        ? context.push(route)
+                        : showSoon(context, label),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(icon,
                         size: 20,
-                        color: active
-                            ? AppColors.primary
-                            : AppColors.textFaint),
+                        color:
+                            active ? AppColors.primary : AppColors.textFaint),
                     const SizedBox(height: 5),
                     Text(
                       label,
@@ -280,4 +284,3 @@ class _ErrorState extends StatelessWidget {
     );
   }
 }
-

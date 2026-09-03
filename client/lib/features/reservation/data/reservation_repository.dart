@@ -41,4 +41,128 @@ class ReservationRepository {
       throw ApiException.fromDio(e);
     }
   }
+
+  /// 일정 + 참석 현황 + 셋리스트.
+  Future<ReservationDetail> detail({
+    required int bandId,
+    required int reservationId,
+  }) async {
+    try {
+      final res = await _dio.get<dynamic>(
+        '/bands/$bandId/reservations/$reservationId',
+      );
+      return unwrap(
+        res,
+        (d) => ReservationDetail.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 일정 등록. 겹침이 있어도 성공(201) — 결과의 overlaps 로 안내한다.
+  Future<ReservationWriteResult> create({
+    required int bandId,
+    required int roomId,
+    required DateTime startAt,
+    required DateTime endAt,
+    int? cost,
+    String? note,
+  }) async {
+    try {
+      final res = await _dio.post<dynamic>(
+        '/bands/$bandId/reservations',
+        data: {
+          'roomId': roomId,
+          'startAt': startAt.toUtc().toIso8601String(),
+          'endAt': endAt.toUtc().toIso8601String(),
+          if (cost != null) 'cost': cost,
+          if (note != null && note.isNotEmpty) 'note': note,
+        },
+      );
+      return unwrap(
+        res,
+        (d) => ReservationWriteResult.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 일정 취소 (등록자 본인 또는 밴드장).
+  Future<void> cancel({
+    required int bandId,
+    required int reservationId,
+  }) async {
+    try {
+      await _dio.delete<dynamic>(
+        '/bands/$bandId/reservations/$reservationId',
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 내 참석 상태 변경. 변경 후 전체 참석 현황을 돌려준다.
+  Future<AttendanceBoard> respondAttendance({
+    required int bandId,
+    required int reservationId,
+    required int userId,
+    required AttendanceStatus status,
+  }) async {
+    try {
+      final res = await _dio.put<dynamic>(
+        '/bands/$bandId/reservations/$reservationId/attendances/$userId',
+        data: {'status': attendanceStatusWire(status)},
+      );
+      return unwrap(
+        res,
+        (d) => AttendanceBoard.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 셋리스트에 곡 추가 (맨 뒤). 밴드 멤버 누구나.
+  Future<SetlistItem> addSetlistItem({
+    required int bandId,
+    required int reservationId,
+    required String title,
+    String? artist,
+    String? referenceUrl,
+  }) async {
+    try {
+      final res = await _dio.post<dynamic>(
+        '/bands/$bandId/reservations/$reservationId/setlist',
+        data: {
+          'title': title,
+          if (artist != null && artist.isNotEmpty) 'artist': artist,
+          if (referenceUrl != null && referenceUrl.isNotEmpty)
+            'referenceUrl': referenceUrl,
+        },
+      );
+      return unwrap(
+        res,
+        (d) => SetlistItem.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 셋리스트 곡 삭제.
+  Future<void> deleteSetlistItem({
+    required int bandId,
+    required int reservationId,
+    required int itemId,
+  }) async {
+    try {
+      await _dio.delete<dynamic>(
+        '/bands/$bandId/reservations/$reservationId/setlist/$itemId',
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
 }

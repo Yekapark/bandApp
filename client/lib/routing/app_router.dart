@@ -11,6 +11,10 @@ import '../features/band/presentation/band_gate_screen.dart';
 import '../features/band/presentation/create_band_screen.dart';
 import '../features/band/presentation/join_band_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/reservation/presentation/calendar_screen.dart';
+import '../features/reservation/presentation/reservation_detail_screen.dart';
+import '../features/reservation/presentation/reservation_form_screen.dart';
+import '../features/reservation/presentation/room_form_screen.dart';
 
 class Routes {
   const Routes._();
@@ -22,6 +26,13 @@ class Routes {
   static const createBand = '/band-gate/create';
   static const joinBand = '/band-gate/join';
   static const home = '/home';
+  static const calendar = '/cal';
+  static const newReservation = '/cal/new';
+  static const newRoom = '/cal/rooms/new';
+
+  /// 일정 상세. [reservationId] 로 실제 경로를 만든다.
+  static String reservation(int reservationId) =>
+      '/reservations/$reservationId';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -59,17 +70,45 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: Routes.login, builder: (_, __) => const LoginScreen()),
       GoRoute(path: Routes.terms, builder: (_, __) => const TermsScreen()),
       GoRoute(path: Routes.signup, builder: (_, __) => const SignupScreen()),
-      GoRoute(path: Routes.bandGate, builder: (_, __) => const BandGateScreen()),
+      GoRoute(
+          path: Routes.bandGate, builder: (_, __) => const BandGateScreen()),
       GoRoute(
         path: Routes.createBand,
         builder: (_, __) => const CreateBandScreen(),
       ),
-      GoRoute(path: Routes.joinBand, builder: (_, __) => const JoinBandScreen()),
+      GoRoute(
+          path: Routes.joinBand, builder: (_, __) => const JoinBandScreen()),
       GoRoute(path: Routes.home, builder: (_, __) => const HomeScreen()),
+      GoRoute(
+        path: Routes.newReservation,
+        builder: (_, state) => ReservationFormScreen(
+          initialDate: _parseDate(state.uri.queryParameters['date']),
+        ),
+      ),
+      GoRoute(
+        path: Routes.newRoom,
+        builder: (_, __) => const RoomFormScreen(),
+      ),
+      GoRoute(
+        path: Routes.calendar,
+        builder: (_, __) => const CalendarScreen(),
+      ),
+      GoRoute(
+        path: '/reservations/:rid',
+        builder: (_, state) => ReservationDetailScreen(
+          reservationId: int.parse(state.pathParameters['rid']!),
+        ),
+      ),
     ],
   );
 });
 
 class _AuthRefresh extends ChangeNotifier {
   void bump() => notifyListeners();
+}
+
+/// "2026-09-10" → DateTime(2026, 9, 10). 파싱 실패 시 null.
+DateTime? _parseDate(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  return DateTime.tryParse(raw);
 }

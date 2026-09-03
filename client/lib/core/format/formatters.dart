@@ -32,6 +32,26 @@ class Fmt {
   /// "금"
   static String dow(DateTime utc) => _dows[utc.toLocal().weekday - 1];
 
+  /// 이미 로컬인 날짜를 "2026년 9월" 로. (캘린더 헤더)
+  static String monthTitleKo(DateTime local) =>
+      '${local.year}년 ${local.month}월';
+
+  /// 이미 로컬인 날짜를 "9월 10일 (목)" 로.
+  static String dateKo(DateTime local) =>
+      '${local.month}월 ${local.day}일 (${_dows[local.weekday - 1]})';
+
+  /// UTC 를 로컬로 바꿔 "9월 10일 (목)" 로.
+  static String dateKoUtc(DateTime utc) => dateKo(utc.toLocal());
+
+  /// 로컬 날짜를 "2026-09-10" 로 (쿼리 파라미터·라우트용).
+  static String ymd(DateTime local) =>
+      '${local.year.toString().padLeft(4, '0')}-'
+      '${_two(local.month)}-${_two(local.day)}';
+
+  /// 로컬 시각을 "19:00" 로.
+  static String hhmm(DateTime local) =>
+      '${_two(local.hour)}:${_two(local.minute)}';
+
   /// 두 시각 사이를 "3시간" / "1시간 30분" 형태로.
   static String durationKo(DateTime startUtc, DateTime endUtc) {
     final mins = endUtc.difference(startUtc).inMinutes;

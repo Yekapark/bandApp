@@ -11,9 +11,11 @@
 
 - 백엔드는 Phase 0~10 완료(`docs/progress/README.md` 참조). 지금은 **Flutter 클라이언트 트랙**.
 - 클라이언트 코드 위치: **`client/`** (이 저장소 안, 모노레포).
-- 1단계(온보딩 흐름 → 밴드 홈)는 **코드 구현 완료**, `flutter analyze` 에러 0, 웹 빌드 성공,
-  `flutter run -d chrome` 로 로그인 화면까지 실렌더 확인함.
-- 다음: 예약 캘린더 화면 → 일정 등록 폼 → 일정 상세(참석 체크).
+- 1단계(온보딩 → 밴드 홈), 2단계(캘린더 → 합주실 → 일정 등록 → 일정 상세)는 **코드 구현 완료**,
+  `flutter analyze` 에러 0, 웹 빌드 성공. 백엔드 붙인 end-to-end 는 아직 미검증.
+- 2단계에 딸려: **백엔드 신규 엔드포인트** `GET /bands/{id}/rooms/search`(네이버 지역검색 프록시)
+  + 한국어 로케일. 백엔드 순수 단위 테스트·컴파일 통과, 통합 테스트는 CI 대기.
+- 다음: 하단 탭바 ShellRoute화 → 합주실 지도 → 정산 화면 → 카카오 로그인 SDK.
 
 ---
 
@@ -23,6 +25,7 @@
 |---|---|---|
 | 1 | **이 파일** (`docs/progress/client-DEVLOG.md`) | 현재 상태·다음 할 일·로컬 환경 함정 |
 | 2 | `docs/progress/client-01-onboarding-home.md` | 1단계에서 만든 것 상세, 목업↔백엔드 차이 표 |
+| 2b | `docs/progress/client-02-calendar-reservation.md` | 2단계(캘린더·합주실·일정 등록·상세) 상세, 뺀 것/열린 결정 |
 | 3 | `client/README.md` | 실행법, 폴더 구조, 상태관리/패키지 선택 |
 | 4 | `docs/BACKLOG.md` §2 (286~318줄) | 전체 화면 정의 13개 (사람이 준 요구사항 원문) |
 | 5 | `example/BandScreen.dc.html` | 화면 목업(디자인 기준). 색/폰트/레이아웃 |
@@ -49,6 +52,27 @@
 | 초대코드 가입 | `/band-gate/join` | `.../join_band_screen.dart` | `POST /bands/join` |
 | 밴드 홈 | `/home` | `features/home/presentation/home_screen.dart` | `GET /bands`, `/bands/{id}/members`, `/bands/{id}/reservations` |
 
+### 구현 완료 (2단계: 캘린더 → 일정 등록 → 일정 상세) — 상세는 `client-02-calendar-reservation.md`
+
+| 화면 | 라우트 | 파일 | 백엔드 |
+|---|---|---|---|
+| 예약 캘린더 | `/cal` | `features/reservation/presentation/calendar_screen.dart` | `GET /bands/{id}/reservations?from&to` |
+| 일정 등록 폼 | `/cal/new?date=` | `.../reservation_form_screen.dart` | `POST /bands/{id}/reservations` (겹침은 `overlaps` 경고) |
+| 합주실 등록 폼 | `/cal/rooms/new` | `.../room_form_screen.dart` | `POST /bands/{id}/rooms`, `GET /bands/{id}/rooms/search` |
+| 합주실 선택 시트 | (모달) | `.../widgets/room_picker_sheet.dart` | `GET /bands/{id}/rooms` |
+| 일정 상세 | `/reservations/:rid` | `.../reservation_detail_screen.dart` | `GET/DELETE …/{rid}`, `PUT …/attendances/{uid}`, `POST/DELETE …/setlist` |
+
+- 상태: `features/reservation/application/calendar_providers.dart`
+  (`calendarMonthProvider`, `monthReservationsProvider`, `roomsProvider`, `reservationDetailProvider`).
+- 홈의 `showSoon` 안내 중 캘린더/일정 관련은 실제 라우트로 교체(지도·정산·게시판은 유지).
+- **합주실 주소 검색**: 등록 폼 주소 칸이 네이버 지역검색과 연결(디바운스 → `rooms/search` →
+  후보 탭 시 자동 입력). `place_models.dart`, `room_repository.searchPlaces`.
+  **백엔드에 `GET /bands/{id}/rooms/search` 엔드포인트를 새로 만들었다**(네이버 지역검색 프록시,
+  `phase-03-room.md` §8.2). `NAVER_SEARCH_CLIENT_ID/SECRET` 환경변수 필요(개발자센터 앱, NCP 지도 키와 별개).
+- **한국어 로케일**: `app.dart`에 `flutter_localizations`+`locale: ko` → 날짜/시간 피커 등 한국어.
+  `intl`을 `^0.20.2`로 올림.
+- **뺀 것**: 정기(반복) 일정 — 백엔드에 생성 API 없음. 일정 수정/승인/거절 UI. 캘린더 주간 뷰.
+
 - 라우팅: `lib/routing/app_router.dart` — go_router + 로그인 상태 기반 redirect.
 - 네트워크: `lib/core/network/dio_client.dart` — 토큰 자동 부착, 401→refresh 1회 재시도.
 - 상태관리: flutter_riverpod (코드젠 없음). 인증 상태: `features/auth/application/auth_controller.dart`.
@@ -57,20 +81,22 @@
 
 ### 검증 결과
 
-- `flutter analyze` → **에러 0**, info/warning 103개(주로 `prefer_const`, `require_trailing_commas`,
-  `withOpacity` deprecated). 기능 영향 없음. 정리는 선택.
+- `flutter analyze` → **에러 0**. 경고 15개(전부 `unawaited_return_in_try_block` — 기존
+  repository 들과 동일한 `return unwrap(...)` 패턴), info 95개(`prefer_const`,
+  `require_trailing_commas`, `withOpacity` deprecated). 기능 영향 없음. `dart format` 적용.
 - `flutter build web` → 성공. (`flutter_secure_storage_web` 가 WASM 미지원이라 "Wasm dry run failed"
   경고는 뜨지만 기본 JS 빌드는 정상.)
-- `flutter run -d chrome --web-port=5599` → 로그인 화면까지 실렌더 확인(2026-09-03).
-- 백엔드 붙여서 로그인/가입/밴드생성 **end-to-end 는 아직 미검증** (아래 3-C 참조).
+- 1단계: `flutter run -d chrome` 로 로그인 화면까지 실렌더 확인(2026-09-03).
+- 백엔드 붙여서 **end-to-end 는 아직 미검증** (1·2단계 모두. 아래 3-C 참조).
 
 ### 커밋 상태
 
-- `client/` 및 이 진행 문서들은 **아직 커밋 안 됨** (2026-09-03 기준). 첫 커밋 시 포함 대상:
-  `client/lib/**`, `client/pubspec.yaml`, `client/analysis_options.yaml`, `client/README.md`,
-  `client/.gitignore`, `docs/progress/client-*.md`, `docs/progress/README.md`(수정), `CLAUDE.md`(수정).
-- `client/android`, `client/web`, `client/windows`, `client/.metadata` 는 `flutter create` 로
-  생성한 것. `client/.gitignore` 가 플랫폼 폴더를 무시하도록 해둠 — 커밋할지는 팀 결정.
+- 1단계(`client/` 스캐폴딩~홈)는 커밋됨: `5a50dfb feat(client): Flutter 클라이언트 스캐폴딩 + 온보딩~밴드 홈`.
+- 2단계(캘린더·일정) 변경분은 **아직 커밋 안 됨**. 대상:
+  `client/lib/features/reservation/**`(신규), `client/lib/features/home/**`,
+  `client/lib/routing/app_router.dart`, `client/lib/core/format/formatters.dart`,
+  `docs/progress/client-02-*.md`, `docs/progress/client-DEVLOG.md`, `docs/progress/README.md`.
+- `client/android`, `client/web`, `client/windows` 는 `.gitignore` 로 제외 상태 — 커밋할지는 팀 결정.
 
 ---
 
@@ -106,6 +132,11 @@
 - `docker compose up` 은 프로젝트 루트(`E:\project\band`)에서. `.env` 필요(`JWT_SECRET` 필수).
 - 2026-09-03 시점: `band-app-1`, `band-postgres-1`, `band-redis-1` 모두 `Up (healthy)` 였음.
   세션 이어받으면 `docker ps` 로 재확인.
+- **FCM 자격증명 함정 (2026-09-03 확인)**: `docker compose up --build` 로 app 을 재빌드하면
+  기동 실패한다 — `.env` 의 `FCM_CREDENTIALS_HOST_PATH` 가 가리키는 JSON 파일이 저장소에 없어
+  compose 가 `/run/secrets/fcm-credentials.json` 를 **디렉터리로** 마운트, `FcmPushSender` 생성 실패.
+  우회: `.env` 에서 `FCM_CREDENTIALS_PATH=` (빈 값) 로 두면 FCM 을 건너뛰고 정상 기동.
+  (실제 Firebase 서비스계정 JSON 을 저장소 루트에 두면 정식 해결.)
 - Flutter 웹에서 백엔드 호출은 CORS 를 타는데, 백엔드 `app.cors.allowed-origins` 가
   `http://localhost:*` 라 `localhost:5599` 등에서 바로 붙는다(설정 OK).
 - **안드로이드 에뮬레이터**는 호스트 localhost 가 `10.0.2.2` → `AppConfig.apiBaseUrl` 이 자동 분기함.
@@ -133,27 +164,33 @@ cd E:\project\band\client
 #   r=핫리로드, R=핫리스타트, q=종료
 ```
 
-수동 확인 시나리오는 `docs/progress/client-01-onboarding-home.md` §5.
+수동 확인 시나리오는 1단계 `client-01-onboarding-home.md` §5, 2단계 `client-02-calendar-reservation.md` §5.
 
 ---
 
 ## 5. 다음 할 일 (우선순위)
 
-1. **예약 캘린더** `/cal` — 월간 뷰, 일정 있는 날 점 표시, 날짜 탭 시 하단 일정 리스트.
-   `GET /bands/{id}/reservations?from&to` (이미 `reservation_repository.dart` 에 있음).
-2. **일정 등록 폼** — 합주실 선택 + 날짜/시간 + 비용 + 외부 예약 메모 + 반복 설정.
-   `POST /bands/{id}/reservations`. 응답의 `overlaps`(겹침 경고)를 등록 후 안내로 표시(등록은 성공시킴).
-   합주실 목록 API(`GET /bands/{id}/rooms`) 화면도 필요 → 합주실 등록 폼도 같이.
-3. **일정 상세** — 참석 체크(참석/불참/미정), 멤버별 참석 현황·집계, 셋리스트.
-   `GET /bands/{id}/reservations/{rid}` (상세엔 attendance·setlist 포함), `PUT .../attendance`.
-4. 하단 탭바를 실제 화면으로 연결 (`ShellRoute` 로 전환 검토).
-5. 카카오 로그인 SDK 연동 (`kakao_flutter_sdk` 추가 + 네이티브 설정). `AuthController.loginKakao` 자리는 있음.
-6. (정리) analyze info/warning 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신).
-7. (검토) 클라이언트 CI — `flutter analyze` + `flutter test`.
+- ~~예약 캘린더 `/cal`~~ ✅ 2단계 완료
+- ~~일정 등록 폼 + 합주실 목록/등록~~ ✅ 2단계 완료 (반복 설정은 제외 — 백엔드 API 없음)
+- ~~일정 상세 (참석 체크 · 멤버별 현황 · 셋리스트)~~ ✅ 2단계 완료
+
+1. 하단 탭바를 실제 화면으로 연결 (`ShellRoute` 로 전환 검토).
+2. **합주실 지도** `/map` — 좌표 있는 합주실 마커 + 하단 목록. `GET /bands/{id}/rooms`.
+3. **정산 화면** `/split` — 일정별 1인당 금액, 멤버별 납부 체크리스트. Phase 7 API.
+4. 카카오 로그인 SDK 연동 (`kakao_flutter_sdk` 추가 + 네이티브 설정). `AuthController.loginKakao` 자리는 있음.
+5. (검토) **정기 일정** — 백엔드에 정기 규칙 생성 API 추가 vs 클라에서 N회 `POST` 반복.
+6. 일정 상세에 수정(PUT)·밴드장 승인/거절 UI.
+7. (정리) analyze info 줄이기, 폰트 번들(google_fonts 런타임 다운로드 대신), 날짜/시간 피커 다크 스타일.
+8. (검토) 클라이언트 CI — `flutter analyze` + `flutter test`.
 
 ## 6. 열린 결정 / 확인 필요
 
-- `client/` 플랫폼 폴더(android/web/windows) 커밋 여부 — 현재 .gitignore 로 제외.
+- **정기(반복) 일정**: 백엔드 `POST /reservations` 에 반복 필드가 없음(`recurringRuleId` 는 응답 전용).
+  규칙 생성 엔드포인트를 추가할지, 클라에서 반복 호출할지.
 - 홈 "이번 달 정산" 카드: 밴드 단위 정산 합계 API 없음 → 현재 값 `—`. 집계 엔드포인트를
   백엔드에 추가할지, 화면에서 일정별로 합산할지 결정 필요.
 - 초대코드 UI: 백엔드는 8자 영숫자인데 목업은 6자리 숫자 키패드 → 현재 8자 텍스트 입력으로 구현.
+- 일정 등록 폼의 "예약 방법": 목업은 전화/카톡 등 태그 선택인데 백엔드엔 `note` 자유 텍스트만 → 메모 한 칸으로 구현.
+- **합주실 주소 검색**(해결): `GET /bands/{id}/rooms/search` 추가함. 다만 실제 결과가 뜨려면
+  `NAVER_SEARCH_CLIENT_ID/SECRET`(네이버 개발자센터 앱) 를 `.env` 에 넣고 재기동해야 한다 —
+  현재 로컬엔 미설정이라 항상 빈 목록. 사용자가 크리덴셜 보유 중이라 함(2026-09-03).
