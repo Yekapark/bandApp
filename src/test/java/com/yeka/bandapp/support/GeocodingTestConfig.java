@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Primary;
 
 /**
  * 합주실 테스트에서 {@code @Import(GeocodingTestConfig.class)}로 가져온다.
- * {@code @Primary}라 실제 {@code NaverGeocodingClient}/{@code NaverLocalSearchClient}보다 우선한다.
+ * {@code @Primary}라 실제 {@code NaverGeocodingClient}/{@code KakaoLocalSearchClient}보다 우선한다.
  */
 @TestConfiguration
 public class GeocodingTestConfig {

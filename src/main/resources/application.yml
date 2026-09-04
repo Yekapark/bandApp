@@ -54,18 +54,17 @@ app:
     admin-key: ${KAKAO_ADMIN_KEY:}
     connect-timeout: PT2S
     read-timeout: PT3S
+    local:                                                      # 로컬(키워드 장소 검색) — 카카오 개발자 콘솔 앱의 REST API 키, 로그인용 키와 별개
+      api-base-url: https://dapi.kakao.com
+      rest-api-key: ${KAKAO_REST_API_KEY:}                      # 비우면 합주실 주소 검색이 항상 빈 목록을 반환한다
+      connect-timeout: PT2S
+      read-timeout: PT3S
   naver:
     api-base-url: https://maps.apigw.ntruss.com                 # NCP 콘솔이 안내하는 주소로 코드 수정 없이 교체 가능
     client-id: ${NAVER_MAP_CLIENT_ID:}                          # 비우면 지오코딩만 건너뛰고 좌표 없이 등록된다
     client-secret: ${NAVER_MAP_CLIENT_SECRET:}
     connect-timeout: PT2S
     read-timeout: PT3S
-    search:                                                     # 지역검색(장소 검색) — 네이버 개발자센터 앱, 지도 API와 다른 자격증명
-      api-base-url: https://openapi.naver.com
-      client-id: ${NAVER_SEARCH_CLIENT_ID:}                     # 비우면 합주실 주소 검색이 항상 빈 목록을 반환한다
-      client-secret: ${NAVER_SEARCH_CLIENT_SECRET:}
-      connect-timeout: PT2S
-      read-timeout: PT3S
   r2:
     account-id: ${R2_ACCOUNT_ID:}                               # 비우면 미디어 업로드 API 만 503, 게시판·신고·차단은 정상
     bucket: ${R2_BUCKET:}

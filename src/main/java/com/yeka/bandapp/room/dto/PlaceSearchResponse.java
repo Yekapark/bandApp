@@ -5,7 +5,7 @@ import com.yeka.bandapp.room.naver.PlaceSuggestion;
 import java.util.List;
 
 /**
- * 합주실 주소 검색 결과. 네이버 지역검색 후보를 최대 5건 담는다. 검색 키가 없거나 결과가 없으면
+ * 합주실 주소 검색 결과. 카카오 로컬 검색 후보를 최대 5건 담는다. 검색 키가 없거나 결과가 없으면
  * {@code places}는 빈 목록이다({@code placeCount == 0}).
  */
 public record PlaceSearchResponse(String query, int placeCount, List<PlaceItem> places) {

@@ -270,7 +270,7 @@ class RoomIntegrationTest extends RoomApiSupport {
     }
 
     @Test
-    void place_search_returns_naver_candidates() {
+    void place_search_returns_candidates() {
         String leader = signup("room-search1@band.app", "리더");
         long bandId = createBand(leader, "검색밴드");
         placeSearch.willReturn(
@@ -289,7 +289,7 @@ class RoomIntegrationTest extends RoomApiSupport {
     }
 
     @Test
-    void place_search_with_blank_query_returns_empty_without_calling_naver() {
+    void place_search_with_blank_query_returns_empty_without_calling_search() {
         String leader = signup("room-search2@band.app", "리더");
         long bandId = createBand(leader, "빈검색밴드");
         placeSearch.willReturn(

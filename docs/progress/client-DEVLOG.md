@@ -13,7 +13,7 @@
 - 클라이언트 코드 위치: **`client/`** (이 저장소 안, 모노레포).
 - 1단계(온보딩→홈), 2단계(캘린더·합주실·일정), 3단계(정산 N빵)는 **코드 구현 완료**,
   `flutter analyze` 에러 0, 웹 빌드 성공. 백엔드 붙인 UI end-to-end 는 아직 미검증.
-- 2단계에 딸려: **백엔드 신규 엔드포인트** `GET /bands/{id}/rooms/search`(네이버 지역검색 프록시)
+- 2단계에 딸려: **백엔드 신규 엔드포인트** `GET /bands/{id}/rooms/search`(카카오 로컬 검색 프록시)
   + 한국어 로케일. PR #34.
 - 3단계 정산: 백엔드 변경 없음(Phase 7 API 사용). 백엔드 스모크(생성/납부/재계산) 통과. PR: `feat/client-settlement`.
 - 카카오 로그인 SDK 배선 완료(`kakao_flutter_sdk_user`). 앱 키만 넣으면 동작. 백엔드 `/auth/kakao` 는 이미 있었음.
@@ -103,10 +103,12 @@
 - 상태: `features/reservation/application/calendar_providers.dart`
   (`calendarMonthProvider`, `monthReservationsProvider`, `roomsProvider`, `reservationDetailProvider`).
 - 홈의 `showSoon` 안내 중 캘린더/일정 관련은 실제 라우트로 교체(지도·정산·게시판은 유지).
-- **합주실 주소 검색**: 등록 폼 주소 칸이 네이버 지역검색과 연결(디바운스 → `rooms/search` →
+- **합주실 주소 검색**: 등록 폼 주소 칸이 카카오 로컬 검색과 연결(디바운스 → `rooms/search` →
   후보 탭 시 자동 입력). `place_models.dart`, `room_repository.searchPlaces`.
-  **백엔드에 `GET /bands/{id}/rooms/search` 엔드포인트를 새로 만들었다**(네이버 지역검색 프록시,
-  `phase-03-room.md` §8.2). `NAVER_SEARCH_CLIENT_ID/SECRET` 환경변수 필요(개발자센터 앱, NCP 지도 키와 별개).
+  **백엔드에 `GET /bands/{id}/rooms/search` 엔드포인트를 새로 만들었다**(카카오 로컬 검색 프록시,
+  `phase-03-room.md` §8.2). `KAKAO_REST_API_KEY` 환경변수 필요(카카오 개발자 콘솔 앱의 REST API 키,
+  로그인용 네이티브/JS 키와 별개). **2026-09-04 네이버 지역검색 → 카카오 로컬로 교체** — 네이버
+  검색 API 신규 발급이 제휴 심사로 막혀서.
 - **한국어 로케일**: `app.dart`에 `flutter_localizations`+`locale: ko` → 날짜/시간 피커 등 한국어.
   `intl`을 `^0.20.2`로 올림.
 - **뺀 것**: 정기(반복) 일정 — 백엔드에 생성 API 없음. 일정 수정/승인/거절 UI. 캘린더 주간 뷰.
@@ -142,7 +144,7 @@
 
 1. **NCP 콘솔**(https://console.ncloud.com) → AI·NAVER API → **Maps** → Application 등록.
    Android 패키지명 `com.yeka.bandapp_client`, iOS 번들 ID 등록. → **Client ID** 복사.
-   (2단계 주소검색용 `NAVER_SEARCH_*` 는 네이버 개발자센터 앱으로 별개.)
+   (2단계 주소검색용 `KAKAO_REST_API_KEY` 는 카카오 개발자 콘솔 앱으로 별개.)
 2. 실행 시 dart-define: `--dart-define=NAVER_MAP_CLIENT_ID=<Client ID>`.
 3. Android 네이티브 빌드는 개발자 모드 필요(§3-D). 웹은 어차피 지도 미지원 → 목록만.
 
@@ -381,8 +383,9 @@ cd E:\project\band\client
 - 초대코드 UI: 백엔드는 8자 영숫자인데 목업은 6자리 숫자 키패드 → 현재 8자 텍스트 입력으로 구현.
 - 일정 등록 폼의 "예약 방법": 목업은 전화/카톡 등 태그 선택인데 백엔드엔 `note` 자유 텍스트만 → 메모 한 칸으로 구현.
 - **합주실 주소 검색**(해결): `GET /bands/{id}/rooms/search` 추가함. 다만 실제 결과가 뜨려면
-  `NAVER_SEARCH_CLIENT_ID/SECRET`(네이버 개발자센터 앱) 를 `.env` 에 넣고 재기동해야 한다 —
-  현재 로컬엔 미설정이라 항상 빈 목록. 사용자가 크리덴셜 보유 중이라 함(2026-09-03).
+  `KAKAO_REST_API_KEY`(카카오 개발자 콘솔 앱의 REST API 키) 를 `.env` 에 넣고
+  `docker compose up -d --force-recreate app` 해야 한다 — 미설정이면 항상 빈 목록(등록 자체는 정상).
+  2026-09-04 네이버 지역검색에서 교체(네이버 검색 API 신규 발급이 제휴 심사로 막힘).
 
 ---
 
