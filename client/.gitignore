@@ -20,3 +20,6 @@ build/
 
 # 로컬 설정
 lib/core/config/app_config.local.dart
+
+# 로컬 키 (--dart-define-from-file)
+dart_defines.json
