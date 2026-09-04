@@ -10,8 +10,12 @@ import 'native_abi.dart';
 class AppConfig {
   const AppConfig._();
 
-  /// 임시 워크네임. 정식 앱 이름 확정 시 교체 (`example/BandScreen.dc.html` 목업 기준).
-  static const String appName = 'STAGE ON';
+  /// 앱 이름. 한국어 표기를 앞세운다 — 영문만 두면 "밴듈/밴둘/반둘레" 로 읽혀 입으로
+  /// 전달이 안 된다(밴드 멤버끼리 말로 추천하는 앱이라 이게 중요하다).
+  static const String appName = '밴듈';
+
+  /// 스토어·웹 등 영문 표기가 필요한 곳. Band + schedule.
+  static const String appNameEn = 'Bandule';
 
   /// 백엔드 베이스 URL. 엔드포인트는 이 뒤에 `/api/v1/...` 가 붙는다.
   ///

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/config/app_config.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/application/auth_controller.dart';
 import 'features/notification/data/push_service.dart';
@@ -25,7 +26,7 @@ class BandApp extends ConsumerWidget {
     });
 
     return MaterialApp.router(
-      title: 'STAGE ON',
+      title: AppConfig.appName,
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: scaffoldMessengerKey,
       theme: AppTheme.dark(),
