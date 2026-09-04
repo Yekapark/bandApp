@@ -214,7 +214,13 @@ class _ReservationDetailScreenState
                 userId: meId,
                 status: status,
               );
-      if (mounted) setState(() => _boardOverride = board);
+      if (!mounted) return;
+      setState(() => _boardOverride = board);
+      // 로컬 갱신만으로는 부족하다. reservationDetailProvider 는 autoDispose 가 아니라
+      // 캐시가 계속 남아서, 화면을 벗어났다 돌아오면(_boardOverride 가 사라진 뒤) 응답 전의
+      // 옛 값이 다시 그려진다. 캐시도 함께 무효화한다 — 이미 데이터가 있는 상태의 갱신이라
+      // 로딩 스피너로 깜빡이지 않는다.
+      ref.invalidate(reservationDetailProvider(_key(bandId)));
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
