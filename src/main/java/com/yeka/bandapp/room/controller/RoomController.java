@@ -61,7 +61,7 @@ public class RoomController {
     }
 
     @Operation(summary = "합주실 주소 검색",
-            description = "네이버 지역검색으로 합주실 이름·주소 후보를 최대 5건 반환한다. 등록 폼에서 검색해 자동 입력하는 용도. "
+            description = "카카오 로컬 검색으로 합주실 이름·주소 후보를 최대 5건 반환한다. 등록 폼에서 검색해 자동 입력하는 용도. "
                     + "검색어가 비었거나 서버에 검색 키가 없으면 빈 목록(places=[])을 준다 — 이때도 200이다. "
                     + "그 밴드 멤버만(비멤버 403 NOT_BAND_MEMBER). 계정당 분당 호출 상한이 있어 초과 시 429.")
     @GetMapping("/search")

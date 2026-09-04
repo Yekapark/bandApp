@@ -345,13 +345,13 @@ B3 25회 연타 → 429 + 키 TTL 100s, B1 `prod` 프로파일에서 `/v3/api-do
 
 | 항목 | 내용 |
 |---|---|
-| 엔드포인트 | `GET /api/v1/bands/{bandId}/rooms/search?query=` — 밴드 멤버만. 네이버 지역검색 후보 최대 5건. 응답 `{query, placeCount, places:[{name, roadAddress, address, category, phone, lat, lng}]}` |
-| 실패 처리 | 검색어 공백·서버에 검색 키 없음·네이버 오류 → **200 + 빈 목록**(에러 아님). 등록은 주소 직접 입력으로 항상 가능 |
-| 외부 연동 | `PlaceSearchClient` 인터페이스 + `NaverLocalSearchClient`(개발자센터 지역검색 `GET /v1/search/local.json`). 기존 `GeocodingClient`와 동일 방침 — **예외를 던지지 않고** 빈 목록으로 통일. `@Transactional` 밖 |
-| 좌표 변환 | 네이버 `mapx`/`mapy`(WGS84×1e7 정수)를 나눠서 KR 대략 경계 안일 때만 채운다(구형 KATEC 값은 좌표 null, 후보는 유지) |
-| 자격증명 | `app.naver.search.client-id/secret` ← `NAVER_SEARCH_CLIENT_ID/SECRET`. **네이버 개발자센터(developers.naver.com) 앱, NCP 지도 키와 별개.** 비우면 검색만 빈 목록 |
+| 엔드포인트 | `GET /api/v1/bands/{bandId}/rooms/search?query=` — 밴드 멤버만. 카카오 로컬 검색 후보 최대 5건. 응답 `{query, placeCount, places:[{name, roadAddress, address, category, phone, lat, lng}]}` |
+| 실패 처리 | 검색어 공백·서버에 검색 키 없음·카카오 오류 → **200 + 빈 목록**(에러 아님). 등록은 주소 직접 입력으로 항상 가능 |
+| 외부 연동 | `PlaceSearchClient` 인터페이스 + `KakaoLocalSearchClient`(카카오 로컬 키워드 검색 `GET /v2/local/search/keyword.json`, 헤더 `Authorization: KakaoAK {키}`). 기존 `GeocodingClient`와 동일 방침 — **예외를 던지지 않고** 빈 목록으로 통일. `@Transactional` 밖 |
+| 좌표 변환 | 카카오 `x`(경도)/`y`(위도)는 WGS84 십진 그대로. KR 대략 경계 안일 때만 채운다(범위 밖은 좌표 null, 후보는 유지) |
+| 자격증명 | `app.kakao.local.rest-api-key` ← `KAKAO_REST_API_KEY`. **카카오 개발자 콘솔 앱의 REST API 키, 로그인용 네이티브/JS 키와 별개.** 비우면 검색만 빈 목록. (2026-09-04 네이버 지역검색에서 교체 — 네이버 검색 API 신규 발급이 제휴 심사로 막힘) |
 | 레이트리밋 | 지오코딩과 같은 `geocode-per-user-per-min` 상한을 `placesearch:user` 버킷으로 공유 |
-| 테스트 | `NaverLocalSearchParseTest`(순수 단위 — `<b>` 태그 제거·좌표 변환·범위 밖 제외), `RoomIntegrationTest`에 3건(후보 반환/공백 질의 무호출/비멤버 403). `FakePlaceSearchClient` 추가 |
+| 테스트 | `KakaoLocalSearchParseTest`(순수 단위 — 필드 매핑·좌표 범위 밖 제외·빈 필드 null), `RoomIntegrationTest`에 3건(후보 반환/공백 질의 무호출/비멤버 403). `FakePlaceSearchClient` 추가 |
 
 검증(2026-09-03): 순수 단위 테스트 통과. `docker compose`로 앱 기동 후 `rooms/search` —
 키 미설정 시 `200 {placeCount:0}`, 공백 질의 `200` 빈 목록, 비멤버 `403` 확인.

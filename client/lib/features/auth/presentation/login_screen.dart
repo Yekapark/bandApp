@@ -78,6 +78,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
+      debugPrint('kakao login failed: $e');
       final msg = e.toString().toLowerCase();
       final canceled = msg.contains('cancel') || msg.contains('access_denied');
       if (!canceled) setState(() => _error = '카카오 로그인 중 문제가 발생했습니다.');
