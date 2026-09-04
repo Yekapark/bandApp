@@ -1,6 +1,6 @@
 package com.yeka.bandapp.room.dto;
 
-import com.yeka.bandapp.room.naver.PlaceSuggestion;
+import com.yeka.bandapp.room.place.PlaceSuggestion;
 
 import java.util.List;
 

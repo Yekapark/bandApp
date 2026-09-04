@@ -1,7 +1,7 @@
 package com.yeka.bandapp.support;
 
-import com.yeka.bandapp.room.naver.Coordinates;
-import com.yeka.bandapp.room.naver.GeocodingClient;
+import com.yeka.bandapp.room.place.Coordinates;
+import com.yeka.bandapp.room.place.GeocodingClient;
 
 import java.util.Optional;
 

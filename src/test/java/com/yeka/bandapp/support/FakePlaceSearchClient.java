@@ -1,7 +1,7 @@
 package com.yeka.bandapp.support;
 
-import com.yeka.bandapp.room.naver.PlaceSearchClient;
-import com.yeka.bandapp.room.naver.PlaceSuggestion;
+import com.yeka.bandapp.room.place.PlaceSearchClient;
+import com.yeka.bandapp.room.place.PlaceSuggestion;
 
 import java.util.ArrayList;
 import java.util.List;

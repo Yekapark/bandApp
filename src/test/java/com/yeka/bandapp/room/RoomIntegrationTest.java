@@ -2,7 +2,7 @@ package com.yeka.bandapp.room;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yeka.bandapp.room.entity.Room;
-import com.yeka.bandapp.room.naver.PlaceSuggestion;
+import com.yeka.bandapp.room.place.PlaceSuggestion;
 import com.yeka.bandapp.room.repository.RoomRepository;
 import com.yeka.bandapp.support.FakeGeocodingClient;
 import com.yeka.bandapp.support.FakePlaceSearchClient;
