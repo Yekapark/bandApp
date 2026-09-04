@@ -40,14 +40,16 @@ class AppConfig {
   static bool get kakaoEnabled =>
       kakaoNativeAppKey.isNotEmpty || kakaoJavaScriptAppKey.isNotEmpty;
 
-  /// 네이버 지도 클라이언트 ID (NCP → Maps → Application). Android/iOS 전용.
-  /// 빈 값이면 지도 화면이 마커 대신 목록만 보여준다.
-  /// 배포 빌드: --dart-define=NAVER_MAP_CLIENT_ID=xxxx
-  static const String naverMapClientId = String.fromEnvironment(
-    'NAVER_MAP_CLIENT_ID',
-  );
+  /// 카카오맵(kakao_map_sdk)은 로그인과 **같은 네이티브 앱 키**를 쓴다 — 지도 전용 키가 따로 없다.
+  /// Android/iOS 전용이라 웹에서는 지도 대신 목록만 보여준다.
+  ///
+  /// SDK 인증에 실패하면(콘솔에 키 해시 미등록 등) 이 플래그가 켜지고, 지도 자리에는 안내 문구만
+  /// 남는다. 지도가 등록 폼처럼 자주 여는 화면에 들어가 있어서, 인증 실패로 화면이 깨지는 대신
+  /// 조용히 폴백해야 한다.
+  static bool mapAuthFailed = false;
 
-  static bool get naverMapEnabled => naverMapClientId.isNotEmpty;
+  static bool get mapEnabled =>
+      !kIsWeb && kakaoNativeAppKey.isNotEmpty && !mapAuthFailed;
 
   /// 스플래시 최소 노출 시간 (목업: 약 2초).
   static const Duration splashMinDuration = Duration(seconds: 2);

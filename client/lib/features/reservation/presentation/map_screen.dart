@@ -1,6 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_naver_map/flutter_naver_map.dart';
+import 'package:kakao_map_sdk/kakao_map_sdk.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -12,10 +11,11 @@ import '../../band/application/band_providers.dart';
 import '../application/calendar_providers.dart';
 import '../data/room_models.dart';
 import '../data/room_repository.dart';
+import 'widgets/room_map_bits.dart';
 
-/// 합주실 지도 — 좌표가 있는 합주실을 네이버 지도 마커로, 아래에 목록.
+/// 합주실 지도 — 좌표가 있는 합주실을 카카오맵 마커로, 아래에 목록.
 ///
-/// 네이버 지도 SDK는 Android/iOS 전용이라, 웹이나 클라이언트 ID 미설정 시에는
+/// 카카오맵 SDK는 Android/iOS 전용이라, 웹이나 네이티브 앱 키 미설정·SDK 인증 실패 시에는
 /// 지도 없이 목록만 보여준다. `GET /bands/{id}/rooms` 하나만 쓴다.
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -25,12 +25,9 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
-  NaverMapController? _map;
+  KakaoMapController? _map;
 
-  /// 서울시청 — 좌표가 하나도 없을 때 지도 초기 위치.
-  static const _fallback = NLatLng(37.5666, 126.9784);
-
-  bool get _mapAvailable => !kIsWeb && AppConfig.naverMapEnabled;
+  bool get _mapAvailable => AppConfig.mapEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +61,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               if (_mapAvailable)
                 Expanded(flex: 3, child: _buildMap(located))
               else
-                const _MapUnavailableNote(),
+                MapUnavailableNote(message: mapUnavailableMessage()),
               Expanded(
                 flex: 2,
                 child: _RoomList(
@@ -89,23 +86,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Widget _buildMap(List<Room> located) {
     final start = located.isEmpty
-        ? _fallback
-        : NLatLng(located.first.lat!, located.first.lng!);
-    return NaverMap(
-      options: NaverMapViewOptions(
-        initialCameraPosition: NCameraPosition(target: start, zoom: 12),
-        rotationGesturesEnable: false,
-        tiltGesturesEnable: false,
-      ),
-      onMapReady: (controller) {
+        ? kMapFallbackCenter
+        : LatLng(located.first.lat!, located.first.lng!);
+    return KakaoMap(
+      option: KakaoMapOption(position: start, zoomLevel: 12),
+      // 인증 실패로 화면이 깨지는 대신 목록만 남긴다(키 해시 미등록 등).
+      onMapError: (_) => setState(() => AppConfig.mapAuthFailed = true),
+      onMapReady: (controller) async {
         _map = controller;
+        final style = await roomPoiStyle();
         for (final r in located) {
-          controller.addOverlay(
-            NMarker(
-              id: 'room-${r.id}',
-              position: NLatLng(r.lat!, r.lng!),
-              caption: NOverlayCaption(text: r.name),
-            ),
+          await controller.labelLayer.addPoi(
+            LatLng(r.lat!, r.lng!),
+            style: style,
+            text: r.name,
           );
         }
       },
@@ -161,10 +155,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   void _moveTo(Room room) {
-    _map?.updateCamera(
-      NCameraUpdate.scrollAndZoomTo(
-        target: NLatLng(room.lat!, room.lng!),
-        zoom: 15,
+    _map?.moveCamera(
+      CameraUpdate.newCenterPosition(
+        LatLng(room.lat!, room.lng!),
+        zoomLevel: 15,
       ),
     );
   }
@@ -330,26 +324,6 @@ class _AddRoomButton extends StatelessWidget {
             color: AppColors.primary,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _MapUnavailableNote extends StatelessWidget {
-  const _MapUnavailableNote();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      color: AppColors.surface,
-      child: Text(
-        kIsWeb
-            ? '지도는 모바일 앱에서만 표시됩니다. 아래 목록으로 확인하세요.'
-            : '네이버 지도 클라이언트 ID(NAVER_MAP_CLIENT_ID)를 설정하면 '
-                '지도에 마커가 표시됩니다.',
-        style: const TextStyle(fontSize: 12, color: AppColors.textDim),
       ),
     );
   }
