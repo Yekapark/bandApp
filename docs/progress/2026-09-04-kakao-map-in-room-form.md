@@ -79,7 +79,8 @@ Phase 3 완료 기준인 **"지오코딩 실패해도 등록은 성공한다"** 
 | `presentation/room_form_screen.dart` | **주소 칸 아래 180px 지도.** 후보를 핀으로 표시, 핀 탭 = 선택 |
 | `presentation/map_screen.dart` | 기존 합주실 지도를 카카오맵으로 교체 (마커·카메라 이동만) |
 | `presentation/widgets/room_map_bits.dart` | **신규.** 두 화면이 공유하는 마커 스타일·폴백 안내 |
-| `core/config/app_config.dart`, `main.dart` | `naverMapClientId` 제거, 카카오 SDK 초기화 + **인증 실패 가드** |
+| `core/config/app_config.dart`, `main.dart` | `naverMapClientId` 제거, 카카오 SDK 초기화 + **인증 실패 가드** + 디버그 시 키 해시 로그 출력 |
+| `core/config/native_abi.dart` (+ `_io`/`_web`) | **신규.** ARM ABI 여부 판별 — x86_64 에뮬레이터에서 지도 SDK 초기화를 막는다(§7-B) |
 | `android/` (gitignore) | minSdk 23, 위치·인터넷 권한, ProGuard 규칙, **카카오 로그인 리다이렉트 스킴** |
 
 ---
@@ -124,9 +125,23 @@ DB 저장 → 합주실 지도 화면에 같은 위치로 표시
 
 **콘솔에서 설정할 것:**
 
-1. 앱 설정 → **플랫폼 → Android 등록**
-   - 패키지명: `com.example.bandapp_client` (`client/android/app/build.gradle.kts`의 `applicationId`)
-   - **키 해시 등록** — 이게 없으면 로그인은 `keyHash validation failed`, 지도는 인증 실패
+1. 앱 설정 → **플랫폼 → Android 등록** — 아래 두 값을 **복사해서** 넣는다(타이핑하면 오타가 난다)
+
+   | 칸 | 값 |
+   |---|---|
+   | 패키지명 | `com.example.bandapp_client` |
+   | 키 해시 | `ahCJ5a5dXyiPh3x9ksny6yMbjzk=` (이 PC의 디버그 키스토어 기준) |
+
+   넣은 뒤 **하단 저장 버튼을 누른다** — 칸에 입력만 하면 반영되지 않는다.
+   이게 없으면 로그인은 `keyHash validation failed`, 지도는 인증 실패다.
+
+   키 해시가 계속 거부되면 순서대로 확인한다:
+   - **지금 보고 있는 콘솔 앱이 맞는 앱인가.** 앱이 쓰는 네이티브 키는
+     `client/dart_defines.json`에 있고, 실행 로그의 리다이렉트 스킴 `kakao<네이티브키>://oauth`
+     에도 그대로 찍힌다. 앱을 새로 만들었다면 옛 앱 화면에서 등록하고 있을 수 있다.
+   - **앱이 스스로 계산한 값을 쓴다.** 디버그 빌드는 시작할 때 로그에
+     `kakao keyHash (콘솔에 등록할 값): ...` 을 찍는다(`main.dart`). 이게 SDK가 서버로
+     실제 보내는 값이라 100% 정확하다. 릴리스 키스토어로 바꿀 때도 이 줄만 보면 된다.
 2. 제품 설정 → **카카오 로그인 활성화 ON**
 3. 카카오 로그인 → **동의항목**: `프로필 정보(닉네임)`, `카카오계정(이메일)`
 4. **Redirect URI는 등록 불필요** — 네이티브 SDK 로그인(`loginWithKakaoTalk` /
@@ -162,19 +177,54 @@ KAKAO_REST_API_KEY=<REST API 키>
 kakao.appKey=<네이티브 앱 키>
 ```
 
-반영 (restart는 `.env`를 다시 안 읽는다):
+반영 — **무엇을 고쳤느냐에 따라 명령이 다르다.** 이걸 헷갈리면 한참 헤맨다:
 
-```bash
-cd C:\band\bandApp && docker compose up -d --force-recreate app
+| 고친 것 | 명령 |
+|---|---|
+| `.env` 값만 | `docker compose up -d --force-recreate app` |
+| **백엔드 코드** | `docker compose up -d --build app` |
+
+```powershell
+cd C:\band\bandApp; docker compose up -d --build app
 ```
 
-### 5-C. 실행
+`docker compose up -d`는 **이미지가 있으면 재빌드하지 않는다.** `--force-recreate`도 컨테이너만
+다시 만들 뿐 이미지는 그대로다 — 즉 코드 변경이 반영되지 않는다. 실제로 이번에 이틀 전 이미지가
+계속 돌면서 `rooms/search` 엔드포인트가 없는 상태였고, 그 탓에 `/rooms/search` 요청이
+`/rooms/{roomId}` 로 흘러가 400(INVALID_INPUT)이 났다. 지금 도는 이미지가 언제 것인지는
+`docker image inspect bandapp-app --format '{{.Created}}'` 로 확인한다.
 
-```bash
-cd C:\band\bandApp\client && C:\src\flutter\bin\flutter.bat run -d emulator-5554 --dart-define-from-file=dart_defines.json
+### 5-C. 실행 — 지도를 보려면 **실기기여야 한다**
+
+지도는 실기기에서만 나온다(이유는 §7-B). 폰에서 개발자 옵션 → USB 디버깅을 켜고 연결한다.
+
+```powershell
+flutter devices                     # 폰의 기기 ID 확인 (예: R3CX40J7QJE)
+cd C:\band\bandApp\client; flutter run -d <기기ID> --dart-define-from-file=dart_defines.json
 ```
 
 > Flutter SDK 경로는 이 PC 기준 `C:\src\flutter`다(앞선 문서의 `C:\flutter`는 다른 PC).
+> PowerShell 5.1에는 `&&`가 없다 — 명령을 이을 때는 `;`를 쓴다.
+
+**실기기는 백엔드 주소가 다르다.** `10.0.2.2`는 에뮬레이터 전용 별칭이라 폰에서는 아무 데도 가지
+않는다. USB 터널을 뚫는 게 가장 확실하다(WiFi·테더링·방화벽과 무관):
+
+```powershell
+& "$env:LOCALAPPDATA\Android\sdk\platform-tools\adb.exe" -s <기기ID> reverse tcp:8080 tcp:8080
+```
+
+그러면 기기의 `localhost:8080`이 PC의 8080으로 간다. `client/dart_defines.json`에 함께 넣어 둔다:
+
+```json
+{ "KAKAO_NATIVE_APP_KEY": "<네이티브 앱 키>", "API_BASE_URL": "http://localhost:8080" }
+```
+
+`adb reverse`는 **USB를 뽑거나 기기를 다시 연결하면 사라진다.** 붙일 때마다 다시 실행한다.
+에뮬레이터에도 같은 명령이 그대로 통한다.
+
+평문 HTTP는 Android 9+ 가 기본 차단하므로 `android/app/src/debug/AndroidManifest.xml`에
+`android:usesCleartextTraffic="true"`를 넣어 뒀다(**디버그 빌드 전용** — 배포는 https).
+이 파일은 `client/android/` 아래라 gitignore다.
 
 ### 5-D. 기대 결과
 
@@ -194,6 +244,10 @@ cd C:\band\bandApp\client && C:\src\flutter\bin\flutter.bat run -d emulator-5554
 | 지도 자리에 "인증에 실패했습니다" | 콘솔에 패키지명·키 해시 미등록 | 5-A의 1번 |
 | 숫자만 넣으면 결과 없음 | 카카오 키워드 검색 특성 | 한글 상호명으로 검색 |
 | 카카오 로그인이 브라우저에서 멈춤 | `local.properties`의 `kakao.appKey` 누락 → 리다이렉트 스킴이 비어버림 | 5-B |
+| `keyHash validation failed` | 콘솔의 키 해시가 이 빌드 서명과 다름 / 다른 앱에 등록 / 저장 안 누름 | 5-A의 확인 순서 |
+| 앱이 켜지자마자 죽음 | x86_64 에뮬레이터 + 카카오맵 ARM 전용 라이브러리 | 해결됨(§7-B). 실기기 사용 |
+| "서버에 연결하지 못했습니다" | 실기기가 `10.0.2.2`(에뮬 전용 주소)로 붙으려 함 / 평문 HTTP 차단 | 5-C의 `adb reverse` + `API_BASE_URL` |
+| 검색 요청이 400 `INVALID_INPUT` | **도는 이미지가 옛 코드** — `rooms/search` 가 없어 `/{roomId}` 로 매칭됨 | `docker compose up -d --build app` (5-B) |
 
 ---
 
@@ -208,7 +262,9 @@ cd C:\band\bandApp\client && C:\src\flutter\bin\flutter.bat run -d emulator-5554
 | `flutter analyze` (변경 파일) | ✅ 에러 0 (남은 것은 저장소 전반의 기존 스타일 info) |
 | `flutter test` | ✅ 27건 통과 (`place_models_test.dart` 신규 5건 포함) |
 | `flutter build apk --debug` | ✅ 성공 — 카카오맵 SDK 링크, minSdk 23, 매니페스트 병합 확인 |
-| 에뮬레이터 end-to-end | ⏸ **미실행** — 카카오 콘솔 설정(5-A) 후 확인 필요. **남은 유일한 검증** |
+| `flutter build web` | ✅ 성공 (`dart:ffi` 조건부 import가 웹을 깨지 않는지 확인) |
+| 실기기 앱 구동 (갤럭시 S24) | ✅ 앱 실행·카카오 로그인 리다이렉트 스킴 동작 확인 |
+| 실기기 지도·등록 end-to-end | ⏸ **미실행** — 카카오 콘솔 키 해시 등록(5-A) 후 확인 필요 |
 
 신규 백엔드 통합 테스트 4건:
 
@@ -247,9 +303,42 @@ api.version=1.44
 원본은 `.testcontainers.properties.bak`으로 백업해 뒀다. 근본 해결은 Testcontainers를 1.21+로
 올리는 것인데, CI에서는 지금 버전으로 잘 돌고 있어 저장소는 건드리지 않았다.
 
-### 7-B. 남은 것
+### 7-B. (해결) 에뮬레이터에서 앱이 켜지자마자 죽던 문제
 
-- **실기기 end-to-end 검증이 남았다.** 카카오 콘솔 설정(5-A) 후 에뮬레이터에서 확인이 필요하다.
+`kakao_map_sdk`는 **ARM 네이티브 라이브러리만 배포한다.** 빌드된 APK를 열어 보면:
+
+| ABI | `libK3fAndroid.so` (카카오맵 엔진) |
+|---|---|
+| `arm64-v8a` | 있음 |
+| `armeabi-v7a` | 있음 |
+| `x86_64` | **없음** |
+
+그래서 흔한 x86_64 에뮬레이터에서 SDK를 초기화하면 이렇게 죽는다:
+
+```
+dlopen failed: "...libK3fAndroid.so" is for EM_AARCH64 (183) instead of EM_X86_64 (62)
+  at com.kakao.vectormap.KakaoMapSdk.<init>
+```
+
+**Dart `try/catch`로는 못 막는다.** 네이티브 메인 스레드에서 나는 `UnsatisfiedLinkError`라
+Dart 로 올라오지 않고 프로세스가 통째로 종료된다. 유일한 방어는 **지원되지 않는 ABI에서는
+초기화를 아예 호출하지 않는 것**이라, `core/config/native_abi.dart`(+ io/web 조건부 분기)에서
+`Abi.current()`로 ARM 여부를 보고 `AppConfig.mapEnabled`를 끈다. 웹은 `dart:ffi`를 못 쓰므로
+조건부 import로 갈랐다(`flutter build web` 통과 확인).
+
+결과: 에뮬레이터에서도 앱이 정상 실행되고, 지도 자리에만 "ARM 기기 전용" 안내가 뜬다.
+로그인·합주실 등록·주소 검색·좌표 저장까지 전부 에뮬레이터에서 확인할 수 있다.
+
+### 7-C. 남은 것
+
+- **지도 화면 자체는 실기기에서만 검증할 수 있다**(에뮬레이터는 §7-B 때문에 안내 문구).
+  크롬(웹)도 지도는 안 나오지만 나머지 기능은 확인 가능하다.
+- **패키지명이 `com.example.bandapp_client`로 남아 있다** — `flutter create` 기본값이다.
+  구글 플레이는 `com.example.`로 시작하는 패키지를 거부하므로 출시 전에 바꿔야 하고,
+  바꾸면 카카오 콘솔의 플랫폼 등록(패키지명·키 해시)도 다시 해야 한다. 테스트가 끝난 뒤
+  한 번에 처리하는 게 낫다.
+- **릴리스 키스토어의 키 해시는 아직 등록 전이다.** 릴리스 빌드로 처음 돌릴 때
+  §5-A의 로그 한 줄(`kakao keyHash ...`)을 보고 콘솔에 추가한다.
 - **`kakao_map_sdk`는 신생 패키지다** (1.3.0, 좋아요 10 / 주간 1.3k). 네이티브 래퍼이고
   Android/iOS는 production-ready로 표기돼 있으나, 검증된 `flutter_naver_map`(주간 7.6k)보다
   이력이 짧다. 이 앱이 쓰는 기능은 마커 몇 개 + 카메라 이동뿐이라 SDK 표면을 거의 안 건드린다.
