@@ -13,3 +13,9 @@ final settlementProvider =
         reservationId: key.reservationId,
       );
 });
+
+/// 밴드 정산 목록 첫 페이지. 이어지는 페이지는 화면이 커서로 직접 붙인다.
+final bandSettlementsProvider =
+    FutureProvider.family<BandSettlementPage, int>((ref, bandId) async {
+  return ref.watch(settlementRepositoryProvider).listForBand(bandId: bandId);
+});

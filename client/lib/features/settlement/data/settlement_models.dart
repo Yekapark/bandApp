@@ -101,3 +101,79 @@ class Settlement {
     );
   }
 }
+
+/// GET /bands/{bandId}/settlements 의 한 줄 — 정산 한 건과 그 안에서의 내 몫.
+///
+/// 일정 상세를 하나씩 열지 않고 "내가 아직 안 낸 돈"을 보기 위한 목록용 모델이라,
+/// 멤버별 몫 전체는 담지 않는다(그건 [Settlement] 가 한다).
+class BandSettlementItem {
+  const BandSettlementItem({
+    required this.settlementId,
+    required this.reservationId,
+    required this.startAt,
+    required this.roomName,
+    required this.totalAmount,
+    required this.shareCount,
+    required this.paidCount,
+    this.myAmount,
+    this.myPaid,
+  });
+
+  final int settlementId;
+  final int reservationId;
+  final DateTime startAt;
+
+  /// 삭제된 합주실이면 null.
+  final String? roomName;
+  final int totalAmount;
+  final int shareCount;
+  final int paidCount;
+
+  /// 내가 이 정산의 분담 대상이 아니면 null (정산 후 합류한 멤버 등).
+  final int? myAmount;
+  final bool? myPaid;
+
+  bool get isMine => myAmount != null;
+  bool get iStillOwe => myAmount != null && myPaid == false;
+  bool get allPaid => shareCount > 0 && paidCount == shareCount;
+
+  factory BandSettlementItem.fromJson(Map<String, dynamic> json) {
+    return BandSettlementItem(
+      settlementId: (json['settlementId'] as num).toInt(),
+      reservationId: (json['reservationId'] as num).toInt(),
+      startAt: DateTime.parse(json['startAt'] as String).toLocal(),
+      roomName: json['roomName'] as String?,
+      totalAmount: (json['totalAmount'] as num?)?.toInt() ?? 0,
+      shareCount: (json['shareCount'] as num?)?.toInt() ?? 0,
+      paidCount: (json['paidCount'] as num?)?.toInt() ?? 0,
+      myAmount: (json['myAmount'] as num?)?.toInt(),
+      myPaid: json['myPaid'] as bool?,
+    );
+  }
+}
+
+/// 밴드 정산 목록 한 페이지.
+class BandSettlementPage {
+  const BandSettlementPage({
+    required this.items,
+    required this.myOutstandingTotal,
+    this.nextCursor,
+  });
+
+  final List<BandSettlementItem> items;
+
+  /// 이 목록에서 내가 아직 안 낸 금액의 합.
+  final int myOutstandingTotal;
+  final int? nextCursor;
+
+  factory BandSettlementPage.fromJson(Map<String, dynamic> json) {
+    final raw = json['settlements'] as List<dynamic>? ?? const [];
+    return BandSettlementPage(
+      items: raw
+          .map((e) => BandSettlementItem.fromJson(e as Map<String, dynamic>))
+          .toList(growable: false),
+      myOutstandingTotal: (json['myOutstandingTotal'] as num?)?.toInt() ?? 0,
+      nextCursor: (json['nextCursor'] as num?)?.toInt(),
+    );
+  }
+}

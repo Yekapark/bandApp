@@ -32,6 +32,7 @@ import '../features/reservation/presentation/map_screen.dart';
 import '../features/reservation/presentation/reservation_detail_screen.dart';
 import '../features/reservation/presentation/reservation_form_screen.dart';
 import '../features/reservation/presentation/room_form_screen.dart';
+import '../features/settlement/presentation/band_settlements_screen.dart';
 import '../features/settlement/presentation/settlement_screen.dart';
 import 'tab_shell.dart';
 
@@ -48,6 +49,7 @@ class Routes {
   static const calendar = '/cal';
   static const map = '/map';
   static const board = '/board';
+  static const settlements = '/settlements';
   static const newPost = '/board/new';
   static const newReservation = '/cal/new';
   static const newRoom = '/cal/rooms/new';
@@ -160,6 +162,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                   path: Routes.board, builder: (_, __) => const BoardScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                  path: Routes.settlements,
+                  builder: (_, __) => const BandSettlementsScreen()),
             ],
           ),
         ],

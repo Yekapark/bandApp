@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_colors.dart';
-import '../shared/widgets/soon.dart';
 
 /// 하단 탭바를 유지하는 셸. 실제 화면이 있는 탭(홈·캘린더)만 브랜치를 전환하고,
-/// 화면이 없는 탭(지도·정산·게시판)은 "다음 단계" 스낵바로 안내한다.
+/// 탭 5개가 모두 실제 화면을 가진다 — 홈·캘린더·지도·게시판·정산.
 class TabShell extends StatelessWidget {
   const TabShell({super.key, required this.navigationShell});
 
@@ -17,12 +16,10 @@ class TabShell extends StatelessWidget {
     ('캘린더', Icons.calendar_today),
     ('지도', Icons.map_outlined),
     ('게시판', Icons.grid_view),
+    ('정산', Icons.receipt_long),
   ];
 
   /// 아직 화면이 없는 탭.
-  static const _soonTabs = <(String, IconData)>[
-    ('정산', Icons.receipt_long),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -45,13 +42,6 @@ class TabShell extends StatelessWidget {
                 // 이미 그 탭이면 브랜치 스택을 루트로 되감는다.
                 onTap: () =>
                     navigationShell.goBranch(i, initialLocation: i == current),
-              ),
-            for (final (label, icon) in _soonTabs)
-              _TabItem(
-                label: label,
-                icon: icon,
-                active: false,
-                onTap: () => showSoon(context, label),
               ),
           ],
         ),

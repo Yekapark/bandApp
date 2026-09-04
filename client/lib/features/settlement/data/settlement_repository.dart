@@ -18,6 +18,29 @@ class SettlementRepository {
       '/bands/$bandId/reservations/$reservationId/settlement';
 
   /// 정산 현황. 아직 정산이 없으면 null (404 SETTLEMENT_NOT_FOUND).
+  /// 밴드의 정산 목록(최신순). [cursor] 는 직전 페이지의 nextCursor.
+  Future<BandSettlementPage> listForBand({
+    required int bandId,
+    int? cursor,
+    int size = 20,
+  }) async {
+    try {
+      final res = await _dio.get<dynamic>(
+        '/bands/$bandId/settlements',
+        queryParameters: {
+          'size': size,
+          if (cursor != null) 'cursor': cursor,
+        },
+      );
+      return unwrap(
+        res,
+        (d) => BandSettlementPage.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   Future<Settlement?> get({
     required int bandId,
     required int reservationId,
