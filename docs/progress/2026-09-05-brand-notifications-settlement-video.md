@@ -144,11 +144,36 @@ Android 13+ 테마 아이콘용 monochrome 포함), 웹 favicon·Icon-192/512·�
 
 ---
 
-## 7. 그 밖의 수정
+## 7. 저장했는데 되돌아가는 버그 — 한 종류였다
 
-- **참석 여부가 화면을 벗어나면 되돌아가던 버그** — 응답 뒤 화면 로컬 상태만 갱신하고
-  `reservationDetailProvider`(autoDispose 아님) 캐시를 안 비워서, 다른 화면에 갔다 오면 응답 전
-  값이 다시 그려졌다. 서버에는 정상 저장돼 있었고 화면만 거짓말을 했다.
+참석 여부에서 처음 나왔고, 정산 납부 체크에서 또 나왔다. 같은 원인이라 전수 조사했다.
+
+**원인**: 이 앱의 `FutureProvider` 는 하나도 `autoDispose` 가 아니다 — 캐시가 영구히 남는다.
+그래서 저장한 뒤 화면 로컬 상태(`setState`)만 갱신하면, 화면을 벗어나는 순간 로컬 상태가
+사라지고 다시 들어올 때 **저장 전 값이 다시 그려진다**. 서버에는 제대로 들어가 있어서
+"저장이 안 됐나?" 하고 엉뚱한 곳을 보게 된다.
+
+고친 곳:
+
+| 위치 | 증상 |
+|---|---|
+| `reservation_detail_screen._respond` | 참석/불참을 바꾸고 나갔다 오면 미정으로 |
+| `settlement_screen._togglePaid` | 납부 체크가 다시 들어오면 풀림 |
+| `settlement_screen._recalculate` | 재계산 결과가 사라짐 |
+| `settlement_screen._create` | 정산 탭의 미납 합계가 안 바뀜 |
+| `recurring_form_screen._submit` | 정기 일정 등록 후 목록·캘린더·홈이 그대로 |
+
+정산 쪽은 상세 화면과 **정산 탭** 두 캐시를 함께 비워야 한다(`_refreshCaches`).
+정기 일정은 규칙만이 아니라 회차(일정)까지 만들어지므로 캘린더·홈도 비운다.
+
+**다시 안 나게**: `client/tools/check_cache_invalidation.py` 를 뒀다. 쓰기 메서드를 찾아
+그 안에서(또는 그 메서드를 부르는 쪽에서) 캐시를 비우는지 본다. 헬퍼로 쪼갠 경우도 따라간다.
+
+```bash
+cd client && python tools/check_cache_invalidation.py
+```
+
+현재 33개 화면 파일 통과. 무효화를 일부러 지우면 그 메서드를 집어내는 것까지 확인했다.
 
 ---
 

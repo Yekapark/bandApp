@@ -105,7 +105,7 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
             splitType: type,
           );
       if (mounted) setState(() => _override = s);
-      ref.invalidate(settlementProvider(_key(bandId)));
+      _refreshCaches(bandId);
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
@@ -124,7 +124,9 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
             userId: share.userId,
             paid: !share.paid,
           );
-      if (mounted) setState(() => _override = s);
+      if (!mounted) return;
+      setState(() => _override = s);
+      _refreshCaches(bandId);
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
@@ -166,7 +168,9 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
             bandId: bandId,
             reservationId: widget.reservationId,
           );
-      if (mounted) setState(() => _override = s);
+      if (!mounted) return;
+      setState(() => _override = s);
+      _refreshCaches(bandId);
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
@@ -174,6 +178,16 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 정산을 바꾼 뒤 캐시를 비운다.
+  ///
+  /// 화면 로컬 상태(`_override`)만 갱신하면 이 화면을 벗어나는 순간 사라지고, 프로바이더는
+  /// autoDispose 가 아니라 캐시가 계속 남아서 다시 들어올 때 옛 값이 그려진다.
+  /// 정산 탭의 미납 합계도 같은 이유로 함께 비운다.
+  void _refreshCaches(int bandId) {
+    ref.invalidate(settlementProvider(_key(bandId)));
+    ref.invalidate(bandSettlementsProvider(bandId));
   }
 
   void _toast(String msg) {

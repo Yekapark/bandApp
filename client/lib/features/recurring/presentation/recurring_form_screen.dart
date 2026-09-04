@@ -10,6 +10,9 @@ import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../band/application/band_providers.dart';
+import '../../reservation/application/calendar_providers.dart';
+import '../../home/application/home_providers.dart';
+import '../application/recurring_providers.dart';
 import '../../reservation/data/room_models.dart';
 import '../../reservation/presentation/widgets/room_picker_sheet.dart';
 import '../data/recurring_models.dart';
@@ -138,6 +141,10 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
             cost: _costValue,
             note: _note.text.trim(),
           );
+      // 규칙만 만드는 게 아니라 회차(일정)까지 생성된다 — 캘린더·홈도 함께 비운다.
+      ref.invalidate(recurringRulesProvider(band.id));
+      ref.invalidate(monthReservationsProvider);
+      ref.invalidate(upcomingReservationsProvider(band.id));
       if (!mounted) return;
       await _showResultDialog(result);
       if (!mounted) return;
