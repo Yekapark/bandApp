@@ -1,6 +1,7 @@
 package com.yeka.bandapp.notification.repository;
 
 import com.yeka.bandapp.notification.entity.NotificationDispatch;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -8,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 public interface NotificationDispatchRepository extends JpaRepository<NotificationDispatch, Long> {
 
@@ -20,12 +22,30 @@ public interface NotificationDispatchRepository extends JpaRepository<Notificati
     @Transactional
     @Modifying
     @Query(value = """
-            insert into notification_dispatches (user_id, type, target_id, variant, created_at)
-            values (:userId, :type, :targetId, :variant, now())
+            insert into notification_dispatches
+                (user_id, type, target_id, variant, band_id, title, body, created_at)
+            values (:userId, :type, :targetId, :variant, :bandId, :title, :body, now())
             on conflict (user_id, type, target_id, variant) do nothing
             """, nativeQuery = true)
     int insertIfAbsent(@Param("userId") long userId, @Param("type") String type,
-                       @Param("targetId") long targetId, @Param("variant") int variant);
+                       @Param("targetId") long targetId, @Param("variant") int variant,
+                       @Param("bandId") Long bandId, @Param("title") String title,
+                       @Param("body") String body);
+
+    /**
+     * 알림 목록 한 페이지. 최신순(id 내림차순)이며 <b>문구가 있는 행만</b> 돌려준다 —
+     * V11 이전에 쌓인 행은 보낸 문구가 없어 화면에 그릴 수 없다.
+     *
+     * @param cursorId 이 id 보다 작은 것만(첫 페이지는 {@code null})
+     */
+    @Query("""
+            select d from NotificationDispatch d
+            where d.userId = :userId and d.bandId = :bandId and d.title is not null
+              and (:cursorId is null or d.id < :cursorId)
+            order by d.id desc
+            """)
+    List<NotificationDispatch> findFeed(@Param("userId") long userId, @Param("bandId") long bandId,
+                                        @Param("cursorId") Long cursorId, Pageable pageable);
 
     /**
      * 보관기한이 지난 발송 이력 정리. 리마인더 배치가 실행 끝에 호출한다(별도 배치를 늘리지 않는다).

@@ -37,10 +37,15 @@ public class NotificationDispatchRecorder {
     /**
      * 아직 발송하지 않은 수신자면 이력을 남기고 {@code true}. 이미 발송된 조합이면 {@code false}
      * (충돌은 DB 가 흡수하므로 예외 없음).
+     *
+     * <p>{@code bandId}/{@code title}/{@code body}는 앱의 알림 목록에 그대로 쓰인다. 보낸 문구를
+     * 그때 그대로 남겨 두면 나중에 일정이 바뀌거나 지워져도 알림은 온전히 남는다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean recordIfAbsent(NotificationType type, long targetId, int variant, long userId) {
-        return dispatchRepository.insertIfAbsent(userId, type.name(), targetId, variant) > 0;
+    public boolean recordIfAbsent(NotificationType type, long targetId, int variant, long userId,
+                                  Long bandId, String title, String body) {
+        return dispatchRepository.insertIfAbsent(
+                userId, type.name(), targetId, variant, bandId, title, body) > 0;
     }
 
     /** FCM 이 무효라고 응답한 토큰 제거. */
