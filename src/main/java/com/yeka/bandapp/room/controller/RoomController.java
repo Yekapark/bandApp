@@ -30,7 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "6. 합주실",
         description = "밴드별 합주실(주소록) 등록·조회·수정·삭제. 등록/수정/삭제는 밴드 멤버 누구나 가능. "
-                + "주소를 주면 네이버 지오코딩으로 좌표를 채운다(서버에 키가 없으면 lat/lng는 null).")
+                + "좌표(lat/lng)를 함께 보내면 그대로 저장하고, 없으면 주소를 카카오 지오코딩으로 변환해 채운다"
+                + "(서버에 카카오 REST 키가 없으면 lat/lng는 null).")
 @RestController
 @RequestMapping("/api/v1/bands/{bandId}/rooms")
 public class RoomController {
@@ -42,7 +43,8 @@ public class RoomController {
     }
 
     @Operation(summary = "합주실 등록",
-            description = "이름만 필수. 주소가 있으면 좌표 변환을 시도하되 실패해도 등록은 성공한다(201, lat/lng는 null). "
+            description = "이름만 필수. lat/lng를 함께 주면(주소 검색에서 고른 좌표) 지오코딩 없이 그대로 저장하고, "
+                    + "없으면 주소로 좌표 변환을 시도하되 실패해도 등록은 성공한다(201, lat/lng는 null). "
                     + "같은 밴드에 같은 이름이 있으면 409 ROOM_NAME_DUPLICATED. 그 밴드 멤버만.")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -61,7 +63,8 @@ public class RoomController {
     }
 
     @Operation(summary = "합주실 주소 검색",
-            description = "카카오 로컬 검색으로 합주실 이름·주소 후보를 최대 5건 반환한다. 등록 폼에서 검색해 자동 입력하는 용도. "
+            description = "카카오 로컬 검색으로 합주실 이름·주소 후보를 최대 5건 반환한다. 등록 폼에서 검색해 "
+                    + "자동 입력·지도 확인하는 용도이며, 각 후보의 lat/lng를 그대로 등록 요청에 실어 보내면 된다. "
                     + "검색어가 비었거나 서버에 검색 키가 없으면 빈 목록(places=[])을 준다 — 이때도 200이다. "
                     + "그 밴드 멤버만(비멤버 403 NOT_BAND_MEMBER). 계정당 분당 호출 상한이 있어 초과 시 429.")
     @GetMapping("/search")
@@ -81,8 +84,10 @@ public class RoomController {
     }
 
     @Operation(summary = "합주실 수정",
-            description = "PUT 전체 교체 — 보내지 않은 필드는 비워진다. 주소가 실제로 바뀐 경우에만 좌표를 다시 계산한다"
-                    + "(못 얻으면 null로 비움). 이름 충돌 409 ROOM_NAME_DUPLICATED, 삭제된 방 404 ROOM_NOT_FOUND.")
+            description = "PUT 전체 교체 — 보내지 않은 필드는 비워진다. lat/lng를 주면 주소 변경 여부와 무관하게 "
+                    + "그 좌표로 덮어쓰고(좌표 없던 옛 합주실을 채울 수 있다), 안 주면 주소가 실제로 바뀐 경우에만 "
+                    + "다시 계산한다(못 얻으면 null로 비움). "
+                    + "이름 충돌 409 ROOM_NAME_DUPLICATED, 삭제된 방 404 ROOM_NOT_FOUND.")
     @PutMapping("/{roomId}")
     public ApiResponse<RoomResponse> update(@AuthenticationPrincipal AuthPrincipal principal,
                                             @PathVariable long bandId,

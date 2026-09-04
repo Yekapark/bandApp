@@ -6,7 +6,7 @@ import com.yeka.bandapp.room.naver.GeocodingClient;
 import java.util.Optional;
 
 /**
- * 프로그래머블 지오코딩 스텁. 실제 네이버 클라이언트처럼 <b>예외를 던지지 않고</b>
+ * 프로그래머블 지오코딩 스텁. 실제 카카오 클라이언트처럼 <b>예외를 던지지 않고</b>
  * {@link Optional}로만 결과를 낸다 — "지오코딩 실패해도 등록은 성공"을 테스트가 검증할 수 있게 한다.
  *
  * <p>{@link #callCount()}로 호출 횟수를 노출해, "주소가 안 바뀌면 재호출하지 않는다" 같은 규칙도 확인한다.

@@ -60,9 +60,13 @@ public class RoomService {
     }
 
     /**
-     * 합주실 등록. 주소가 있으면 지오코딩을 시도하되, <b>실패해도 좌표 없이 저장한다</b>
-     * (Phase 3 완료 기준). 지오코딩이 트랜잭션 밖이어야 하므로 {@code @Transactional} 없음 —
-     * 실제 쓰기는 {@link #persist}의 단일 INSERT 하나뿐이라 원자성 손실이 없다.
+     * 합주실 등록. 좌표는 두 경로로 온다 — 클라이언트가 장소 검색에서 고른 좌표를 보냈으면 그대로 쓰고,
+     * 없을 때만(직접 입력한 주소) 주소로 지오코딩한다. 등록 폼 지도에서 확인한 위치와 저장되는 위치가
+     * 어긋나면 "확인하고 등록"이 의미를 잃기 때문에 요청 좌표가 우선이다.
+     *
+     * <p>어느 쪽이든 <b>좌표를 못 얻어도 좌표 없이 저장한다</b>(Phase 3 완료 기준). 지오코딩이
+     * 트랜잭션 밖이어야 하므로 {@code @Transactional} 없음 — 실제 쓰기는 {@link #persist}의 단일
+     * INSERT 하나뿐이라 원자성 손실이 없다.
      */
     public RoomResponse create(long bandId, long userId, CreateRoomRequest request) {
         accessGuard.requireActiveMember(bandId, userId);
@@ -73,7 +77,10 @@ public class RoomService {
 
         Room room = Room.create(bandId, userId, name, address,
                 trimToNull(request.phone()), trimToNull(request.memo()));
-        geocode(userId, address).ifPresent(room::applyCoordinates);
+        Optional<Coordinates> coordinates = hasBoth(request.lat(), request.lng())
+                ? Optional.of(new Coordinates(request.lat(), request.lng()))
+                : geocode(userId, address);
+        coordinates.ifPresent(room::applyCoordinates);
 
         return RoomResponse.from(persist(room));
     }
@@ -114,7 +121,8 @@ public class RoomService {
     }
 
     /**
-     * 수정. 주소가 실제로 바뀐 경우에만 지오코딩을 다시 호출한다(외부 API 호출 절약).
+     * 수정. 요청에 좌표가 오면 그것을 쓰고, 없을 때는 <b>주소가 실제로 바뀐 경우에만</b> 지오코딩을
+     * 다시 호출한다(외부 API 호출 절약).
      *
      * <p>지오코딩을 트랜잭션 밖에서 끝낸 뒤, 확정된 좌표를 들고 {@code updateEditableFields} 부분 UPDATE
      * 한 번으로 쓴다. 엔티티 {@code merge}(전체 컬럼 재기록)를 피해 동시에 바뀔 수 있는 {@code usageCount} 등을 보존한다.
@@ -130,7 +138,12 @@ public class RoomService {
 
         Double lat = snapshot.getLat();
         Double lng = snapshot.getLng();
-        if (!Objects.equals(address, snapshot.getAddress())) {
+        if (hasBoth(request.lat(), request.lng())) {
+            // 검색에서 고른 좌표가 오면 주소 변경 여부와 무관하게 그것이 정답이다 — 좌표 없이 저장됐던
+            // 옛 합주실을 수정만으로 채울 수 있어야 한다.
+            lat = request.lat();
+            lng = request.lng();
+        } else if (!Objects.equals(address, snapshot.getAddress())) {
             // 주소가 바뀐 이상 옛 좌표는 더 이상 이 주소의 것이 아니다. 새로 얻지 못하면 비운다.
             Optional<Coordinates> found = geocode(userId, address);
             lat = found.map(Coordinates::lat).orElse(null);
@@ -206,6 +219,11 @@ public class RoomService {
         rateLimiter.check(GEOCODE_BUCKET, String.valueOf(userId),
                 rateLimitProperties.geocodePerUserPerMin());
         return geocodingClient.geocode(address);
+    }
+
+    /** 반쪽 좌표(위도만·경도만)는 지도에 찍을 수 없으므로 없는 것으로 취급한다. */
+    private static boolean hasBoth(Double lat, Double lng) {
+        return lat != null && lng != null;
     }
 
     private static String trimToNull(String value) {
