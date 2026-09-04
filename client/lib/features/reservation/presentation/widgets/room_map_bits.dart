@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:kakao_map_sdk/kakao_map_sdk.dart';
 
 import '../../../../core/config/app_config.dart';
+import '../../../../core/config/native_abi.dart';
 import '../../../../core/theme/app_colors.dart';
 
 /// 합주실 지도(목록 화면·등록 폼)가 함께 쓰는 조각들.
@@ -31,6 +32,10 @@ Future<PoiStyle> roomPoiStyle() async {
 String mapUnavailableMessage() {
   if (kIsWeb) {
     return '지도는 모바일 앱에서만 표시됩니다. 목록으로 확인하세요.';
+  }
+  if (!kakaoMapAbiSupported) {
+    return '카카오맵은 ARM 기기 전용이라 이 환경(x86 에뮬레이터 등)에서는 표시되지 않습니다. '
+        '실제 기기에서 확인하세요.';
   }
   if (AppConfig.kakaoNativeAppKey.isEmpty) {
     return '카카오 네이티브 앱 키(KAKAO_NATIVE_APP_KEY)를 설정하면 지도가 표시됩니다.';

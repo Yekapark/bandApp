@@ -110,21 +110,28 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
 
   Future<void> _search(String query) async {
     final band = ref.read(currentBandProvider);
-    if (band == null) return;
+    if (band == null) {
+      debugPrint('장소 검색 건너뜀: 선택된 밴드가 없다');
+      return;
+    }
     final seq = ++_searchSeq;
     setState(() => _searching = true);
     try {
       final results = await ref
           .read(roomRepositoryProvider)
           .searchPlaces(bandId: band.id, query: query);
+      debugPrint('장소 검색 결과 ${results.length}건 (query=$query)');
       if (!mounted || seq != _searchSeq) return;
       setState(() {
         _suggestions = results;
         _searching = false;
       });
       await _syncPins(results);
-    } catch (_) {
+    } catch (e) {
       // 검색은 편의 기능 — 실패해도 조용히 넘어가고 직접 입력을 막지 않는다.
+      // 다만 원인은 남긴다. 화면에는 아무것도 안 뜨는 게 정상 동작이라, 로그가 없으면
+      // "검색 결과가 없다"와 "서버에 못 붙었다"를 구분할 방법이 없다.
+      debugPrint('장소 검색 실패 (query=$query): $e');
       if (!mounted || seq != _searchSeq) return;
       setState(() {
         _suggestions = const [];

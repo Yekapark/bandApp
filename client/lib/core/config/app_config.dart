@@ -2,6 +2,8 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 
+import 'native_abi.dart';
+
 /// 앱 전역 설정. 빌드 시 `--dart-define` 으로 덮어쓸 수 있다.
 ///
 /// 예) flutter run --dart-define=API_BASE_URL=http://192.168.0.10:8080
@@ -48,8 +50,10 @@ class AppConfig {
   /// 조용히 폴백해야 한다.
   static bool mapAuthFailed = false;
 
-  static bool get mapEnabled =>
-      !kIsWeb && kakaoNativeAppKey.isNotEmpty && !mapAuthFailed;
+  static bool get mapEnabled => !kIsWeb &&
+      kakaoMapAbiSupported &&
+      kakaoNativeAppKey.isNotEmpty &&
+      !mapAuthFailed;
 
   /// 스플래시 최소 노출 시간 (목업: 약 2초).
   static const Duration splashMinDuration = Duration(seconds: 2);
