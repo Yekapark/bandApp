@@ -15,6 +15,7 @@ import '../features/board/presentation/board_screen.dart';
 import '../features/board/presentation/post_compose_screen.dart';
 import '../features/board/presentation/post_detail_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/notification/presentation/notification_list_screen.dart';
 import '../features/notification/presentation/notification_settings_screen.dart';
 import '../features/plan/presentation/plan_screen.dart';
 import '../features/recurring/presentation/recurring_detail_screen.dart';
@@ -53,6 +54,7 @@ class Routes {
 
   /// 합주실 수정 (extra 로 Room 전달).
   static String editRoom(int roomId) => '/cal/rooms/$roomId/edit';
+  static const notifications = '/notifications';
   static const notificationSettings = '/settings/notifications';
 
   /// 게시글 상세.
@@ -205,6 +207,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/cal/rooms/:roomId/edit',
         builder: (_, state) => RoomFormScreen(existing: state.extra as Room?),
+      ),
+      GoRoute(
+        path: Routes.notifications,
+        builder: (_, __) => const NotificationListScreen(),
       ),
       GoRoute(
         path: Routes.notificationSettings,

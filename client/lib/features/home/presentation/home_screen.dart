@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../routing/app_router.dart';
 import '../../band/application/band_providers.dart';
+import '../../notification/application/notification_providers.dart';
 import '../../band/data/band_models.dart';
 import '../application/home_providers.dart';
 import 'widgets/band_switch_sheet.dart';
@@ -90,7 +91,10 @@ class _Header extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unread = 0; // 알림 화면 미구현 — 배지는 0.
+    // 안 읽은 알림 수. 기기에 저장된 "마지막 확인 시각" 이후에 온 것만 센다(서버에 읽음 상태 없음).
+    // 아직 못 불러왔으면 0 — 배지 때문에 헤더가 흔들리지 않게 한다.
+    final unread =
+        ref.watch(unreadNotificationCountProvider(band.id)).value ?? 0;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -132,7 +136,7 @@ class _Header extends ConsumerWidget {
         _IconSquare(
           badgeCount: unread,
           icon: Icons.notifications_none,
-          onTap: () => context.push(Routes.notificationSettings),
+          onTap: () => context.push(Routes.notifications),
         ),
         const SizedBox(width: 8),
         _IconSquare(
