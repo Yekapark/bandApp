@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @Tag(name = "13. 첨부 미디어",
         description = "게시글 사진·영상 첨부. upload-url 로 presigned PUT URL 을 받아 R2 에 직접 PUT → "
-                + "complete 로 실제 업로드를 검증(HEAD)해 READY 전환. 이미지 10MB / 영상 50MB, URL 만료 5~15분.")
+                + "complete 로 실제 업로드를 검증(HEAD)해 READY 전환. 이미지 10MB / 영상 200MB, URL 만료 5~15분.")
 @RestController
 @RequestMapping("/api/v1/bands/{bandId}/posts/{postId}/media")
 public class MediaAttachmentController {

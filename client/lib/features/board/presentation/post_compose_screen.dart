@@ -1,7 +1,11 @@
 import 'package:flutter/foundation.dart' show Uint8List;
+import 'dart:async' show unawaited;
+
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_compress/video_compress.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
@@ -19,7 +23,7 @@ const _allowedTypes = {
   'video/quicktime',
 };
 const _imageMaxBytes = 10 * 1024 * 1024;
-const _videoMaxBytes = 50 * 1024 * 1024;
+const _videoMaxBytes = 200 * 1024 * 1024;
 
 /// 게시글 작성/수정. [postId] 가 없으면 새 글, 있으면 수정.
 ///
@@ -48,6 +52,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
   /// 아직 서버에 올리지 않은 첨부(새 글에서 고른 것). 글이 생긴 뒤 순서대로 올라간다.
   List<_PendingMedia> _pending = const [];
+
+  /// 영상 압축 진행률(0~100). 압축 중이 아니면 null. 6분짜리는 30초 넘게 걸려서
+  /// 스피너만 돌리면 멈춘 줄 안다.
+  double? _compressPct;
 
   bool get _isEdit => _postId != null;
 
@@ -162,8 +170,8 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             const SizedBox(height: 4),
             Text(
               _isEdit
-                  ? '이미지 최대 10MB · 영상 최대 50MB · 글당 10개'
-                  : '이미지 최대 10MB · 영상 최대 50MB · 글당 10개 · 등록할 때 함께 올라가요',
+                  ? '이미지 최대 10MB · 영상 최대 200MB · 글당 10개'
+                  : '이미지 최대 10MB · 영상 최대 200MB · 글당 10개 · 등록할 때 함께 올라가요',
               style: const TextStyle(fontSize: 11, color: AppColors.textFaint),
             ),
             const SizedBox(height: 10),
@@ -171,6 +179,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               media: _media,
               pending: _pending,
               busy: _busy,
+              compressPct: _compressPct,
               onAdd: () => _addAttachment(bandId),
               onRemove: (m) => _removeMedia(bandId, m),
               onRemovePending: _removePending,
@@ -255,6 +264,8 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       setState(() => _pending = failed);
 
       ref.read(boardFeedProvider(bandId).notifier).refresh();
+      // 압축본은 앱 캐시에 쌓인다 — 다 올렸으면 치운다.
+      unawaited(VideoCompress.deleteAllCache());
       if (!mounted) return;
 
       if (failed.isEmpty) {
@@ -274,11 +285,13 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   /// 첨부 한 건 업로드. 성공하면 true. 실패는 토스트로 알리고 호출자가 대기 목록에 남긴다.
   Future<bool> _uploadOne(int bandId, int postId, _PendingMedia item) async {
     try {
+      // 파일을 통째로 메모리에 올리지 않고 스트림으로 흘려보낸다 — 영상은 수백 MB 가 된다.
       final media = await ref.read(boardRepositoryProvider).uploadMedia(
             bandId: bandId,
             postId: postId,
             contentType: item.contentType,
-            bytes: await item.file.readAsBytes(),
+            sizeBytes: await item.file.length(),
+            data: item.file.openRead(),
           );
       if (mounted) setState(() => _media = [..._media, media]);
       return true;
@@ -358,17 +371,19 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       return;
     }
 
-    // 길이만 확인한다 — 50MB 영상을 상한 검사하려고 통째로 메모리에 올릴 이유가 없다.
+    // 영상은 압축한 뒤에 재야 한다 — 폰 기본 촬영은 6분이면 700MB 를 넘지만 압축하면 들어온다.
+    final item = _PendingMedia(
+        await _compressIfVideo(file, contentType), contentType);
+
+    // 길이만 확인한다 — 상한 검사하려고 파일을 통째로 메모리에 올릴 이유가 없다.
     final limit =
         contentType.startsWith('video/') ? _videoMaxBytes : _imageMaxBytes;
-    if (await file.length() > limit) {
+    if (await item.file.length() > limit) {
       _toast(contentType.startsWith('video/')
-          ? '영상은 최대 50MB까지예요.'
+          ? '영상이 너무 길어요. 압축해도 200MB를 넘습니다.'
           : '이미지는 최대 10MB까지예요.');
       return;
     }
-
-    final item = _PendingMedia(file, contentType);
 
     // 새 글: 아직 글이 없어 매달 곳이 없다. 등록할 때 함께 올린다.
     if (!_isEdit) {
@@ -390,6 +405,35 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 영상이면 720p 로 압축해 돌려준다. 이미지·웹이거나 실패하면 원본 그대로.
+  ///
+  /// 폰 기본 촬영(1080p 17Mbps)은 6분이면 700MB 가 넘어 상한(200MB)에 들어가지 않는다.
+  /// 720p 로 줄이면 6분이 대략 90MB 다. 합주 영상은 소리가 본체라 이 정도면 충분하다.
+  ///
+  /// 압축은 30초 넘게 걸릴 수 있어 진행률을 보여준다. 실패하면 원본으로 진행하고,
+  /// 상한을 넘으면 호출한 쪽의 크기 검사에서 걸린다.
+  Future<XFile> _compressIfVideo(XFile file, String contentType) async {
+    if (kIsWeb || !contentType.startsWith('video/')) return file;
+
+    final sub = VideoCompress.compressProgress$.subscribe((p) {
+      if (mounted) setState(() => _compressPct = p);
+    });
+    setState(() => _compressPct = 0);
+    try {
+      final info = await VideoCompress.compressVideo(
+        file.path,
+        quality: VideoQuality.Res1280x720Quality,
+      );
+      final path = info?.path;
+      return path == null ? file : XFile(path);
+    } catch (_) {
+      return file;
+    } finally {
+      sub.unsubscribe();
+      if (mounted) setState(() => _compressPct = null);
     }
   }
 
@@ -432,7 +476,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
 /// 아직 서버에 올리지 않은 첨부.
 ///
-/// 바이트를 들고 있지 않고 [XFile] 참조만 둔다 — 50MB 영상을 10개까지 메모리에 쥐고 있을
+/// 바이트를 들고 있지 않고 [XFile] 참조만 둔다 — 큰 영상을 10개까지 메모리에 쥐고 있을
 /// 이유가 없다. 실제 읽기는 업로드 직전에 한 번만 한다.
 class _PendingMedia {
   const _PendingMedia(this.file, this.contentType);
@@ -461,6 +505,7 @@ class _MediaStrip extends StatelessWidget {
     required this.media,
     required this.pending,
     required this.busy,
+    required this.compressPct,
     required this.onAdd,
     required this.onRemove,
     required this.onRemovePending,
@@ -471,6 +516,9 @@ class _MediaStrip extends StatelessWidget {
   /// 아직 안 올라간 것들. 올라간 첨부 뒤에 흐리게 붙는다.
   final List<_PendingMedia> pending;
   final bool busy;
+
+  /// 영상 압축 진행률(0~100). 압축 중이 아니면 null.
+  final double? compressPct;
   final VoidCallback onAdd;
   final void Function(PostMedia) onRemove;
   final void Function(_PendingMedia) onRemovePending;
@@ -496,7 +544,7 @@ class _MediaStrip extends StatelessWidget {
               ),
             ),
           GestureDetector(
-            onTap: busy ? null : onAdd,
+            onTap: (busy || compressPct != null) ? null : onAdd,
             child: Container(
               width: 92,
               height: 92,
@@ -505,15 +553,38 @@ class _MediaStrip extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.borderStrong),
               ),
-              child: busy
-                  ? const Center(
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+              child: compressPct != null
+                  // 압축은 30초 넘게 걸릴 수 있어 진행률을 보여준다.
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              value: compressPct! / 100,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '압축 ${compressPct!.round()}%',
+                            style: const TextStyle(
+                                fontSize: 9.5, color: AppColors.textFaint),
+                          ),
+                        ],
                       ),
                     )
-                  : const Icon(Icons.add, color: AppColors.textSecondary),
+                  : busy
+                      ? const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : const Icon(Icons.add, color: AppColors.textSecondary),
             ),
           ),
         ],

@@ -18,7 +18,14 @@ import java.util.Map;
 public final class MediaPolicy {
 
     public static final long IMAGE_MAX_BYTES = 10L * 1024 * 1024; // 10MB
-    public static final long VIDEO_MAX_BYTES = 50L * 1024 * 1024; // 50MB
+    /**
+     * 영상 상한 200MB. 합주 영상은 5~6분이 예사인데 50MB 로는 480p 도 빠듯했다.
+     * 클라이언트가 업로드 전에 720p 로 압축하므로 6분이 대략 90MB 안쪽에 들어온다.
+     *
+     * <p>파일은 presigned URL 로 R2 에 직접 올라가 백엔드를 거치지 않고, 클라이언트도
+     * 스트림으로 흘려보내므로 상한을 올려도 서버·앱 메모리에 부담이 없다.
+     */
+    public static final long VIDEO_MAX_BYTES = 200L * 1024 * 1024; // 200MB
     public static final int MAX_ATTACHMENTS_PER_POST = 10;
 
     /** 허용 MIME → 미디어 종류. image/svg+xml·image/gif·text/* 등은 의도적으로 뺀다. */

@@ -33,6 +33,10 @@ dependencies:
   # chewie 같은 UI 패키지는 더 붙이지 않는다.
   video_player: ^2.9.2
 
+  # 업로드 전 영상 압축. 폰 기본 촬영(1080p 17Mbps)은 6분이면 700MB 를 넘어 상한(200MB)에
+  # 들어가지 않는다. 720p 로 줄이면 6분이 대략 90MB. Android/iOS 전용이라 웹은 원본 그대로.
+  video_compress: ^3.1.2
+
   # 푸시 알림 수신 (FCM 디바이스 토큰 등록). 설정 파일(google-services.json /
   # firebase_options.dart)이 없으면 초기화가 조용히 실패하고 no-op — 카카오 SDK 와 같은 방식.
   firebase_core: ^3.6.0
