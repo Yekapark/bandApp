@@ -29,6 +29,10 @@ dependencies:
   # 게시판 첨부: 사진/영상 선택 → R2 presigned URL 로 직접 업로드.
   image_picker: ^1.1.2
 
+  # 게시판 영상 첨부 재생. 컨트롤은 이 패키지의 VideoProgressIndicator 로 충분해서
+  # chewie 같은 UI 패키지는 더 붙이지 않는다.
+  video_player: ^2.9.2
+
   # 푸시 알림 수신 (FCM 디바이스 토큰 등록). 설정 파일(google-services.json /
   # firebase_options.dart)이 없으면 초기화가 조용히 실패하고 no-op — 카카오 SDK 와 같은 방식.
   firebase_core: ^3.6.0

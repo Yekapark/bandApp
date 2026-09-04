@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -347,10 +348,39 @@ class _MediaBlock extends StatelessWidget {
       );
     }
     if (media.isVideo) {
-      return _frame(
-        _Note(
-          icon: Icons.movie_outlined,
-          text: '영상 첨부 · ${_sizeKo(media.sizeBytes)}\n영상 재생은 준비 중이에요.',
+      // 한 글에 영상이 여러 개일 수 있어 인라인으로 다 초기화하지 않는다.
+      // 이미지와 같은 방식으로, 탭하면 전체화면에서 재생한다.
+      return GestureDetector(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => _FullVideo(url: media.downloadUrl!),
+          ),
+        ),
+        child: _frame(
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: AppColors.borderStrong),
+                ),
+                child: const Icon(
+                  Icons.play_arrow,
+                  color: Colors.white,
+                  size: 30,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '영상 첨부 · ${_sizeKo(media.sizeBytes)}',
+                style: const TextStyle(fontSize: 12, color: AppColors.textDim),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -414,6 +444,109 @@ class _Note extends StatelessWidget {
           textAlign: TextAlign.center,
           style: const TextStyle(
               fontSize: 12, color: AppColors.textDim, height: 1.5),
+        ),
+      ],
+    );
+  }
+}
+
+/// 전체화면 영상 재생.
+///
+/// 컨트롤은 video_player 가 주는 [VideoProgressIndicator] 로 충분해서 별도 UI 패키지를
+/// 붙이지 않았다. 화면을 탭하면 재생/일시정지.
+///
+/// [url] 은 만료가 짧은 presigned URL 이라 재생 중 만료될 수 있다 — 그 경우 에러 안내를
+/// 보여주고, 사용자는 뒤로 갔다 다시 열면 새 URL 을 받는다.
+class _FullVideo extends StatefulWidget {
+  const _FullVideo({required this.url});
+
+  final String url;
+
+  @override
+  State<_FullVideo> createState() => _FullVideoState();
+}
+
+class _FullVideoState extends State<_FullVideo> {
+  late final VideoPlayerController _controller;
+  bool _ready = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _controller.initialize().then((_) {
+      if (!mounted) return;
+      setState(() => _ready = true);
+      _controller.play();
+    }).catchError((Object e) {
+      if (!mounted) return;
+      setState(() => _error = '영상을 재생할 수 없어요.');
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
+      body: Center(child: _body()),
+    );
+  }
+
+  Widget _body() {
+    if (_error != null) {
+      return Text(
+        _error!,
+        style: const TextStyle(fontSize: 13, color: AppColors.textDim),
+      );
+    }
+    if (!_ready) {
+      return const CircularProgressIndicator();
+    }
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() {
+            _controller.value.isPlaying ? _controller.pause() : _controller.play();
+          }),
+          child: AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                VideoPlayer(_controller),
+                // 일시정지 상태에서만 큰 재생 아이콘을 덮어 보여준다.
+                if (!_controller.value.isPlaying)
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.play_arrow,
+                        color: Colors.white, size: 38),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: VideoProgressIndicator(
+            _controller,
+            allowScrubbing: true,
+            colors: const VideoProgressColors(playedColor: AppColors.primary),
+          ),
         ),
       ],
     );
