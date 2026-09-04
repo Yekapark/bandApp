@@ -23,7 +23,7 @@ Flutter 클라이언트를 `client/` 에 새로 만들고, **앱 실행 → 로�
 - `analysis_options.yaml`, `.gitignore`, `README.md`(실행법·구조·목업↔백엔드 차이).
 
 ### core (공통 기반)
-- `core/config/app_config.dart` — 앱 이름(임시 `STAGE ON`), API 베이스 URL.
+- `core/config/app_config.dart` — 앱 이름(`밴듈` / 영문 `Bandule`), API 베이스 URL.
   안드로이드 에뮬레이터는 `10.0.2.2`, 그 외 `localhost:8080`. `--dart-define=API_BASE_URL=` 로 덮어쓴다.
 - `core/theme/` — 목업에서 뽑은 다크 단일 테마(배경 `#0B0B0E`, 포인트 오렌지 `#FF6A2B`,
   보조 퍼플 `#A06BFF`). 폰트: 본문 Noto Sans KR, 로고 Bebas Neue, 숫자 JetBrains Mono.
