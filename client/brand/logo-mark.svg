@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60" fill="none">
+  <title>Stick Check — band rehearsal app mark</title>
+  <path d="M9 31l13 15" stroke="#A06BFF" stroke-width="7" stroke-linecap="round"></path>
+  <path d="M22 46L51 11" stroke="#FF6A2B" stroke-width="7" stroke-linecap="round"></path>
+  <circle cx="51" cy="11" r="5.2" fill="#FF8B5C"></circle>
+  <circle cx="9" cy="31" r="4.4" fill="#C8AAFF"></circle>
+</svg>

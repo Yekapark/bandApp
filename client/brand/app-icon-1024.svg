@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <title>App icon — Stick Check</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2A1420"></stop>
+      <stop offset="1" stop-color="#0E0E13"></stop>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"></rect>
+  <g transform="translate(172 172) scale(11.4667)">
+    <path d="M9 31l13 15" stroke="#A06BFF" stroke-width="7" stroke-linecap="round"></path>
+    <path d="M22 46L51 11" stroke="#FF6A2B" stroke-width="7" stroke-linecap="round"></path>
+    <circle cx="51" cy="11" r="5.2" fill="#FF8B5C"></circle>
+    <circle cx="9" cy="31" r="4.4" fill="#C8AAFF"></circle>
+  </g>
+</svg>
