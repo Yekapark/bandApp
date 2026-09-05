@@ -28,6 +28,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # 배포 대상 서버가 아직 없을 수 있다. secrets 컨텍스트는 job 단위 if 에서 못 쓰므로
+    # env 로 올려서 스텝 조건에 쓴다.
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -58,7 +62,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # 서버가 생기기 전까지는 여기서 멈춘다. 이미지는 이미 GHCR 에 올라갔으므로
+      # 서버를 잡은 뒤 시크릿만 채우면 그때부터 자동으로 배포된다.
+      - name: 배포 대상 없음 — SSH 단계 건너뜀
+        if: env.DEPLOY_HOST == ''
+        run: |
+          echo "::notice title=배포 건너뜀::DEPLOY_HOST 시크릿이 비어 있다. 이미지 ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }} 는 GHCR 에 올라갔다. 서버를 잡고 DEPLOY_HOST/DEPLOY_USER/DEPLOY_KEY 를 넣으면 이 단계부터 자동으로 이어진다 (docs/LAUNCH_CHECKLIST.md 6단계)."
+
       - name: SSH 배포
+        if: env.DEPLOY_HOST != ''
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
