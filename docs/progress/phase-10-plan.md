@@ -70,7 +70,7 @@ CHECK 제약으로 불변식을 DB 레벨에서 강제한다:
 | `repository/BandPlanRepository` | `findByBandId`(조회), `findByBandIdForUpdate`(`PESSIMISTIC_WRITE` — 전환용) |
 | `gateway/PaymentGateway` | 인터페이스. `subscribe`/`renew`/`cancel` + 커맨드·결과 record. 커맨드에 카드·토큰 정보 없음(어댑터가 자체 처리) |
 | `gateway/NoOpPaymentGateway` | `@Component`. 항상 즉시 성공. `subscribe`/`renew` → `ref="noop-{bandId}"`, 구독기간 종료 = 요청 시각 + `premiumPeriodDays` |
-| `config/PlanProperties` | `app.plan.*` — `premiumPeriodDays`(30), `downgradeGraceDays`(30), `planCode`(`PREMIUM_MONTHLY`). 유효하지 않으면 기본값 복귀 |
+| `config/PlanProperties` | `app.plan.*` — `premiumPeriodDays`(365, 밴드별 1년 구독), `downgradeGraceDays`(30), `planCode`(`PREMIUM_YEARLY`), `expireCron`, `zone`. 유효하지 않으면 기본값 복귀 |
 | `service/MediaRetention` | **순수 함수** `expiresAt(uploadedAt, retentionDays)` — null ⇒ 무제한(null), ≤0 ⇒ 예외. `FREE_RETENTION_DAYS=30` |
 | `service/PlanProvisioningService` | `createDefaultPlan(bandId, now)` — 밴드 생성 시 FREE 행 생성. `BandService.create` 가 호출 |
 | `service/PlanDirectoryService` | 타 도메인용 읽기 창구. `mediaExpiresAt(bandId, uploadedAt)`(게시판이 호출), `currentPlan(bandId)`(→ `PlanView` record, 엔티티 노출 안 함) |

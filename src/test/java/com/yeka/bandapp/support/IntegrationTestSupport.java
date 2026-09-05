@@ -70,6 +70,7 @@ public abstract class IntegrationTestSupport {
         registry.add("app.notification.nudge-cron", () -> "-");
         registry.add("app.media.expire-cron", () -> "-");
         registry.add("app.media.orphan-cron", () -> "-");
+        registry.add("app.plan.expire-cron", () -> "-");
         // 초대 딥링크: 링크·검증 파일의 값을 고정해 assertion 을 쓸 수 있게 한다.
         registry.add("app.deeplink.base-url", () -> "https://band.test");
         registry.add("app.deeplink.scheme", () -> "bandapp");
