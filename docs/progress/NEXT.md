@@ -97,12 +97,6 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
   아직 동작하지 않는다. 켤 때 릴리스 빌드로 지도·로그인을 다시 확인해야 한다.
 - 릴리스 키스토어의 **키 해시도 카카오 콘솔에 추가**해야 한다(디버그 것과 다르다).
 
-### 2-B. 신고 레이트리밋 테스트 안정화
-
-`ReportIntegrationTest.reports_are_rate_limited_per_user()` 가 전체 실행에서 간헐적으로 실패한다.
-상세는 [2026-09-05 문서 §9-A](2026-09-05-brand-notifications-settlement-video.md).
-(별도 세션에서 진행 중)
-
 ---
 
 ## 3. 기능으로 남은 것
@@ -127,12 +121,20 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 ```bash
 cd client && python tools/check_cache_invalidation.py   # 저장 후 캐시 무효화 누락 검사
-cd client && flutter test && flutter analyze lib/
+cd client && flutter test
+cd client && flutter analyze --no-fatal-warnings --no-fatal-infos   # CI 와 같은 명령
 cd C:\band\bandApp && ./gradlew test
 ```
 
 - 저장(쓰기)을 하는 화면을 만들면 **반드시 관련 프로바이더를 `ref.invalidate`** 한다.
   이 앱의 provider 는 autoDispose 가 아니라, 안 비우면 화면을 벗어났다 오는 순간
   옛 값이 다시 그려진다(오늘 4곳에서 났다). 위 검사 스크립트가 잡아 준다.
+- **`flutter analyze` 는 CI 와 똑같은 옵션으로 돌린다.** 결과를 `grep` 으로 거르지 말 것 —
+  분석기는 `error` 를 7칸 우측정렬(공백 **2**칸)로, `info` 는 공백 3칸으로 찍는다.
+  공백 3칸으로 error 를 찾다가 문법 오류를 놓치고 CI 를 깨뜨린 적이 있다.
+- **레이트리밋을 검증하는 테스트는 시도 횟수를 상한의 2배보다 크게** 잡는다.
+  `RedisRateLimiter` 가 1분 고정 윈도우라, 루프가 분 경계를 넘으면 카운터가 중간에 리셋돼
+  429 가 한 번도 안 날 수 있다. `N > 2×상한` 이면 어떻게 갈려도 한쪽이 상한을 넘는다.
+  (이걸로 `ReportIntegrationTest`·`MediaUploadIntegrationTest` 가 각각 한 번씩 깨졌다.)
 - 아이콘을 바꾸려면 `client/brand/*.svg` 를 고치고
   `cd client && python tools/render_icons.py`.
