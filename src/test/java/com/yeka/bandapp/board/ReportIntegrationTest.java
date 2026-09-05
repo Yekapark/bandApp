@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.ResponseEntity;
+import static com.yeka.bandapp.support.RateLimitAssertions.assertRateLimited;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -124,15 +125,8 @@ class ReportIntegrationTest extends BoardApiSupport {
         long target = myUserId(signup("rp-rl-t@band.app", "대상"));
         String body = "{\"targetType\":\"USER\",\"targetId\":" + target + ",\"reason\":\"신고\"}";
 
-        // 상한(10)의 2배+1 회를 연속으로 쏜다. 레이트리밋은 고정 1분 윈도우라 버스트가 분 경계에
-        // 걸치면 카운터가 리셋되는데, 2N+1 이면 경계를 넘어도 한쪽 윈도우는 반드시 N을 초과한다.
+        // 테스트 설정상 report 분당 10회.
         // (레이트리밋 검사가 중복 검사보다 먼저라 같은 대상을 반복 신고해도 카운터는 쌓인다.)
-        int limitHits = 0;
-        for (int i = 0; i < 21; i++) {
-            if (post(REPORTS, body, a).getStatusCode().value() == 429) {
-                limitHits++;
-            }
-        }
-        assertThat(limitHits).isPositive();
+        assertRateLimited(10, () -> post(REPORTS, body, a).getStatusCode().value());
     }
 }

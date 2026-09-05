@@ -3,13 +3,17 @@ package com.yeka.bandapp.plan.controller;
 import com.yeka.bandapp.common.response.ApiResponse;
 import com.yeka.bandapp.common.security.AuthPrincipal;
 import com.yeka.bandapp.plan.dto.PlanResponse;
+import com.yeka.bandapp.plan.dto.RedeemCouponRequest;
+import com.yeka.bandapp.plan.service.PlanCouponService;
 import com.yeka.bandapp.plan.service.PlanService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,9 +32,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlanController {
 
     private final PlanService planService;
+    private final PlanCouponService planCouponService;
 
-    public PlanController(PlanService planService) {
+    public PlanController(PlanService planService, PlanCouponService planCouponService) {
         this.planService = planService;
+        this.planCouponService = planCouponService;
     }
 
     @Operation(summary = "현재 요금제 조회",
@@ -67,5 +73,17 @@ public class PlanController {
     public ApiResponse<PlanResponse> renew(@AuthenticationPrincipal AuthPrincipal principal,
                                            @PathVariable long bandId) {
         return ApiResponse.ok(planService.renew(bandId, principal.userId()));
+    }
+
+    @Operation(summary = "맛보기 쿠폰 사용",
+            description = "운영자가 발급한 쿠폰 코드로 PREMIUM 기간을 얻는다. 밴드장만"
+                    + "(그 외 403 NOT_BAND_LEADER). 이미 PREMIUM 이면 남은 기간에 더한다. "
+                    + "없는 코드 404 COUPON_NOT_FOUND, 기한 지남 410 COUPON_EXPIRED, "
+                    + "모두 사용됨 409 COUPON_EXHAUSTED, 이 밴드가 이미 쓴 쿠폰 409 COUPON_ALREADY_USED.")
+    @PostMapping("/coupons/redeem")
+    public ApiResponse<PlanResponse> redeemCoupon(@AuthenticationPrincipal AuthPrincipal principal,
+                                                  @PathVariable long bandId,
+                                                  @Valid @RequestBody RedeemCouponRequest request) {
+        return ApiResponse.ok(planCouponService.redeem(bandId, principal.userId(), request.code()));
     }
 }

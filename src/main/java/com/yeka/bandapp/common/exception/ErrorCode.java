@@ -32,6 +32,7 @@ public enum ErrorCode {
 
     // 밴드 / 멤버 (Phase 2)
     BAND_NOT_FOUND(HttpStatus.NOT_FOUND, "밴드를 찾을 수 없습니다."),
+    BAND_NAME_MISMATCH(HttpStatus.BAD_REQUEST, "밴드 이름이 일치하지 않습니다."),
     NOT_BAND_MEMBER(HttpStatus.FORBIDDEN, "밴드 멤버가 아닙니다."),
     NOT_BAND_LEADER(HttpStatus.FORBIDDEN, "밴드장만 할 수 있는 작업입니다."),
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 밴드 멤버를 찾을 수 없습니다."),
@@ -114,7 +115,13 @@ public enum ErrorCode {
     PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "밴드의 요금제 정보를 찾을 수 없습니다."),
     PLAN_ALREADY_PREMIUM(HttpStatus.CONFLICT, "이미 프리미엄 요금제입니다."),
     PLAN_ALREADY_FREE(HttpStatus.CONFLICT, "이미 무료 요금제입니다."),
-    PAYMENT_FAILED(HttpStatus.PAYMENT_REQUIRED, "결제 처리에 실패했습니다.");
+    PAYMENT_FAILED(HttpStatus.PAYMENT_REQUIRED, "결제 처리에 실패했습니다."),
+
+    // 요금제 쿠폰
+    COUPON_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 쿠폰 코드입니다."),
+    COUPON_EXPIRED(HttpStatus.GONE, "사용 기한이 지난 쿠폰입니다."),
+    COUPON_EXHAUSTED(HttpStatus.CONFLICT, "모두 사용된 쿠폰입니다."),
+    COUPON_ALREADY_USED(HttpStatus.CONFLICT, "이 밴드에서 이미 사용한 쿠폰입니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

@@ -1,7 +1,9 @@
 # 다음에 이어서 할 일
 
 > 살아있는 문서. 끝난 항목은 지우고, 새로 생긴 건 여기에 적는다.
-> 오늘까지의 작업 내용은 [2026-09-05-brand-notifications-settlement-video.md](2026-09-05-brand-notifications-settlement-video.md).
+> 오늘까지의 작업 내용은 [2026-09-05-brand-notifications-settlement-video.md](2026-09-05-brand-notifications-settlement-video.md)
+> , [2026-09-05-plan-lifecycle-and-media-fix.md](2026-09-05-plan-lifecycle-and-media-fix.md),
+> [2026-09-05-band-delete.md](2026-09-05-band-delete.md).
 > 마지막 갱신: **2026-09-05**
 
 ---
@@ -10,9 +12,11 @@
 
 | | |
 |---|---|
-| 브랜치 | `feat/kakao-map-in-room-form` — `main` 대비 커밋 20개, 워킹트리 깨끗 |
-| PR | **아직 안 올렸다.** 브랜치가 길어졌으니 정리해서 올릴지 결정 필요 |
-| 백엔드 | 최신 코드로 재빌드해 둠(V11 마이그레이션·정산 목록 API 포함). `docker compose ps` 로 healthy 확인 |
+| PR | 스택 3개가 올라가 있다(전부 CI 통과). **아래 순서대로 머지한다** — 앞의 것이 머지되면 뒤의 base 가 `main` 으로 자동 정리된다 |
+| ① | [#39](https://github.com/Yekapark/bandApp/pull/39) `feat/kakao-map-in-room-form` → `main` — 카카오 지도·브랜딩·알림 목록·정산 탭·영상 업로드 |
+| ② | [#40](https://github.com/Yekapark/bandApp/pull/40) `feat/plan-lifecycle` → ① — 요금제 만료·1년 구독·쿠폰 + 영상 첨부 버그 수정 |
+| ③ | [#41](https://github.com/Yekapark/bandApp/pull/41) `feat/band-delete` → ② — 밴드 삭제 |
+| 백엔드 | 마이그레이션이 `V13` 까지 늘었다(V12 쿠폰, V13 영상 200MB). **`docker compose up -d --build app` 으로 다시 띄워야** 반영된다 |
 | 실기기 | 갤럭시 S24(`R3CX40J7QJE`) USB 테더링 + `adb reverse tcp:8080` |
 
 실행:
@@ -58,6 +62,11 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 - [ ] 정산 탭 — 납부 체크 후 **다른 화면 갔다 와도 유지되는지**(오늘 고친 버그)
 - [ ] 알림 목록 — 홈 종 배지 숫자, 목록 열면 배지가 0 이 되는지
 - [ ] 영상 첨부 — 5~6분 영상으로 압축 진행률(%)이 돌고, 등록 시 함께 올라가는지
+      (**이게 그동안 안 됐다** — DB 제약이 50MB 에 머물러 있어 압축한 영상도 500 이 났다.
+      `V12` 에서 200MB 로 올렸으니 이제 실제로 확인이 된다)
+- [ ] 사진 첨부 — 고화질 사진을 올린 뒤 저장 크기가 1MB 아래인지(긴 변 2048px 로 축소한다)
+- [ ] 요금제 쿠폰 — 쿠폰을 SQL 로 넣고 앱에서 입력 → PREMIUM 전환·기간 가산
+- [ ] 밴드 삭제 — 사진·영상·일정·정산이 있는 테스트 밴드를 지우고 R2 버킷과 각 테이블이 비는지
 - [ ] 게시글 영상 재생 — 전체화면, 탭 play/pause, 진행바 스크러빙
 - [ ] 합주실 등록 폼 지도 — 검색 후보가 핀으로 뜨고 고른 좌표가 저장되는지
 
@@ -80,13 +89,7 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 ## 2. 우선순위가 높은 남은 작업
 
-### 2-A. PREMIUM 만료 자동 강등 (돈 문제)
-
-`PlanService` 의 `TODO(PG 어댑터)` — `band_plans.expires_at` 이 지난 PREMIUM 밴드를 FREE 로
-되돌리는 배치가 없다. **기한이 지나도 계속 PREMIUM 이다.** 결제 연동(`PaymentGateway` 는
-현재 no-op)과 별개로, 만료 처리만이라도 먼저 하는 게 맞다.
-
-### 2-B. 출시 전 필수
+### 2-A. 출시 전 필수
 
 - **패키지명이 `com.example.bandapp_client`** — 구글 플레이가 `com.example.` 로 시작하는
   패키지를 거부한다. 바꾸면 **카카오 콘솔 플랫폼 등록(패키지명·키 해시)도 다시** 해야 한다.
@@ -95,12 +98,6 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 - **ProGuard 가 꺼져 있다** — `isMinifyEnabled` 미설정. 카카오맵 규칙은 미리 넣어 뒀지만
   아직 동작하지 않는다. 켤 때 릴리스 빌드로 지도·로그인을 다시 확인해야 한다.
 - 릴리스 키스토어의 **키 해시도 카카오 콘솔에 추가**해야 한다(디버그 것과 다르다).
-
-### 2-C. 신고 레이트리밋 테스트 안정화
-
-`ReportIntegrationTest.reports_are_rate_limited_per_user()` 가 전체 실행에서 간헐적으로 실패한다.
-상세는 [2026-09-05 문서 §9-A](2026-09-05-brand-notifications-settlement-video.md).
-(별도 세션에서 진행 중)
 
 ---
 
@@ -126,12 +123,21 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 ```bash
 cd client && python tools/check_cache_invalidation.py   # 저장 후 캐시 무효화 누락 검사
-cd client && flutter test && flutter analyze lib/
+cd client && flutter test
+cd client && flutter analyze --no-fatal-warnings --no-fatal-infos   # CI 와 같은 명령
 cd C:\band\bandApp && ./gradlew test
 ```
 
 - 저장(쓰기)을 하는 화면을 만들면 **반드시 관련 프로바이더를 `ref.invalidate`** 한다.
   이 앱의 provider 는 autoDispose 가 아니라, 안 비우면 화면을 벗어났다 오는 순간
   옛 값이 다시 그려진다(오늘 4곳에서 났다). 위 검사 스크립트가 잡아 준다.
+- **`flutter analyze` 는 CI 와 똑같은 옵션으로 돌린다.** 결과를 `grep` 으로 거르지 말 것 —
+  분석기는 `error` 를 7칸 우측정렬(공백 **2**칸)로, `info` 는 공백 3칸으로 찍는다.
+  공백 3칸으로 error 를 찾다가 문법 오류를 놓치고 CI 를 깨뜨린 적이 있다.
+- **레이트리밋을 검증하는 테스트는 직접 루프를 돌리지 말고 `RateLimitAssertions.assertRateLimited`
+  를 쓴다.** `RedisRateLimiter` 가 1분 고정 윈도우라, 상한보다 조금만 많이 던지는 루프는
+  분 경계를 넘는 순간 카운터가 리셋돼 429 가 한 번도 안 난다. 헬퍼가 상한의 2배+2회를
+  던져 산수로 막아 준다(`N > 2×상한` 이면 어떻게 갈려도 한쪽이 상한을 넘는다).
+  이걸로 `Report`·`MediaUpload`·`AuthRateLimit` 세 테스트가 차례로 깨졌다.
 - 아이콘을 바꾸려면 `client/brand/*.svg` 를 고치고
   `cd client && python tools/render_icons.py`.

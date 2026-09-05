@@ -99,4 +99,9 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
              where r.id = :id
             """)
     int decreaseUsageCountBy(@Param("id") long id, @Param("delta") int delta);
+
+    /** 밴드 삭제 정리. 합주실을 참조하는 일정·정기규칙을 먼저 지운 뒤 호출한다. */
+    @Modifying
+    @Query("delete from Room r where r.bandId = :bandId")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

@@ -98,9 +98,11 @@ app:
     expire-cron: ${MEDIA_EXPIRE_CRON:0 15 4 * * *}       # 매일 04:15 KST 보관기한 만료 미디어 → R2 삭제 + EXPIRED
     orphan-cron: ${MEDIA_ORPHAN_CRON:0 10 * * * *}       # 매시 10분 콜백 없는 고아 PENDING 정리
   plan:
-    premium-period-days: ${PLAN_PREMIUM_PERIOD_DAYS:30}  # no-op 게이트웨이가 PREMIUM 구독기간 종료를 계산하는 기준 일수
-    downgrade-grace-days: ${PLAN_DOWNGRADE_GRACE_DAYS:30} # PREMIUM 해지 시 기존 미디어에 부여하는 유예기간(일)
-    plan-code: PREMIUM_MONTHLY                           # 결제 게이트웨이에 넘기는 요금제 코드
+    zone: Asia/Seoul                                     # 배치 cron 해석 기준 시간대
+    premium-period-days: ${PLAN_PREMIUM_PERIOD_DAYS:365} # PREMIUM 한 구독기간의 일수. 밴드별 1년 단위 구독
+    downgrade-grace-days: ${PLAN_DOWNGRADE_GRACE_DAYS:30} # 해지·만료 시 기존 미디어에 주는 유예기간(일). 보관 유예라 구독 주기와 무관
+    plan-code: PREMIUM_YEARLY                            # 결제 게이트웨이에 넘기는 요금제 코드
+    expire-cron: ${PLAN_EXPIRE_CRON:0 45 4 * * *}        # 매일 04:45 KST 구독기간 지난 PREMIUM → FREE
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
   deeplink:

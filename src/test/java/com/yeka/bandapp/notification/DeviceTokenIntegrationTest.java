@@ -4,6 +4,8 @@ import com.yeka.bandapp.notification.repository.DeviceTokenRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import java.util.concurrent.atomic.AtomicInteger;
+import static com.yeka.bandapp.support.RateLimitAssertions.assertRateLimited;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -61,15 +63,10 @@ class DeviceTokenIntegrationTest extends NotificationApiSupport {
     @Test
     void registration_is_rate_limited_per_user() {
         String user = signup("dt-rl@band.app", "유저");
-        int limited = 0;
-        for (int i = 0; i < 13; i++) {
-            ResponseEntity<String> res = registerToken(user, "tok-" + i, "ANDROID");
-            if (res.getStatusCode().value() == 429) {
-                limited++;
-                assertThat(errorCode(res)).isEqualTo("TOO_MANY_REQUESTS");
-            }
-        }
-        assertThat(limited).isPositive();
+        // 테스트 설정상 device-token 분당 10회.
+        AtomicInteger seq = new AtomicInteger();
+        assertRateLimited(10, () ->
+                registerToken(user, "tok-" + seq.getAndIncrement(), "ANDROID").getStatusCode().value());
     }
 
     @Test

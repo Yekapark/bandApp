@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
 
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
@@ -125,4 +126,12 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
                                                    @Param("endAt") Instant endAt,
                                                    @Param("excludeRuleId") long excludeRuleId,
                                                    Pageable limit);
+
+    /**
+     * 밴드 삭제 정리. {@code recurring_rules}·{@code rooms} 를 참조하는 FK 가 있어
+     * <b>그 둘보다 먼저</b> 지워야 한다.
+     */
+    @Modifying
+    @Query("delete from Reservation r where r.bandId = :bandId")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

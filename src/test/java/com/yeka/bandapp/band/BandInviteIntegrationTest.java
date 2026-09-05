@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.time.Duration;
 import java.time.Instant;
+import static com.yeka.bandapp.support.RateLimitAssertions.assertRateLimited;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -146,11 +147,7 @@ class BandInviteIntegrationTest extends BandApiSupport {
     void repeated_join_attempts_are_rate_limited() {
         String joiner = signup("inv-flood@band.app", "폭주");
 
-        int lastStatus = 0;
-        for (int i = 0; i < 11; i++) {
-            lastStatus = join(joiner, "NOTREAL1").getStatusCode().value();
-        }
-        // 테스트 설정상 분당 10회 → 11번째는 429.
-        assertThat(lastStatus).isEqualTo(429);
+        // 테스트 설정상 invite-join 분당 10회.
+        assertRateLimited(10, () -> join(joiner, "NOTREAL1").getStatusCode().value());
     }
 }
