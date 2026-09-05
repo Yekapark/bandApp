@@ -9,9 +9,14 @@ build/
 *.iml
 .idea/
 
-# 플랫폼 폴더는 `flutter create .` 로 생성 — 커밋 대상 여부는 팀에서 결정
-# (초기에는 추적하지 않는다)
-/android/
+# 안드로이드는 추적한다. 그 안에 손으로 만든 설정이 쌓였고(카카오 로그인 리다이렉트 스킴,
+# 카카오맵용 minSdk, 앱 아이콘, applicationId), 앞으로 릴리스 서명·ProGuard 도 여기 들어간다.
+# 무시해 두면 이 PC 가 죽는 순간 사라지고 다른 PC·CI 에서 앱을 만들 수 없다.
+# 비밀·기계별 파일(local.properties 의 카카오 키, 키스토어, 빌드 산출물)은
+# android/.gitignore 와 저장소 루트 .gitignore 가 이미 막는다.
+
+# 나머지 플랫폼 폴더는 아직 `flutter create .` 산출물 그대로라 추적하지 않는다.
+# 손댈 일이 생기면(웹 index.html 에 SDK 스크립트를 넣는 등) 그때 android 처럼 풀어 준다.
 /ios/
 /web/
 /linux/

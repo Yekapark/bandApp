@@ -100,11 +100,13 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 - ~~**패키지명이 `com.example.bandapp_client`**~~ **완료 (2026-09-06)** — `com.yeka.bandule` 로
   바꿨다(`namespace`·`applicationId`·`MainActivity.kt` 패키지·디렉터리, 백엔드 딥링크 기본값).
   **남은 사람 작업: 카카오 콘솔(+ 쓰고 있다면 NCP)의 Android 플랫폼 패키지명을 새 값으로 고칠 것** — §1-C.
-- **`client/.gitignore` 가 `/android/`·`/ios/`·`/web/` 를 통째로 무시한다** — 위 패키지명 변경을
-  포함해 안드로이드 프로젝트 전체(빌드 설정·매니페스트·카카오 스킴·아이콘)가 **git 에 없다.**
-  이 PC 가 죽으면 그대로 사라지고, 다른 PC 나 CI 에서 앱을 빌드할 수 없다. 릴리스 서명 설정과
-  ProGuard 도 결국 이 폴더에 들어가므로 **출시 전에 추적으로 돌려야 한다**
-  (`local.properties`·키스토어는 계속 제외).
+- ~~**`client/.gitignore` 가 `/android/` 를 통째로 무시한다**~~ **완료 (2026-09-06)** —
+  안드로이드 프로젝트를 추적으로 돌렸다(27개 파일). 그전까지는 빌드 설정·매니페스트·
+  카카오 스킴·아이콘·패키지명이 전부 이 PC 에만 있었다. 비밀·기계별 파일은
+  `client/android/.gitignore`(flutter create 산출물)와 루트 `.gitignore` 가 이미 막는다 —
+  `local.properties`(카카오 키), 키스토어, `*.iml`, 빌드 산출물, `GeneratedPluginRegistrant.java`.
+  `/ios/`·`/web/`·`/windows/` 는 아직 `flutter create` 기본값 그대로라 계속 무시한다.
+  손댈 일이 생기면 그때 푼다.
 - **릴리스 서명 설정 없음** — `build.gradle.kts` 의 `release` 블록이 아직 디버그 키로 서명한다.
 - **ProGuard 가 꺼져 있다** — `isMinifyEnabled` 미설정. 카카오맵 규칙은 미리 넣어 뒀지만
   아직 동작하지 않는다. 켤 때 릴리스 빌드로 지도·로그인을 다시 확인해야 한다.
