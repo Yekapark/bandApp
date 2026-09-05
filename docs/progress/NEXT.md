@@ -15,7 +15,7 @@
 | 백엔드 | **Phase 0~11 전부 완료.** PR 스택(#39~#41)은 머지 순서가 엇갈려 ②③이 `main` 에 안 들어갔었고, [#42](https://github.com/Yekapark/bandApp/pull/42) 로 바로잡았다 |
 | 진행 중 | `phase-11-deploy` — 운영 compose·Nginx·Let's Encrypt·GitHub Actions 배포·DB 백업/복구. 배포 방법은 [docs/DEPLOY.md](../DEPLOY.md) |
 | 마이그레이션 | `V13` 까지. **`docker compose up -d --build app` 으로 다시 띄워야** 반영된다 |
-| 남은 것 | 실제 VM 확보 후 배포 1회 · 아래 §1(미검증 항목)·§2-A(출시 전 필수) |
+| 남은 것 | **출시까지 순서는 [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) 를 본다** (도메인 → 서버 → 배포 → 카카오 콘솔 → 약관 → 서명 → 스토어). 이 문서는 코드로 남은 것만 다룬다 |
 | 실기기 | 갤럭시 S24(`R3CX40J7QJE`) USB 테더링 + `adb reverse tcp:8080` |
 
 실행:

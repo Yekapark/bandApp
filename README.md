@@ -13,6 +13,7 @@ Swagger UI: http://localhost:8080/swagger-ui.html · OpenAPI: http://localhost:8
 
 ## 배포
 
+출시까지 무엇을 어떤 순서로 해야 하는지는 [docs/LAUNCH_CHECKLIST.md](docs/LAUNCH_CHECKLIST.md).
 운영 배포·백업·복구 절차는 [docs/DEPLOY.md](docs/DEPLOY.md). 운영 스택은 `docker-compose.prod.yml`,
 `main` 의 CI 가 통과하면 `.github/workflows/deploy.yml` 이 자동으로 배포한다.
 
