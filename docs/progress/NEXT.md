@@ -74,11 +74,18 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 마지막으로 본 상태는 `Android keyHash validation failed` 였다. 값은 확인된 게 있다:
 
 ```
-패키지명   com.example.bandapp_client
+패키지명   com.yeka.bandule            ← 2026-09-06 에 com.example.bandapp_client 에서 바꿨다
 키 해시    ahCJ5a5dXyiPh3x9ksny6yMbjzk=
 ```
 
-폰에 설치된 APK 의 서명 인증서에서 직접 뽑아 대조한 값이라 확실하다. 그래도 거부되면
+> **패키지명을 바꿨으니 카카오 콘솔의 Android 플랫폼 등록을 반드시 새로 해야 한다.**
+> 개발자 콘솔 > 내 애플리케이션 > 앱 설정 > 플랫폼 > Android 에서 패키지명을
+> `com.yeka.bandule` 로 고치고 저장한다. 키 해시는 **서명 키에서 나오는 값이라 그대로**다
+> (같은 debug.keystore 를 쓰는 한 바뀌지 않는다). 이걸 안 하면 카카오 로그인이
+> `KakaoTalk not installed` 가 아니라 플랫폼 불일치로 막힌다.
+> 네이버 지도(NCP)에도 패키지명이 등록돼 있으면 그쪽도 같이 고친다.
+
+키 해시는 폰에 설치된 APK 의 서명 인증서에서 직접 뽑아 대조한 값이라 확실하다. 그래도 거부되면
 **앱이 스스로 찍는 값**을 쓴다 — 디버그 빌드는 시작할 때 로그에
 `kakao keyHash (콘솔에 등록할 값): ...` 을 남긴다. 콘솔에서 확인할 것:
 ① 지금 보고 있는 앱의 네이티브 키가 `dart_defines.json` 의 것과 같은지,
@@ -90,10 +97,15 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 ### 2-A. 출시 전 필수
 
-- **패키지명이 `com.example.bandapp_client`** — 구글 플레이가 `com.example.` 로 시작하는
-  패키지를 거부한다. 바꾸면 **카카오 콘솔 플랫폼 등록(패키지명·키 해시)도 다시** 해야 한다.
-  이름이 밴듈로 정해졌으니 지금이 바꿀 타이밍이다.
-- **릴리스 서명 설정 없음** — `build.gradle.kts` 가 디버그 키로 서명 중(`TODO` 주석 그대로).
+- ~~**패키지명이 `com.example.bandapp_client`**~~ **완료 (2026-09-06)** — `com.yeka.bandule` 로
+  바꿨다(`namespace`·`applicationId`·`MainActivity.kt` 패키지·디렉터리, 백엔드 딥링크 기본값).
+  **남은 사람 작업: 카카오 콘솔(+ 쓰고 있다면 NCP)의 Android 플랫폼 패키지명을 새 값으로 고칠 것** — §1-C.
+- **`client/.gitignore` 가 `/android/`·`/ios/`·`/web/` 를 통째로 무시한다** — 위 패키지명 변경을
+  포함해 안드로이드 프로젝트 전체(빌드 설정·매니페스트·카카오 스킴·아이콘)가 **git 에 없다.**
+  이 PC 가 죽으면 그대로 사라지고, 다른 PC 나 CI 에서 앱을 빌드할 수 없다. 릴리스 서명 설정과
+  ProGuard 도 결국 이 폴더에 들어가므로 **출시 전에 추적으로 돌려야 한다**
+  (`local.properties`·키스토어는 계속 제외).
+- **릴리스 서명 설정 없음** — `build.gradle.kts` 의 `release` 블록이 아직 디버그 키로 서명한다.
 - **ProGuard 가 꺼져 있다** — `isMinifyEnabled` 미설정. 카카오맵 규칙은 미리 넣어 뒀지만
   아직 동작하지 않는다. 켤 때 릴리스 빌드로 지도·로그인을 다시 확인해야 한다.
 - 릴리스 키스토어의 **키 해시도 카카오 콘솔에 추가**해야 한다(디버그 것과 다르다).

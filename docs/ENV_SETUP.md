@@ -218,10 +218,10 @@ R2 에 직접 접근한다. presigned URL 유효기간은 코드에서 5~15분�
 §5.2 의 서비스 계정 키(서버 전용 비밀)와 혼동 주의.
 
 1. 같은 Firebase 프로젝트 → **프로젝트 설정 > 일반 > 내 앱 > 앱 추가 → Android**
-   - Android 패키지 이름: `com.yeka.bandapp` (`ANDROID_PACKAGE` 와 동일하게)
+   - Android 패키지 이름: `com.yeka.bandule` (`ANDROID_PACKAGE`, 클라이언트 `applicationId` 와 동일하게)
    - `google-services.json` 다운로드 → `android/app/` 에 배치
 2. **앱 추가 → iOS**
-   - iOS 번들 ID: `com.yeka.bandapp`
+   - iOS 번들 ID: `com.yeka.bandule`
    - `GoogleService-Info.plist` 다운로드 → Xcode 로 `ios/Runner/` 에 추가
 3. **iOS 는 APNs 키 추가 필요** (안 하면 Android 는 되는데 iOS 만 조용히 실패):
    - Apple Developer → **APNs Authentication Key (.p8)** 생성
@@ -242,7 +242,7 @@ R2 에 직접 접근한다. presigned URL 유효기간은 코드에서 5~15분�
 | `SPRING_PROFILES_ACTIVE=prod` | Swagger/API 문서 비공개, `/actuator/health` 상세 숨김 |
 | `CORS_ALLOWED_ORIGINS` | 기본값 `http://localhost:*` → 실제 프론트/앱 도메인 |
 | `DEEPLINK_BASE_URL` | 초대 링크·AASA/assetlinks 제공용 백엔드 공개 도메인 (HTTPS) |
-| `IOS_APP_ID` | `TEAMID.com.yeka.bandapp`. Apple Developer($99/년)의 Team ID + 번들 ID. iOS 유니버설 링크 검증 |
+| `IOS_APP_ID` | `TEAMID.com.yeka.bandule`. Apple Developer($99/년)의 Team ID + 번들 ID. iOS 유니버설 링크 검증 |
 | `ANDROID_PACKAGE` / `ANDROID_SHA256_CERT_FINGERPRINTS` | 앱 서명 키 SHA-256 지문. Play Console > 앱 무결성 > 앱 서명 에서 복사. Android App Links 검증 |
 | `IOS_APP_STORE_URL` / `ANDROID_PLAY_STORE_URL` | 미설치 사용자 스토어 유도 |
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | 기본 30분 / 14일. 필요 시만 |
