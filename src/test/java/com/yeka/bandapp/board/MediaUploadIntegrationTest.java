@@ -145,6 +145,40 @@ class MediaUploadIntegrationTest extends BoardApiSupport {
         assertThat(errorCode(again)).isEqualTo("MEDIA_NOT_PENDING");
     }
 
+    /**
+     * 압축한 합주 영상은 6분이면 90MB 안팎이라 50MB 를 넘는 게 정상 경로다.
+     *
+     * <p>회귀 방지: V8 의 {@code ck_media_attachments_size} 가 50MB 로 남아 있던 동안, 업로드 URL 발급이
+     * 신고 크기로 PENDING 행을 먼저 넣다가 제약 위반으로 500 이 났다(= 영상 첨부가 아예 안 됐다).
+     * {@code MediaPolicyTest} 는 DB 를 안 타는 순수 단위 테스트라 이 불일치를 잡지 못했으므로,
+     * <b>DB 를 실제로 타는</b> 이 테스트가 상한 일치를 지킨다. 실제 바이트는 올리지 않는다 —
+     * 행이 만들어지는지만 보면 된다.
+     */
+    @Test
+    void upload_url_accepts_a_video_larger_than_the_old_50mb_cap() {
+        String leader = signup("md-vid-l@band.app", "리더");
+        long bandId = createBand(leader, "영상밴드");
+        long postId = createPost(leader, bandId, "글", "본문");
+
+        ResponseEntity<String> res = issueUploadUrl(leader, bandId, postId, "video/mp4", 100 * ONE_MB);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(201);
+        assertThat(data(res).get("mediaId").asLong()).isPositive();
+        assertThat(data(res).get("maxSizeBytes").asLong()).isEqualTo(200 * ONE_MB);
+    }
+
+    @Test
+    void upload_url_rejects_oversized_video_above_the_200mb_cap() {
+        String leader = signup("md-vid-big@band.app", "리더");
+        long bandId = createBand(leader, "큰영상밴드");
+        long postId = createPost(leader, bandId, "글", "본문");
+
+        ResponseEntity<String> res = issueUploadUrl(leader, bandId, postId, "video/mp4", 200 * ONE_MB + 1);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(400);
+        assertThat(errorCode(res)).isEqualTo("MEDIA_SIZE_EXCEEDED");
+    }
+
     @Test
     void upload_url_rejects_oversized_image_without_creating_a_row() {
         String leader = signup("md-big-l@band.app", "리더");
