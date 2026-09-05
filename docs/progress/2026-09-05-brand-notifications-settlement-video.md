@@ -212,9 +212,10 @@ Expecting actual: 0 to be greater than: 0     (limitHits == 0)
 `N > 2×상한` 이면 경계가 어디로 갈리든 한쪽 윈도우가 `ceil(21/2) = 11 > 10` 이라 429 가
 **산수로 보장**된다. sleep 도 재시도도 없다.
 
-같은 뿌리의 결함이 `MediaUploadIntegrationTest.upload_url_is_rate_limited_per_user()` 에도
-있었고(12회 → `2N+2`), 2026-09-05 요금제 작업 브랜치에서 CI 가 실제로 이걸로 실패해 함께 고쳤다.
-**앞으로 레이트리밋 테스트를 쓸 때는 시도 횟수를 상한의 2배보다 크게 잡는다.**
+같은 뿌리의 결함이 `MediaUploadIntegrationTest`·`AuthRateLimitIntegrationTest` 에도 있었고,
+2026-09-05 요금제·밴드삭제 브랜치 CI 가 차례로 이걸로 실패했다. 하나씩 고치는 대신
+**`support/RateLimitAssertions.assertRateLimited` 로 규칙을 한 곳에 모으고** 레이트리밋을
+검증하는 테스트 5개를 전부 그리로 옮겼다. 앞으로는 이 헬퍼만 쓰면 된다.
 
 ### 9-B. 그대로 남은 것
 

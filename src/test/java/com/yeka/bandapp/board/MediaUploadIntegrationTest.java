@@ -11,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicInteger;
+import static com.yeka.bandapp.support.RateLimitAssertions.assertRateLimited;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -209,21 +211,11 @@ class MediaUploadIntegrationTest extends BoardApiSupport {
         String leader = signup("md-rl-l@band.app", "리더");
         long bandId = createBand(leader, "잔나비둘");
 
-        // 상한의 2배 + 2회를 던진다. RedisRateLimiter 는 epochSecond/60 기준 고정 윈도우라
-        // 루프 도중 분이 바뀌면 카운터가 리셋된다 — 12회면 3+9 처럼 갈려 어느 쪽도 상한(10)을
-        // 못 넘고 429 가 한 번도 안 날 수 있다(CI 에서 실제로 그렇게 실패했다).
-        // N > 2*limit 이면 어떻게 갈려도 한쪽이 ceil(N/2) = 11 > 10 이라 429 가 보장된다.
-        int attempts = 2 * MEDIA_UPLOAD_LIMIT_PER_MIN + 2;
-        int limitHits = 0;
-        for (int i = 0; i < attempts; i++) {
-            long postId = createPost(leader, bandId, "글 " + i, "본문");
-            ResponseEntity<String> res = issueUploadUrl(leader, bandId, postId, "image/jpeg", ONE_MB);
-            if (res.getStatusCode().value() == 429) {
-                limitHits++;
-                assertThat(errorCode(res)).isEqualTo("TOO_MANY_REQUESTS");
-            }
-        }
-        assertThat(limitHits).isPositive();
+        AtomicInteger seq = new AtomicInteger();
+        assertRateLimited(MEDIA_UPLOAD_LIMIT_PER_MIN, () -> {
+            long postId = createPost(leader, bandId, "글 " + seq.getAndIncrement(), "본문");
+            return issueUploadUrl(leader, bandId, postId, "image/jpeg", ONE_MB).getStatusCode().value();
+        });
     }
 
     @Test
