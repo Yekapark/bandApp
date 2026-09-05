@@ -132,9 +132,10 @@ cd C:\band\bandApp && ./gradlew test
 - **`flutter analyze` 는 CI 와 똑같은 옵션으로 돌린다.** 결과를 `grep` 으로 거르지 말 것 —
   분석기는 `error` 를 7칸 우측정렬(공백 **2**칸)로, `info` 는 공백 3칸으로 찍는다.
   공백 3칸으로 error 를 찾다가 문법 오류를 놓치고 CI 를 깨뜨린 적이 있다.
-- **레이트리밋을 검증하는 테스트는 시도 횟수를 상한의 2배보다 크게** 잡는다.
-  `RedisRateLimiter` 가 1분 고정 윈도우라, 루프가 분 경계를 넘으면 카운터가 중간에 리셋돼
-  429 가 한 번도 안 날 수 있다. `N > 2×상한` 이면 어떻게 갈려도 한쪽이 상한을 넘는다.
-  (이걸로 `ReportIntegrationTest`·`MediaUploadIntegrationTest` 가 각각 한 번씩 깨졌다.)
+- **레이트리밋을 검증하는 테스트는 직접 루프를 돌리지 말고 `RateLimitAssertions.assertRateLimited`
+  를 쓴다.** `RedisRateLimiter` 가 1분 고정 윈도우라, 상한보다 조금만 많이 던지는 루프는
+  분 경계를 넘는 순간 카운터가 리셋돼 429 가 한 번도 안 난다. 헬퍼가 상한의 2배+2회를
+  던져 산수로 막아 준다(`N > 2×상한` 이면 어떻게 갈려도 한쪽이 상한을 넘는다).
+  이걸로 `Report`·`MediaUpload`·`AuthRateLimit` 세 테스트가 차례로 깨졌다.
 - 아이콘을 바꾸려면 `client/brand/*.svg` 를 고치고
   `cd client && python tools/render_icons.py`.
