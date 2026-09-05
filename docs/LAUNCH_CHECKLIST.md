@@ -14,8 +14,8 @@
 | | 확인 근거 |
 |---|---|
 | ✅ **카카오 개발자 앱** | `.env` 에 `KAKAO_APP_ID`·`KAKAO_ADMIN_KEY`·`KAKAO_REST_API_KEY` 가 채워져 있다. 로그인·장소검색·지도가 이 앱 하나를 쓴다 |
-| ✅ **Cloudflare 계정 + R2 버킷** | `.env` 에 `R2_ACCOUNT_ID`·`R2_BUCKET`(`bandapp-media-dev`)·액세스 키. 사진·영상이 여기 올라간다 |
-| ✅ **Firebase 프로젝트(FCM)** | `.env` 에 `FCM_PROJECT_ID` + 서비스 계정 JSON |
+| ⚠️ **Cloudflare 계정 + R2 버킷** | **개발용만 있다**(`bandapp-media-dev`). 계정·결제·사용법은 검증됐으니 운영 버킷만 하나 더 만들면 된다 |
+| ⚠️ **Firebase 프로젝트(FCM)** | **개발용만 있다.** 게다가 아래 "안 되는 것" 참조 — 지금은 기기에서 푸시가 아예 안 온다 |
 | ✅ **백엔드 Phase 0~11** | 배포 설정·자동 백업·복구까지. 로컬에서 전부 돈다 |
 | ✅ **Flutter 앱 화면 13개** | 요구 화면 전부 도달 |
 
@@ -29,6 +29,14 @@
 | ❌ **개인정보처리방침·이용약관 페이지** | 스토어 등록 필수 + 한국은 법적 요건 |
 | ❌ **릴리스 서명 키** | 지금은 디버그 키로 서명 중이라 스토어에 못 올린다 |
 
+### 만들어는 놨는데 실제로는 안 되는 것
+
+- **기기 푸시 알림이 전혀 안 온다.** 백엔드는 보낼 준비가 끝났는데(Phase 9), **클라이언트에
+  Firebase 설정 파일이 없다** — `client/android/app/google-services.json` 도, `firebase_options.dart` 도,
+  `com.google.gms.google-services` 그래들 플러그인도 없다. `PushService` 는 설정이 없으면 조용히
+  비활성화되도록 만들어져 있어서 앱은 멀쩡히 돌지만, **기기가 토큰을 등록하지 않으므로 리마인더가
+  한 통도 가지 않는다.** 일정 리마인더는 이 앱의 핵심 기능이라 출시 전 필수다 → 7-B 단계.
+
 > **핵심: 도메인 하나가 8할을 막고 있다.** 그것부터 사면 나머지가 줄줄이 풀린다.
 
 ---
@@ -41,6 +49,17 @@
   장난이 없고, DNS 가 자동으로 붙는다). 국내 등록기관에서 사도 되지만 그러면 네임서버를
   Cloudflare 로 바꾸는 단계가 하나 더 붙는다.
 - `.com` 기준 대략 연 1.5만원 안팎. 도메인 값은 수시로 바뀌니 살 때 확인한다.
+
+**2026-09-06 확인 (Verisign RDAP, 권위 있는 응답)**
+
+| 후보 | |
+|---|---|
+| `bandule.com` | ✅ **등록 안 됨 — 살 수 있다** |
+| `bandule.net` | ✅ 등록 안 됨 |
+| `bandule.app` | ✅ 등록 안 됨 (`.app` 은 HTTPS 강제 TLD — 우리는 어차피 HTTPS 라 무관) |
+| `bandule.kr` / `bandule.co.kr` | ❓ **확인 못 했다.** `.kr` 은 공개 RDAP 이 없어 자동 조회가 안 된다. `whois.kr` 에서 직접 확인할 것 |
+
+도메인은 한번 정하면 스토어·약관·딥링크에 다 박히므로 **`.com` 을 잡아 두는 것을 권한다.**
 - 서브도메인 계획을 미리 잡아 두면 나중에 안 꼬인다:
 
 | 용도 | 예 |
@@ -131,6 +150,26 @@ GitHub 리포지토리 시크릿 4개(`DEPLOY_HOST`·`DEPLOY_USER`·`DEPLOY_KEY`
 
 ---
 
+## 7-B단계 — Firebase 운영 프로젝트 + 기기 푸시 살리기 (2~3시간, 서버와 무관)
+
+지금 개발용 Firebase 프로젝트만 있고, **클라이언트에는 설정 파일이 아예 없어서 기기 푸시가
+한 통도 안 온다.** 백엔드는 준비가 끝나 있다.
+
+- [ ] **운영 Firebase 프로젝트 생성** (개발용과 분리)
+- [ ] 그 프로젝트에 **Android 앱 등록 — 패키지명 `com.yeka.bandule`**
+      (7단계에서 카카오 콘솔에 넣는 것과 같은 값)
+- [ ] `google-services.json` 을 받아 `client/android/app/` 에 넣는다.
+      **이 파일은 저장소에 커밋하지 않는다** — `client/android/.gitignore` 에 추가하고,
+      PC 마다·CI 에 따로 넣는다(`local.properties` 와 같은 취급)
+- [ ] `com.google.gms.google-services` 그래들 플러그인 적용 (`android/build.gradle.kts`,
+      `android/app/build.gradle.kts`)
+- [ ] 서비스 계정 JSON 을 받아 운영 서버의 `.env.prod` 에 연결 (`FCM_PROJECT_ID`,
+      `FCM_CREDENTIALS_HOST_PATH`)
+- [ ] **실기기로 확인** — 로그인 후 토큰이 등록되는지, 일정 리마인더가 실제로 오는지
+
+> 개발용 프로젝트를 그대로 써도 동작은 한다. 다만 테스트 알림이 실사용자에게 가거나 그 반대가
+> 되면 곤란하니, R2 와 같은 이유로 나누는 것을 권한다.
+
 ## 8단계 — 약관·개인정보처리방침 (반나절)
 
 스토어 등록에 **URL 입력이 필수**고, 한국에서 실사용자를 받으면 개인정보처리방침 게시는
@@ -177,11 +216,19 @@ GitHub 리포지토리 시크릿 4개(`DEPLOY_HOST`·`DEPLOY_USER`·`DEPLOY_KEY`
 - **[NEXT.md](progress/NEXT.md) §1-B 실기기 검증 체크리스트** — 영상 첨부·정산 유지·밴드 삭제 등
   아직 눈으로 확인 안 한 것들. 로컬 백엔드 + USB 테더링으로 지금 가능
 - **[NEXT.md](progress/NEXT.md) §1-A "BOTTOM OVERFLOWED" 재현** — 아직 원인 미확인
+- **7-B 단계 Firebase** — 운영 프로젝트 생성과 `google-services.json` 배선은 서버가 없어도 된다.
+  기기 푸시가 아예 안 오는 상태라 우선순위가 낮지 않다
 
 ---
 
-## 운영 버킷 분리 (4단계 즈음)
+## 운영 R2 버킷 만들기 (4단계 즈음, 30분)
 
-지금 R2 버킷 이름이 `bandapp-media-dev` 다. 실사용자 파일과 개발 중 테스트 파일이 같은 곳에
-섞이면 나중에 정리가 어렵다. 운영용 버킷을 따로 만들어 `.env.prod` 의 `R2_BUCKET` 에 넣는다.
-DB 백업도 같은 버킷의 `db-backups/` 에 올라간다.
+지금 있는 건 `bandapp-media-dev` 개발용 하나다. 실사용자의 사진·영상과 개발 중 테스트 파일이
+같은 곳에 섞이면 나중에 정리가 불가능해진다. **DB 백업도 같은 버킷의 `db-backups/` 에 올라가므로**
+더더욱 나눠야 한다 — 개발 중에 버킷을 비우다 운영 백업을 지우는 사고가 난다.
+
+- [ ] Cloudflare 대시보드 > R2 > 운영 버킷 생성 (예: `bandule-media`)
+- [ ] 그 버킷에 접근하는 **API 토큰을 새로 발급** (개발용 키를 그대로 쓰지 않는다)
+- [ ] `.env.prod` 의 `R2_BUCKET`·`R2_ACCESS_KEY_ID`·`R2_SECRET_ACCESS_KEY` 에 넣는다
+- [ ] 버킷은 **비공개로 유지한다.** 앱은 짧은 만료의 presigned URL 로만 접근한다 —
+      공개로 바꾸면 밴드 사진·영상이 주소만 알면 누구나 보이게 된다
