@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,7 +42,8 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
   bool _loading = false;
   String? _error;
 
-  Timer? _debounce;
+  /// 검색 결과 목록 위치 — 검색 후 여기까지 스크롤한다.
+  final _suggestionsKey = GlobalKey();
   List<PlaceSuggestion> _suggestions = const [];
   bool _searching = false;
   int _searchSeq = 0;
@@ -81,7 +80,6 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _name.dispose();
     _address.dispose();
     _phone.dispose();
@@ -96,16 +94,34 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
       _pickedLat = null;
       _pickedLng = null;
     });
-    _debounce?.cancel();
-    final q = value.trim();
+  }
+
+  /// 돋보기 버튼 / 키보드의 "검색" 키. 여기서만 검색을 호출한다.
+  ///
+  /// 예전에는 타이핑이 멈추면 350ms 뒤 자동으로 검색했다. 글자를 지웠다 고치기만 해도
+  /// 호출이 쌓여 카카오 로컬 API 를 헛되이 태웠고, 결과가 뜬 자리를 키보드가 가려서
+  /// 어차피 한 번 내려야 볼 수 있었다. 누른 시점에 한 번만 부르고 키보드를 내린다.
+  Future<void> _submitSearch() async {
+    final q = _address.text.trim();
+    FocusScope.of(context).unfocus();
     if (q.length < 2) {
       setState(() {
         _suggestions = const [];
-        _searching = false;
+        _error = '두 글자 이상 입력해 주세요.';
       });
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 350), () => _search(q));
+    await _search(q);
+    if (!mounted) return;
+    // 키보드가 내려간 자리에 결과가 보이도록 목록까지 스크롤한다.
+    final ctx = _suggestionsKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      await Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 250),
+        alignment: 0.1,
+      );
+    }
   }
 
   Future<void> _search(String query) async {
@@ -340,19 +356,35 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
               TextField(
                 controller: _address,
                 maxLength: 255,
-                textInputAction: TextInputAction.next,
+                textInputAction: TextInputAction.search,
                 onChanged: _onAddressChanged,
-                decoration: const InputDecoration(
-                  hintText: '합주실 이름·주소로 검색하거나 직접 입력',
+                onSubmitted: (_) => _submitSearch(),
+                decoration: InputDecoration(
+                  hintText: '합주실 이름·주소 입력 후 검색',
                   counterText: '',
-                  prefixIcon: Icon(Icons.search, size: 18),
+                  prefixIcon: const Icon(Icons.place_outlined, size: 18),
+                  suffixIcon: IconButton(
+                    icon: _searching
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.search, size: 20),
+                    tooltip: '검색',
+                    onPressed: _searching ? null : _submitSearch,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
               _buildMap(),
               if (_suggestions.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                _SuggestionList(items: _suggestions, onTap: _pick),
+                _SuggestionList(
+                  key: _suggestionsKey,
+                  items: _suggestions,
+                  onTap: _pick,
+                ),
               ],
               const SizedBox(height: 16),
               const _Label('연락처 (선택)'),
@@ -402,7 +434,8 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
 }
 
 class _SuggestionList extends StatelessWidget {
-  const _SuggestionList({required this.items, required this.onTap});
+  const _SuggestionList(
+      {super.key, required this.items, required this.onTap});
   final List<PlaceSuggestion> items;
   final ValueChanged<PlaceSuggestion> onTap;
 

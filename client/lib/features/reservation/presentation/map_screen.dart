@@ -27,6 +27,12 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   KakaoMapController? _map;
 
+  /// 지도에 그려 둔 핀. 목록이 바뀌면 지우고 다시 그린다.
+  final List<Poi> _pois = [];
+
+  /// 마지막으로 그린 목록의 지문. 이게 같으면 다시 그리지 않는다.
+  String _drawn = '';
+
   bool get _mapAvailable => AppConfig.mapEnabled;
 
   @override
@@ -88,22 +94,57 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final start = located.isEmpty
         ? kMapFallbackCenter
         : LatLng(located.first.lat!, located.first.lng!);
+
+    // 합주실을 새로 등록하면 roomsProvider 가 무효화돼 여기까지 새 목록이 내려오는데,
+    // KakaoMap 위젯은 그대로라 onMapReady 가 다시 불리지 않는다. 그래서 핀만 안 생겼다.
+    // 목록이 바뀌었으면 이번 프레임 뒤에 다시 그린다.
+    if (_map != null && _signature(located) != _drawn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncPois(located));
+    }
+
     return KakaoMap(
       option: KakaoMapOption(position: start, zoomLevel: 12),
       // 인증 실패로 화면이 깨지는 대신 목록만 남긴다(키 해시 미등록 등).
       onMapError: (_) => setState(() => AppConfig.mapAuthFailed = true),
       onMapReady: (controller) async {
         _map = controller;
-        final style = await roomPoiStyle();
-        for (final r in located) {
-          await controller.labelLayer.addPoi(
-            LatLng(r.lat!, r.lng!),
-            style: style,
-            text: r.name,
-          );
-        }
+        await _syncPois(located);
       },
     );
+  }
+
+  /// 이름·좌표가 하나라도 달라지면 다시 그린다.
+  String _signature(List<Room> located) =>
+      located.map((r) => '${r.id}:${r.name}:${r.lat}:${r.lng}').join('|');
+
+  /// 지도의 핀을 목록과 맞춘다. 지우고 다시 그리는 쪽이 차이를 계산하는 것보다 단순하고,
+  /// 밴드 하나의 합주실은 많아야 수십 개라 비용도 문제되지 않는다.
+  Future<void> _syncPois(List<Room> located) async {
+    final map = _map;
+    if (map == null || !mounted) return;
+
+    final signature = _signature(located);
+    if (signature == _drawn) return;
+    _drawn = signature;
+
+    for (final poi in _pois) {
+      try {
+        await map.labelLayer.removePoi(poi);
+      } catch (_) {
+        // 이미 사라진 핀 — 무시한다.
+      }
+    }
+    _pois.clear();
+
+    final style = await roomPoiStyle();
+    for (final r in located) {
+      if (!mounted) return;
+      _pois.add(await map.labelLayer.addPoi(
+        LatLng(r.lat!, r.lng!),
+        style: style,
+        text: r.name,
+      ));
+    }
   }
 
   Future<void> _deleteRoom(int bandId, Room room) async {
