@@ -56,4 +56,12 @@ public interface NotificationDispatchRepository extends JpaRepository<Notificati
     @Modifying
     @Query("delete from NotificationDispatch d where d.createdAt < :threshold")
     int deleteOlderThan(@Param("threshold") Instant threshold);
+
+    /**
+     * 밴드 삭제 정리. {@code band_id} 는 V11 이 FK 없는 순수 {@code BIGINT} 로 추가한 컬럼이라
+     * FK 를 훑는 방식으로는 빠진다 — 남겨두면 없어진 밴드의 알림이 사용자 피드에 계속 뜬다.
+     */
+    @Modifying
+    @Query("delete from NotificationDispatch d where d.bandId = :bandId")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

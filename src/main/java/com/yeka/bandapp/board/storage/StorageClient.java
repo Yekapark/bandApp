@@ -31,4 +31,18 @@ public interface StorageClient {
 
     /** 멱등 삭제. 객체가 이미 없어도 성공으로 취급한다. */
     void delete(String storageKey);
+
+    /**
+     * 접두사로 시작하는 객체를 모두 지운다. 밴드 삭제가 쓴다 — 키가
+     * {@code bands/{bandId}/posts/{postId}/{uuid}} 라 한 밴드의 객체는 전부
+     * {@code bands/{bandId}/} 아래에 있다({@code StorageKeys#newMediaKey}).
+     *
+     * <p>DB 행을 돌며 키를 하나씩 지우는 것보다 <b>정확하다</b> — media_attachments 가 이미
+     * 추적을 놓친 객체(R2 삭제가 실패한 뒤 EXPIRED 로 넘어간 것들)까지 함께 정리된다.
+     *
+     * <p>{@code delete} 와 마찬가지로 멱등이다. 해당 객체가 없으면 0 을 돌려준다.
+     *
+     * @return 지운 객체 수
+     */
+    int deleteByPrefix(String keyPrefix);
 }

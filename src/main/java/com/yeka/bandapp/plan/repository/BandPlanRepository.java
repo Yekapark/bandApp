@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
 
 /**
  * 밴드 요금제 저장소. 밴드당 한 행이라 조회는 {@code band_id} 하나뿐이다.
@@ -46,4 +47,9 @@ public interface BandPlanRepository extends JpaRepository<BandPlan, Long> {
             + "where p.tier = com.yeka.bandapp.plan.entity.PlanTier.PREMIUM and p.expiresAt < :now "
             + "order by p.expiresAt")
     List<Long> findExpiredPremiumBandIds(@Param("now") Instant now, Pageable pageable);
+
+    /** 밴드 삭제 정리. */
+    @Modifying
+    @Query("delete from BandPlan p where p.bandId = :bandId")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

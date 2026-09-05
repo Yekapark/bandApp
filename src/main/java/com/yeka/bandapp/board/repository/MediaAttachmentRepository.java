@@ -138,4 +138,10 @@ public interface MediaAttachmentRepository extends JpaRepository<MediaAttachment
              order by m.createdAt asc
             """)
     List<MediaAttachment> findStalePending(@Param("threshold") Instant threshold, Pageable limit);
+
+    /** 밴드 삭제 정리 — 그 밴드 게시글의 첨부 행을 모두 지운다(R2 객체는 접두사 삭제가 따로 처리). */
+    @Modifying
+    @Query("delete from MediaAttachment m where m.boardPostId in "
+            + "(select p.id from BoardPost p where p.bandId = :bandId)")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

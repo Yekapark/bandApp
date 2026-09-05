@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
 
 public interface RecurringRuleRepository extends JpaRepository<RecurringRule, Long> {
 
@@ -47,4 +48,9 @@ public interface RecurringRuleRepository extends JpaRepository<RecurringRule, Lo
      */
     @Query("select r from RecurringRule r where r.deletedAt is null and r.id > :afterId order by r.id asc")
     List<RecurringRule> findActiveAfter(@Param("afterId") long afterId, Pageable page);
+
+    /** 밴드 삭제 정리. 회차(reservations)를 먼저 지운 뒤 호출한다. */
+    @Modifying
+    @Query("delete from RecurringRule r where r.bandId = :bandId")
+    int deleteByBandId(@Param("bandId") long bandId);
 }
