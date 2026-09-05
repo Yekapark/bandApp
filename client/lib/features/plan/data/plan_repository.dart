@@ -22,6 +22,11 @@ class PlanRepository {
   Future<BandPlan> cancel(int bandId) => _post('/bands/$bandId/plan/cancel');
   Future<BandPlan> renew(int bandId) => _post('/bands/$bandId/plan/renew');
 
+  /// 맛보기 쿠폰 사용. 이미 PREMIUM 이면 남은 기간에 더해진다.
+  /// 발급은 운영자가 직접 하고 앱에는 사용 화면만 있다.
+  Future<BandPlan> redeemCoupon(int bandId, String code) =>
+      _post('/bands/$bandId/plan/coupons/redeem', body: {'code': code});
+
   Future<BandPlan> _get(String path) async {
     try {
       final res = await _dio.get<dynamic>(path);
@@ -31,9 +36,9 @@ class PlanRepository {
     }
   }
 
-  Future<BandPlan> _post(String path) async {
+  Future<BandPlan> _post(String path, {Map<String, dynamic>? body}) async {
     try {
-      final res = await _dio.post<dynamic>(path);
+      final res = await _dio.post<dynamic>(path, data: body);
       return unwrap(res, (d) => BandPlan.fromJson(d! as Map<String, dynamic>));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);

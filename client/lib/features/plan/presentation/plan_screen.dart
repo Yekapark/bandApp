@@ -96,6 +96,14 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                 busy: _busy,
                 onTap: () => _confirmSubscribe(band.id),
               ),
+            if (band.isLeader) ...[
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: _busy ? null : () => _promptCoupon(band.id),
+                child: const Text('쿠폰 코드 입력',
+                    style: TextStyle(fontSize: 13, color: AppColors.textDim)),
+              ),
+            ],
             const SizedBox(height: 12),
             const Text(
               '이 릴리스에서는 실제 결제 없이 요금제가 전환됩니다(스토어 결제 연동 예정).',
@@ -158,7 +166,59 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     return ok ?? false;
   }
 
-  Future<void> _run(int bandId, String op) async {
+  /// 쿠폰 코드를 받아 사용한다. 코드를 넣어야만 버튼이 살아난다.
+  Future<void> _promptCoupon(int bandId) async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('쿠폰 코드 입력', style: TextStyle(fontSize: 16)),
+        // 키보드가 올라오면 다이얼로그가 눌리므로 스크롤을 열어 둔다.
+        scrollable: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '받은 쿠폰 코드를 넣으면 PREMIUM 기간이 더해집니다.',
+              style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              maxLength: 8,
+              decoration: const InputDecoration(
+                hintText: '예: BANDULE7',
+                counterText: '',
+              ),
+              onSubmitted: (v) => Navigator.pop(ctx, v.trim()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('취소')),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (_, value, __) => TextButton(
+              onPressed: value.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.pop(ctx, value.text.trim()),
+              child: const Text('사용'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (code == null || code.isEmpty) return;
+    await _run(bandId, 'coupon', code: code);
+  }
+
+  Future<void> _run(int bandId, String op, {String? code}) async {
     setState(() => _busy = true);
     try {
       final repo = ref.read(planRepositoryProvider);
@@ -169,13 +229,15 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
           await repo.cancel(bandId);
         case 'renew':
           await repo.renew(bandId);
+        case 'coupon':
+          await repo.redeemCoupon(bandId, code!);
       }
       ref.invalidate(bandPlanProvider(bandId));
-      _toast('요금제를 변경했어요.');
+      _toast(op == 'coupon' ? '쿠폰을 사용했어요.' : '요금제를 변경했어요.');
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('요금제를 변경하지 못했습니다.');
+      _toast(op == 'coupon' ? '쿠폰을 사용하지 못했습니다.' : '요금제를 변경하지 못했습니다.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
