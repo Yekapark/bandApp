@@ -6,13 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/notification_providers.dart';
 import 'notification_repository.dart';
 
 /// 앱 전역 SnackBar 를 띄우기 위한 키 (app.dart 의 MaterialApp 에 연결).
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
 final pushServiceProvider = Provider<PushService>((ref) {
-  return PushService(ref.watch(notificationRepositoryProvider));
+  return PushService(ref, ref.watch(notificationRepositoryProvider));
 });
 
 /// FCM 디바이스 토큰 등록·수신 담당.
@@ -21,13 +22,15 @@ final pushServiceProvider = Provider<PushService>((ref) {
 /// 없으면 초기화가 실패하고 조용히 비활성화된다** — 카카오 SDK·네이버 지도와 같은 방식.
 /// 그 상태에서도 앱의 나머지 기능은 정상 동작한다.
 class PushService {
-  PushService(this._repo);
+  PushService(this._ref, this._repo);
 
+  final Ref _ref;
   final NotificationRepository _repo;
 
   bool _started = false;
   bool _available = false;
   String? _token;
+  AppLifecycleListener? _lifecycle;
 
   /// 로그인 직후 1회. 이미 시작했으면 무시.
   Future<void> start() async {
@@ -53,6 +56,11 @@ class PushService {
       });
 
       FirebaseMessaging.onMessage.listen(_onForegroundMessage);
+
+      // 앱이 백그라운드에 있는 동안 온 푸시는 onMessage 가 뜨지 않는다. 돌아왔을 때 알림
+      // 목록을 다시 읽지 않으면 홈의 종 배지가 옛 값 그대로 남는다(프로바이더가
+      // autoDispose 가 아니라 캐시가 살아 있다 — docs/progress/NEXT.md §4).
+      _lifecycle ??= AppLifecycleListener(onResume: _refreshNotifications);
     } catch (e) {
       debugPrint('PushService: 초기화 건너뜀 ($e)');
     }
@@ -63,6 +71,8 @@ class PushService {
     final token = _token;
     _started = false;
     _token = null;
+    _lifecycle?.dispose();
+    _lifecycle = null;
     if (!_available || token == null) return;
     try {
       await _repo.unregisterDeviceToken(token);
@@ -93,7 +103,16 @@ class PushService {
     }
   }
 
+  /// 알림 목록 캐시를 비운다. 배지(안 읽은 수)가 이 목록에서 계산되므로 함께 갱신된다.
+  /// 어느 밴드인지 몰라도 되게 family 전체를 무효화한다.
+  void _refreshNotifications() {
+    _ref.invalidate(notificationFeedProvider);
+  }
+
   void _onForegroundMessage(RemoteMessage message) {
+    // 앱을 보고 있는 중에 온 푸시. 스낵바만 띄우고 끝내면 종 배지가 안 오른다.
+    _refreshNotifications();
+
     final n = message.notification;
     final text = n?.title ?? n?.body ?? message.data['title']?.toString();
     if (text == null || text.isEmpty) return;

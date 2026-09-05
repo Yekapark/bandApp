@@ -61,13 +61,15 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 > 아래 목록에서 `[API]` 표시가 그것이다. 남은 것은 **화면으로만 확인 가능한 것들**이라
 > 폰을 USB 로 연결해야 한다(확인 시도 시 `adb devices` 가 비어 있었다).
 
-- [ ] 앱 아이콘(런처에서 Stick Check), 스플래시·로그인의 브랜드 마크와 `BANDULE` 워드마크
+- [x] 앱 아이콘(런처에서 Stick Check), 스플래시·로그인의 브랜드 마크와 `BANDULE` 워드마크
+      · `[기기]` ✅ 스플래시의 체크마크 + `BANDULE`/밴듈, 로그인 헤더, 알림·최근앱의 앱 아이콘 확인
 - [ ] 정산 탭 — 납부 체크 후 **다른 화면 갔다 와도 유지되는지**(오늘 고친 버그)
       · `[API]` ✅ 서버는 정상 — 체크 후 재조회해도 `paid=true` 유지, 타인 share 변경은 403,
         3명이 10,000원 나눌 때 합계 일치. **남은 건 화면 캐시 무효화 확인뿐이다**
 - [ ] 알림 목록 — 홈 종 배지 숫자, 목록 열면 배지가 0 이 되는지
-      · `[API]` ✅ `GET /api/v1/notifications?bandId=` 200, `{notifications, nextCursor}` 반환.
-        배지 숫자는 화면 확인 필요
+      · `[API]` ✅ `GET /api/v1/notifications?bandId=` 200, `{notifications, nextCursor}` 반환
+      · `[기기]` ✅ 목록 화면(안 읽음 주황 점 포함), 배지 숫자, 열면 0 이 되는 것까지 확인.
+        **다만 푸시를 받아도 배지가 안 오르는 버그를 발견해 고쳤다** — 아래 1-D
 - [ ] 영상 첨부 — 5~6분 영상으로 압축 진행률(%)이 돌고, 등록 시 함께 올라가는지
       (**이게 그동안 안 됐다** — DB 제약이 50MB 에 머물러 있어 압축한 영상도 500 이 났다.
       `V12` 에서 200MB 로 올렸으니 이제 실제로 확인이 된다)
@@ -85,9 +87,44 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 - [ ] 게시글 영상 재생 — 전체화면, 탭 play/pause, 진행바 스크러빙
 - [ ] 합주실 등록 폼 지도 — 검색 후보가 핀으로 뜨고 고른 좌표가 저장되는지
 
+### 1-D. 기기 푸시 — 살렸다 (2026-09-06)
+
+그동안 **기기 푸시가 한 통도 오지 않았다.** 백엔드는 Phase 9 에서 끝났는데 안드로이드에서
+Firebase 를 초기화해 줄 `com.google.gms.google-services` 그래들 플러그인이 빠져 있었다.
+`PushService` 가 "설정 없으면 조용히 비활성화" 로 짜여 있어 앱은 멀쩡히 돌았고, 그래서
+아무도 눈치채지 못했다.
+
+전 구간 실증(로컬 백엔드 + 갤럭시 S24):
+
+| | |
+|---|---|
+| 서버 | `FCM 푸시 발송 활성화 projectId=bandapp-dev-67c6f` |
+| 기기 | `FirebaseApp initialization successful` |
+| 토큰 | `device_tokens` 에 `user=21 ANDROID` 등록 |
+| 도착 | 알림창에 **"새 합주 일정 / 11월 11일 20:00 합주 일정이 등록됐어요."** |
+
+같이 고친 버그 — **푸시를 받아도 홈 종 배지가 안 올랐다.** 알림 목록 프로바이더가
+autoDispose 가 아니라 캐시된 옛 값을 계속 그렸고, 앱을 완전히 껐다 켜야만 반영됐다(§4 의
+그 패턴). `push_service.dart` 가 (1) 포그라운드 푸시 수신 시 (2) 앱이 다시 활성화될 때
+(`AppLifecycleListener.onResume` — 백그라운드에서 받은 경우가 이쪽이고 더 흔하다)
+알림 목록 캐시를 비우도록 했다. 기기에서 `배지 0 → 백그라운드 → 푸시 → 복귀 → 배지 1` 확인.
+
+**남은 것**: 운영 Firebase 프로젝트 분리(지금은 개발용을 앱·서버가 함께 쓴다).
+알림 채널이 FCM 기본값(`fcm_fallback_notification_channel`)이라 설정 화면에 "기타" 로 보인다 —
+앱에서 채널을 만들어 이름을 주면 좋다(출시 전 다듬기).
+
 ### 1-C. 카카오 로그인 keyHash
 
-마지막으로 본 상태는 `Android keyHash validation failed` 였다. 값은 확인된 게 있다:
+**2026-09-06 — 실기기에서 카카오 로그인 성공을 확인했다.** 패키지명을 `com.yeka.bandule` 로
+바꾼 뒤에도 콘솔을 손대지 않고 그대로 됐다. Redis 리프레시 세션 TTL 이 14일 만료에서
+94초 지난 값이라, 버튼을 누른 그 시각에 세션이 새로 생긴 것이 확인된다.
+
+> 한동안 "앱 키 미설정" 으로 막혔던 적이 있는데, 그건 APK 를 빌드할 때
+> `--dart-define-from-file=dart_defines.json` 을 빠뜨려 앱 안에 키가 안 들어간 것이었다.
+> **실기기 빌드는 반드시 이 옵션을 붙인다.**
+
+키 해시는 서명 키에서 나오는 값이라 패키지명과 무관하다. 세 곳에서 계산해 모두 같았다
+(디버그 키스토어 / 설치된 APK 서명 / 아래 기록값):
 
 ```
 패키지명   com.yeka.bandule            ← 2026-09-06 에 com.example.bandapp_client 에서 바꿨다
