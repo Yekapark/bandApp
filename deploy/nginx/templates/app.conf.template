@@ -1,6 +1,15 @@
 # ${DOMAIN} 리버스 프록시. nginx 공식 이미지가 기동 때 이 템플릿의 ${DOMAIN} 을 치환해
 # /etc/nginx/conf.d/app.conf 로 쓴다(NGINX_ENVSUBST_FILTER 로 DOMAIN 만 치환 대상).
 
+# Cloudflare 프록시(주황 구름)를 켜면 모든 요청의 소켓 주소가 Cloudflare 엣지가 된다.
+# 그대로 두면 전 사용자가 한 IP 로 뭉쳐 레이트리밋이 정상 사용자끼리 서로를 막는다.
+# 아래 목록은 "Cloudflare 대역에서 온 요청에 한해" CF-Connecting-IP 를 실제 클라이언트 IP 로
+# 인정하게 한다. 그 결과 $remote_addr 이 진짜 사용자 IP 가 되고, proxy-headers.conf 가
+# 그 값을 앱에 넘긴다. 회색 구름(DNS only)이면 헤더가 없어 소켓 주소가 그대로 쓰인다 —
+# 두 경우 모두 이 설정 하나로 맞다.
+# 목록 갱신: sh deploy/nginx/update-cloudflare-ips.sh
+include /etc/nginx/cloudflare-realip.conf;
+
 server {
     listen 80;
     server_name ${DOMAIN};

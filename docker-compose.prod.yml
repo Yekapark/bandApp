@@ -100,6 +100,7 @@ services:
     volumes:
       - ./deploy/nginx/templates:/etc/nginx/templates:ro
       - ./deploy/nginx/proxy-headers.conf:/etc/nginx/proxy-headers.conf:ro
+      - ./deploy/nginx/cloudflare-realip.conf:/etc/nginx/cloudflare-realip.conf:ro
       - certbot-conf:/etc/letsencrypt:ro
       - certbot-www:/var/www/certbot
     # 인증서가 갱신돼도 nginx 는 그걸 모른다(파일을 기동 때 한 번 읽는다). 6시간마다 reload 해서

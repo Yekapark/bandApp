@@ -27,6 +27,9 @@
 | `.env.prod.example` | 서버에 채워 넣을 설정값 견본 (비밀번호·도메인·외부 서비스 키) |
 | `deploy/nginx/templates/app.conf.template` | 바깥에서 들어온 요청을 앱으로 넘기는 규칙, HTTPS 설정 |
 | `deploy/nginx/proxy-headers.conf` | 앱에 넘길 헤더. **접속자 IP 위조를 막는 부분이 여기 있다** |
+| `deploy/nginx/cloudflare-realip.conf` | Cloudflare 대역에서 온 요청만 `CF-Connecting-IP` 를 믿게 하는 목록 |
+| `deploy/nginx/update-cloudflare-ips.sh` | 위 목록 갱신 (분기 1회) |
+| `deploy/nginx/test-realip.sh` | IP 위조가 통하는지 도커로 검증 (VM 불필요) |
 | `deploy/init-letsencrypt.sh` | HTTPS 인증서 최초 발급 (서버에서 딱 한 번) |
 | `deploy/deploy.sh` | 새 버전 교체 + 정상 기동 확인. 실패하면 로그를 남기고 멈춘다 |
 | `deploy/backup/pg-backup.sh` | 매일 데이터베이스 백업 → R2 업로드 → 7개만 남기기 |
@@ -64,7 +67,17 @@
 3. **코드** — `ClientIp` 가 헤더를 직접 읽지 않고 소켓 주소만 본다. 헤더 해석은 2번이 담당하므로,
    이 함수를 쓰는 모든 자리(로그인·초대참여·업로드·신고)가 한 번에 안전해진다.
 
+4. **Cloudflare 대역 목록** (`deploy/nginx/cloudflare-realip.conf`) — 주황 구름(프록시)을 켜면
+   모든 요청이 Cloudflare 를 거쳐서 오므로, 위 1~3 만으로는 **전 사용자가 Cloudflare 주소 하나로
+   뭉친다.** 그러면 남이 로그인 시도할 때 내가 막힌다. 이 목록은 "Cloudflare 대역에서 온 요청에
+   한해" `CF-Connecting-IP` 를 진짜 사용자 IP 로 인정하게 해서 이걸 푼다. 바깥에서 그 헤더를
+   위조해도 대역 밖이라 무시된다. 회색 구름으로 되돌려도 같은 설정이 그대로 맞다.
+
 같이 필요해서 넣은 것: Redis 비밀번호 설정(`REDIS_PASSWORD`) — 지금까지 운영 설정에 항목 자체가 없었다.
+
+**이 네 겹이 실제로 맞는지 도커로 검증했다** (`deploy/nginx/test-realip.sh`, VM 불필요).
+Cloudflare 대역(104.16.99.0/24)과 바깥(203.0.113.0/24) 두 네트워크를 만들어 각각에서 요청을
+넣고, 앱이 최종적으로 보는 IP 를 확인한다 — §5 참조.
 
 ### 3.3 HTTPS 인증서 — 왜 발급 스크립트가 따로 있나
 
@@ -176,18 +189,42 @@ DOMAIN=api.example.com DB_NAME=b DB_USERNAME=b DB_PASSWORD=p REDIS_PASSWORD=r JW
 | **빈 DB(`restore_drill`)로 복구** | ✅ `flyway=13`, `users=9 / bands=5 / reservations=7 / board_posts=1` — **백업 시점과 완전 일치** |
 | 운영 DB 경로 복구(스키마 드롭 → 복구 → 앱 재기동) | ✅ 앱 `healthy`, 행 수 동일 |
 | 운영 compose 문법 검증 | ✅ |
+| Nginx 설정 기동 검증 (`nginx -t`, 실제 컨테이너) | ✅ |
+| **접속자 IP 위조 검증** (`deploy/nginx/test-realip.sh`) | ✅ 5케이스 전부 통과 (아래) |
 | 백엔드 빌드·테스트 (`./gradlew build`) | (§8 결과 참조) |
 
 → **"백업 파일로부터 빈 DB 에 복구하는 절차가 실제로 성공한다" 충족.**
+
+### 접속자 IP 위조 검증 상세
+
+앱이 최종적으로 보게 되는 IP 를 그대로 돌려주는 가짜 백엔드를 두고, Cloudflare 대역과
+바깥에서 각각 요청을 넣었다.
+
+| 케이스 | 앱이 본 IP | |
+|---|---|---|
+| ① Cloudflare 대역에서 `CF-Connecting-IP: 9.9.9.9` | `9.9.9.9` | 진짜 사용자로 인정 ✅ |
+| ② 바깥에서 `CF-Connecting-IP: 9.9.9.9` 위조 | `203.0.113.4` | 무시하고 실제 주소 ✅ |
+| ③ 바깥에서 `X-Forwarded-For: 1.2.3.4` 위조 | `203.0.113.4` | 무시하고 실제 주소 ✅ |
+| ④ 헤더 없음 (회색 구름 상황) | `104.16.99.4` | 소켓 주소 그대로 ✅ |
+| ⑤ 바깥에서 두 헤더 동시 위조 | `203.0.113.4` | 둘 다 무시 ✅ |
+
+**이 테스트에 실효성이 있는지도 확인했다.** `proxy-headers.conf` 를 인터넷에 흔한 예제대로
+`$proxy_add_x_forwarded_for` 로 되돌린 뒤 돌리면 ③⑤ 가 `1.2.3.4, 203.0.113.4` 로 깨진다 —
+위조값이 맨 앞에 오고, 톰캣은 그걸 클라이언트 IP 로 삼는다. 나중에 누가 무심코 그 예제를
+가져다 붙이면 이 테스트가 잡는다.
 
 ## 6. 알려진 이슈 / 아직 안 한 것
 
 - **실제 VM 에서는 아직 돌려 보지 않았다.** 서버가 없어서 백업·복구만 로컬에서 검증했다.
   Nginx·인증서 발급·SSH 배포는 코드로만 준비돼 있다. 서버를 잡으면 `docs/DEPLOY.md` §2 를
   따라가며 확인해야 한다.
-- **Cloudflare 주황 구름(프록시)은 API 도메인에 켜지 않는다.** 켜면 모든 접속자가 Cloudflare
-  IP 하나로 보여서 횟수 제한이 정상 사용자끼리 서로를 막는다. 켜려면 Nginx 에 Cloudflare
-  대역 설정을 먼저 넣어야 한다 (`docs/DEPLOY.md` §1).
+- **Cloudflare 주황 구름(프록시)은 켜는 것으로 정했다.** 원본 서버 IP 를 감추는 이점이 무료 VM
+  한 대 구성에서 크다. 켜기 전에 **Cloudflare SSL/TLS 모드를 `Full (strict)` 로** 바꿔야 한다 —
+  `Flexible` 이면 무한 리다이렉트가 난다. 인증서는 회색 구름 상태에서 먼저 발급하고 켠다
+  (`docs/DEPLOY.md` §1).
+- **Cloudflare 대역 목록은 분기에 한 번 갱신한다** (`sh deploy/nginx/update-cloudflare-ips.sh`).
+  Cloudflare 가 대역을 추가했는데 목록이 옛것이면 그 대역으로 들어온 사용자들의 IP 가 다시
+  하나로 뭉쳐 레이트리밋이 오작동한다.
 - **DB 를 과거로 되돌리면 그 뒤 올라간 사진·영상은 R2 에 고아로 남는다.** R2 는 서버와 별개라
   같이 죽지 않지만, 참조가 끊긴 파일을 자동으로 지우지는 않는다. 수동 확인 항목.
 - **로그 로테이션 미설정.** 도커 기본 설정은 로그가 무한히 자란다. VM 배포 시
@@ -208,7 +245,9 @@ DOMAIN=api.example.com DB_NAME=b DB_USERNAME=b DB_PASSWORD=p REDIS_PASSWORD=r JW
 | 백업 포맷 | `pg_dump -Fc` | 자체 압축되고, 복구 시 테이블 단위 선택·병렬 복구가 된다 |
 | 백업 보관 | 스크립트에서 7개 유지 | R2 수명주기 규칙으로도 되지만 콘솔 수동 설정이라 잊기 쉽다. 스크립트가 자체 완결 |
 | 복구 훈련 모드 | `RESTORE_DB=` 로 별도 DB | 백업이 살아 있는지 확인하려고 운영 DB 를 날릴 이유가 없다 |
-| XFF 처리 위치 | Nginx 덮어쓰기 + 톰캣 밸브 + `ClientIp` 소켓 주소 | 세 겹 중 하나만 어긋나도 우회되는 문제라 전부 닫았다. `ClientIp` 한 곳을 고치면 이 함수를 쓰는 모든 경로가 함께 안전해진다 |
+| XFF 처리 위치 | Nginx 덮어쓰기 + 톰캣 밸브 + `ClientIp` 소켓 주소 + Cloudflare 대역 목록 | 네 겹 중 하나만 어긋나도 우회되는 문제라 전부 닫았다. `ClientIp` 한 곳을 고치면 이 함수를 쓰는 모든 경로가 함께 안전해진다 |
+| Cloudflare 프록시(주황 구름) | **켠다** | 원본 IP 를 감추는 이점이 무료 VM 한 대 구성에서 크다. API 라 캐시 이득은 없다. 레이트리밋이 뭉치는 부작용은 `cloudflare-realip.conf` 로 닫았고 테스트로 확인했다 |
+| Cloudflare 대역 목록 관리 | 파일로 커밋 + 갱신 스크립트 | 기동할 때마다 받아 오면 Cloudflare 가 응답을 안 줄 때 서버가 못 뜬다. 갱신 스크립트도 목록이 비면 기존 파일을 그대로 둔다 |
 
 ## 8. 커밋 · CI
 
