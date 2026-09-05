@@ -1,7 +1,8 @@
 # 다음에 이어서 할 일
 
 > 살아있는 문서. 끝난 항목은 지우고, 새로 생긴 건 여기에 적는다.
-> 오늘까지의 작업 내용은 [2026-09-05-brand-notifications-settlement-video.md](2026-09-05-brand-notifications-settlement-video.md).
+> 오늘까지의 작업 내용은 [2026-09-05-brand-notifications-settlement-video.md](2026-09-05-brand-notifications-settlement-video.md)
+> 와 [2026-09-05-plan-lifecycle-and-media-fix.md](2026-09-05-plan-lifecycle-and-media-fix.md).
 > 마지막 갱신: **2026-09-05**
 
 ---
@@ -58,6 +59,10 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 - [ ] 정산 탭 — 납부 체크 후 **다른 화면 갔다 와도 유지되는지**(오늘 고친 버그)
 - [ ] 알림 목록 — 홈 종 배지 숫자, 목록 열면 배지가 0 이 되는지
 - [ ] 영상 첨부 — 5~6분 영상으로 압축 진행률(%)이 돌고, 등록 시 함께 올라가는지
+      (**이게 그동안 안 됐다** — DB 제약이 50MB 에 머물러 있어 압축한 영상도 500 이 났다.
+      `V12` 에서 200MB 로 올렸으니 이제 실제로 확인이 된다)
+- [ ] 사진 첨부 — 고화질 사진을 올린 뒤 저장 크기가 1MB 아래인지(긴 변 2048px 로 축소한다)
+- [ ] 요금제 쿠폰 — 쿠폰을 SQL 로 넣고 앱에서 입력 → PREMIUM 전환·기간 가산
 - [ ] 게시글 영상 재생 — 전체화면, 탭 play/pause, 진행바 스크러빙
 - [ ] 합주실 등록 폼 지도 — 검색 후보가 핀으로 뜨고 고른 좌표가 저장되는지
 
@@ -80,13 +85,7 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 ## 2. 우선순위가 높은 남은 작업
 
-### 2-A. PREMIUM 만료 자동 강등 (돈 문제)
-
-`PlanService` 의 `TODO(PG 어댑터)` — `band_plans.expires_at` 이 지난 PREMIUM 밴드를 FREE 로
-되돌리는 배치가 없다. **기한이 지나도 계속 PREMIUM 이다.** 결제 연동(`PaymentGateway` 는
-현재 no-op)과 별개로, 만료 처리만이라도 먼저 하는 게 맞다.
-
-### 2-B. 출시 전 필수
+### 2-A. 출시 전 필수
 
 - **패키지명이 `com.example.bandapp_client`** — 구글 플레이가 `com.example.` 로 시작하는
   패키지를 거부한다. 바꾸면 **카카오 콘솔 플랫폼 등록(패키지명·키 해시)도 다시** 해야 한다.
@@ -96,7 +95,7 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
   아직 동작하지 않는다. 켤 때 릴리스 빌드로 지도·로그인을 다시 확인해야 한다.
 - 릴리스 키스토어의 **키 해시도 카카오 콘솔에 추가**해야 한다(디버그 것과 다르다).
 
-### 2-C. 신고 레이트리밋 테스트 안정화
+### 2-B. 신고 레이트리밋 테스트 안정화
 
 `ReportIntegrationTest.reports_are_rate_limited_per_user()` 가 전체 실행에서 간헐적으로 실패한다.
 상세는 [2026-09-05 문서 §9-A](2026-09-05-brand-notifications-settlement-video.md).
