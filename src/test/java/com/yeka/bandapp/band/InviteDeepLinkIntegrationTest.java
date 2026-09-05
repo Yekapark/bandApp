@@ -39,7 +39,7 @@ class InviteDeepLinkIntegrationTest extends ApiIntegrationTest {
         ResponseEntity<String> res = get("/.well-known/apple-app-site-association");
 
         assertThat(res.getStatusCode().value()).isEqualTo(200);
-        assertThat(body(res).at("/applinks/details/0/appID").asText()).isEqualTo("ABCDE12345.com.yeka.bandapp");
+        assertThat(body(res).at("/applinks/details/0/appID").asText()).isEqualTo("ABCDE12345.com.yeka.bandule");
         assertThat(body(res).at("/applinks/details/0/paths/0").asText()).isEqualTo("/invite/*");
     }
 
@@ -48,7 +48,7 @@ class InviteDeepLinkIntegrationTest extends ApiIntegrationTest {
         ResponseEntity<String> res = get("/.well-known/assetlinks.json");
 
         assertThat(res.getStatusCode().value()).isEqualTo(200);
-        assertThat(body(res).at("/0/target/package_name").asText()).isEqualTo("com.yeka.bandapp");
+        assertThat(body(res).at("/0/target/package_name").asText()).isEqualTo("com.yeka.bandule");
         assertThat(body(res).at("/0/target/sha256_cert_fingerprints/0").asText()).isEqualTo("AA:BB:CC");
     }
 

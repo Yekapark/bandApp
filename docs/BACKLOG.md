@@ -92,8 +92,10 @@ Phase 1 머지 후 보안·인프라 리뷰에서 나온 항목. `.env.example` 
 **인프라 · 운영**
 
 - **Spring Boot 버전 상향.** `3.4.1`은 OSS 지원 종료(2025-12-31). `3.4.x` 최신 패치 또는 `3.5.x`로.
-- **CI 액션 상향 + 리포트 업로드.** `actions/*@v4`가 Node 20 폐기 경고. 실패 시 `build/reports`를
-  아티팩트로 올려 CI 로그만으로 원인 파악이 되게.
+- ~~**CI 리포트 업로드.**~~ **완료 (2026-09-06)** — 실패 시 `build/reports/tests/test` 와
+  `build/test-results/test` 를 아티팩트로 올린다(7일 보관). 그전에는 로그에 "338 tests
+  completed, 1 failed" 만 찍혀서 어느 테스트인지 원시 로그를 뒤져야 했다.
+  액션 버전 상향(`actions/checkout@v7`·`setup-java@v6`·`gradle/actions@v6`)은 이미 반영돼 있다.
 - **Dockerfile 하드닝.** 런타임 이미지에서 헬스체크용 `curl` 설치 제거 검토, 베이스 이미지 다이제스트 고정.
 - `main` 브랜치 보호(리뷰·CI 필수), 정적 분석(spotless/checkstyle) 도입은 선택.
 

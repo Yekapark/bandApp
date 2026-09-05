@@ -72,9 +72,12 @@ public abstract class IntegrationTestSupport {
         registry.add("app.media.orphan-cron", () -> "-");
         registry.add("app.plan.expire-cron", () -> "-");
         // 초대 딥링크: 링크·검증 파일의 값을 고정해 assertion 을 쓸 수 있게 한다.
+        // android-package 를 빠뜨렸다가 application.yml 의 운영 기본값이 바뀌는 순간
+        // InviteDeepLinkIntegrationTest 가 깨졌다. 검증 파일에 들어가는 값은 여기서 전부 고정한다.
         registry.add("app.deeplink.base-url", () -> "https://band.test");
         registry.add("app.deeplink.scheme", () -> "bandapp");
-        registry.add("app.deeplink.ios-app-id", () -> "ABCDE12345.com.yeka.bandapp");
+        registry.add("app.deeplink.ios-app-id", () -> "ABCDE12345.com.yeka.bandule");
+        registry.add("app.deeplink.android-package", () -> "com.yeka.bandule");
         registry.add("app.deeplink.android-sha256-cert-fingerprints", () -> "AA:BB:CC");
         // 레이트리밋: 테스트가 초과를 빠르게 검증할 수 있게 낮춘다. 단일 테스트가 이보다 많이
         // 호출하지 않도록 유지한다(매 테스트 전 Redis flush 로 카운터는 초기화된다).
