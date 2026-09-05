@@ -23,7 +23,7 @@
 
 | | |
 |---|---|
-| ❌ **도메인** | 없으면 HTTPS 인증서를 못 받는다. 딥링크·약관 URL·스토어 등록도 전부 여기 걸린다 |
+| ✅ ~~**도메인**~~ | **`bandule.com` 구매 완료 (2026-09-06)** |
 | ❌ **서버(VM)** | 앱이 돌 곳 |
 | ❌ **스토어 개발자 계정** | Google Play 1회 $25 / Apple 연 $99 |
 | ❌ **개인정보처리방침·이용약관 페이지** | 스토어 등록 필수 + 한국은 법적 요건 |
@@ -41,7 +41,7 @@
 
 ---
 
-## 1단계 — 도메인 (먼저, 하루면 끝난다)
+## 1단계 — 도메인 ✅ **완료 (2026-09-06)** — `bandule.com`
 
 인증서·딥링크·약관 URL·스토어 등록이 전부 여기서 시작한다. **다른 걸 하기 전에 이것부터.**
 
@@ -62,12 +62,12 @@
 도메인은 한번 정하면 스토어·약관·딥링크에 다 박히므로 **`.com` 을 잡아 두는 것을 권한다.**
 - 서브도메인 계획을 미리 잡아 두면 나중에 안 꼬인다:
 
-| 용도 | 예 |
+| 용도 | 확정값 |
 |---|---|
-| 백엔드 API | `api.<도메인>` |
-| 약관·개인정보처리방침·초대 랜딩 | `<도메인>` 또는 `www.<도메인>` (정적, Cloudflare Pages 무료) |
+| 백엔드 API | **`api.bandule.com`** — `.env.prod` 의 `DOMAIN`, 앱의 `API_BASE_URL` |
+| 약관·개인정보처리방침·초대 랜딩 | **`bandule.com`** (정적, Cloudflare Pages 무료) |
 
-**끝나면**: `.env.prod` 의 `DOMAIN` 에 넣을 값이 정해진다.
+`.env.prod.example` 에 이 값이 이미 들어가 있다. Cloudflare Registrar 로 샀으므로 DNS 가 자동으로 붙어 있어 3단계는 A 레코드 한 줄이면 끝난다.
 
 ---
 
@@ -152,23 +152,31 @@ GitHub 리포지토리 시크릿 4개(`DEPLOY_HOST`·`DEPLOY_USER`·`DEPLOY_KEY`
 
 ## 7-B단계 — Firebase 운영 프로젝트 + 기기 푸시 살리기 (2~3시간, 서버와 무관)
 
-지금 개발용 Firebase 프로젝트만 있고, **클라이언트에는 설정 파일이 아예 없어서 기기 푸시가
-한 통도 안 온다.** 백엔드는 준비가 끝나 있다.
+**코드 배선은 끝났다 (2026-09-06).** `com.google.gms.google-services` 그래들 플러그인을
+붙였고, `android/app/google-services.json` 이 **있으면 적용되고 없으면 건너뛴다** —
+카카오 키가 없을 때와 같은 방식이라, 설정 파일이 없어도 빌드는 그대로 된다.
+Dart 쪽(`PushService`)·매니페스트 권한(`POST_NOTIFICATIONS`)·`FirebaseMessagingService` 는
+원래 다 들어 있었다.
 
-- [ ] **운영 Firebase 프로젝트 생성** (개발용과 분리)
+**남은 건 콘솔 작업뿐이다.** 아래를 하면 그 순간부터 푸시가 온다.
+
+- [ ] **운영 Firebase 프로젝트 생성** (지금 있는 개발용과 분리)
 - [ ] 그 프로젝트에 **Android 앱 등록 — 패키지명 `com.yeka.bandule`**
       (7단계에서 카카오 콘솔에 넣는 것과 같은 값)
-- [ ] `google-services.json` 을 받아 `client/android/app/` 에 넣는다.
-      **이 파일은 저장소에 커밋하지 않는다** — `client/android/.gitignore` 에 추가하고,
-      PC 마다·CI 에 따로 넣는다(`local.properties` 와 같은 취급)
-- [ ] `com.google.gms.google-services` 그래들 플러그인 적용 (`android/build.gradle.kts`,
-      `android/app/build.gradle.kts`)
-- [ ] 서비스 계정 JSON 을 받아 운영 서버의 `.env.prod` 에 연결 (`FCM_PROJECT_ID`,
-      `FCM_CREDENTIALS_HOST_PATH`)
+- [ ] `google-services.json` 을 받아 **`client/android/app/` 에 넣는다.**
+      이 파일은 `client/android/.gitignore` 가 막으므로 커밋되지 않는다 — PC 마다 직접 넣는다
+      (`local.properties` 와 같은 취급). 비밀값이라서가 아니라, 커밋하면 모든 빌드가
+      한쪽 Firebase 프로젝트로 고정되기 때문이다
+- [ ] 서비스 계정 JSON(비공개 키)을 받아 운영 서버의 `.env.prod` 에 연결
+      (`FCM_PROJECT_ID`, `FCM_CREDENTIALS_HOST_PATH`)
 - [ ] **실기기로 확인** — 로그인 후 토큰이 등록되는지, 일정 리마인더가 실제로 오는지
 
 > 개발용 프로젝트를 그대로 써도 동작은 한다. 다만 테스트 알림이 실사용자에게 가거나 그 반대가
 > 되면 곤란하니, R2 와 같은 이유로 나누는 것을 권한다.
+
+**알림 형태는 이미 정해져 있다** — 백엔드가 `notification` + `data` 를 함께 보내므로
+(`FcmPushSender`), 앱이 꺼져 있거나 백그라운드면 **안드로이드가 알아서 알림창에 띄우고**,
+앱이 떠 있으면 `PushService` 가 스낵바로 보여 준다. 별도 처리 코드가 더 필요하지 않다.
 
 ## 8단계 — 약관·개인정보처리방침 (반나절)
 
@@ -191,6 +199,12 @@ GitHub 리포지토리 시크릿 4개(`DEPLOY_HOST`·`DEPLOY_USER`·`DEPLOY_KEY`
 - [ ] **ProGuard 켜기**(`isMinifyEnabled`) — 카카오맵 규칙은 이미 넣어 뒀지만 아직 꺼져 있다.
       켠 뒤 **릴리스 빌드로 지도·로그인을 다시 확인**한다(난독화가 SDK 를 깨는 일이 흔하다)
 - [ ] `ANDROID_SHA256_CERT_FINGERPRINTS` 를 `.env.prod` 에 넣는다 (딥링크 검증용)
+- [ ] **릴리스 빌드는 서버 주소를 넘겨야 한다.** 앱 기본값은 로컬(`localhost` / 에뮬레이터
+      `10.0.2.2`)이라, 그대로 빌드하면 아무 데도 붙지 못한다:
+
+      flutter build appbundle --dart-define=API_BASE_URL=https://api.bandule.com --dart-define=KAKAO_NATIVE_APP_KEY=...
+
+      `dart_defines.json` 을 쓴다면 운영용 파일을 따로 만들어 `--dart-define-from-file` 로 넘긴다
 
 ---
 

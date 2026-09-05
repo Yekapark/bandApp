@@ -7,6 +7,10 @@ gradle-wrapper.jar
 GeneratedPluginRegistrant.java
 .cxx/
 
+# Firebase 설정 — 개발용/운영용 프로젝트가 달라서 커밋하지 않는다. PC 마다 콘솔에서 받아 넣는다.
+# (비밀값은 아니지만, 커밋하면 모든 빌드가 한쪽 프로젝트로 고정된다)
+app/google-services.json
+
 # Remember to never publicly share your keystore.
 # See https://flutter.dev/to/reference-keystore
 key.properties
