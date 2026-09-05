@@ -3,8 +3,10 @@ name: CI
 on:
   push:
     branches: [ main ]
+  # base 제한을 두지 않는다 — 스택 PR(브랜치 → 브랜치)에서도 돌아야 한다.
+  # main 만 걸어 뒀을 때, 브랜치를 향한 PR 은 백엔드가 통째로 CI 없이 지나갔다.
+  # client-ci.yml 과 같은 조건이다.
   pull_request:
-    branches: [ main ]
 
 jobs:
   build:
