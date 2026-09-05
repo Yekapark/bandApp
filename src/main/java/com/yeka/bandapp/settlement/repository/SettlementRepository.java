@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
 
 public interface SettlementRepository extends JpaRepository<Settlement, Long> {
 
@@ -40,4 +41,14 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Settlement s where s.reservationId = :reservationId")
     Optional<Settlement> findByReservationIdForUpdate(@Param("reservationId") long reservationId);
+
+    /**
+     * 밴드 삭제 정리 — 그 밴드 일정에 달린 정산을 모두 지운다.
+     * {@code settlement_shares} 는 FK 에 {@code ON DELETE CASCADE} 가 걸려 있어 따라 지워진다
+     * (스키마 전체에서 유일한 cascade — V7__settlement.sql).
+     */
+    @Modifying
+    @Query("delete from Settlement s where s.reservationId in "
+            + "(select r.id from Reservation r where r.bandId = :bandId)")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

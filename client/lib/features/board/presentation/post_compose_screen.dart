@@ -359,10 +359,19 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     );
     if (kind == null) return;
 
+    // 이미지는 고르는 시점에 줄인다 — imageQuality 만으로는 재인코딩만 되고 해상도가 그대로라,
+    // 요즘 폰의 1200만 화소 사진이 4000x3000 그대로 장당 2~4MB 로 올라갔다. 긴 변 2048px 로
+    // 비율 유지 축소하면 400~700KB 로 떨어진다. 피드·상세에서 보는 용도라 이 정도면 충분하고,
+    // PREMIUM 은 보관기한이 무제한이라 원본을 그대로 쌓을 이유가 없다.
+    // (영상은 아래 _compressIfVideo 가 720p 로 따로 압축한다.)
     final XFile? file = kind == 'video'
         ? await _picker.pickVideo(source: ImageSource.gallery)
         : await _picker.pickImage(
-            source: ImageSource.gallery, imageQuality: 88);
+            source: ImageSource.gallery,
+            imageQuality: 88,
+            maxWidth: 2048,
+            maxHeight: 2048,
+          );
     if (file == null) return;
 
     final contentType = _resolveContentType(file, kind);

@@ -3,8 +3,10 @@ package com.yeka.bandapp.band.controller;
 import com.yeka.bandapp.band.dto.BandResponse;
 import com.yeka.bandapp.band.dto.CreateBandRequest;
 import com.yeka.bandapp.band.dto.DelegateLeadershipRequest;
+import com.yeka.bandapp.band.dto.DeleteBandRequest;
 import com.yeka.bandapp.band.dto.MyBandListResponse;
 import com.yeka.bandapp.band.dto.UpdateBandSettingsRequest;
+import com.yeka.bandapp.band.service.BandDeletionService;
 import com.yeka.bandapp.band.service.BandMemberService;
 import com.yeka.bandapp.band.service.BandService;
 import com.yeka.bandapp.common.response.ApiResponse;
@@ -31,10 +33,13 @@ public class BandController {
 
     private final BandService bandService;
     private final BandMemberService bandMemberService;
+    private final BandDeletionService bandDeletionService;
 
-    public BandController(BandService bandService, BandMemberService bandMemberService) {
+    public BandController(BandService bandService, BandMemberService bandMemberService,
+                          BandDeletionService bandDeletionService) {
         this.bandService = bandService;
         this.bandMemberService = bandMemberService;
+        this.bandDeletionService = bandDeletionService;
     }
 
     @Operation(summary = "밴드 생성",
@@ -84,5 +89,23 @@ public class BandController {
                                                         @Valid @RequestBody DelegateLeadershipRequest request) {
         return ApiResponse.ok(bandMemberService.delegateLeadership(
                 bandId, principal.userId(), request.newLeaderUserId()));
+    }
+
+    @Operation(summary = "밴드 삭제",
+            description = "밴드와 그 안의 모든 데이터를 되돌릴 수 없게 지운다 — 합주 일정, 정산 내역, "
+                    + "게시글과 첨부한 사진·영상(R2 객체 포함), 합주실, 셋리스트, 정기 규칙, 초대코드, "
+                    + "요금제, 알림 이력. 밴드장만(그 외 403 NOT_BAND_LEADER). "
+                    + "오입력 방지를 위해 body 의 confirmName 이 실제 밴드 이름과 정확히 같아야 한다"
+                    + "(다르면 400 BAND_NAME_MISMATCH). "
+                    + "저장소 삭제가 실패하면 502 이고 아무것도 지워지지 않는다 — 다시 시도하면 된다. "
+                    + "사람↔사람 차단 기록과 사용자 계정·알림 설정은 밴드와 무관하므로 남는다. "
+                    + "DELETE 가 아니라 POST 인 이유: 확인용 본문이 필요한데 본문 있는 DELETE 는 "
+                    + "클라이언트·프록시 지원이 고르지 않다. 계정 탈퇴(POST /users/me/withdraw)와 같은 형태다.")
+    @PostMapping("/{bandId}/delete")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@AuthenticationPrincipal AuthPrincipal principal,
+                       @PathVariable long bandId,
+                       @Valid @RequestBody DeleteBandRequest request) {
+        bandDeletionService.delete(bandId, principal.userId(), request.confirmName());
     }
 }

@@ -13,11 +13,16 @@ import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -27,6 +32,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -150,6 +156,43 @@ public class R2StorageClient implements StorageClient {
         } catch (SdkException e) {
             throw storageError("delete", storageKey, e);
         }
+    }
+
+    /**
+     * 접두사 아래 객체를 목록으로 훑어 1000개씩 묶어 지운다(S3 DeleteObjects 한 번에 최대 1000).
+     * 한 건씩 지우는 것보다 왕복이 훨씬 적고, DB 가 모르는 고아 객체까지 함께 정리된다.
+     */
+    @Override
+    public int deleteByPrefix(String keyPrefix) {
+        S3Client client = requireS3();
+        int deleted = 0;
+        String continuationToken = null;
+        try {
+            do {
+                ListObjectsV2Response listed = client.listObjectsV2(ListObjectsV2Request.builder()
+                        .bucket(properties.bucket())
+                        .prefix(keyPrefix)
+                        .continuationToken(continuationToken)
+                        .build());
+                List<ObjectIdentifier> keys = listed.contents().stream()
+                        .map(o -> ObjectIdentifier.builder().key(o.key()).build())
+                        .toList();
+                if (!keys.isEmpty()) {
+                    client.deleteObjects(DeleteObjectsRequest.builder()
+                            .bucket(properties.bucket())
+                            .delete(Delete.builder().objects(keys).build())
+                            .build());
+                    deleted += keys.size();
+                }
+                // 목록을 지우는 중이라 다음 페이지 토큰을 그대로 따라간다(삭제분은 이미 응답에 담겼다).
+                continuationToken = Boolean.TRUE.equals(listed.isTruncated())
+                        ? listed.nextContinuationToken()
+                        : null;
+            } while (continuationToken != null);
+        } catch (SdkException e) {
+            throw storageError("deleteByPrefix", keyPrefix, e);
+        }
+        return deleted;
     }
 
     @PreDestroy

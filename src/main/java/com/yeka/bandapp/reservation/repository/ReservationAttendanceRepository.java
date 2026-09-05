@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
 
 public interface ReservationAttendanceRepository extends JpaRepository<ReservationAttendance, Long> {
 
@@ -27,4 +28,10 @@ public interface ReservationAttendanceRepository extends JpaRepository<Reservati
                and a.status <> com.yeka.bandapp.reservation.entity.AttendanceStatus.PENDING
             """)
     List<Long> findRespondedUserIds(@Param("reservationId") long reservationId);
+
+    /** 밴드 삭제 정리 — 그 밴드 일정의 참석 응답을 모두 지운다. */
+    @Modifying
+    @Query("delete from ReservationAttendance a where a.reservationId in "
+            + "(select r.id from Reservation r where r.bandId = :bandId)")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

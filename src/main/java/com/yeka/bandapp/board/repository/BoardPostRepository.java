@@ -76,4 +76,9 @@ public interface BoardPostRepository extends JpaRepository<BoardPost, Long> {
     @Query("update BoardPost p set p.title = :title, p.content = :content "
             + "where p.id = :id and p.deletedAt is null")
     int updateContent(@Param("id") long id, @Param("title") String title, @Param("content") String content);
+
+    /** 밴드 삭제 정리 — 소프트 삭제된 글까지 전부 하드 삭제한다. */
+    @Modifying
+    @Query("delete from BoardPost p where p.bandId = :bandId")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

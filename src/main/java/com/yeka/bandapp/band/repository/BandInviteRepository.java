@@ -38,4 +38,9 @@ public interface BandInviteRepository extends JpaRepository<BandInvite, Long> {
                and (i.maxUses is null or i.usedCount < i.maxUses)
             """)
     int tryConsume(@Param("id") Long id, @Param("now") Instant now);
+
+    /** 밴드 삭제 정리 — 발급했던 초대코드를 모두 지운다. */
+    @Modifying
+    @Query("delete from BandInvite i where i.bandId = :bandId")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

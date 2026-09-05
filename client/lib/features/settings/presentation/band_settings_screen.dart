@@ -134,10 +134,105 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 11, color: AppColors.textFaint),
             ),
+            const SizedBox(height: 28),
+            const Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: 20),
+            const _SectionTitle('위험한 작업'),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: _busy ? null : () => _deleteBand(band.id, band.name),
+              child: const Text('밴드 삭제',
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.danger)),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              '밴드와 그 안의 모든 기록이 영구히 사라집니다.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: AppColors.textFaint),
+            ),
           ],
         ],
       ),
     );
+  }
+
+  /// 밴드 삭제. 되돌릴 수 없어서 무엇이 지워지는지 먼저 보여주고,
+  /// 밴드 이름을 정확히 입력해야만 삭제 버튼이 살아난다.
+  Future<void> _deleteBand(int bandId, String bandName) async {
+    final controller = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('밴드를 삭제할까요?',
+            style: TextStyle(fontSize: 16, color: AppColors.danger)),
+        // 키보드가 올라오면 다이얼로그가 눌리므로 스크롤을 열어 둔다.
+        scrollable: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '밴드를 삭제하면 되돌릴 수 없습니다.\n\n'
+              '합주 일정, 정산 내역, 게시글과 첨부한 사진·영상, 합주실 정보, '
+              '셋리스트가 모두 영구 삭제됩니다.',
+              style: TextStyle(
+                  fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              '확인을 위해 밴드 이름 「$bandName」을 입력해 주세요.',
+              style: const TextStyle(
+                  fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: InputDecoration(hintText: bandName),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소')),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (_, value, __) => TextButton(
+              // 이름이 정확히 맞아야만 눌린다.
+              onPressed: value.text.trim() == bandName
+                  ? () => Navigator.pop(ctx, true)
+                  : null,
+              child: const Text('삭제',
+                  style: TextStyle(color: AppColors.danger)),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(bandRepositoryProvider).deleteBand(bandId, bandName);
+      // 지워진 밴드가 선택 상태로 남지 않게 비우고 목록을 다시 받는다.
+      ref.read(selectedBandIdProvider.notifier).clear();
+      ref.invalidate(myBandsProvider);
+      if (mounted) {
+        _toast('밴드를 삭제했어요.');
+        context.go('/home');
+      }
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (_) {
+      _toast('밴드를 삭제하지 못했습니다.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _changePermission(int bandId, String mode) async {

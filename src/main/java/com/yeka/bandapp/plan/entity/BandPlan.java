@@ -22,8 +22,8 @@ import java.time.Instant;
  * {@code expiresAt}=null / PREMIUM ⇒ {@code mediaRetentionDays}=null(무제한). 아래 상태 변경 메서드가
  * 두 필드를 항상 짝으로 맞춘다.
  *
- * <p>{@code expiresAt} 은 PREMIUM 구독기간 종료 시각이지만 이번 릴리스에서는 정보성이다 — 경과해도
- * 자동으로 FREE 로 되돌리지 않는다(실제 PG 연동 시 처리).
+ * <p>{@code expiresAt} 은 PREMIUM 구독기간(밴드별 1년) 종료 시각이다. 이 시각이 지나면
+ * {@code PlanExpirationJob} 이 매일 밤 FREE 로 되돌리고 기존 미디어에 30일 유예를 준다.
  */
 @Entity
 @Table(name = "band_plans")
