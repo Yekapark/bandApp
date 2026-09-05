@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show Uint8List;
-import 'dart:async' show unawaited;
+import 'dart:async' show Timer, unawaited;
+import 'dart:ui' show FontFeature;
 
 import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
@@ -56,6 +57,12 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   /// 영상 압축 진행률(0~100). 압축 중이 아니면 null. 6분짜리는 30초 넘게 걸려서
   /// 스피너만 돌리면 멈춘 줄 안다.
   double? _compressPct;
+
+  /// 첨부 업로드 진행 상태. 영상은 수백 MB 라 한참 걸린다 — 아무 표시가 없으면
+  /// 사용자가 앱이 멈춘 줄 안다. 몇 번째/전체와 퍼센트를 함께 보여준다.
+  int _uploadIndex = 0;
+  int _uploadTotal = 0;
+  int _uploadPct = 0;
 
   bool get _isEdit => _postId != null;
 
@@ -184,6 +191,14 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               onRemove: (m) => _removeMedia(bandId, m),
               onRemovePending: _removePending,
             ),
+            if (_uploadTotal > 0) ...[
+              const SizedBox(height: 16),
+              _UploadProgress(
+                index: _uploadIndex,
+                total: _uploadTotal,
+                pct: _uploadPct,
+              ),
+            ],
             const SizedBox(height: 24),
             if (widget.postId != null)
               PrimaryButton(
@@ -256,9 +271,11 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       });
 
       final failed = <_PendingMedia>[];
-      for (final item in _pending) {
-        final ok = await _uploadOne(bandId, detail.id, item);
-        if (!ok) failed.add(item);
+      final queue = List.of(_pending);
+      setState(() => _uploadTotal = queue.length);
+      for (var i = 0; i < queue.length; i++) {
+        final ok = await _uploadOne(bandId, detail.id, queue[i], index: i + 1);
+        if (!ok) failed.add(queue[i]);
         if (!mounted) return;
       }
       setState(() => _pending = failed);
@@ -278,12 +295,24 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     } catch (_) {
       _toast('게시글을 등록하지 못했습니다.');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _uploadTotal = 0;
+        });
+      }
     }
   }
 
   /// 첨부 한 건 업로드. 성공하면 true. 실패는 토스트로 알리고 호출자가 대기 목록에 남긴다.
-  Future<bool> _uploadOne(int bandId, int postId, _PendingMedia item) async {
+  Future<bool> _uploadOne(int bandId, int postId, _PendingMedia item,
+      {int index = 1}) async {
+    if (mounted) {
+      setState(() {
+        _uploadIndex = index;
+        _uploadPct = 0;
+      });
+    }
     try {
       // 파일을 통째로 메모리에 올리지 않고 스트림으로 흘려보낸다 — 영상은 수백 MB 가 된다.
       final media = await ref.read(boardRepositoryProvider).uploadMedia(
@@ -292,6 +321,12 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             contentType: item.contentType,
             sizeBytes: await item.file.length(),
             data: item.file.openRead(),
+            // 퍼센트가 바뀔 때만 다시 그린다 — 콜백은 초당 수십 번 온다.
+            onProgress: (sent, total) {
+              if (!mounted || total <= 0) return;
+              final pct = (sent * 100 ~/ total).clamp(0, 100);
+              if (pct != _uploadPct) setState(() => _uploadPct = pct);
+            },
           );
       if (mounted) setState(() => _media = [..._media, media]);
       return true;
@@ -404,7 +439,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       return;
     }
 
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _uploadTotal = 1;
+    });
     try {
       if (await _uploadOne(bandId, _postId!, item)) {
         ref.invalidate(
@@ -413,9 +451,18 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
         ref.read(boardFeedProvider(bandId).notifier).refresh();
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _uploadTotal = 0;
+        });
+      }
     }
   }
+
+  /// 진행률이 이 시간 동안 한 번도 안 바뀌면 압축이 물린 것으로 보고 취소한다.
+  /// 큰 영상은 오래 걸리지만 "느린 것"은 진행률이 계속 오른다 — 멈춘 것만 걸러낸다.
+  static const _compressStall = Duration(seconds: 90);
 
   /// 영상이면 720p 로 압축해 돌려준다. 이미지·웹이거나 실패하면 원본 그대로.
   ///
@@ -424,12 +471,32 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   ///
   /// 압축은 30초 넘게 걸릴 수 있어 진행률을 보여준다. 실패하면 원본으로 진행하고,
   /// 상한을 넘으면 호출한 쪽의 크기 검사에서 걸린다.
+  ///
+  /// **진행률이 멈추면 취소한다.** video_compress 가 쓰는 트랜스코더가 특정 영상에서
+  /// 교착에 빠진다 — 오디오 디코더가 출력 버퍼를 다 쥔 채 못 비워서 리더가 멈추고,
+  /// 그 상태로 초당 수십 번씩 헛도는 루프에 갇힌다(실기기 확인: 131MB 영상이 33% 에서
+  /// 정지, 4분간 출력 파일 크기 변화 없음, CPU 만 태움). 라이브러리 안에서 나는 일이라
+  /// 여기서는 감시만 하고 원본으로 넘어간다. 원본이 상한을 넘으면 호출한 쪽에서 걸린다.
   Future<XFile> _compressIfVideo(XFile file, String contentType) async {
     if (kIsWeb || !contentType.startsWith('video/')) return file;
 
+    var lastPct = -1.0;
+    var lastMoved = DateTime.now();
+    var stalled = false;
+
     final sub = VideoCompress.compressProgress$.subscribe((p) {
+      if (p != lastPct) {
+        lastPct = p;
+        lastMoved = DateTime.now();
+      }
       if (mounted) setState(() => _compressPct = p);
     });
+    final watchdog = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (DateTime.now().difference(lastMoved) < _compressStall) return;
+      stalled = true;
+      VideoCompress.cancelCompression();
+    });
+
     setState(() => _compressPct = 0);
     try {
       final info = await VideoCompress.compressVideo(
@@ -441,8 +508,14 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     } catch (_) {
       return file;
     } finally {
+      watchdog.cancel();
       sub.unsubscribe();
-      if (mounted) setState(() => _compressPct = null);
+      if (mounted) {
+        setState(() => _compressPct = null);
+        if (stalled) {
+          _toast('영상 압축이 진행되지 않아 원본으로 올려요. 용량이 크면 등록이 막힐 수 있어요.');
+        }
+      }
     }
   }
 
@@ -727,6 +800,63 @@ class _MediaThumb extends StatelessWidget {
         m.isVideo ? Icons.movie_outlined : Icons.image_outlined,
         color: AppColors.textFaint,
       ),
+    );
+  }
+}
+
+/// 첨부 업로드 진행 표시. 영상은 수백 MB 라 몇 분씩 걸린다 — 아무 표시가 없으면
+/// 사용자가 앱이 멈춘 줄 알고 뒤로 나가 버린다(글은 이미 저장돼 있어 첨부만 유실된다).
+class _UploadProgress extends StatelessWidget {
+  const _UploadProgress({
+    required this.index,
+    required this.total,
+    required this.pct,
+  });
+
+  final int index;
+  final int total;
+  final int pct;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = total > 1 ? '첨부 올리는 중 $index/$total' : '첨부 올리는 중';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: AppColors.textDim),
+            ),
+            Text(
+              '$pct%',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: pct / 100,
+            minHeight: 6,
+            backgroundColor: AppColors.surfaceRaised,
+            valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          '영상은 몇 분 걸릴 수 있어요. 화면을 벗어나지 마세요.',
+          style: TextStyle(fontSize: 11, color: AppColors.textFaint),
+        ),
+      ],
     );
   }
 }

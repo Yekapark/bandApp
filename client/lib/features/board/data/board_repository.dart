@@ -122,6 +122,8 @@ class BoardRepository {
     required String contentType,
     required int sizeBytes,
     required Stream<List<int>> data,
+    /// 저장소로 보낸 바이트 수. 영상은 수백 MB 라 화면에 진행률을 보여줘야 한다.
+    void Function(int sent, int total)? onProgress,
   }) async {
     final ticket = await _issueUploadUrl(
       bandId: bandId,
@@ -129,7 +131,7 @@ class BoardRepository {
       contentType: contentType,
       sizeBytes: sizeBytes,
     );
-    await _putToStorage(ticket, data, sizeBytes, contentType);
+    await _putToStorage(ticket, data, sizeBytes, contentType, onProgress);
     return _completeMedia(
         bandId: bandId, postId: postId, mediaId: ticket.mediaId);
   }
@@ -159,11 +161,15 @@ class BoardRepository {
     Stream<List<int>> data,
     int sizeBytes,
     String contentType,
+    void Function(int sent, int total)? onProgress,
   ) async {
     try {
       final res = await _plain.put<dynamic>(
         ticket.uploadUrl,
         data: data,
+        // 스트림이라 dio 가 전체 크기를 모른다(total 이 -1 로 온다). 우리가 아는 값을 넘긴다.
+        onSendProgress:
+            onProgress == null ? null : (sent, _) => onProgress(sent, sizeBytes),
         options: Options(
           headers: {
             ...ticket.requiredHeaders,
