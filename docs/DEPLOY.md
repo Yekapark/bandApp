@@ -10,7 +10,10 @@
 | `docker-compose.prod.yml` | 운영 스택 (postgres · redis · app · nginx · certbot) |
 | `.env.prod.example` | 운영 환경변수 견본. VM 에서 `.env.prod` 로 복사해 채운다 |
 | `deploy/nginx/templates/app.conf.template` | Nginx 리버스 프록시 설정 (`${DOMAIN}` 치환) |
-| `deploy/nginx/proxy-headers.conf` | 프록시 헤더. **X-Forwarded-For 를 실제 피어로 덮어쓴다** |
+| `deploy/nginx/proxy-headers.conf` | 프록시 헤더. **X-Forwarded-For 를 실제 접속자로 덮어쓴다** |
+| `deploy/nginx/cloudflare-realip.conf` | Cloudflare 엣지 대역 목록 + `CF-Connecting-IP` 신뢰 설정 (자동 생성물) |
+| `deploy/nginx/update-cloudflare-ips.sh` | 위 목록을 Cloudflare 에서 다시 받아 갱신 (분기 1회) |
+| `deploy/nginx/test-realip.sh` | 접속자 IP 판정이 위조에 안 뚫리는지 도커로 검증 (VM 불필요) |
 | `deploy/init-letsencrypt.sh` | 인증서 최초 발급 (VM 에서 1회) |
 | `deploy/deploy.sh` | 이미지 교체 + 헬스체크. GitHub Actions 가 SSH 로 호출 |
 | `deploy/backup/pg-backup.sh` | 일 1회 pg_dump → R2 업로드 → 7개 보관 |
@@ -40,15 +43,59 @@ git clone https://github.com/Yekapark/bandApp.git /opt/bandapp
 sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw enable
 ```
 
-**DNS** — `DOMAIN` 의 A 레코드를 VM 공인 IP 로. Cloudflare 를 쓴다면 이 API 서브도메인은
-**DNS only(회색 구름)** 로 둔다. 이유:
+**DNS / Cloudflare** — `DOMAIN` 의 A 레코드를 VM 공인 IP 로 만들고, **주황 구름(Proxied)을 켠다.**
 
-- API 는 JSON 응답이라 CDN 캐시 이득이 없다.
-- 주황 구름을 켜면 실제 클라이언트 IP 가 `CF-Connecting-IP` 로만 오고 `$remote_addr` 은
-  Cloudflare 엣지가 된다. 그러면 **모든 레이트리밋이 Cloudflare IP 하나에 뭉쳐** 정상
-  사용자끼리 서로를 막는다. 켜려면 Nginx 에 `set_real_ip_from`(Cloudflare 대역) +
-  `real_ip_header CF-Connecting-IP` 를 먼저 넣어야 한다.
-- 정적 랜딩·약관 페이지에는 주황 구름을 켜도 된다(별도 호스트).
+주황 구름을 켜면 서버의 진짜 IP 가 밖에 보이지 않는다. 무료 VM 한 대로 굴리는 구성에서
+원본 주소가 공개되면 누가 작정하고 두들길 때 막을 수단이 없으므로, 이 이점이 크다.
+DDoS 방어도 함께 붙는다.
+
+대신 **켜기 전에 반드시 확인할 것 두 가지**가 있다.
+
+**① Cloudflare SSL/TLS 모드를 `Full (strict)` 로.**
+`Flexible` 로 두면 Cloudflare 가 원본 서버에 평문(HTTP)으로 말을 걸고, 우리 Nginx 는 그걸
+HTTPS 로 돌려보내고, Cloudflare 가 다시 평문으로 오는 **무한 리다이렉트**가 된다.
+`Full (strict)` 는 원본의 정식 인증서를 검증하는 모드이고, 우리는 Let's Encrypt 인증서가
+있으므로 그대로 통과한다.
+
+**② 인증서를 먼저 발급하고 나서 주황으로 켠다.**
+`init-letsencrypt.sh` 는 certbot 이 80 포트를 직접 잡는 방식이라, 회색 구름 상태에서
+받는 것이 확실하다. 순서: 회색으로 DNS 등록 → §2 로 인증서 발급·기동 → 주황으로 전환.
+(이후 갱신은 웹루트 방식이라 주황 상태에서도 그대로 동작한다.)
+
+**접속자 IP 는 이미 처리돼 있다.** 주황 구름을 켜면 모든 요청이 Cloudflare 를 거치므로
+서버 눈에는 전 사용자가 Cloudflare 주소 하나로 보인다. 그대로 두면 IP 기준 레이트리밋
+(로그인 브루트포스·초대코드 대입 방지)이 **정상 사용자끼리 서로를 막는다.**
+`deploy/nginx/cloudflare-realip.conf` 가 "Cloudflare 대역에서 온 요청에 한해"
+`CF-Connecting-IP` 헤더를 진짜 사용자 IP 로 인정하게 해서 이걸 푼다.
+회색 구름으로 되돌려도 같은 설정이 그대로 맞다(헤더가 없으면 소켓 주소를 쓴다).
+
+Cloudflare 가 대역을 추가하는 일이 가끔 있다. 분기에 한 번:
+
+```bash
+sh deploy/nginx/update-cloudflare-ips.sh
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec nginx nginx -s reload
+```
+
+설정이 맞는지는 VM 없이도 확인된다 — 도커로 Cloudflare 대역과 바깥에서 각각 요청을 넣어
+위조가 통하는지 본다:
+
+```bash
+sh deploy/nginx/test-realip.sh
+```
+
+> **정적 페이지(개인정보처리방침·이용약관·초대 랜딩)는 별개 호스트로 두는 것이 좋다.**
+> 그쪽은 캐시 이득이 실제로 있어서 Cloudflare Pages 무료 호스팅이 잘 맞는다.
+
+**방화벽** 재확인 — 주황 구름을 켜도 **원본 IP 를 알아낸 사람은 직접 접속할 수 있다.**
+80·443 을 Cloudflare 대역에서만 받도록 좁히면 더 안전하다(선택):
+
+```bash
+for cidr in $(curl -s https://www.cloudflare.com/ips-v4); do sudo ufw allow from "$cidr" to any port 80,443 proto tcp; done
+sudo ufw delete allow 80,443/tcp
+```
+
+이렇게 잠그면 `init-letsencrypt.sh` 의 최초 발급(80 직접 사용)이 막히므로, **인증서를 먼저
+받은 뒤에** 적용한다.
 
 ---
 
@@ -104,6 +151,9 @@ GitHub 리포지토리 시크릿:
 | `DEPLOY_PORT` | (선택) SSH 포트, 기본 22 |
 
 GHCR 인증은 워크플로의 `GITHUB_TOKEN` 을 SSH 세션으로 넘겨 쓴다 — VM 에 PAT 를 심어 둘 필요가 없다.
+
+**서버가 아직 없을 때** — `DEPLOY_HOST` 가 비어 있으면 이미지 빌드·GHCR 업로드까지만 하고
+SSH 단계는 건너뛴다(실패로 처리하지 않는다). 서버를 잡고 시크릿만 채우면 그때부터 이어진다.
 
 **롤백** — 이전 태그로 되돌린다:
 

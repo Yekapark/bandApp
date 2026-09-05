@@ -23,6 +23,9 @@ secrets/
 
 # DB 덤프 (deploy/backup/pg-backup.sh)
 backups/
+
+# deploy/nginx/test-realip.sh 작업 디렉터리
+.realip-test-*/
 *firebase-adminsdk*.json
 
 # Logs

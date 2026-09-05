@@ -22,13 +22,19 @@
 - 카카오 로그인 SDK 배선 완료(`kakao_flutter_sdk_user`). 앱 키만 넣으면 동작. 백엔드 `/auth/kakao` 는 이미 있었음.
 - 하단 탭바 **`StatefulShellRoute` 전환 완료**(2026-09-04) — 홈·캘린더·지도 탭이 스택/스크롤을
   각자 보존하고 탭바가 항상 떠 있다. 상세·폼·정산은 루트 네비게이터에 풀스크린으로 push.
+- **`client/android/` 를 git 추적으로 돌렸다**(2026-09-06) — 그전까지 `client/.gitignore` 의
+  `/android/` 때문에 안드로이드 프로젝트 전체가 저장소에 없었다(빌드 설정·매니페스트·카카오
+  리다이렉트 스킴·아이콘·`applicationId`). **다른 PC 에서 클론하면 이제 그대로 빌드된다** —
+  단 `android/local.properties` 는 계속 제외이므로 PC 마다 `kakao.appKey=...` 한 줄을 직접 넣어야
+  한다(`sdk.dir`·`flutter.sdk` 는 flutter 가 채운다). `/ios/`·`/web/`·`/windows/` 는 아직 무시한다.
 - **합주실 지도 `/map` 구현 완료**(2026-09-04) — 좌표 있는 합주실 마커 + 하단 목록.
   **Android/iOS 전용**이라 웹에선 목록만(가드).
 - **지도 제공자를 카카오로 통일**(2026-09-04) — `flutter_naver_map` → `kakao_map_sdk`.
   백엔드 지오코딩도 네이버 NCP → 카카오 로컬로 교체해 프로젝트에서 네이버가 완전히 빠졌다.
   **지도 전용 키가 없다** — 로그인에 쓰는 `KAKAO_NATIVE_APP_KEY` 를 그대로 쓰고,
   `NAVER_MAP_CLIENT_ID` dart-define 은 사라졌다. 카카오 콘솔에 패키지명
-  (`com.example.bandapp_client`) + 키 해시 등록이 필요하며, 이는 카카오 로그인에도 같이 쓰인다.
+  (**`com.yeka.bandule`** — 2026-09-06 에 `com.example.bandapp_client` 에서 바꿨다)
+  + 키 해시 등록이 필요하며, 이는 카카오 로그인에도 같이 쓰인다.
 - **합주실 등록 폼에 지도**(2026-09-04) — 주소 검색 후보가 지도에 핀으로 뜨고, 핀/목록에서 고른
   **그 좌표가 그대로 저장된다**(서버 지오코딩 생략). 직접 타이핑한 주소만 서버가 지오코딩한다.
   SDK 인증 실패 시 앱이 죽지 않고 지도 자리에 안내만 남는다.

@@ -53,10 +53,19 @@
 이메일 등 개인정보 항목을 받으려면 카카오 개발자 콘솔에서 비즈앱 전환/검수가
 필요할 수 있다. **개발 초기에 미리 확인**해두면 배포 직전에 막히는 일이 없다.
 
-### 1.7 서비스명 · 패키지명 확정
+### 1.7 서비스명 · 패키지명 확정 — **완료 (2026-09-06)**
 
-`BUILD_PLAN.md` Phase 0의 패키지 경로를 실제 값으로 바꿔야 한다. 나중에 변경하면
-패키지·리포지토리·앱 ID를 모두 손봐야 하므로 시작 전에 정한다.
+서비스명은 **밴듈(BANDULE)**, 앱 패키지는 **`com.yeka.bandule`** 로 확정했다.
+`flutter create` 기본값 `com.example.bandapp_client` 는 `com.example.` 로 시작해서
+구글 플레이가 업로드를 거부한다. 바꾼 곳: 클라이언트 `namespace`·`applicationId`·
+`MainActivity.kt` 패키지와 디렉터리, 백엔드 딥링크 기본값(`ANDROID_PACKAGE`·플레이스토어 URL·
+`IOS_APP_ID` 예시).
+
+**남은 사람 작업** — 카카오 개발자 콘솔 > 내 애플리케이션 > 앱 설정 > 플랫폼 > Android 의
+패키지명을 새 값으로 고친다. 키 해시는 서명 키에서 나오는 값이라 그대로다.
+안 고치면 카카오 로그인이 플랫폼 불일치로 막힌다.
+
+> 백엔드 자바 패키지(`com.yeka.bandapp`)는 서버 코드 경로라 앱 ID 와 별개다. 그대로 둔다.
 
 ### 1.8 Phase 0·1 코드 리뷰 후속 (2026-08-31)
 
@@ -83,8 +92,10 @@ Phase 1 머지 후 보안·인프라 리뷰에서 나온 항목. `.env.example` 
 **인프라 · 운영**
 
 - **Spring Boot 버전 상향.** `3.4.1`은 OSS 지원 종료(2025-12-31). `3.4.x` 최신 패치 또는 `3.5.x`로.
-- **CI 액션 상향 + 리포트 업로드.** `actions/*@v4`가 Node 20 폐기 경고. 실패 시 `build/reports`를
-  아티팩트로 올려 CI 로그만으로 원인 파악이 되게.
+- ~~**CI 리포트 업로드.**~~ **완료 (2026-09-06)** — 실패 시 `build/reports/tests/test` 와
+  `build/test-results/test` 를 아티팩트로 올린다(7일 보관). 그전에는 로그에 "338 tests
+  completed, 1 failed" 만 찍혀서 어느 테스트인지 원시 로그를 뒤져야 했다.
+  액션 버전 상향(`actions/checkout@v7`·`setup-java@v6`·`gradle/actions@v6`)은 이미 반영돼 있다.
 - **Dockerfile 하드닝.** 런타임 이미지에서 헬스체크용 `curl` 설치 제거 검토, 베이스 이미지 다이제스트 고정.
 - `main` 브랜치 보호(리뷰·CI 필수), 정적 분석(spotless/checkstyle) 도입은 선택.
 
