@@ -1,0 +1,126 @@
+# 운영용 compose. 단일 VM 에서 아래처럼 띄운다(스크립트: deploy/deploy.sh).
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# 로컬 개발용 docker-compose.yml 과의 차이:
+#   - app 이미지를 GHCR 에서 받아 온다(VM 에서 빌드하지 않는다 — 소형 VM 에서 gradle 빌드는 OOM 난다)
+#   - postgres·redis·app 포트를 호스트에 게시하지 않는다. 컨테이너 네트워크 안에서만 닿는다
+#   - redis 에 requirepass 를 건다
+#   - SPRING_PROFILES_ACTIVE=prod (springdoc off, actuator 상세 off, XFF 프록시 신뢰)
+#   - nginx + certbot 이 붙는다
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # 리프레시 토큰·차단목록이 들어 있다. 비밀번호 없이 띄우지 않는다.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--save", "60", "1"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  app:
+    image: ${APP_IMAGE:-ghcr.io/yekapark/bandapp}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      KAKAO_APP_ID: ${KAKAO_APP_ID:-}
+      KAKAO_ADMIN_KEY: ${KAKAO_ADMIN_KEY:-}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
+      FCM_CREDENTIALS_PATH: ${FCM_CREDENTIALS_PATH:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      DEEPLINK_BASE_URL: https://${DOMAIN}
+      DEEPLINK_SCHEME: ${DEEPLINK_SCHEME:-bandapp}
+      IOS_APP_ID: ${IOS_APP_ID:-}
+      IOS_APP_STORE_URL: ${IOS_APP_STORE_URL:-}
+      ANDROID_PACKAGE: ${ANDROID_PACKAGE:-}
+      ANDROID_PLAY_STORE_URL: ${ANDROID_PLAY_STORE_URL:-}
+      ANDROID_SHA256_CERT_FINGERPRINTS: ${ANDROID_SHA256_CERT_FINGERPRINTS:-}
+    volumes:
+      - ${FCM_CREDENTIALS_HOST_PATH:-/dev/null}:/run/secrets/fcm-credentials.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 60s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      # $host·$scheme 같은 nginx 변수까지 치환되지 않도록 DOMAIN 만 대상으로 제한한다.
+      NGINX_ENVSUBST_FILTER: "^DOMAIN$$"
+    volumes:
+      - ./deploy/nginx/templates:/etc/nginx/templates:ro
+      - ./deploy/nginx/proxy-headers.conf:/etc/nginx/proxy-headers.conf:ro
+      - certbot-conf:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot
+    # 인증서가 갱신돼도 nginx 는 그걸 모른다(파일을 기동 때 한 번 읽는다). 6시간마다 reload 해서
+    # 갱신분을 집어 들게 한다. reload 는 무중단이다.
+    command: >
+      sh -c "while :; do sleep 6h & wait $$!; nginx -s reload; done & 
+             exec nginx -g 'daemon off;'"
+
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    # 최초 발급은 deploy/init-letsencrypt.sh 가 한다. 이 컨테이너는 갱신만 맡는다.
+    # certbot renew 는 만료 30일 전부터만 실제로 갱신하므로 12시간마다 돌려도 레이트리밋에 안 걸린다.
+    entrypoint: >
+      sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $$!; done"
+
+volumes:
+  pgdata:
+  redisdata:
+  certbot-conf:
+  certbot-www:

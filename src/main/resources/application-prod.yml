@@ -1,6 +1,14 @@
 # 운영 프로파일. 배포(Phase 11)에서 SPRING_PROFILES_ACTIVE=prod 로 띄운다.
 # 로컬 docker compose 개발은 여전히 docker 프로파일이며 아래 제약을 받지 않는다.
 
+server:
+  # Nginx 뒤에 있으므로 톰캣 RemoteIpValve 가 X-Forwarded-For/-Proto 를 해석하게 한다.
+  # 밸브는 "신뢰 프록시(server.tomcat.remoteip.internal-proxies 기본 정규식 — 10/8·172.16/12·
+  # 192.168/16·127/8, 도커 브리지 대역 포함)에서 들어온" 요청의 XFF 만 반영해
+  # getRemoteAddr() 를 실제 클라이언트 IP 로 바꾼다. 외부에서 앱 포트로 직접 온 위조 XFF 는
+  # 무시된다. 레이트리밋 키(common/web/ClientIp)가 이 값을 쓴다.
+  forward-headers-strategy: NATIVE
+
 springdoc:
   # API 명세·Swagger UI 를 무인증 공개하지 않는다. 끄면 엔드포인트 자체가 등록되지 않는다.
   api-docs:

@@ -33,6 +33,7 @@
 | 8 | [phase-08-board-media-report.md](phase-08-board-media-report.md) — 게시판 CRUD(커서 페이징) · R2 presigned 업로드(백엔드 미경유) · 완료 콜백 HEAD 크기·형식 검증 · 신고 접수 · 사용자 차단(양방향) | ✅ 완료 — CI 통과 (PR #29) |
 | 9 | [phase-09-notification-batch.md](phase-09-notification-batch.md) — FCM 푸시(디바이스 토큰·알림 on/off·리마인더 시점) · 트리거(새 일정·승인·정산·취소, AFTER_COMMIT 이벤트) · 리마인더·참석 독촉 배치(멱등) · 미디어 만료·고아 PENDING 정리 배치(R2 삭제 실패 재시도) | ✅ 완료 — CI 통과 (PR #30) |
 | 10 | [phase-10-plan.md](phase-10-plan.md) — 밴드 FREE/PREMIUM 요금제 · 미디어 보관기한을 현재 플랜에 연결(FREE 30일 / PREMIUM 무제한) · 티어 변경 시 기존 미디어 만료일 재계산(업그레이드=NULL, 다운그레이드=30일 유예) · `PaymentGateway` 인터페이스 + no-op 구현체 · 동시 전환 `SELECT … FOR UPDATE` 직렬화 | ✅ 완료 — CI 통과 (PR #33) |
+| 11 | [phase-11-deploy.md](phase-11-deploy.md) — 배포: 운영 Docker Compose(포트 비공개·Redis 비밀번호·prod 프로파일) · Nginx 리버스 프록시 + Let's Encrypt 자동 갱신 · GitHub Actions 배포(CI 통과 시 GHCR → SSH) · DB 일 1회 백업(자체 검증 → R2 → 7개 보관) · 복구 스크립트(훈련 모드) · X-Forwarded-For 위조 차단 | ✅ 완료 — 백업·복구 로컬 실증(빈 DB 복구 성공). 실제 VM 배포는 서버 확보 후 |
 
 ### 클라이언트 (Flutter, `client/`)
 
