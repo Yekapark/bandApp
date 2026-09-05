@@ -23,6 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MediaUploadIntegrationTest extends BoardApiSupport {
 
     private static final long ONE_MB = 1024 * 1024;
+    /** {@code IntegrationTestSupport} 가 테스트용으로 낮춰 둔 값과 맞춘다. */
+    private static final int MEDIA_UPLOAD_LIMIT_PER_MIN = 10;
 
     @Autowired
     private FakeStorageClient storage;
@@ -207,8 +209,13 @@ class MediaUploadIntegrationTest extends BoardApiSupport {
         String leader = signup("md-rl-l@band.app", "리더");
         long bandId = createBand(leader, "잔나비둘");
 
+        // 상한의 2배 + 2회를 던진다. RedisRateLimiter 는 epochSecond/60 기준 고정 윈도우라
+        // 루프 도중 분이 바뀌면 카운터가 리셋된다 — 12회면 3+9 처럼 갈려 어느 쪽도 상한(10)을
+        // 못 넘고 429 가 한 번도 안 날 수 있다(CI 에서 실제로 그렇게 실패했다).
+        // N > 2*limit 이면 어떻게 갈려도 한쪽이 ceil(N/2) = 11 > 10 이라 429 가 보장된다.
+        int attempts = 2 * MEDIA_UPLOAD_LIMIT_PER_MIN + 2;
         int limitHits = 0;
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < attempts; i++) {
             long postId = createPost(leader, bandId, "글 " + i, "본문");
             ResponseEntity<String> res = issueUploadUrl(leader, bandId, postId, "image/jpeg", ONE_MB);
             if (res.getStatusCode().value() == 429) {
