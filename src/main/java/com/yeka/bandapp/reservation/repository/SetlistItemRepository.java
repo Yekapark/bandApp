@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
 
 public interface SetlistItemRepository extends JpaRepository<SetlistItem, Long> {
 
@@ -22,4 +23,10 @@ public interface SetlistItemRepository extends JpaRepository<SetlistItem, Long> 
     /** 새 곡의 순서 번호(마지막 + 1) 계산용. 항목이 없으면 0. */
     @Query("select coalesce(max(s.orderNo), 0) from SetlistItem s where s.reservationId = :reservationId")
     int maxOrderNo(@Param("reservationId") long reservationId);
+
+    /** 밴드 삭제 정리 — 그 밴드 일정의 셋리스트를 모두 지운다. */
+    @Modifying
+    @Query("delete from SetlistItem i where i.reservationId in "
+            + "(select r.id from Reservation r where r.bandId = :bandId)")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

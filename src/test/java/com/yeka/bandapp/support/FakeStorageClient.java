@@ -26,16 +26,20 @@ public class FakeStorageClient implements StorageClient {
     private final List<String> presignedPutKeys = new ArrayList<>();
     private final List<String> presignedGetKeys = new ArrayList<>();
     private final List<String> deletedKeys = new ArrayList<>();
+    private final List<String> deletedPrefixes = new ArrayList<>();
     private boolean failNextHead = false;
     private boolean failNextDelete = false;
+    private boolean failNextDeleteByPrefix = false;
 
     public void reset() {
         objects.clear();
         presignedPutKeys.clear();
         presignedGetKeys.clear();
         deletedKeys.clear();
+        deletedPrefixes.clear();
         failNextHead = false;
         failNextDelete = false;
+        failNextDeleteByPrefix = false;
     }
 
     /** 업로드 성공 시뮬레이션. */
@@ -60,8 +64,18 @@ public class FakeStorageClient implements StorageClient {
         return presignedPutKeys.get(presignedPutKeys.size() - 1);
     }
 
+    /** 다음 {@link #deleteByPrefix} 호출이 저장소 통신 실패로 터지게 한다(밴드 삭제의 중단 검증용). */
+    public void failNextDeleteByPrefix() {
+        this.failNextDeleteByPrefix = true;
+    }
+
     public List<String> deletedKeys() {
         return List.copyOf(deletedKeys);
+    }
+
+    /** {@link #deleteByPrefix} 로 지운 접두사 목록. */
+    public List<String> deletedPrefixes() {
+        return List.copyOf(deletedPrefixes);
     }
 
     public boolean objectExists(String storageKey) {
@@ -97,5 +111,18 @@ public class FakeStorageClient implements StorageClient {
         }
         objects.remove(storageKey);
         deletedKeys.add(storageKey);
+    }
+
+    @Override
+    public int deleteByPrefix(String keyPrefix) {
+        if (failNextDeleteByPrefix) {
+            failNextDeleteByPrefix = false;
+            throw new BusinessException(ErrorCode.MEDIA_STORAGE_ERROR);
+        }
+        deletedPrefixes.add(keyPrefix);
+        List<String> hit = objects.keySet().stream().filter(k -> k.startsWith(keyPrefix)).toList();
+        hit.forEach(objects::remove);
+        deletedKeys.addAll(hit);
+        return hit.size();
     }
 }

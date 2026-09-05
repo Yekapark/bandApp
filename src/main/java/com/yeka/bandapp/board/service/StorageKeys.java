@@ -13,6 +13,16 @@ public final class StorageKeys {
     }
 
     public static String newMediaKey(long bandId, long postId) {
-        return "bands/%d/posts/%d/%s".formatted(bandId, postId, UUID.randomUUID());
+        return bandPrefix(bandId) + "posts/%d/%s".formatted(postId, UUID.randomUUID());
+    }
+
+    /**
+     * 한 밴드의 모든 객체가 놓이는 접두사. 밴드 삭제가 이 접두사로 한 번에 지운다
+     * ({@code StorageClient#deleteByPrefix}).
+     *
+     * <p>끝의 {@code /} 가 중요하다 — 없으면 {@code bands/1} 이 {@code bands/12} 까지 잡는다.
+     */
+    public static String bandPrefix(long bandId) {
+        return "bands/%d/".formatted(bandId);
     }
 }

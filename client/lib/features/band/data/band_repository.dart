@@ -123,4 +123,17 @@ class BandRepository {
       throw ApiException.fromDio(e);
     }
   }
+
+  /// 밴드 삭제. 밴드장만이고 **되돌릴 수 없다** — 일정·정산·게시글·사진/영상까지 전부 지워진다.
+  /// [confirmName] 이 실제 밴드 이름과 다르면 400 BAND_NAME_MISMATCH.
+  ///
+  /// 확인 본문이 필요해서 DELETE 가 아니라 POST 다(본문 있는 DELETE 는 지원이 고르지 않다).
+  Future<void> deleteBand(int bandId, String confirmName) async {
+    try {
+      await _dio.post<dynamic>('/bands/$bandId/delete',
+          data: {'confirmName': confirmName});
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
 }

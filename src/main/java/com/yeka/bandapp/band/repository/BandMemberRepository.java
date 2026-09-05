@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface BandMemberRepository extends JpaRepository<BandMember, Long> {
 
@@ -21,4 +24,9 @@ public interface BandMemberRepository extends JpaRepository<BandMember, Long> {
     long countByBandIdAndRoleAndLeftAtIsNull(Long bandId, BandMemberRole role);
 
     long countByBandIdAndLeftAtIsNull(Long bandId);
+
+    /** 밴드 삭제 정리 — 나간 멤버의 과거 행까지 전부 지운다. */
+    @Modifying
+    @Query("delete from BandMember m where m.bandId = :bandId")
+    int deleteByBandId(@Param("bandId") long bandId);
 }

@@ -32,6 +32,7 @@ public enum ErrorCode {
 
     // 밴드 / 멤버 (Phase 2)
     BAND_NOT_FOUND(HttpStatus.NOT_FOUND, "밴드를 찾을 수 없습니다."),
+    BAND_NAME_MISMATCH(HttpStatus.BAD_REQUEST, "밴드 이름이 일치하지 않습니다."),
     NOT_BAND_MEMBER(HttpStatus.FORBIDDEN, "밴드 멤버가 아닙니다."),
     NOT_BAND_LEADER(HttpStatus.FORBIDDEN, "밴드장만 할 수 있는 작업입니다."),
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 밴드 멤버를 찾을 수 없습니다."),

@@ -2,7 +2,8 @@
 
 > 살아있는 문서. 끝난 항목은 지우고, 새로 생긴 건 여기에 적는다.
 > 오늘까지의 작업 내용은 [2026-09-05-brand-notifications-settlement-video.md](2026-09-05-brand-notifications-settlement-video.md)
-> 와 [2026-09-05-plan-lifecycle-and-media-fix.md](2026-09-05-plan-lifecycle-and-media-fix.md).
+> , [2026-09-05-plan-lifecycle-and-media-fix.md](2026-09-05-plan-lifecycle-and-media-fix.md),
+> [2026-09-05-band-delete.md](2026-09-05-band-delete.md).
 > 마지막 갱신: **2026-09-05**
 
 ---
@@ -65,6 +66,7 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
       `V12` 에서 200MB 로 올렸으니 이제 실제로 확인이 된다)
 - [ ] 사진 첨부 — 고화질 사진을 올린 뒤 저장 크기가 1MB 아래인지(긴 변 2048px 로 축소한다)
 - [ ] 요금제 쿠폰 — 쿠폰을 SQL 로 넣고 앱에서 입력 → PREMIUM 전환·기간 가산
+- [ ] 밴드 삭제 — 사진·영상·일정·정산이 있는 테스트 밴드를 지우고 R2 버킷과 각 테이블이 비는지
 - [ ] 게시글 영상 재생 — 전체화면, 탭 play/pause, 진행바 스크러빙
 - [ ] 합주실 등록 폼 지도 — 검색 후보가 핀으로 뜨고 고른 좌표가 저장되는지
 
