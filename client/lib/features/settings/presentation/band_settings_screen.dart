@@ -176,9 +176,7 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '밴드를 삭제하면 되돌릴 수 없습니다.
-
-'
+              '밴드를 삭제하면 되돌릴 수 없습니다.\n\n'
               '합주 일정, 정산 내역, 게시글과 첨부한 사진·영상, 합주실 정보, '
               '셋리스트가 모두 영구 삭제됩니다.',
               style: TextStyle(
