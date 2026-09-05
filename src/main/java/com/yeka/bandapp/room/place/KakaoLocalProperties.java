@@ -1,4 +1,4 @@
-package com.yeka.bandapp.room.naver;
+package com.yeka.bandapp.room.place;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

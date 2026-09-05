@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -111,19 +110,26 @@ class BoardRepository {
   }
 
   /// 첨부 업로드: URL 발급 → R2 직접 PUT → 완료 콜백. 성공 시 READY 첨부를 돌려준다.
+  /// 첨부 업로드 — presigned URL 발급 → R2 에 직접 PUT → 완료 통보.
+  ///
+  /// 파일을 [data] 스트림으로 받아 흘려보낸다. 바이트 배열로 받으면 영상 한 편이 통째로
+  /// 메모리에 올라가 중저가 기기에서 앱이 죽는다. 호출자는 `file.openRead()` 를 넘긴다.
+  ///
+  /// [sizeBytes] 는 정확해야 한다 — 서버가 완료 처리에서 실제 업로드된 크기와 대조한다.
   Future<PostMedia> uploadMedia({
     required int bandId,
     required int postId,
     required String contentType,
-    required Uint8List bytes,
+    required int sizeBytes,
+    required Stream<List<int>> data,
   }) async {
     final ticket = await _issueUploadUrl(
       bandId: bandId,
       postId: postId,
       contentType: contentType,
-      sizeBytes: bytes.length,
+      sizeBytes: sizeBytes,
     );
-    await _putToStorage(ticket, bytes, contentType);
+    await _putToStorage(ticket, data, sizeBytes, contentType);
     return _completeMedia(
         bandId: bandId, postId: postId, mediaId: ticket.mediaId);
   }
@@ -150,17 +156,19 @@ class BoardRepository {
 
   Future<void> _putToStorage(
     UploadTicket ticket,
-    Uint8List bytes,
+    Stream<List<int>> data,
+    int sizeBytes,
     String contentType,
   ) async {
     try {
       final res = await _plain.put<dynamic>(
         ticket.uploadUrl,
-        data: Stream.fromIterable([bytes]),
+        data: data,
         options: Options(
           headers: {
             ...ticket.requiredHeaders,
-            Headers.contentLengthHeader: bytes.length,
+            // 스트림 업로드라 dio 가 길이를 알 수 없다 — 직접 알려줘야 R2 가 받는다.
+            Headers.contentLengthHeader: sizeBytes,
           },
           contentType: contentType,
         ),

@@ -6,7 +6,6 @@ import '../../../../core/format/formatters.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../routing/app_router.dart';
-import '../../../../shared/widgets/soon.dart';
 import '../../../band/data/band_models.dart';
 import '../../../reservation/data/reservation_models.dart';
 
@@ -216,7 +215,7 @@ class _MiniPill extends StatelessWidget {
   }
 }
 
-/// 2칸 요약 그리드. 정산 합계 집계 API 가 아직 없어 좌측 카드는 안내 문구.
+/// 2칸 요약 그리드. 좌측 정산 카드는 밴드 전체 합계 API 가 없어 값 대신 정산 탭으로 보낸다.
 class SummaryRow extends StatelessWidget {
   const SummaryRow({super.key, required this.upcomingCount});
   final int? upcomingCount;
@@ -229,8 +228,8 @@ class SummaryRow extends StatelessWidget {
           child: _SummaryCard(
             title: '이번 달 정산',
             value: '—',
-            hint: '일정 상세에서 확인',
-            onTap: () => showSoon(context, '정산'),
+            hint: '정산 탭에서 확인',
+            onTap: () => context.go(Routes.settlements),
           ),
         ),
         const SizedBox(width: 10),

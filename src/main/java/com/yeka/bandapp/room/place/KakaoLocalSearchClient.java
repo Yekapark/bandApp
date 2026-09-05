@@ -1,4 +1,4 @@
-package com.yeka.bandapp.room.naver;
+package com.yeka.bandapp.room.place;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
@@ -18,7 +18,7 @@ import java.util.List;
  * <p>동기 HTTP는 {@code spring-web}에 이미 포함된 {@link RestClient}로 한다(의존성 추가 없음).
  * 카카오 장애가 폼 입력을 붙잡지 않도록 connect/read 타임아웃을 짧게 명시한다.
  *
- * <p>{@link NaverGeocodingClient}와 같은 방침으로 <b>어떤 실패도 예외로 올리지 않는다</b>. 키 미설정·
+ * <p>{@link KakaoGeocodingClient}와 같은 방침으로 <b>어떤 실패도 예외로 올리지 않는다</b>. 키 미설정·
  * 통신 실패·결과 0건을 모두 빈 리스트 + 로그로 처리한다.
  */
 @Component

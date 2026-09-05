@@ -30,7 +30,7 @@ class RoomRepository {
     }
   }
 
-  /// 네이버 지역검색으로 합주실 이름·주소 후보를 최대 5건. 서버에 검색 키가 없으면 빈 목록.
+  /// 카카오 로컬 검색으로 합주실 이름·주소 후보를 최대 5건(좌표 포함). 서버에 검색 키가 없으면 빈 목록.
   Future<List<PlaceSuggestion>> searchPlaces({
     required int bandId,
     required String query,
@@ -51,12 +51,16 @@ class RoomRepository {
     }
   }
 
+  /// [lat]/[lng] 를 주면(검색에서 고른 후보의 좌표) 서버가 지오코딩 없이 그대로 저장한다.
+  /// 직접 입력한 주소처럼 좌표가 없으면 서버가 주소로 지오코딩한다.
   Future<Room> create({
     required int bandId,
     required String name,
     String? address,
     String? phone,
     String? memo,
+    double? lat,
+    double? lng,
   }) async {
     try {
       final res = await _dio.post<dynamic>(
@@ -66,6 +70,7 @@ class RoomRepository {
           if (address != null && address.isNotEmpty) 'address': address,
           if (phone != null && phone.isNotEmpty) 'phone': phone,
           if (memo != null && memo.isNotEmpty) 'memo': memo,
+          if (lat != null && lng != null) ...{'lat': lat, 'lng': lng},
         },
       );
       return unwrap(res, (d) => Room.fromJson(d! as Map<String, dynamic>));
@@ -74,7 +79,10 @@ class RoomRepository {
     }
   }
 
-  /// 합주실 수정 (PUT 전체 교체). 주소가 실제로 바뀐 경우에만 서버가 좌표를 다시 계산한다.
+  /// 합주실 수정 (PUT 전체 교체).
+  ///
+  /// [lat]/[lng] 를 주면 주소 변경 여부와 무관하게 그 좌표로 덮어쓴다 — 좌표 없이 저장됐던 방을
+  /// 검색으로 다시 골라 채울 수 있다. 안 주면 주소가 실제로 바뀐 경우에만 서버가 다시 계산한다.
   Future<Room> update({
     required int bandId,
     required int roomId,
@@ -82,6 +90,8 @@ class RoomRepository {
     String? address,
     String? phone,
     String? memo,
+    double? lat,
+    double? lng,
   }) async {
     try {
       final res = await _dio.put<dynamic>(
@@ -91,6 +101,7 @@ class RoomRepository {
           if (address != null && address.isNotEmpty) 'address': address,
           if (phone != null && phone.isNotEmpty) 'phone': phone,
           if (memo != null && memo.isNotEmpty) 'memo': memo,
+          if (lat != null && lng != null) ...{'lat': lat, 'lng': lng},
         },
       );
       return unwrap(res, (d) => Room.fromJson(d! as Map<String, dynamic>));

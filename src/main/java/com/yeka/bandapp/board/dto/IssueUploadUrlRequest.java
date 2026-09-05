@@ -14,7 +14,7 @@ public record IssueUploadUrlRequest(
                 example = "image/jpeg")
         @NotBlank String contentType,
 
-        @Schema(description = "파일 크기(바이트). 이미지 최대 10MB, 영상 최대 50MB.", example = "3145728")
+        @Schema(description = "파일 크기(바이트). 이미지 최대 10MB, 영상 최대 200MB.", example = "3145728")
         @NotNull @Positive Long sizeBytes
 ) {
 }

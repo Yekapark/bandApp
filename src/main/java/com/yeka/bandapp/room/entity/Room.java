@@ -1,7 +1,7 @@
 package com.yeka.bandapp.room.entity;
 
 import com.yeka.bandapp.common.entity.BaseTimeEntity;
-import com.yeka.bandapp.room.naver.Coordinates;
+import com.yeka.bandapp.room.place.Coordinates;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;

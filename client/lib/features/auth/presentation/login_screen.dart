@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../shared/widgets/brand_mark.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../routing/app_router.dart';
@@ -109,10 +110,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 children: [
                   Row(
                     children: [
-                      _LogoMark(),
+                      const BrandMark(size: 34),
                       const SizedBox(width: 10),
+                      // 워드마크는 Bebas Neue(라틴 전용)라 한글 글리프가 없다 — 영문 표기를 쓴다.
                       Text(
-                        'STAGE ON',
+                        AppConfig.appNameEn,
                         style: AppTypography.display(
                             fontSize: 23, letterSpacing: 3.5),
                       ),
@@ -213,33 +215,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 }
 
-class _LogoMark extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(11),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, Color(0xFFC8391F)],
-        ),
-      ),
-      child: Center(
-        child: Container(
-          width: 11,
-          height: 11,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFF120806), width: 3),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _SocialButton extends StatelessWidget {
   const _SocialButton({

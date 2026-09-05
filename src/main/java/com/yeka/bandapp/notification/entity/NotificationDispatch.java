@@ -19,6 +19,10 @@ import lombok.NoArgsConstructor;
  *
  * <p>{@code variant}는 같은 {@code (user, type, target)} 안에서 발송을 구분한다 — 리마인더는 offset(분),
  * 그 외 트리거는 0. 불변 기록이라 상태 전이 메서드가 없다.
+ *
+ * <p>{@code bandId}/{@code title}/{@code body}는 앱의 <b>알림 목록</b>을 위해 나중에 더한 것이라
+ * {@code null}일 수 있다(V11 이전에 쌓인 행). 목록 조회는 문구가 있는 행만 대상으로 한다.
+ * 읽음 여부는 여기 두지 않는다 — 클라이언트가 기기에 "마지막 확인 시각"을 저장한다.
  */
 @Entity
 @Table(name = "notification_dispatches")
@@ -42,6 +46,17 @@ public class NotificationDispatch extends BaseTimeEntity {
 
     @Column(nullable = false)
     private int variant;
+
+    /** 알림이 속한 밴드. 목록을 밴드 단위로 거르는 데 쓴다. 옛 행은 {@code null}. */
+    @Column(name = "band_id")
+    private Long bandId;
+
+    /** 보낸 그대로의 문구. 옛 행은 {@code null}. */
+    @Column(length = 100)
+    private String title;
+
+    @Column(length = 500)
+    private String body;
 
     private NotificationDispatch(long userId, NotificationType type, long targetId, int variant) {
         this.userId = userId;

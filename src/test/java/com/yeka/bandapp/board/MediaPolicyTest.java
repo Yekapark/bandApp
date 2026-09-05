@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * {@link MediaPolicy} 순수 단위 테스트 — Docker 불필요.
- * 형식 화이트리스트, 이미지 10MB / 영상 50MB 경계, 위조(크기·형식) 판정.
+ * 형식 화이트리스트, 이미지 10MB / 영상 200MB 경계, 위조(크기·형식) 판정.
  * (보관기한 계산은 요금제 도메인으로 옮겨졌다 — {@code MediaRetentionTest} 참조.)
  */
 class MediaPolicyTest {

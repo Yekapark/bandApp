@@ -89,7 +89,7 @@ public enum ErrorCode {
     POST_CURSOR_INVALID(HttpStatus.BAD_REQUEST, "목록 커서 형식이 올바르지 않습니다."),
     MEDIA_NOT_FOUND(HttpStatus.NOT_FOUND, "첨부 파일을 찾을 수 없습니다."),
     MEDIA_TYPE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "지원하지 않는 파일 형식입니다."),
-    MEDIA_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "파일 크기 상한을 넘었습니다. (이미지 10MB, 영상 50MB)"),
+    MEDIA_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "파일 크기 상한을 넘었습니다. (이미지 10MB, 영상 200MB)"),
     MEDIA_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "한 게시글에 첨부할 수 있는 파일 수를 넘었습니다."),
     MEDIA_NOT_PENDING(HttpStatus.CONFLICT, "이미 업로드가 완료되었거나 취소된 첨부입니다."),
     MEDIA_NOT_UPLOADED(HttpStatus.CONFLICT, "업로드된 파일이 없습니다. 업로드를 마친 뒤 다시 시도해 주세요."),

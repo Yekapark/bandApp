@@ -1,4 +1,4 @@
-package com.yeka.bandapp.room.naver;
+package com.yeka.bandapp.room.place;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;

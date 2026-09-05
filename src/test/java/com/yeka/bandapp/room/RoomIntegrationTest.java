@@ -2,7 +2,7 @@ package com.yeka.bandapp.room;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yeka.bandapp.room.entity.Room;
-import com.yeka.bandapp.room.naver.PlaceSuggestion;
+import com.yeka.bandapp.room.place.PlaceSuggestion;
 import com.yeka.bandapp.room.repository.RoomRepository;
 import com.yeka.bandapp.support.FakeGeocodingClient;
 import com.yeka.bandapp.support.FakePlaceSearchClient;
@@ -90,6 +90,75 @@ class RoomIntegrationTest extends RoomApiSupport {
         assertThat(res.getStatusCode().value()).isEqualTo(201);
         assertThat(data(res).get("lat").isNull()).isTrue();
         assertThat(geocoding.callCount()).isZero();
+    }
+
+    /**
+     * 검색에서 고른 좌표를 실어 보내면 그대로 저장하고 지오코딩을 부르지 않는다 —
+     * 등록 폼 지도에서 확인한 위치와 저장되는 위치가 어긋나면 안 된다.
+     */
+    @Test
+    void request_coordinates_are_saved_without_geocoding() {
+        String leader = signup("room-coord1@band.app", "리더");
+        long bandId = createBand(leader, "장미여관");
+        geocoding.willReturn(37.5665, 126.9780); // 불려서는 안 되는 값
+
+        ResponseEntity<String> res = post("/api/v1/bands/" + bandId + "/rooms",
+                "{\"name\":\"그루브 합주실\",\"address\":\"서울 마포구 와우산로 1\","
+                        + "\"lat\":37.5559,\"lng\":126.9236}", leader);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(201);
+        JsonNode room = data(res);
+        assertThat(room.get("lat").asDouble()).isEqualTo(37.5559);
+        assertThat(room.get("lng").asDouble()).isEqualTo(126.9236);
+        assertThat(geocoding.callCount()).isZero();
+    }
+
+    /** 위도만·경도만 온 반쪽 좌표는 지도에 찍을 수 없으므로 무시하고 주소로 지오코딩한다. */
+    @Test
+    void half_coordinates_fall_back_to_geocoding() {
+        String leader = signup("room-coord2@band.app", "리더");
+        long bandId = createBand(leader, "브로콜리너마저");
+        geocoding.willReturn(37.1, 127.1);
+
+        ResponseEntity<String> res = post("/api/v1/bands/" + bandId + "/rooms",
+                "{\"name\":\"반쪽방\",\"address\":\"서울 어딘가\",\"lat\":37.5559}", leader);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(201);
+        assertThat(data(res).get("lat").asDouble()).isEqualTo(37.1);
+        assertThat(geocoding.callCount()).isEqualTo(1);
+    }
+
+    /** 좌표는 신뢰 경계를 넘어오는 값이다 — 한국 범위를 벗어나면 등록을 거부한다. */
+    @Test
+    void out_of_range_coordinates_are_rejected() {
+        String leader = signup("room-coord3@band.app", "리더");
+        long bandId = createBand(leader, "십센치");
+
+        ResponseEntity<String> res = post("/api/v1/bands/" + bandId + "/rooms",
+                "{\"name\":\"이상한방\",\"address\":\"어딘가\",\"lat\":99.0,\"lng\":126.9}", leader);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(400);
+    }
+
+    /**
+     * 좌표 없이 저장됐던 옛 합주실을, 주소를 그대로 둔 채 검색으로 다시 골라 채울 수 있어야 한다.
+     * (주소가 안 바뀌었어도 요청 좌표가 오면 그것을 쓴다.)
+     */
+    @Test
+    void update_with_coordinates_backfills_room_without_changing_address() {
+        String leader = signup("room-coord4@band.app", "리더");
+        long bandId = createBand(leader, "쏜애플");
+        geocoding.willReturnNothing();
+        long roomId = createRoom(leader, bandId, roomBody("좌표없던방", "서울 마포구 와우산로 1"));
+        assertThat(geocoding.callCount()).isEqualTo(1);
+
+        ResponseEntity<String> res = put("/api/v1/bands/" + bandId + "/rooms/" + roomId,
+                "{\"name\":\"좌표없던방\",\"address\":\"서울 마포구 와우산로 1\","
+                        + "\"lat\":37.5559,\"lng\":126.9236}", leader);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
+        assertThat(data(res).get("lat").asDouble()).isEqualTo(37.5559);
+        assertThat(geocoding.callCount()).isEqualTo(1); // 재호출 없음
     }
 
     /** 완료 기준 ② — 다른 밴드 멤버는 목록을 볼 수 없다. */

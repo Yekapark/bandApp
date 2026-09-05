@@ -151,7 +151,7 @@ a{color:#FF6A2B}a:hover{color:#FF8B5C}
 <div onClick="{{ goStart }}" style="font-size:13px;color:rgba(242,240,236,.5);margin-bottom:18px;cursor:pointer">← 밴드 가입</div>
 <div style="display:flex;align-items:center;gap:10px">
 <div style="width:26px;height:26px;border-radius:7px;background:#FF6A2B"></div>
-<div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:.14em;line-height:1">STAGE ON</div>
+<div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:.14em;line-height:1">BANDULE</div>
 </div>
 <div style="margin-top:38px;font-size:26px;font-weight:900;line-height:1.35;letter-spacing:-.02em">밴드장이 준<br>초대코드를 입력해줘</div>
 <div style="margin-top:10px;font-size:13.5px;color:rgba(242,240,236,.5);line-height:1.6">코드 6자리를 넣으면 밴드에 바로 합류돼.<br>합주 일정과 정산이 자동으로 공유돼.</div>
@@ -1113,7 +1113,7 @@ a{color:#FF6A2B}a:hover{color:#FF8B5C}
 <sc-if value="{{ isPremium }}" hint-placeholder-val="{{ true }}">
 <div style="flex:1;overflow:auto;padding:64px 20px 18px;background:radial-gradient(85% 45% at 50% 0%,#241636 0%,#0B0B0E 60%)">
 <div onClick="{{ goHome }}" style="font-size:13px;color:rgba(242,240,236,.5);cursor:pointer">← 프리미엄</div>
-<div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.2em;color:#C8AAFF;margin-top:14px">STAGE ON PRO</div>
+<div style="font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:.2em;color:#C8AAFF;margin-top:14px">BANDULE PRO</div>
 <div style="font-size:25px;font-weight:900;line-height:1.35;letter-spacing:-.02em;margin-top:6px">정기 합주하는 밴드에<br>맞춘 플랜</div>
 
 <div style="margin-top:18px;padding:20px;border-radius:18px;background:#15151B;border:1px solid rgba(160,107,255,.35)">
@@ -1256,7 +1256,7 @@ a{color:#FF6A2B}a:hover{color:#FF8B5C}
 </div>
 
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;appName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;STAGE ON&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;bandName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;새벽 네시&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showApproval&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;동작&quot;},&quot;calendarMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;month&quot;,&quot;week&quot;],&quot;default&quot;:&quot;month&quot;,&quot;tsType&quot;:&quot;'month'|'week'&quot;,&quot;section&quot;:&quot;동작&quot;},&quot;feedLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;feed&quot;,&quot;grid&quot;],&quot;default&quot;:&quot;feed&quot;,&quot;tsType&quot;:&quot;'feed'|'grid'&quot;,&quot;section&quot;:&quot;동작&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;appName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;BANDULE&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;bandName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;새벽 네시&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showApproval&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;동작&quot;},&quot;calendarMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;month&quot;,&quot;week&quot;],&quot;default&quot;:&quot;month&quot;,&quot;tsType&quot;:&quot;'month'|'week'&quot;,&quot;section&quot;:&quot;동작&quot;},&quot;feedLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;feed&quot;,&quot;grid&quot;],&quot;default&quot;:&quot;feed&quot;,&quot;tsType&quot;:&quot;'feed'|'grid'&quot;,&quot;section&quot;:&quot;동작&quot;}}">
 const ORANGE = '#FF6A2B', PURPLE = '#A06BFF', DIM = 'rgba(242,240,236,.45)';
 const MEMBERS = [
   { name: '지훈', part: '보컬', initial: '지', tint: ORANGE, leader: true },
@@ -1406,7 +1406,7 @@ class Component extends DCLogic {
       showApproval,
       isJoin: st.screen === 'join', isHome: st.screen === 'home', isCal: st.screen === 'cal',
       isMap: st.screen === 'map', isDetail: st.screen === 'detail', isSplit: st.screen === 'split', isBoard: st.screen === 'board',
-      appName: p.appName ?? 'STAGE ON',
+      appName: p.appName ?? 'BANDULE',
       isSplash: st.screen === 'splash', isLogin: st.screen === 'login', isStart: st.screen === 'start', isCreate: st.screen === 'create',
       goLogin: () => this.go('login'), goStart: () => this.go('start'), goJoin: () => this.go('join'), goCreate: () => this.go('create'),
       providers: PROVIDERS.map(([k, label, bg, fg]) => ({

@@ -14,8 +14,35 @@ class NotificationRepository {
 
   final Dio _dio;
 
+  static const _feed = '/notifications';
   static const _settings = '/notifications/settings';
   static const _deviceTokens = '/notifications/device-tokens';
+
+  /// 받은 알림 목록(최신순). [cursor] 는 직전 페이지의 nextCursor.
+  ///
+  /// 알림 목록 기능 이전에 발송된 알림은 서버에 문구가 남아 있지 않아 빠진다.
+  Future<NotificationPage> feed({
+    required int bandId,
+    int? cursor,
+    int size = 20,
+  }) async {
+    try {
+      final res = await _dio.get<dynamic>(
+        _feed,
+        queryParameters: {
+          'bandId': bandId,
+          'size': size,
+          if (cursor != null) 'cursor': cursor,
+        },
+      );
+      return unwrap(
+        res,
+        (d) => NotificationPage.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
 
   /// FCM 디바이스 토큰 등록/갱신 (upsert). [platform]: IOS | ANDROID | WEB.
   Future<void> registerDeviceToken({

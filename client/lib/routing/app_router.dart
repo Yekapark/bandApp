@@ -15,6 +15,7 @@ import '../features/board/presentation/board_screen.dart';
 import '../features/board/presentation/post_compose_screen.dart';
 import '../features/board/presentation/post_detail_screen.dart';
 import '../features/home/presentation/home_screen.dart';
+import '../features/notification/presentation/notification_list_screen.dart';
 import '../features/notification/presentation/notification_settings_screen.dart';
 import '../features/plan/presentation/plan_screen.dart';
 import '../features/recurring/presentation/recurring_detail_screen.dart';
@@ -31,6 +32,7 @@ import '../features/reservation/presentation/map_screen.dart';
 import '../features/reservation/presentation/reservation_detail_screen.dart';
 import '../features/reservation/presentation/reservation_form_screen.dart';
 import '../features/reservation/presentation/room_form_screen.dart';
+import '../features/settlement/presentation/band_settlements_screen.dart';
 import '../features/settlement/presentation/settlement_screen.dart';
 import 'tab_shell.dart';
 
@@ -47,12 +49,14 @@ class Routes {
   static const calendar = '/cal';
   static const map = '/map';
   static const board = '/board';
+  static const settlements = '/settlements';
   static const newPost = '/board/new';
   static const newReservation = '/cal/new';
   static const newRoom = '/cal/rooms/new';
 
   /// 합주실 수정 (extra 로 Room 전달).
   static String editRoom(int roomId) => '/cal/rooms/$roomId/edit';
+  static const notifications = '/notifications';
   static const notificationSettings = '/settings/notifications';
 
   /// 게시글 상세.
@@ -160,6 +164,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                   path: Routes.board, builder: (_, __) => const BoardScreen()),
             ],
           ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                  path: Routes.settlements,
+                  builder: (_, __) => const BandSettlementsScreen()),
+            ],
+          ),
         ],
       ),
       GoRoute(
@@ -205,6 +216,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/cal/rooms/:roomId/edit',
         builder: (_, state) => RoomFormScreen(existing: state.extra as Room?),
+      ),
+      GoRoute(
+        path: Routes.notifications,
+        builder: (_, __) => const NotificationListScreen(),
       ),
       GoRoute(
         path: Routes.notificationSettings,

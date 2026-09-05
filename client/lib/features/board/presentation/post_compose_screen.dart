@@ -1,6 +1,11 @@
+import 'package:flutter/foundation.dart' show Uint8List;
+import 'dart:async' show unawaited;
+
+import 'package:flutter/foundation.dart' show Uint8List, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_compress/video_compress.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
@@ -18,11 +23,13 @@ const _allowedTypes = {
   'video/quicktime',
 };
 const _imageMaxBytes = 10 * 1024 * 1024;
-const _videoMaxBytes = 50 * 1024 * 1024;
+const _videoMaxBytes = 200 * 1024 * 1024;
 
 /// 게시글 작성/수정. [postId] 가 없으면 새 글, 있으면 수정.
 ///
-/// 새 글은 본문 등록 직후 같은 화면에서 첨부를 이어서 올릴 수 있도록 수정 모드로 전환된다.
+/// 첨부는 글에 매달리는 구조라 글이 없으면 올릴 수 없다. 그래서 새 글에서는 고른 파일을
+/// [_pending] 에 모아 뒀다가 **등록 버튼을 누를 때 글 생성 → 첨부 업로드**를 이어서 한다.
+/// 사용자 입장에서는 쓰면서 사진을 고르고 한 번에 올리는 것으로 보인다.
 class PostComposeScreen extends ConsumerStatefulWidget {
   const PostComposeScreen({super.key, this.postId});
 
@@ -43,7 +50,17 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   bool _dirty = false;
   List<PostMedia> _media = const [];
 
+  /// 아직 서버에 올리지 않은 첨부(새 글에서 고른 것). 글이 생긴 뒤 순서대로 올라간다.
+  List<_PendingMedia> _pending = const [];
+
+  /// 영상 압축 진행률(0~100). 압축 중이 아니면 null. 6분짜리는 30초 넘게 걸려서
+  /// 스피너만 돌리면 멈춘 줄 안다.
+  double? _compressPct;
+
   bool get _isEdit => _postId != null;
+
+  /// 올라간 것 + 올릴 것. 10개 상한은 이 합계로 센다.
+  int get _attachmentCount => _media.length + _pending.length;
 
   @override
   void initState() {
@@ -146,25 +163,28 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 20),
-            if (_isEdit) ...[
-              const Text(
-                '첨부',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                '이미지 최대 10MB · 영상 최대 50MB · 글당 10개',
-                style: TextStyle(fontSize: 11, color: AppColors.textFaint),
-              ),
-              const SizedBox(height: 10),
-              _MediaStrip(
-                media: _media,
-                busy: _busy,
-                onAdd: () => _pickAndUpload(bandId),
-                onRemove: (m) => _removeMedia(bandId, m),
-              ),
-              const SizedBox(height: 24),
-            ],
+            const Text(
+              '첨부',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _isEdit
+                  ? '이미지 최대 10MB · 영상 최대 200MB · 글당 10개'
+                  : '이미지 최대 10MB · 영상 최대 200MB · 글당 10개 · 등록할 때 함께 올라가요',
+              style: const TextStyle(fontSize: 11, color: AppColors.textFaint),
+            ),
+            const SizedBox(height: 10),
+            _MediaStrip(
+              media: _media,
+              pending: _pending,
+              busy: _busy,
+              compressPct: _compressPct,
+              onAdd: () => _addAttachment(bandId),
+              onRemove: (m) => _removeMedia(bandId, m),
+              onRemovePending: _removePending,
+            ),
+            const SizedBox(height: 24),
             if (widget.postId != null)
               PrimaryButton(
                 label: '저장',
@@ -216,6 +236,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     return ok ?? false;
   }
 
+  /// 등록 버튼. 글을 만든 뒤, 쓰면서 골라 둔 첨부를 순서대로 올린다.
+  ///
+  /// 첨부가 하나라도 실패하면 화면을 닫지 않고 실패분만 대기 목록에 남긴다 — 글은 이미
+  /// 저장됐으므로 사용자는 남은 것만 다시 시도하면 된다.
   Future<void> _createThenAttach(int bandId) async {
     setState(() => _busy = true);
     try {
@@ -224,20 +248,59 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             title: _title.text.trim(),
             content: _content.text.trim(),
           );
-      ref.read(boardFeedProvider(bandId).notifier).refresh();
       if (!mounted) return;
       setState(() {
         _postId = detail.id;
         _media = detail.media;
         _dirty = false;
       });
-      _toast('등록됐어요. 사진·영상을 추가할 수 있어요.');
+
+      final failed = <_PendingMedia>[];
+      for (final item in _pending) {
+        final ok = await _uploadOne(bandId, detail.id, item);
+        if (!ok) failed.add(item);
+        if (!mounted) return;
+      }
+      setState(() => _pending = failed);
+
+      ref.read(boardFeedProvider(bandId).notifier).refresh();
+      // 압축본은 앱 캐시에 쌓인다 — 다 올렸으면 치운다.
+      unawaited(VideoCompress.deleteAllCache());
+      if (!mounted) return;
+
+      if (failed.isEmpty) {
+        Navigator.of(context).pop(true);
+      } else {
+        _toast('글은 등록됐어요. 첨부 ${failed.length}개는 올리지 못했어요 — 다시 시도해 주세요.');
+      }
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
       _toast('게시글을 등록하지 못했습니다.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 첨부 한 건 업로드. 성공하면 true. 실패는 토스트로 알리고 호출자가 대기 목록에 남긴다.
+  Future<bool> _uploadOne(int bandId, int postId, _PendingMedia item) async {
+    try {
+      // 파일을 통째로 메모리에 올리지 않고 스트림으로 흘려보낸다 — 영상은 수백 MB 가 된다.
+      final media = await ref.read(boardRepositoryProvider).uploadMedia(
+            bandId: bandId,
+            postId: postId,
+            contentType: item.contentType,
+            sizeBytes: await item.file.length(),
+            data: item.file.openRead(),
+          );
+      if (mounted) setState(() => _media = [..._media, media]);
+      return true;
+    } on ApiException catch (e) {
+      _toast(e.message);
+      return false;
+    } catch (_) {
+      _toast('첨부를 올리지 못했습니다.');
+      return false;
     }
   }
 
@@ -267,8 +330,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     }
   }
 
-  Future<void> _pickAndUpload(int bandId) async {
-    if (_media.length >= 10) {
+  /// 첨부 고르기. 글이 이미 있으면 바로 올리고, 새 글이면 대기 목록에 담아 둔다
+  /// (등록 버튼을 누를 때 [_createThenAttach] 가 이어서 올린다).
+  Future<void> _addAttachment(int bandId) async {
+    if (_attachmentCount >= 10) {
       _toast('첨부는 글당 10개까지예요.');
       return;
     }
@@ -306,36 +371,75 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       return;
     }
 
-    final bytes = await file.readAsBytes();
+    // 영상은 압축한 뒤에 재야 한다 — 폰 기본 촬영은 6분이면 700MB 를 넘지만 압축하면 들어온다.
+    final item = _PendingMedia(
+        await _compressIfVideo(file, contentType), contentType);
+
+    // 길이만 확인한다 — 상한 검사하려고 파일을 통째로 메모리에 올릴 이유가 없다.
     final limit =
         contentType.startsWith('video/') ? _videoMaxBytes : _imageMaxBytes;
-    if (bytes.length > limit) {
+    if (await item.file.length() > limit) {
       _toast(contentType.startsWith('video/')
-          ? '영상은 최대 50MB까지예요.'
+          ? '영상이 너무 길어요. 압축해도 200MB를 넘습니다.'
           : '이미지는 최대 10MB까지예요.');
+      return;
+    }
+
+    // 새 글: 아직 글이 없어 매달 곳이 없다. 등록할 때 함께 올린다.
+    if (!_isEdit) {
+      if (!mounted) return;
+      setState(() {
+        _pending = [..._pending, item];
+        _dirty = true;
+      });
       return;
     }
 
     setState(() => _busy = true);
     try {
-      final media = await ref.read(boardRepositoryProvider).uploadMedia(
-            bandId: bandId,
-            postId: _postId!,
-            contentType: contentType,
-            bytes: bytes,
-          );
-      if (mounted) setState(() => _media = [..._media, media]);
-      ref.invalidate(
-        postDetailProvider((bandId: bandId, postId: _postId!)),
-      );
-      ref.read(boardFeedProvider(bandId).notifier).refresh();
-    } on ApiException catch (e) {
-      _toast(e.message);
-    } catch (_) {
-      _toast('첨부를 올리지 못했습니다.');
+      if (await _uploadOne(bandId, _postId!, item)) {
+        ref.invalidate(
+          postDetailProvider((bandId: bandId, postId: _postId!)),
+        );
+        ref.read(boardFeedProvider(bandId).notifier).refresh();
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 영상이면 720p 로 압축해 돌려준다. 이미지·웹이거나 실패하면 원본 그대로.
+  ///
+  /// 폰 기본 촬영(1080p 17Mbps)은 6분이면 700MB 가 넘어 상한(200MB)에 들어가지 않는다.
+  /// 720p 로 줄이면 6분이 대략 90MB 다. 합주 영상은 소리가 본체라 이 정도면 충분하다.
+  ///
+  /// 압축은 30초 넘게 걸릴 수 있어 진행률을 보여준다. 실패하면 원본으로 진행하고,
+  /// 상한을 넘으면 호출한 쪽의 크기 검사에서 걸린다.
+  Future<XFile> _compressIfVideo(XFile file, String contentType) async {
+    if (kIsWeb || !contentType.startsWith('video/')) return file;
+
+    final sub = VideoCompress.compressProgress$.subscribe((p) {
+      if (mounted) setState(() => _compressPct = p);
+    });
+    setState(() => _compressPct = 0);
+    try {
+      final info = await VideoCompress.compressVideo(
+        file.path,
+        quality: VideoQuality.Res1280x720Quality,
+      );
+      final path = info?.path;
+      return path == null ? file : XFile(path);
+    } catch (_) {
+      return file;
+    } finally {
+      sub.unsubscribe();
+      if (mounted) setState(() => _compressPct = null);
+    }
+  }
+
+  /// 아직 안 올라간 첨부 빼기 — 서버에 아무것도 없으니 목록에서만 지운다.
+  void _removePending(_PendingMedia item) {
+    setState(() => _pending = _pending.where((x) => x != item).toList());
   }
 
   Future<void> _removeMedia(int bandId, PostMedia m) async {
@@ -370,6 +474,19 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   }
 }
 
+/// 아직 서버에 올리지 않은 첨부.
+///
+/// 바이트를 들고 있지 않고 [XFile] 참조만 둔다 — 큰 영상을 10개까지 메모리에 쥐고 있을
+/// 이유가 없다. 실제 읽기는 업로드 직전에 한 번만 한다.
+class _PendingMedia {
+  const _PendingMedia(this.file, this.contentType);
+
+  final XFile file;
+  final String contentType;
+
+  bool get isVideo => contentType.startsWith('video/');
+}
+
 String? _resolveContentType(XFile file, String kind) {
   final mt = file.mimeType?.toLowerCase();
   if (mt != null && _allowedTypes.contains(mt)) return mt;
@@ -386,15 +503,25 @@ String? _resolveContentType(XFile file, String kind) {
 class _MediaStrip extends StatelessWidget {
   const _MediaStrip({
     required this.media,
+    required this.pending,
     required this.busy,
+    required this.compressPct,
     required this.onAdd,
     required this.onRemove,
+    required this.onRemovePending,
   });
 
   final List<PostMedia> media;
+
+  /// 아직 안 올라간 것들. 올라간 첨부 뒤에 흐리게 붙는다.
+  final List<_PendingMedia> pending;
   final bool busy;
+
+  /// 영상 압축 진행률(0~100). 압축 중이 아니면 null.
+  final double? compressPct;
   final VoidCallback onAdd;
   final void Function(PostMedia) onRemove;
+  final void Function(_PendingMedia) onRemovePending;
 
   @override
   Widget build(BuildContext context) {
@@ -408,8 +535,16 @@ class _MediaStrip extends StatelessWidget {
               padding: const EdgeInsets.only(right: 8),
               child: _MediaThumb(media: m, onRemove: () => onRemove(m)),
             ),
+          for (final p in pending)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _PendingThumb(
+                item: p,
+                onRemove: () => onRemovePending(p),
+              ),
+            ),
           GestureDetector(
-            onTap: busy ? null : onAdd,
+            onTap: (busy || compressPct != null) ? null : onAdd,
             child: Container(
               width: 92,
               height: 92,
@@ -418,21 +553,120 @@ class _MediaStrip extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.borderStrong),
               ),
-              child: busy
-                  ? const Center(
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+              child: compressPct != null
+                  // 압축은 30초 넘게 걸릴 수 있어 진행률을 보여준다.
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              value: compressPct! / 100,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '압축 ${compressPct!.round()}%',
+                            style: const TextStyle(
+                                fontSize: 9.5, color: AppColors.textFaint),
+                          ),
+                        ],
                       ),
                     )
-                  : const Icon(Icons.add, color: AppColors.textSecondary),
+                  : busy
+                      ? const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : const Icon(Icons.add, color: AppColors.textSecondary),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+/// 대기 중인 첨부 미리보기. 아직 서버에 없으므로 "등록 시 올라감"을 알 수 있게 표시한다.
+class _PendingThumb extends StatelessWidget {
+  const _PendingThumb({required this.item, required this.onRemove});
+
+  final _PendingMedia item;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: 92,
+            height: 92,
+            // dart:io 의 File 을 쓰면 웹 빌드가 깨진다. XFile 로 바이트를 읽어
+            // Image.memory 로 그린다. cacheWidth 로 썸네일 크기까지만 디코드한다.
+            child: item.isVideo
+                ? _icon(Icons.movie_outlined)
+                : FutureBuilder<Uint8List>(
+                    future: item.file.readAsBytes(),
+                    builder: (_, snap) => snap.hasData
+                        ? Image.memory(
+                            snap.data!,
+                            fit: BoxFit.cover,
+                            cacheWidth: 184,
+                            errorBuilder: (_, __, ___) =>
+                                _icon(Icons.image_outlined),
+                          )
+                        : _icon(Icons.image_outlined),
+                  ),
+          ),
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.bottomCenter,
+              padding: const EdgeInsets.only(bottom: 6),
+              child: const Text(
+                '등록 시 업로드',
+                style: TextStyle(fontSize: 9.5, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 2,
+          right: 2,
+          child: GestureDetector(
+            onTap: onRemove,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.black54,
+                shape: BoxShape.circle,
+              ),
+              padding: const EdgeInsets.all(3),
+              child: const Icon(Icons.close, size: 14, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _icon(IconData icon) => Container(
+        color: AppColors.surfaceAlt,
+        alignment: Alignment.center,
+        child: Icon(icon, color: AppColors.textFaint),
+      );
 }
 
 class _MediaThumb extends StatelessWidget {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/widgets/brand_mark.dart';
 import '../../../core/theme/app_typography.dart';
 import '../application/auth_controller.dart';
 
@@ -44,45 +45,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 82,
-                height: 82,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.primary, Color(0xFFC8391F)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.28),
-                      blurRadius: 48,
-                      offset: const Offset(0, 18),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border:
-                          Border.all(color: const Color(0xFF120806), width: 6),
-                    ),
-                  ),
-                ),
-              ),
+              const BrandMark(size: 82),
               const SizedBox(height: 20),
+              // 워드마크는 Bebas Neue(라틴 전용)라 한글 글리프가 없다 — 영문 표기를 쓴다.
               Text(
-                AppConfig.appName,
+                AppConfig.appNameEn,
                 style: AppTypography.display(fontSize: 31, letterSpacing: 5),
               ),
               const SizedBox(height: 7),
-              const Text(
-                '앱 이름 미정 · 임시 워크네임',
-                style: TextStyle(fontSize: 11, color: AppColors.textFaint),
+              Text(
+                AppConfig.appName,
+                style: const TextStyle(fontSize: 11, color: AppColors.textFaint),
               ),
               const SizedBox(height: 26),
               const SizedBox(

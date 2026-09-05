@@ -1,4 +1,4 @@
-package com.yeka.bandapp.room.naver;
+package com.yeka.bandapp.room.place;
 
 /**
  * WGS84 좌표.

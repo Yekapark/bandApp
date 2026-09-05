@@ -1,4 +1,4 @@
-package com.yeka.bandapp.room.naver;
+package com.yeka.bandapp.room.place;
 
 /**
  * 장소 검색 결과 한 건. 합주실 등록 폼에서 "이 장소로 채우기"에 쓰인다.

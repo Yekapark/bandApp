@@ -70,10 +70,12 @@ public class NotificationSender {
             return 0;
         }
 
+        Long bandId = bandIdOf(message);
         List<Long> fresh = new ArrayList<>();
         for (Long userId : recipients) {
             try {
-                if (dispatchRecorder.recordIfAbsent(type, targetId, variant, userId)) {
+                if (dispatchRecorder.recordIfAbsent(type, targetId, variant, userId,
+                        bandId, message.title(), message.body())) {
                     fresh.add(userId);
                 }
             } catch (RuntimeException e) {
@@ -87,6 +89,22 @@ public class NotificationSender {
 
         pushToDevices(type, targetId, fresh, message);
         return fresh.size();
+    }
+
+    /**
+     * 알림이 속한 밴드. {@code NotificationMessages}가 data 페이로드에 항상 넣어 주지만,
+     * 없거나 숫자가 아니면 목록에서 빠질 뿐이므로 조용히 {@code null}로 둔다.
+     */
+    private static Long bandIdOf(PushMessage message) {
+        String raw = message.data().get("bandId");
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(raw);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** 보관기한이 지난 발송 이력 정리(리마인더 배치가 실행 끝에 호출). */
