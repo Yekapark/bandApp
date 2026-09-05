@@ -3,8 +3,8 @@
 > 살아있는 문서. 끝난 항목은 지우고, 새로 생긴 건 여기에 적는다.
 > 오늘까지의 작업 내용은 [2026-09-05-brand-notifications-settlement-video.md](2026-09-05-brand-notifications-settlement-video.md)
 > , [2026-09-05-plan-lifecycle-and-media-fix.md](2026-09-05-plan-lifecycle-and-media-fix.md),
-> [2026-09-05-band-delete.md](2026-09-05-band-delete.md).
-> 마지막 갱신: **2026-09-05**
+> [2026-09-05-band-delete.md](2026-09-05-band-delete.md), [phase-11-deploy.md](phase-11-deploy.md).
+> 마지막 갱신: **2026-09-06**
 
 ---
 
@@ -12,11 +12,10 @@
 
 | | |
 |---|---|
-| PR | 스택 3개가 올라가 있다(전부 CI 통과). **아래 순서대로 머지한다** — 앞의 것이 머지되면 뒤의 base 가 `main` 으로 자동 정리된다 |
-| ① | [#39](https://github.com/Yekapark/bandApp/pull/39) `feat/kakao-map-in-room-form` → `main` — 카카오 지도·브랜딩·알림 목록·정산 탭·영상 업로드 |
-| ② | [#40](https://github.com/Yekapark/bandApp/pull/40) `feat/plan-lifecycle` → ① — 요금제 만료·1년 구독·쿠폰 + 영상 첨부 버그 수정 |
-| ③ | [#41](https://github.com/Yekapark/bandApp/pull/41) `feat/band-delete` → ② — 밴드 삭제 |
-| 백엔드 | 마이그레이션이 `V13` 까지 늘었다(V12 쿠폰, V13 영상 200MB). **`docker compose up -d --build app` 으로 다시 띄워야** 반영된다 |
+| 백엔드 | **Phase 0~11 전부 완료.** PR 스택(#39~#41)은 머지 순서가 엇갈려 ②③이 `main` 에 안 들어갔었고, [#42](https://github.com/Yekapark/bandApp/pull/42) 로 바로잡았다 |
+| 진행 중 | `phase-11-deploy` — 운영 compose·Nginx·Let's Encrypt·GitHub Actions 배포·DB 백업/복구. 배포 방법은 [docs/DEPLOY.md](../DEPLOY.md) |
+| 마이그레이션 | `V13` 까지. **`docker compose up -d --build app` 으로 다시 띄워야** 반영된다 |
+| 남은 것 | 실제 VM 확보 후 배포 1회 · 아래 §1(미검증 항목)·§2-A(출시 전 필수) |
 | 실기기 | 갤럭시 S24(`R3CX40J7QJE`) USB 테더링 + `adb reverse tcp:8080` |
 
 실행:

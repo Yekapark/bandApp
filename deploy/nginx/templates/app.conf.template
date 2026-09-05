@@ -1,0 +1,49 @@
+# ${DOMAIN} 리버스 프록시. nginx 공식 이미지가 기동 때 이 템플릿의 ${DOMAIN} 을 치환해
+# /etc/nginx/conf.d/app.conf 로 쓴다(NGINX_ENVSUBST_FILTER 로 DOMAIN 만 치환 대상).
+
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    # Let's Encrypt 갱신용 챌린지. 이 경로만 평문으로 열어 둔다.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    # 파일은 클라이언트가 presigned URL 로 R2 에 직접 올린다. 백엔드로 오는 본문은 JSON 뿐이라
+    # 상한을 낮게 잡아 둔다 — 큰 본문이 이 서버로 들어오면 그건 사고다.
+    client_max_body_size 2m;
+
+    # 모니터링(UptimeRobot)용으로 health 만 열고 나머지 actuator 는 밖에서 막는다.
+    location = /actuator/health {
+        proxy_pass http://app:8080;
+        include /etc/nginx/proxy-headers.conf;
+    }
+    location /actuator/ {
+        return 404;
+    }
+
+    location / {
+        proxy_pass http://app:8080;
+        include /etc/nginx/proxy-headers.conf;
+    }
+}

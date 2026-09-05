@@ -108,7 +108,8 @@ Phase 2(밴드·초대·멤버, PR #16) 머지 후 리뷰에서 나온 항목. `
 
 **보안 — 배포 전 처리**
 
-- **`X-Forwarded-For` 무조건 신뢰.** `common/web/ClientIp`가 XFF 첫 홉을 그대로 클라이언트 IP로
+- ~~**`X-Forwarded-For` 무조건 신뢰.**~~ **완료 (2026-09-06, Phase 11)** — §1.11 참조.
+  (원문) `common/web/ClientIp`가 XFF 첫 홉을 그대로 클라이언트 IP로
   쓴다. 그 결과 (1) 초대 참여 레이트리밋과 (2) §1.8에서 넣은 인증 브루트포스 레이트리밋이
   둘 다 XFF 위조로 우회 가능하고, 피해자 IP를 XFF에 넣어 그 사람의 IP 버킷을 고갈시켜
   참여를 막는 것도 가능하다. 프록시 없는 환경(로컬)에서는 완전 우회. 조치: 신뢰 프록시 IP에서
@@ -209,7 +210,14 @@ Phase 9 완료 기준도 충족. 아래는 잔여 항목(전부 중/하 등급).
 
 **보안 — 배포 전 처리**
 
-- **[중] `X-Forwarded-For` 무조건 신뢰 (§1.9 재확인, 아직 미조치).** `common/web/ClientIp`가
+- ~~**[중] `X-Forwarded-For` 무조건 신뢰.**~~ **완료 (2026-09-06, Phase 11)** — 세 겹으로 닫았다:
+  (1) Nginx 가 XFF 를 이어붙이지 않고 실제 피어 주소로 **덮어쓴다**(`deploy/nginx/proxy-headers.conf`),
+  (2) `application-prod.yml` 에 `server.forward-headers-strategy: NATIVE` — 톰캣 RemoteIpValve 가
+  신뢰 프록시(내부 대역)에서 온 XFF 만 해석해 `getRemoteAddr()` 를 실제 클라이언트 IP 로 바꾼다,
+  (3) `ClientIp` 가 헤더를 직접 읽지 않고 소켓 주소만 본다 — 이 함수를 쓰는 로그인·초대참여·
+  업로드·신고 경로가 한 번에 안전해진다. 운영 compose 는 8080/5432/6379 를 호스트에 게시하지
+  않고 Redis 에 `requirepass` 를 건다. 상세: `docs/progress/phase-11-deploy.md` §3.2.
+  (원문) `common/web/ClientIp`가
   XFF 첫 홉을 검증 없이 클라이언트 IP로 쓴다. 로그인·회원가입(이메일 열거)·초대코드 대입·
   지오코딩/미디어 업로드/신고 스팸 등 **모든 레이트리밋의 키**가 이 값이다. 그런데
   `server.forward-headers-strategy`/신뢰 프록시 설정이 없고, `docker-compose.yml`이 `8080:8080`

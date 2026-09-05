@@ -18,6 +18,11 @@ Thumbs.db
 
 # Env / secrets
 .env
+.env.prod
+secrets/
+
+# DB 덤프 (deploy/backup/pg-backup.sh)
+backups/
 *firebase-adminsdk*.json
 
 # Logs
