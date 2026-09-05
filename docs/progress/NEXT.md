@@ -11,9 +11,11 @@
 
 | | |
 |---|---|
-| 브랜치 | `feat/kakao-map-in-room-form` — `main` 대비 커밋 20개, 워킹트리 깨끗 |
-| PR | **아직 안 올렸다.** 브랜치가 길어졌으니 정리해서 올릴지 결정 필요 |
-| 백엔드 | 최신 코드로 재빌드해 둠(V11 마이그레이션·정산 목록 API 포함). `docker compose ps` 로 healthy 확인 |
+| PR | 스택 3개가 올라가 있다(전부 CI 통과). **아래 순서대로 머지한다** — 앞의 것이 머지되면 뒤의 base 가 `main` 으로 자동 정리된다 |
+| ① | [#39](https://github.com/Yekapark/bandApp/pull/39) `feat/kakao-map-in-room-form` → `main` — 카카오 지도·브랜딩·알림 목록·정산 탭·영상 업로드 |
+| ② | [#40](https://github.com/Yekapark/bandApp/pull/40) `feat/plan-lifecycle` → ① — 요금제 만료·1년 구독·쿠폰 + 영상 첨부 버그 수정 |
+| ③ | [#41](https://github.com/Yekapark/bandApp/pull/41) `feat/band-delete` → ② — 밴드 삭제 |
+| 백엔드 | 마이그레이션이 `V13` 까지 늘었다(V12 쿠폰, V13 영상 200MB). **`docker compose up -d --build app` 으로 다시 띄워야** 반영된다 |
 | 실기기 | 갤럭시 S24(`R3CX40J7QJE`) USB 테더링 + `adb reverse tcp:8080` |
 
 실행:
