@@ -260,15 +260,22 @@ sh deploy/backup/pg-restore.sh backups/bandapp-<타임스탬프>.dump
 
 ## 6. 운영 중 자주 쓰는 것
 
-```bash
-cd /opt/bandapp
-C="docker compose -f docker-compose.prod.yml --env-file .env.prod"
+서버에 `bandule` 명령을 깔아 두면 compose 옵션을 매번 치지 않아도 된다.
 
-$C ps                       # 상태
-$C logs -f --tail 200 app   # 앱 로그
-$C exec -T postgres psql -U bandapp -d bandapp    # DB 접속
-$C restart app
+```bash
+cp /opt/bandapp/deploy/bandule /usr/local/bin/bandule && chmod +x /usr/local/bin/bandule
 ```
+
+```
+bandule ps        컨테이너 상태          bandule health   살아있는지(안/밖)
+bandule logs      앱 로그 실시간          bandule version  돌고 있는 버전
+bandule nginx     접속 로그 실시간        bandule restart  앱만 재시작
+bandule errors    에러만 추려 보기        bandule backup   지금 백업
+bandule db        DB 접속                bandule disk     디스크 여유
+```
+
+원래 명령이 궁금하면 `cat /usr/local/bin/bandule` — 전부 `docker compose -f
+docker-compose.prod.yml --env-file .env.prod ...` 를 감싼 것뿐이다.
 
 **모니터링** — UptimeRobot 으로 `https://<도메인>/actuator/health` 를 5분 간격 감시.
 Nginx 는 `/actuator/health` 만 통과시키고 나머지 `/actuator/*` 는 404 로 막는다.
