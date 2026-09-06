@@ -19,6 +19,8 @@
     --no-upload     빌드까지만 (업로드 전에 APK 를 확인하고 싶을 때)
     --group NAME    보낼 테스터 그룹 (기본 밴듈테스트)
     --api-url URL   서버 주소 (기본 https://api.bandule.com)
+    --abi 이름      올릴 CPU 종류 (기본 arm64-v8a). 32비트 폰을 쓰는 테스터가
+                    "설치되지 않음" 이라고 하면 `--abi armeabi-v7a` 로 한 번 더 올린다
 """
 
 import argparse
@@ -33,9 +35,12 @@ CLIENT = Path(__file__).resolve().parent.parent
 PUBSPEC = CLIENT / "pubspec.yaml"
 DART_DEFINES = CLIENT / "dart_defines.json"
 GOOGLE_SERVICES = CLIENT / "android/app/google-services.json"
-APK = CLIENT / "build/app/outputs/flutter-apk/app-release.apk"
+APK_DIR = CLIENT / "build/app/outputs/flutter-apk"
 
 DEFAULT_API = "https://api.bandule.com"
+# 64비트 ARM. 2015년 이후 안드로이드 폰은 사실상 전부 여기 해당한다.
+# 32비트 기기(armeabi-v7a)를 쓰는 테스터가 나오면 `--abi armeabi-v7a` 로 한 번 더 올린다.
+DEFAULT_ABI = "arm64-v8a"
 DEFAULT_GROUP = "밴듈테스트"
 
 
@@ -94,6 +99,7 @@ def main():
     parser.add_argument("release_notes", help="테스터가 App Tester 에서 볼 설명. 뭘 봐줬으면 하는지 적는다")
     parser.add_argument("--group", default=DEFAULT_GROUP)
     parser.add_argument("--api-url", default=DEFAULT_API)
+    parser.add_argument("--abi", default=DEFAULT_ABI)
     parser.add_argument("--no-upload", action="store_true")
     args = parser.parse_args()
 
@@ -103,26 +109,34 @@ def main():
     name, build = bump_build_number()
     print(f"== 버전 {name}+{build}")
 
+    # `--split-per-abi` — 하나로 합치면 CPU 4종류용 기계어를 다 실어 99MB 가 된다.
+    # 테스터는 새 빌드마다 그걸 통째로 받는다(안드로이드는 부분 업데이트가 없다).
+    # 쪼개면 30MB 대다.
     run(
         [
-            "flutter", "build", "apk", "--release",
+            "flutter", "build", "apk", "--release", "--split-per-abi",
             f"--dart-define-from-file={DART_DEFINES.name}",
             f"--dart-define=API_BASE_URL={args.api_url}",
+            # 앱 안에서 "새 버전 있어요" 를 띄우게 한다. 이 스위치가 없으면 그 코드가
+            # 아예 안 돈다 — 스토어 빌드가 스토어 밖에서 앱을 받는 일이 없도록.
+            "--dart-define=TESTER_BUILD=true",
         ],
         "릴리스 APK 빌드",
     )
 
-    if not APK.exists():
-        fail(f"APK 가 만들어지지 않았다: {APK}")
-    size_mb = APK.stat().st_size / 1024 / 1024
-    print(f"   {APK.name}  {size_mb:.0f}MB")
+    apk = APK_DIR / f"app-{args.abi}-release.apk"
+    if not apk.exists():
+        made = sorted(p.name for p in APK_DIR.glob("app-*-release.apk"))
+        fail(f"{apk.name} 이 없다. 만들어진 것: {', '.join(made) or '없음'}")
+    size_mb = apk.stat().st_size / 1024 / 1024
+    print(f"   {apk.name}  {size_mb:.0f}MB")
 
     # 서버 주소가 실제로 박혔는지 본다. 릴리스는 Dart 가 기계어로 컴파일돼
     # `aapt dump strings` 로는 안 보이므로 libapp.so 를 직접 확인한다.
     import zipfile
 
-    with zipfile.ZipFile(APK) as apk:
-        native = apk.read("lib/arm64-v8a/libapp.so")
+    with zipfile.ZipFile(apk) as zf:
+        native = zf.read(f"lib/{args.abi}/libapp.so")
     host = args.api_url.split("//")[-1].encode()
     if host not in native:
         fail(f"APK 안에 서버 주소({args.api_url})가 없다 — --dart-define 이 안 먹었다")
@@ -134,7 +148,7 @@ def main():
 
     run(
         [
-            "firebase", "appdistribution:distribute", str(APK),
+            "firebase", "appdistribution:distribute", str(apk),
             "--app", firebase_app_id(),
             "--groups", args.group,
             "--release-notes", args.release_notes,

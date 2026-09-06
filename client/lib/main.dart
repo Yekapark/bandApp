@@ -9,6 +9,7 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'app.dart';
 import 'core/config/app_config.dart';
 import 'core/config/native_abi.dart';
+import 'core/update/tester_update.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +38,9 @@ Future<void> main() async {
   //
   // try/catch 는 그 다음 방어선이다. 인증 실패(콘솔 키 해시 미등록 등)처럼 Dart 로 올라오는
   // 실패는 여기서 삼키고, 지도 화면·등록 폼은 AppConfig.mapEnabled 로 안내 문구 폴백한다.
-  if (!kIsWeb && kakaoMapAbiSupported && AppConfig.kakaoNativeAppKey.isNotEmpty) {
+  if (!kIsWeb &&
+      kakaoMapAbiSupported &&
+      AppConfig.kakaoNativeAppKey.isNotEmpty) {
     try {
       await KakaoMapSdk.instance.initialize(AppConfig.kakaoNativeAppKey);
     } catch (e) {
@@ -46,4 +49,7 @@ Future<void> main() async {
     }
   }
   runApp(const ProviderScope(child: BandApp()));
+  // 앱이 뜬 뒤에 물어본다 — 여기서 기다리면 새 버전 확인하느라 첫 화면이 늦어진다.
+  // 테스터 빌드가 아니면 즉시 돌아온다.
+  unawaited(promptIfNewTesterBuild());
 }
