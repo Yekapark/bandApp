@@ -11,7 +11,11 @@ case "${1:-help}" in
   errors)     $C logs --tail 2000 app | grep -iE "error|exception|warn" | tail -40 ;;
   health)     echo "서버 안:  $(curl -s localhost:8080/actuator/health 2>/dev/null || echo 응답없음)"
               echo "바깥에서: $(curl -s https://api.bandule.com/actuator/health 2>/dev/null || echo 응답없음)" ;;
-  restart)    $C restart app && echo "앱 재시작함" ;;
+  # `docker compose restart` 가 아니라 `up -d` 다. restart 는 컨테이너만 다시 띄울 뿐
+  # **.env.prod 를 다시 읽지 않는다** — 설정을 고쳐 올리고 restart 하면 아무것도 안 바뀐다
+  # (실제로 DEEPLINK_SCHEME 을 고치고 restart 했는데 옛 값 그대로였다). up -d 는 설정이
+  # 바뀌었으면 컨테이너를 새로 만들고, 안 바뀌었으면 그대로 둔다.
+  restart)    $C up -d app && echo "앱 재시작함 (설정 반영)" ;;
   backup)     sh deploy/backup/pg-backup.sh ;;
   backups)    ls -lh backups/ 2>/dev/null || echo "아직 없다" ;;
   db)         $C exec postgres psql -U "$(sed -n 's/^DB_USERNAME=//p' .env.prod | tr -d '[:space:]')" \

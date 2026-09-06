@@ -31,14 +31,14 @@ class _TermsScreenState extends State<TermsScreen> {
     'age': false,
     'tos': false,
     'privacy': false,
-    'marketing': false,
   };
 
   static const _rows = [
     ('age', '만 14세 이상이에요', true),
     ('tos', '이용약관 동의', true),
     ('privacy', '개인정보 수집·이용 동의', true),
-    ('marketing', '공연·이벤트 소식 받기', false),
+    // 마케팅 수신 동의를 뺐다 - 보낼 마케팅이 없다. 받아 놓고 안 쓰면 동의만 남는 셈이고,
+    // 개인정보처리방침에도 "마케팅 이메일을 보낸다" 고 써야 해서 사실과 어긋난다.
   ];
 
   bool get _requiredDone =>
