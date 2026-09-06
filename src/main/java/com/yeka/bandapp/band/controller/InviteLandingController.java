@@ -110,7 +110,7 @@ public class InviteLandingController {
                   <h1>밴드 초대</h1>
                   <p>초대 코드</p>
                   <div class="code">%CODE%</div>
-                  <p>앱에서 초대를 여는 중…</p>
+                  <p id="status">앱에서 초대를 여는 중…</p>
                   <a class="btn" id="ios" href="%IOS_STORE%">App Store에서 앱 받기</a>
                   <a class="btn" id="android" href="%ANDROID_STORE%">Google Play에서 앱 받기</a>
                   <p class="hint">앱이 열리지 않으면 위 버튼으로 설치한 뒤 코드를 입력하세요.</p>
@@ -122,15 +122,27 @@ public class InviteLandingController {
                       var isAndroid = /Android/.test(ua);
                       if (isIOS) { var a = document.getElementById("android"); if (a) a.hidden = true; }
                       if (isAndroid) { var i = document.getElementById("ios"); if (i) i.hidden = true; }
-                      var start = Date.now();
-                      // 앱이 설치돼 있으면 커스텀 스킴이 앱을 연다. 안 열리면 아래 타이머가 스토어로 보낸다.
+                      // 앱이 설치돼 있으면 커스텀 스킴이 앱을 연다.
+                      //
+                      // **스토어로 자동 전송하지 않는다.** 예전에는 1.2초 뒤 스토어로 보냈는데,
+                      // 앱이 열렸는지를 경과 시간으로 짐작하는 방식이라 맞지 않았다. 앱이 정상으로
+                      // 열린 뒤에도 뒤에 남은 이 페이지가 스토어로 이동했고, 아직 게시 전이라
+                      // "항목을 찾을 수 없습니다" 가 떴다(실기기에서 그대로 나왔다).
+                      //
+                      // 앱이 없는 사람에게는 이 페이지의 설치 버튼이 이미 보인다. 굳이 자동으로
+                      // 보낼 이유가 없다 - 틀렸을 때의 손해가 맞았을 때의 이득보다 크다.
                       window.location.href = "%SCHEME%://invite/" + code;
-                      setTimeout(function () {
-                        if (Date.now() - start < 2000) {
-                          if (isAndroid) window.location.href = "%ANDROID_STORE%";
-                          else if (isIOS) window.location.href = "%IOS_STORE%";
-                        }
-                      }, 1200);
+
+                      // 앱이 열리면 이 페이지는 화면 뒤로 간다. 그때 "여는 중" 문구를 거둔다 -
+                      // 나중에 브라우저로 돌아왔을 때 계속 여는 중인 것처럼 보이면 안 된다.
+                      function opened() {
+                        var s = document.getElementById("status");
+                        if (s) s.textContent = "앱에서 계속 진행해 주세요.";
+                      }
+                      document.addEventListener("visibilitychange", function () {
+                        if (document.hidden) opened();
+                      });
+                      window.addEventListener("pagehide", opened);
                     })();
                   </script>
                 </body>

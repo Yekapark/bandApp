@@ -32,6 +32,19 @@ class InviteDeepLinkIntegrationTest extends ApiIntegrationTest {
         assertThat(res.getBody()).contains("play.google.com");
     }
 
+    /**
+     * 스토어로 <b>자동 전송하지 않는다.</b>
+     *
+     * <p>예전에는 1.2초 뒤 스토어로 보냈다. 앱이 열렸는지를 경과 시간으로 짐작하는 방식이라
+     * 맞지 않았고, 앱이 정상으로 열린 뒤에도 뒤에 남은 페이지가 스토어로 이동해
+     * "항목을 찾을 수 없습니다"(게시 전이라)가 떴다. 설치 버튼은 페이지에 이미 있으므로
+     * 자동 이동은 이득보다 손해가 크다.
+     */
+    @Test
+    void landing_page_does_not_auto_redirect_to_the_store() {
+        assertThat(get("/invite/ABCD2345").getBody()).doesNotContain("setTimeout");
+    }
+
     @Test
     void malformed_code_in_landing_path_is_404() {
         assertThat(get("/invite/not-a-code").getStatusCode().value()).isEqualTo(404);
