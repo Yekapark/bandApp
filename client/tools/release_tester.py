@@ -16,7 +16,8 @@
 셋 다 조용히 실패해서 테스터가 알려주기 전엔 모른다. 그래서 한 명령으로 묶었다.
 
 옵션:
-    --no-upload     빌드까지만 (업로드 전에 APK 를 확인하고 싶을 때)
+    --no-upload     빌드까지만. **빌드 번호는 되돌린다** — 나가지 않은 빌드가
+                    번호를 먹지 않게. 커밋할 것이 남지 않는다
     --group NAME    보낼 테스터 그룹 (기본 밴듈테스트)
     --api-url URL   서버 주소 (기본 https://api.bandule.com)
     --abi 이름      올릴 CPU 종류 (기본 arm64-v8a). 32비트 폰을 쓰는 테스터가
@@ -54,7 +55,12 @@ def fail(message):
 
 
 def bump_build_number():
-    """`version: 0.1.0+7` 의 뒤 숫자를 하나 올리고, 올린 뒤 값을 돌려준다."""
+    """`version: 0.1.0+7` 의 뒤 숫자를 하나 올리고, (이름, 번호, 원래 파일 내용)을 돌려준다.
+
+    원래 내용을 함께 돌려주는 이유 — `--no-upload` 는 검증용이라 **번호를 되돌린다.**
+    안 그러면 테스터에게 나가지도 않은 번호가 계속 타 없어지고, 커밋할 이유가 애매한
+    변경이 작업 폴더에 남는다. 실제로 그러다 브랜치 사이에서 충돌이 났다.
+    """
     text = PUBSPEC.read_text(encoding="utf-8")
     match = re.search(r"^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$", text, re.M)
     if not match:
@@ -65,7 +71,7 @@ def bump_build_number():
         encoding="utf-8",
         newline="\n",
     )
-    return name, build
+    return name, build, text
 
 
 def firebase_app_id():
@@ -110,7 +116,7 @@ def main():
     if not DART_DEFINES.exists():
         fail(f"{DART_DEFINES.name} 이 없다 — 카카오 앱 키가 들어가지 않아 로그인이 막힌다")
 
-    name, build = bump_build_number()
+    name, build, original_pubspec = bump_build_number()
     print(f"== 버전 {name}+{build}")
     started = time.time()
 
@@ -161,7 +167,9 @@ def main():
     print(f"   서버 주소 확인: {args.api_url}")
 
     if args.no_upload:
-        print("\n== --no-upload 라 여기서 멈춘다")
+        # 검증만 했으니 번호를 되돌린다 — 나가지 않은 빌드가 번호를 먹지 않게.
+        PUBSPEC.write_text(original_pubspec, encoding="utf-8", newline="\n")
+        print("\n== --no-upload 라 여기서 멈춘다 (빌드 번호는 되돌렸다)")
         return
 
     run(
