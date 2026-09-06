@@ -71,7 +71,8 @@ class AppConfig {
   /// 조용히 폴백해야 한다.
   static bool mapAuthFailed = false;
 
-  static bool get mapEnabled => !kIsWeb &&
+  static bool get mapEnabled =>
+      !kIsWeb &&
       kakaoMapAbiSupported &&
       kakaoNativeAppKey.isNotEmpty &&
       !mapAuthFailed;

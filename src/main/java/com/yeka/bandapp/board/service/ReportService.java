@@ -13,16 +13,27 @@ import com.yeka.bandapp.board.repository.MediaAttachmentRepository;
 import com.yeka.bandapp.board.repository.ReportRepository;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import com.yeka.bandapp.board.config.ReportProperties;
 import com.yeka.bandapp.common.ratelimit.RateLimitProperties;
 import com.yeka.bandapp.common.ratelimit.RedisRateLimiter;
+import com.yeka.bandapp.notification.entity.NotificationType;
+import com.yeka.bandapp.notification.service.NotificationMessages;
+import com.yeka.bandapp.notification.service.NotificationSender;
 import com.yeka.bandapp.user.service.UserDirectoryService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 게시글·미디어·사용자 신고 접수. 접수만 한다 — 처리(RESOLVED 전이)용 운영 API 는 BUILD_PLAN Phase 8
  * 범위 밖이다.
+ *
+ * <p>접수되면 <b>운영자에게 푸시가 간다</b>({@code app.report.notify-user-ids}). 그게 없으면
+ * 신고는 표에 한 줄 쌓일 뿐 아무도 모른다.
  *
  * <p>대상이 요청자에게 보이지 않으면(타 밴드 게시글·미디어, 없는 사용자) 존재를 알리지 않고
  * {@code REPORT_TARGET_NOT_FOUND}(404). 자기 자신·자기 글은 {@code CANNOT_REPORT_SELF}(400).
@@ -30,6 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class ReportService {
+
+    private static final Logger log = LoggerFactory.getLogger(ReportService.class);
 
     private static final String RATE_LIMIT_BUCKET = "report:user";
 
@@ -40,6 +53,8 @@ public class ReportService {
     private final UserDirectoryService userDirectory;
     private final RedisRateLimiter rateLimiter;
     private final RateLimitProperties rateLimitProperties;
+    private final NotificationSender notificationSender;
+    private final ReportProperties reportProperties;
 
     public ReportService(ReportRepository reportRepository,
                          BoardPostRepository postRepository,
@@ -47,7 +62,9 @@ public class ReportService {
                          BandAccessGuard accessGuard,
                          UserDirectoryService userDirectory,
                          RedisRateLimiter rateLimiter,
-                         RateLimitProperties rateLimitProperties) {
+                         RateLimitProperties rateLimitProperties,
+                         NotificationSender notificationSender,
+                         ReportProperties reportProperties) {
         this.reportRepository = reportRepository;
         this.postRepository = postRepository;
         this.mediaRepository = mediaRepository;
@@ -55,6 +72,8 @@ public class ReportService {
         this.userDirectory = userDirectory;
         this.rateLimiter = rateLimiter;
         this.rateLimitProperties = rateLimitProperties;
+        this.notificationSender = notificationSender;
+        this.reportProperties = reportProperties;
     }
 
     @Transactional
@@ -74,7 +93,46 @@ public class ReportService {
         } catch (DataIntegrityViolationException duplicate) {
             throw new BusinessException(ErrorCode.REPORT_ALREADY_SUBMITTED);
         }
+        notifyOperatorsAfterCommit(report);
         return ReportResponse.from(report);
+    }
+
+    /**
+     * 커밋된 뒤에 보낸다.
+     *
+     * <p><b>트랜잭션 안에서 보내지 않는 이유</b> — 발송이 FCM HTTP 를 부르는데, 그러면 왕복
+     * 시간 내내 DB 커넥션을 붙잡는다(CLAUDE.md). 게다가 뒤에서 롤백이 나면 없는 신고를
+     * 알린 셈이 된다.
+     *
+     * <p>알림 실패가 신고 접수를 되돌리지는 않는다. 접수는 이미 끝났고, 못 알린 것은
+     * 로그로 남는다.
+     */
+    private void notifyOperatorsAfterCommit(Report report) {
+        if (reportProperties.notifyUserIds().isEmpty()) {
+            return;
+        }
+        long reportId = report.getId();
+        String label = targetLabel(report.getTargetType());
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    notificationSender.notify(NotificationType.REPORT_RECEIVED, reportId, 0,
+                            reportProperties.notifyUserIds(),
+                            NotificationMessages.reportReceived(reportId, label));
+                } catch (RuntimeException e) {
+                    log.warn("신고 접수 알림 실패 reportId={}", reportId, e);
+                }
+            }
+        });
+    }
+
+    private static String targetLabel(ReportTargetType targetType) {
+        return switch (targetType) {
+            case POST -> "게시글";
+            case MEDIA -> "사진·영상";
+            case USER -> "사용자";
+        };
     }
 
     // --- 내부 헬퍼 -------------------------------------------------------
