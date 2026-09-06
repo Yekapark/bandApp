@@ -21,7 +21,7 @@
 | 서버 운영 명령 | `bandule ps` / `logs` / `errors` / `health` / `backup` / `db` — `bandule` 만 쳐도 사용법이 나온다 |
 | 배포 | **`main` 에 머지하면 자동.** CI 통과 → 이미지 빌드 → GHCR → SSH → 교체 → 바깥 주소 200 확인 |
 | 롤백 | `ssh ... 'cd /opt/bandapp && sh deploy/deploy.sh sha-<이전>'` |
-| HTTPS | Let's Encrypt 자동 갱신. Cloudflare 주황 구름 ON (실제 접속자 IP 복원 확인) |
+| HTTPS | Let's Encrypt 자동 갱신. **Cloudflare 주황 구름 OFF (DNS only)** — 아래 참조 |
 | 백업 | 매일 03:30 KST → R2 `s3://bandule-prod/db-backups/`, 7개 보관 |
 | 감시 | UptimeRobot 등록됨 |
 
@@ -45,6 +45,30 @@
 ```bash
 cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126:/opt/bandapp/.env.prod && ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && chmod 600 .env.prod && bandule restart'
 ```
+
+> ### Cloudflare 프록시는 **꺼 두었다** (2026-09-06)
+>
+> 켜 뒀더니 **요청 하나에 700ms~1s** 가 걸렸다. 원인은 서버가 아니라 경로였다 —
+> 무료 요금제가 한국 트래픽을 서울(ICN)이 아니라 **LA(`colo=LAX`)** 로 돌린다.
+> 한국(폰) → LA → 서울 → LA → 한국. 커뮤니티에 같은 제보가 여럿 있는 알려진 문제다.
+>
+> | | 응답 시간 |
+> |---|---|
+> | 서버 안에서 | 20ms |
+> | 프록시 끈 지금 | **64~119ms** |
+> | 프록시 켰을 때 | 700~1000ms |
+>
+> 껐어도 **HTTPS 는 그대로** 된다(인증서가 우리 서버에 있다). **접속자 IP 도 정확하다** —
+> nginx 로그에 실제 IP 가 찍히는 것을 확인했다. 요청 횟수 제한이 계속 동작한다.
+>
+> 대신 **서버의 진짜 IP 가 드러난다.** 공격을 받으면 다시 켜는 것이 방어책인데,
+> 그때는 이 지연을 감수해야 한다. 재 볼 때 쓰는 명령:
+>
+> ```bash
+> curl -s https://api.bandule.com/cdn-cgi/trace | grep colo   # 프록시 켜져 있을 때만 응답
+> for i in 1 2 3; do curl -s -o /dev/null -w "%{time_starttransfer}s
+" https://api.bandule.com/actuator/health; done
+> ```
 
 > **FCM 키 파일은 `chown 999:999`** 여야 한다. root 소유면 앱이 아예 안 뜬다(앱은 uid 999).
 > 실제 파일명은 `secrets/bandapp-dev-67c6f-firebase-adminsdk-fbsvc-bf6d067a95.json` 이다.

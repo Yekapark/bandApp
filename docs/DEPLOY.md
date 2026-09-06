@@ -43,7 +43,20 @@ git clone https://github.com/Yekapark/bandApp.git /opt/bandapp
 sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw enable
 ```
 
-**DNS / Cloudflare** — `DOMAIN` 의 A 레코드를 VM 공인 IP 로 만들고, **주황 구름(Proxied)을 켠다.**
+> ### ⚠️ 한국 서비스라면 주황 구름을 켜기 전에 **재 보라** (2026-09-06)
+>
+> 무료 요금제에서 한국 트래픽이 서울(ICN)이 아니라 **LA(`colo=LAX`)** 로 가는 일이 잦다.
+> 우리 경우 요청 하나가 **700ms~1s** 였고, 끄니 **64~119ms** 가 됐다. 지금은 **꺼 두었다.**
+>
+> ```bash
+> curl -s https://api.<도메인>/cdn-cgi/trace | grep colo
+> for i in 1 2 3; do curl -s -o /dev/null -w "%{time_starttransfer}s
+" https://api.<도메인>/actuator/health; done
+> ```
+>
+> 아래 설명은 다시 켜게 될 때를 위해 남겨 둔다.
+
+**DNS / Cloudflare** — `DOMAIN` 의 A 레코드를 VM 공인 IP 로 만든다. **주황 구름(Proxied)은 위 경고를 읽고 결정한다.**
 
 주황 구름을 켜면 서버의 진짜 IP 가 밖에 보이지 않는다. 무료 VM 한 대로 굴리는 구성에서
 원본 주소가 공개되면 누가 작정하고 두들길 때 막을 수단이 없으므로, 이 이점이 크다.
