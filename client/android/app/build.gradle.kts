@@ -53,21 +53,6 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // firebase_app_distribution 플러그인의 안드로이드 모듈은 두 갈래로 갈라져 있다.
-        // 우리 앱에는 그런 구분이 없어서, 지정해 주지 않으면 Gradle 이 어느 쪽인지 못 고르고
-        // 빌드가 멈춘다.
-        //
-        // **이름과 내용이 반대라 헷갈린다** (플러그인 android/build.gradle:51-63):
-        //   production → firebase-appdistribution-api  = 아무것도 안 하는 껍데기
-        //   staging    → firebase-appdistribution      = 진짜 SDK
-        //
-        // 구글이 "스토어에 올리는 빌드에는 껍데기를 넣어라" 는 뜻으로 지은 이름이다.
-        // 우리는 테스터 빌드를 만들고 있으므로 `staging` 이 맞다. `production` 으로 두면
-        // 오류도 없이 조용히 아무 일도 일어나지 않는다 — 실제로 한 번 그렇게 나갔다.
-        //
-        // 스토어로 갈 때는 이 의존성 자체를 걷어낸다.
-        missingDimensionStrategy("default", "staging")
-
         // AndroidManifest 의 카카오 로그인 리다이렉트 스킴에 꽂힌다.
         manifestPlaceholders["kakaoAppKey"] = kakaoAppKey
     }
