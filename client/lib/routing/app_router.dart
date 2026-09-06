@@ -7,6 +7,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/terms_screen.dart';
+import '../core/deeplink/invite_link_handler.dart';
 import '../features/band/presentation/band_gate_screen.dart';
 import '../features/band/presentation/create_band_screen.dart';
 import '../features/band/presentation/invite_screen.dart';
@@ -100,6 +101,24 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: Routes.splash,
     refreshListenable: refresh,
+    // 앱이 꺼져 있다가 초대 링크로 열리면, 안드로이드가 그 주소(bandule://invite/CODE)를
+    // **앱의 첫 화면 주소로** 넘겨준다. 우리 라우트에는 그런 경로가 없으므로 라우터가
+    // "Page Not Found" 를 띄운다 — 실제로 그렇게 나갔다.
+    //
+    // 앱이 이미 떠 있을 때 오는 링크는 InviteLinkHandler 가 받는다. 꺼져 있다 열리는 쪽은
+    // 그보다 라우터가 먼저 보므로 여기서 받아 준다.
+    onException: (context, state, router) {
+      if (InviteLinkHandler.isInviteLink(state.uri)) {
+        // 코드를 담아 두고 첫 화면으로 보낸다. 아래 redirect 가 로그인 여부를 보고
+        // 데려간다 — 로그인이 안 돼 있으면 로그인부터 시키고, 끝나면 합류 화면으로.
+        InviteLinkHandler.pendingCode = InviteLinkHandler.codeOf(state.uri);
+        router.go(Routes.splash);
+        return;
+      }
+      // 그 밖의 알 수 없는 주소는 조용히 첫 화면으로. 사용자에게 라우터 오류를
+      // 보여 줄 이유가 없다(위 화면이 그랬다).
+      router.go(Routes.splash);
+    },
     redirect: (context, state) {
       final status = ref.read(authControllerProvider).status;
       final loc = state.matchedLocation;
@@ -115,6 +134,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (status == AuthStatus.unauthenticated) {
         return onPublic ? null : Routes.login;
       }
+
+      // 초대 링크로 들어왔다면 홈보다 합류 화면이 먼저다. 로그인 전에 눌렀더라도
+      // 로그인이 끝난 이 시점에 데려간다 — 코드를 다시 받아 적게 하지 않는다.
+      final pending = InviteLinkHandler.takePendingCode();
+      if (pending != null) return '${Routes.joinBand}?code=$pending';
 
       // 로그인 상태에서 스플래시/공개 화면에 있으면 홈으로.
       if (loc == Routes.splash || onPublic) return Routes.home;

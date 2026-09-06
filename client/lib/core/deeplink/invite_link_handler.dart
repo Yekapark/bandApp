@@ -17,6 +17,20 @@ import '../../routing/app_router.dart';
 class InviteLinkHandler {
   InviteLinkHandler(this._router);
 
+  /// 아직 못 연 초대코드.
+  ///
+  /// **초대 링크를 받은 사람은 대개 로그인도 안 되어 있다** — 새로 들어오는 멤버니까.
+  /// 그대로 두면 로그인 화면으로 가면서 코드가 사라지고, 로그인해도 홈으로 갈 뿐이다.
+  /// 여기 담아 두었다가 로그인이 끝나면 라우터가 꺼내 쓴다(`app_router.dart` 의 redirect).
+  static String? pendingCode;
+
+  /// 꺼내면서 비운다. 한 번만 쓰이게 해서 로그인할 때마다 합류 화면이 뜨는 것을 막는다.
+  static String? takePendingCode() {
+    final code = pendingCode;
+    pendingCode = null;
+    return code;
+  }
+
   final GoRouter _router;
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _sub;

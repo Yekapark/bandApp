@@ -40,6 +40,20 @@ void main() {
     });
   });
 
+  group('로그인 전에 받은 코드', () {
+    test('담아 뒀다가 꺼내면 비워진다', () {
+      // 로그인할 때마다 합류 화면이 다시 뜨면 안 된다.
+      InviteLinkHandler.pendingCode = 'ABCD2345';
+      expect(InviteLinkHandler.takePendingCode(), 'ABCD2345');
+      expect(InviteLinkHandler.takePendingCode(), isNull);
+    });
+
+    test('담아 둔 것이 없으면 null', () {
+      InviteLinkHandler.pendingCode = null;
+      expect(InviteLinkHandler.takePendingCode(), isNull);
+    });
+  });
+
   group('초대코드 떼어내기', () {
     test('첫 경로 조각이 코드다', () {
       expect(InviteLinkHandler.codeOf(Uri.parse('bandule://invite/ABCD2345')),
