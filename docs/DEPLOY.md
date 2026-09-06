@@ -114,8 +114,16 @@ openssl rand -base64 32   # DB_PASSWORD, REDIS_PASSWORD
 openssl rand -base64 48   # JWT_SECRET  (비어 있으면 앱이 부팅에 실패한다 — 의도된 동작)
 ```
 
-FCM 을 쓰면 서비스 계정 JSON 을 VM 에 두고 `chmod 600`,
-`FCM_CREDENTIALS_HOST_PATH` 에 그 경로를 적는다.
+FCM 을 쓰면 서비스 계정 JSON 을 VM 에 두고 `FCM_CREDENTIALS_HOST_PATH` 에 그 경로를 적는다.
+**소유자를 컨테이너 사용자(uid 999)로 바꿔야 한다** — 앱은 root 가 아니라 `app`(999)으로 돌아서,
+root 소유 600 파일은 못 읽고 `FileNotFoundException ... (Permission denied)` 로 기동에 실패한다.
+
+```bash
+mkdir -p /opt/bandapp/secrets
+# (로컬에서 scp 로 올린 뒤)
+chown 999:999 /opt/bandapp/secrets/*.json
+chmod 600 /opt/bandapp/secrets/*.json
+```
 
 ```bash
 docker login ghcr.io -u <github-id>     # 첫 pull 전 1회 (이후엔 Actions 가 알아서 로그인한다)
