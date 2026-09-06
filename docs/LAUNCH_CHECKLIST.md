@@ -205,9 +205,25 @@ Dart 쪽(`PushService`)·매니페스트 권한(`POST_NOTIFICATIONS`)·`Firebase
 
 ## 9단계 — 릴리스 빌드 준비 (반나절)
 
-- [ ] **릴리스 키스토어 생성 + `build.gradle.kts` 서명 설정** — 지금은 디버그 키로 서명 중이라
-      스토어가 거부한다. **키스토어를 잃어버리면 그 앱은 영원히 업데이트할 수 없다.**
-      만들자마자 안전한 곳에 백업한다(저장소에는 절대 넣지 않는다)
+**그래들 배선은 끝났다 (2026-09-06).** `android/key.properties` 가 있으면 그 키로 서명하고,
+없으면 디버그 키로 넘어간다 — 키가 없는 PC 에서도 빌드는 그대로 된다. **남은 건 키를
+만드는 일뿐이고, 그건 비밀번호를 쥐는 사람이 직접 해야 한다.**
+
+- [ ] **키스토어 만들기 — 지시자가 직접.** 아래를 `client/android/` 에서 실행한다.
+      비밀번호를 두 번 묻는데(키스토어 / 키), **같은 값으로 해도 된다.**
+
+      keytool -genkeypair -v -keystore bandule-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias bandule
+
+- [ ] **`client/android/key.properties` 를 만든다** (아래 4줄, 비밀번호는 방금 정한 값):
+
+      storePassword=...
+      keyPassword=...
+      keyAlias=bandule
+      storeFile=bandule-release.jks
+
+- [ ] **`.jks` 파일과 비밀번호를 안전한 곳에 백업한다.** 둘 다 `.gitignore` 가 막고 있어
+      저장소에는 안 들어간다. **잃어버리면 그 앱은 영원히 업데이트할 수 없다** — 같은
+      패키지명으로 새 키를 쓴 앱은 스토어가 업데이트로 받아 주지 않는다
 - [ ] 그 키의 **카카오 키 해시**를 콘솔에 추가 (7단계)
 - [ ] **ProGuard 켜기**(`isMinifyEnabled`) — 카카오맵 규칙은 이미 넣어 뒀지만 아직 꺼져 있다.
       켠 뒤 **릴리스 빌드로 지도·로그인을 다시 확인**한다(난독화가 SDK 를 깨는 일이 흔하다)

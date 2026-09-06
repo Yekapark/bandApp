@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/config/app_config.dart';
+import 'core/deeplink/invite_link_handler.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/application/auth_controller.dart';
 import 'features/notification/data/push_service.dart';
@@ -14,6 +15,8 @@ class BandApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    // 초대 링크(bandule://invite/{code}) 수신 시작. 링크가 없으면 아무 일도 안 한다.
+    ref.watch(inviteLinkHandlerProvider);
 
     // 로그인 상태에 따라 FCM 디바이스 토큰 등록/해제 (설정 없으면 조용히 no-op).
     ref.listen(authControllerProvider.select((s) => s.status), (_, status) {

@@ -24,7 +24,10 @@ class InviteDeepLinkIntegrationTest extends ApiIntegrationTest {
         assertThat(res.getStatusCode().value()).isEqualTo(200);
         assertThat(res.getHeaders().getContentType().toString()).startsWith("text/html");
         assertThat(res.getBody()).contains("ABCD2345");
-        assertThat(res.getBody()).contains("bandapp://invite/");
+        // `bandapp` 이 아니라 `bandule` 이어야 한다 - `bandapp://` 는 네이버 밴드가 쓰는
+        // 주소라, 그대로 두면 초대 링크가 네이버 밴드 앱을 연다(실제로 그랬다).
+        assertThat(res.getBody()).contains("bandule://invite/");
+        assertThat(res.getBody()).doesNotContain("bandapp://");
         assertThat(res.getBody()).contains("apps.apple.com");
         assertThat(res.getBody()).contains("play.google.com");
     }

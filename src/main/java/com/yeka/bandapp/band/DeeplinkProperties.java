@@ -29,7 +29,7 @@ public record DeeplinkProperties(
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
         if (scheme == null || scheme.isBlank()) {
-            scheme = "bandapp";
+            scheme = "bandule";
         }
         if (iosAppId == null) {
             iosAppId = "";
@@ -38,10 +38,10 @@ public record DeeplinkProperties(
             iosAppStoreUrl = "https://apps.apple.com/app/id0000000000";
         }
         if (androidPackage == null || androidPackage.isBlank()) {
-            androidPackage = "com.yeka.bandapp";
+            androidPackage = "com.yeka.bandule";
         }
         if (androidPlayStoreUrl == null || androidPlayStoreUrl.isBlank()) {
-            androidPlayStoreUrl = "https://play.google.com/store/apps/details?id=com.yeka.bandapp";
+            androidPlayStoreUrl = "https://play.google.com/store/apps/details?id=com.yeka.bandule";
         }
         androidSha256CertFingerprints =
                 androidSha256CertFingerprints == null ? List.of() : List.copyOf(androidSha256CertFingerprints);

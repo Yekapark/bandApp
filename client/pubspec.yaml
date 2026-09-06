@@ -1,7 +1,7 @@
 name: bandapp_client
 description: 밴드 합주 관리 앱 Flutter 클라이언트
 publish_to: "none"
-version: 0.1.0+11
+version: 0.1.0+12
 environment:
   sdk: ">=3.4.0 <4.0.0"
 
@@ -54,6 +54,11 @@ dependencies:
 
   # 날짜 포매팅 (flutter_localizations 가 0.20.x 를 요구)
   intl: ^0.20.2
+
+  # 초대 링크(bandule://invite/{code})를 앱이 받아 합류 화면으로 넘긴다.
+  # 이게 없으면 링크를 눌러도 앱이 열리지 않는다 - 예전에는 스킴이 네이버 밴드 것과
+  # 겹쳐서 그 앱이 열렸다.
+  app_links: ^7.2.1
 
 dev_dependencies:
   flutter_test:

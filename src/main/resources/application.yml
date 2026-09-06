@@ -110,7 +110,7 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
   deeplink:
     base-url: ${DEEPLINK_BASE_URL:http://localhost:8080}    # 초대 링크·랜딩 페이지 공개 주소
-    scheme: ${DEEPLINK_SCHEME:bandapp}                       # 앱 커스텀 스킴 (bandapp://invite/CODE)
+    scheme: ${DEEPLINK_SCHEME:bandule}                       # 앱 커스텀 스킴 (bandule://invite/CODE). bandapp 은 네이버 밴드가 쓴다 — 겹치면 그 앱이 열린다
     ios-app-id: ${IOS_APP_ID:}                               # 예: TEAMID.com.yeka.bandule (AASA 검증용)
     ios-app-store-url: ${IOS_APP_STORE_URL:https://apps.apple.com/app/id0000000000}
     android-package: ${ANDROID_PACKAGE:com.yeka.bandule}     # 클라이언트 applicationId 와 같아야 한다 (App Links 검증)

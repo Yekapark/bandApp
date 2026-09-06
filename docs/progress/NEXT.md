@@ -56,35 +56,30 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 ## 1. 못 끝낸 것
 
-### 1-Z. 초대 링크가 **네이버 밴드 앱**을 연다 ❗❗
+### 1-Z. 초대 링크 ✅ **고쳤다 (2026-09-06)** — 확인만 남았다
 
-지시자 제보(2026-09-06). 확인해 보니 사실이고, 원인이 둘이다.
+지시자 제보로 드러난 문제였다. 랜딩 페이지가 `bandapp://invite/{code}` 로 앱을 불렀는데
+**`bandapp://` 는 네이버 밴드가 쓰는 주소**라 그 앱이 열렸고, 게다가 우리 앱에는 링크를
+받는 설정도 처리 코드도 없어서 **스킴이 겹치지 않았어도 안 열렸다.**
 
-**① 스킴이 네이버 밴드 것과 같다.** 랜딩 페이지가 `bandapp://invite/{code}` 로 앱을
-부르는데(`InviteLandingController:127`), **`bandapp://` 는 네이버 밴드(`com.nhn.android.band`)
-가 쓰는 주소다.** 안드로이드는 그 스킴을 등록한 앱에게 넘기므로 밴드가 열린다.
-기본값은 `application.yml` 의 `app.deeplink.scheme` 과 `DeeplinkProperties:32` 두 곳에 있다.
+고친 것:
 
-**② 우리 앱은 그 링크를 받을 준비가 아예 안 돼 있다.** `AndroidManifest.xml` 에
-해당 `intent-filter` 가 없고, Flutter 쪽에도 들어온 링크를 처리하는 코드가 없다
-(`app_links`·`uni_links` 계열 의존성 자체가 없다). **스킴 충돌이 없었더라도 앱은 안 열렸다.**
+- 스킴 `bandapp` → `bandule` (`application.yml`, `DeeplinkProperties`)
+- `AndroidManifest.xml` 에 `bandule://invite` 를 받는 `intent-filter`
+- `app_links` 로 받아 합류 화면(`/band-gate/join?code=...`)으로 넘긴다
+  (`core/deeplink/invite_link_handler.dart`)
+- 같이 발견해 고친 것 — `DeeplinkProperties` 의 패키지명 기본값이 `com.yeka.bandapp`
+  으로 남아 있었다(오늘 `com.yeka.bandule` 로 바꾼 것이 안 따라왔다)
 
-> 즉 초대 링크는 **한 번도 동작한 적이 없다.** 링크로 테스트했다면 그건 네이버 밴드가
-> 열린 것이지 우리 앱이 아니다.
+**실기기 확인이 남았다.** 밴드 설정 > 멤버 초대에서 링크를 만들어 카톡 등으로 자신에게
+보낸 뒤 눌러 본다. **밴듈이 열려 합류 화면에 코드가 채워져 있어야 한다.**
 
-**지금 쓸 수 있는 길** — 초대코드 8자를 손으로 넣는 화면은 멀쩡하다
-(`join_band_screen.dart`). 테스터에게는 링크 대신 **코드를 불러 주면 된다.**
+> 브라우저 주소창에서 앱이 **바로** 열리는 App Links 는 아직이다. 릴리스 서명 키의 지문을
+> `assetlinks.json` 에 올려야 해서 스토어 등록 뒤에 붙인다
+> (`app.deeplink.android-sha256-cert-fingerprints`). 지금은 랜딩 페이지를 한 번 거친다.
 
-**고칠 순서**
-
-1. 스킴 `bandapp` → `bandule` (백엔드 기본값 2곳 + 서버 `.env.prod` 의 `DEEPLINK_SCHEME`)
-2. `AndroidManifest.xml` 에 `bandule://invite` 를 받는 `intent-filter`
-3. Flutter 에서 들어온 링크를 초대 화면으로 — **`app_links` 의존성 추가가 필요하다(승인 대상)**
-4. iOS `Info.plist` 의 `CFBundleURLSchemes` (아이폰 지원 시작할 때)
-
-**App Links(브라우저에서 앱이 바로 열리는 방식)는 지금 못 한다.** 정식 서명 키의 지문을
-`assetlinks.json` 에 올려야 하는데 아직 임시 키를 쓴다. 설정 자리는 이미 만들어져 있다
-(`app.deeplink.android-sha256-cert-fingerprints`) — 스토어 등록 때 채운다.
+> **서버에 `DEEPLINK_SCHEME` 이 박혀 있으면 그것도 바꿔야 한다.** `.env.prod` 를 확인하고,
+> 있으면 `bandule` 로 고쳐 올린다(§0 의 scp 명령).
 
 ### 1-A. "BOTTOM OVERFLOWED BY 63 PIXELS" — 원인 미확인 ❗
 

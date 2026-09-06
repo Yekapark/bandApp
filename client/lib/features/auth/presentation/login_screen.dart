@@ -192,13 +192,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     foreground: AppColors.onKakao,
                     onTap: _loading ? null : _kakao,
                   ),
-                  const SizedBox(height: 9),
-                  _SocialButton(
-                    label: '네이버로 계속하기 (준비 중)',
-                    background: AppColors.surfaceRaised,
-                    foreground: AppColors.textFaint,
-                    onTap: null,
-                  ),
+                  // 네이버 로그인 버튼을 뺐다. 눌리지 않는 버튼은 "이 앱은 아직 덜
+                  // 됐구나" 라는 인상만 준다 — 되는 길(이메일·카카오)이 이미 둘 있다.
+                  // 실제로 붙일 때 다시 넣는다.
                   const SizedBox(height: 18),
                   const Text(
                     '계속하면 이용약관과 개인정보처리방침에 동의하는 것으로 봐요.',
