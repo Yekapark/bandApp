@@ -42,11 +42,33 @@ flutter build apk --release   --dart-define-from-file=dart_defines.json   --dart
 
 ## 2. 잘 만들어졌는지 확인
 
+릴리스 빌드는 Dart 코드가 기계어로 컴파일돼 `libapp.so` 안에 들어간다. **`aapt dump strings`
+로는 안 보인다**(안드로이드 리소스만 훑기 때문에 0건으로 나온다 — 실제로 한 번 속았다).
+APK 를 열어 그 파일을 직접 봐야 한다.
+
 ```bash
-"$LOCALAPPDATA/Android/sdk/build-tools/36.1.0/aapt2.exe" dump strings   client/build/app/outputs/flutter-apk/app-release.apk | grep -c api.bandule.com
+python -c "
+import zipfile
+d = zipfile.ZipFile('client/build/app/outputs/flutter-apk/app-release.apk').read('lib/arm64-v8a/libapp.so')
+for p in (b'api.bandule.com', b'localhost:8080', b'10.0.2.2'):
+    print(p.decode().ljust(20), 'FOUND' if p in d else 'not found')
+"
 ```
 
-`0` 이 아니면 서버 주소가 박힌 것이다. 폰에 깔아 로그인까지 되면 확실하다.
+`api.bandule.com` 이 **FOUND**, `localhost`·`10.0.2.2` 가 **not found** 면 제대로 박힌 것이다.
+
+패키지명과 카카오 키 해시는 이렇게 본다:
+
+```bash
+AAPT="$LOCALAPPDATA/Android/sdk/build-tools/36.1.0/aapt2.exe"
+"$AAPT" dump packagename client/build/app/outputs/flutter-apk/app-release.apk
+"$LOCALAPPDATA/Android/sdk/build-tools/36.1.0/apksigner.bat" verify --print-certs   client/build/app/outputs/flutter-apk/app-release.apk | grep "SHA-1"
+```
+
+SHA-1 을 base64 로 바꾼 값이 카카오 콘솔에 등록된 키 해시와 같아야 한다.
+디버그 키로 서명하는 동안은 `ahCJ5a5dXyiPh3x9ksny6yMbjzk=` 로 일정하다.
+
+그래도 **폰에 깔아서 로그인까지 되는지 보는 게 가장 확실하다.**
 
 ## 3. 테스터에게 전달하기
 
