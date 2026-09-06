@@ -4,7 +4,14 @@ import java.time.Instant;
 
 /**
  * 구독 결제 게이트웨이. 구독 시작/갱신/해지를 추상화한다 — 요금제 도메인 로직은 이 인터페이스에만
- * 의존하고, 실제 PG(토스·포트원 등) 연동은 어댑터 구현체로 나중에 추가한다.
+ * 의존하고, 실제 결제 연동은 어댑터 구현체로 나중에 추가한다.
+ *
+ * <p><b>실제 결제 수단은 카드사 PG가 아니라 스토어 인앱결제다</b> — Google Play Billing /
+ * Apple In-App Purchase(BUILD_PLAN.md Phase 12). 스토어 결제는 구매가 클라이언트에서
+ * 시작되고 서버는 영수증·구매 토큰 검증과 웹훅(RTDN / App Store Server Notifications)
+ * 반영만 하는 모델이라, 지금의 "서버가 subscribe/renew/cancel을 능동 호출"하는 모양은
+ * 실제 어댑터를 붙일 때 다시 설계해야 한다. 이 인터페이스는 그 전까지 요금제 도메인을
+ * no-op으로 돌리기 위한 임시 형태다.
  *
  * <p>이번 릴리스의 유일한 구현체는 {@link NoOpPaymentGateway} — 항상 즉시 성공한다. 실제 어댑터가
  * 생기면 {@code @ConditionalOnProperty}/{@code @Primary} 로 선택하고 no-op 은 폴백으로 남긴다.
