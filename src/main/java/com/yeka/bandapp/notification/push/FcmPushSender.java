@@ -3,6 +3,8 @@ package com.yeka.bandapp.notification.push;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
 import com.google.firebase.messaging.BatchResponse;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
@@ -35,6 +37,9 @@ import java.util.List;
  */
 @Component
 public class FcmPushSender implements PushSender {
+
+    /** 앱의 AndroidManifest 와 MainActivity 가 만드는 채널 id 와 같아야 한다. */
+    private static final String ANDROID_CHANNEL_ID = "bandule_default";
 
     private static final Logger log = LoggerFactory.getLogger(FcmPushSender.class);
     private static final String APP_NAME = "bandapp-fcm";
@@ -94,6 +99,18 @@ public class FcmPushSender implements PushSender {
                     .setNotification(Notification.builder()
                             .setTitle(message.title())
                             .setBody(message.body())
+                            .build())
+                    // 안드로이드 알림 채널을 지정한다. 안 하면 FCM 기본 채널로 뜨고, 휴대폰
+                    // 설정의 앱 알림 목록에 "기타" 라는 이름으로 나온다 — 사용자가 무슨
+                    // 알림인지도, 무엇을 끄는지도 알 수 없다.
+                    //
+                    // 앱 매니페스트에도 같은 값을 기본 채널로 적어 뒀지만(앱이 꺼져 있을 때를
+                    // 위해) 여기서도 실어 보낸다. 채널을 만들지 않은 옛 버전 앱에서는 이 값이
+                    // 무시되고 예전처럼 기본 채널로 뜬다 — 앱을 새로 깔면 맞춰진다.
+                    .setAndroidConfig(AndroidConfig.builder()
+                            .setNotification(AndroidNotification.builder()
+                                    .setChannelId(ANDROID_CHANNEL_ID)
+                                    .build())
                             .build())
                     .putAllData(message.data())
                     .addAllTokens(chunk)

@@ -59,6 +59,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 앱이 꺼져 있을 때 온 푸시가 뜰 채널. 이게 없으면 안드로이드가 FCM 기본 채널을
+             쓰고, 휴대폰 설정의 앱 알림 목록에 "기타" 로 나온다.
+             채널 자체는 MainActivity 에서 만든다 — id 가 같아야 한다. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="bandule_default" />
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
