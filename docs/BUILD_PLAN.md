@@ -76,9 +76,12 @@
 ## 3. 도메인 모델
 
 ```
-User { id, email, passwordHash, name, socialProvider, socialId, createdAt, deletedAt }
+User { id, email, passwordHash, name, socialProvider, socialId, emailVerified, createdAt, deletedAt }
   - passwordHash: 이메일 가입자만 값이 있다(소셜 가입자는 NULL). BCrypt 해시로만 저장한다.
   - email: 소셜 가입자는 제공 동의가 없으면 NULL일 수 있다.
+  - emailVerified: 승인됨(2026-09-06) — 이메일 가입자는 가입 시 false로 시작해 인증 코드
+    메일로 true가 된다. 소셜 가입자는 항상 true. 강제하지 않는다(미인증이어도 기능 제한 없음,
+    클라이언트 배너 안내용).
 
 Band { id, name, leaderId,
        reservationPermission(LEADER_ONLY | ANYONE | APPROVAL_REQUIRED),
@@ -177,6 +180,8 @@ CI에서 빌드·테스트가 통과한다.
 - 카카오 OAuth2 소셜 로그인
 - JWT access/refresh 토큰 발급 및 갱신, refresh 토큰은 Redis 저장
 - 회원 탈퇴(계정 삭제) — 소셜 계정 unlink 포함, `deletedAt` 소프트 삭제
+- 비밀번호 재설정(이메일 인증번호) — 승인됨(2026-09-06)
+- 이메일 인증(가입 시 자동 발송, 강제하지 않음) — 승인됨(2026-09-06)
 
 **완료 기준**: 가입 → 로그인 → 토큰 갱신 → 탈퇴 전 과정의 통합 테스트가 통과한다.
 
