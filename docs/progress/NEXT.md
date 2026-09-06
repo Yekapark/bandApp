@@ -27,11 +27,31 @@
 
 **설정·비밀값은 git 에 없다.** 로컬 `.env.prod` 가 정본이고, 고치면 올려야 한다:
 
+> ### ⚠️ 올리기 전에 **반드시 서버 것과 비교한다** (2026-09-06 사고)
+>
+> 로컬이 정본이라는 말을 믿고 그냥 덮어썼다가 **운영 서버를 5분 죽였다.** 두 파일이
+> 갈라져 있었고, 그중 `FCM_CREDENTIALS_HOST_PATH` 가 서버에 없는 경로를 가리켰다.
+> Docker 는 없는 경로를 **빈 디렉터리로 만들어** 마운트하고, 앱은 그 디렉터리를 파일로
+> 읽으려다 기동에 실패한다 (`FileNotFoundException: ... (Is a directory)`).
+>
+> ```bash
+> ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cat /opt/bandapp/.env.prod' > /tmp/server.env
+> diff /tmp/server.env .env.prod
+> ```
+>
+> 다른 줄이 있으면 **어느 쪽이 맞는지 먼저 판단하고** 올린다.
+
+
 ```bash
 cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126:/opt/bandapp/.env.prod && ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && chmod 600 .env.prod && bandule restart'
 ```
 
 > **FCM 키 파일은 `chown 999:999`** 여야 한다. root 소유면 앱이 아예 안 뜬다(앱은 uid 999).
+> 실제 파일명은 `secrets/bandapp-dev-67c6f-firebase-adminsdk-fbsvc-bf6d067a95.json` 이다.
+
+> **`bandule restart` 가 설정을 다시 읽지 않던 것도 고쳤다.** `docker compose restart` 는
+> 컨테이너만 다시 띄울 뿐 `.env.prod` 를 안 읽는다 — 설정을 고쳐 올리고 restart 해도 옛 값
+> 그대로였다(실제로 겪었다). `up -d` 로 바꿨고, **이 수정은 다음 배포 때 서버에 반영된다.**
 
 ### 나머지
 
@@ -56,6 +76,31 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 ## 1. 못 끝낸 것
 
+### 1-Y. 지금 당장 걸려 있는 것 (2026-09-06 저녁)
+
+| | 누가 | 안 하면 |
+|---|---|---|
+| **카카오 콘솔에 새 키 해시 등록** — `7zGOncUg+QW8Yt2dmsgmgmI5TPQ=` | 지시자 | **릴리스 빌드에서 카카오 로그인이 막힌다.** 서명 키가 바뀌었다 |
+| **테스터는 기존 앱을 지우고 새로 설치** | 테스터 | "앱이 설치되지 않음". 안드로이드는 서명이 다른 앱을 업데이트로 받지 않는다 |
+| 약관·개인정보처리방침 웹페이지 게시 | 아직 | 스토어 등록에 URL 이 필수. 본문은 [docs/legal/](../legal/) 에 있다 |
+
+**릴리스 서명 키가 생겼다 (2026-09-06).** `client/android/bandule-release.jks`, 인증서
+`CN=yeka, L=seoul`. `android/key.properties` 가 있으면 그 키로 서명하고 없으면 디버그 키로
+넘어간다. **키와 비밀번호를 잃어버리면 그 앱은 영원히 업데이트할 수 없다** — 백업 필수.
+카카오 키 해시·딥링크 지문 값은 [LAUNCH_CHECKLIST 9단계](../LAUNCH_CHECKLIST.md).
+
+**앱 내 업데이트 알림은 시도했다가 접었다.** Firebase App Distribution 의 인앱 알림 SDK 는
+**테스터가 구글 계정으로 로그인해야** 동작하는데, 등록된 테스터 둘이 `naver.com`·`hanmail.net`
+이라 쓸 수 없었다. 플러그인도 개인이 만든 것이고 그 아래 SDK 는 베타다. 코드는 걷어냈고
+(`revert(client): 앱 내 업데이트 안내를 걷어낸다`), 정식 출시하면 Play 스토어가 자동
+업데이트를 대신한다. **다시 살릴 거라면 테스터에게 구글 계정을 받아야 한다.**
+
+**신고 알림이 붙었다.** `.env.prod` 의 `REPORT_NOTIFY_USER_IDS=4,5` (지시자의 이메일·카카오
+계정). 받은 뒤 무엇을 할 수 있는지는 [docs/MODERATION.md](../MODERATION.md) — 요약하면
+**운영자가 앱으로 할 수 있는 일은 없고**(남의 밴드 글은 못 지운다, 계정 정지 기능이 없다),
+밴드장에게 연락하거나 DB 에서 직접 손대는 두 길뿐이다.
+
+
 ### 1-Z. 초대 링크 ✅ **고쳤다 (2026-09-06)** — 확인만 남았다
 
 지시자 제보로 드러난 문제였다. 랜딩 페이지가 `bandapp://invite/{code}` 로 앱을 불렀는데
@@ -71,8 +116,16 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 - 같이 발견해 고친 것 — `DeeplinkProperties` 의 패키지명 기본값이 `com.yeka.bandapp`
   으로 남아 있었다(오늘 `com.yeka.bandule` 로 바꾼 것이 안 따라왔다)
 
-**실기기 확인이 남았다.** 밴드 설정 > 멤버 초대에서 링크를 만들어 카톡 등으로 자신에게
+**서버 쪽은 끝났다 (2026-09-06).** 배포 + `.env.prod` 의 `DEEPLINK_SCHEME=bandule` 반영까지
+확인했다:
+
+```bash
+curl -s https://api.bandule.com/invite/<코드> | grep -o "band[a-z]*://invite/"   # bandule://invite/
+```
+
+**앱 쪽 실기기 확인이 남았다.** 밴드 설정 > 멤버 초대에서 링크를 만들어 카톡 등으로 자신에게
 보낸 뒤 눌러 본다. **밴듈이 열려 합류 화면에 코드가 채워져 있어야 한다.**
+링크 처리 코드는 `0.1.0+15` 이후 빌드에만 있다 — 그 전 빌드로는 확인되지 않는다.
 
 > 브라우저 주소창에서 앱이 **바로** 열리는 App Links 는 아직이다. 릴리스 서명 키의 지문을
 > `assetlinks.json` 에 올려야 해서 스토어 등록 뒤에 붙인다
