@@ -164,7 +164,8 @@ T unwrap<T>(Response<dynamic> res, T Function(Object? data) parse) {
   }
   throw ApiException(
     code: 'UNKNOWN',
-    message: '예상치 못한 응답 (${res.statusCode})',
+    // 상태코드를 사용자에게 보여줘도 할 수 있는 게 없다. 원인은 로그로 남긴다.
+    message: '요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
     statusCode: res.statusCode,
   );
 }
