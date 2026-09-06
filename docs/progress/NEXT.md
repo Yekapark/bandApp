@@ -56,6 +56,36 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 ## 1. 못 끝낸 것
 
+### 1-Z. 초대 링크가 **네이버 밴드 앱**을 연다 ❗❗
+
+지시자 제보(2026-09-06). 확인해 보니 사실이고, 원인이 둘이다.
+
+**① 스킴이 네이버 밴드 것과 같다.** 랜딩 페이지가 `bandapp://invite/{code}` 로 앱을
+부르는데(`InviteLandingController:127`), **`bandapp://` 는 네이버 밴드(`com.nhn.android.band`)
+가 쓰는 주소다.** 안드로이드는 그 스킴을 등록한 앱에게 넘기므로 밴드가 열린다.
+기본값은 `application.yml` 의 `app.deeplink.scheme` 과 `DeeplinkProperties:32` 두 곳에 있다.
+
+**② 우리 앱은 그 링크를 받을 준비가 아예 안 돼 있다.** `AndroidManifest.xml` 에
+해당 `intent-filter` 가 없고, Flutter 쪽에도 들어온 링크를 처리하는 코드가 없다
+(`app_links`·`uni_links` 계열 의존성 자체가 없다). **스킴 충돌이 없었더라도 앱은 안 열렸다.**
+
+> 즉 초대 링크는 **한 번도 동작한 적이 없다.** 링크로 테스트했다면 그건 네이버 밴드가
+> 열린 것이지 우리 앱이 아니다.
+
+**지금 쓸 수 있는 길** — 초대코드 8자를 손으로 넣는 화면은 멀쩡하다
+(`join_band_screen.dart`). 테스터에게는 링크 대신 **코드를 불러 주면 된다.**
+
+**고칠 순서**
+
+1. 스킴 `bandapp` → `bandule` (백엔드 기본값 2곳 + 서버 `.env.prod` 의 `DEEPLINK_SCHEME`)
+2. `AndroidManifest.xml` 에 `bandule://invite` 를 받는 `intent-filter`
+3. Flutter 에서 들어온 링크를 초대 화면으로 — **`app_links` 의존성 추가가 필요하다(승인 대상)**
+4. iOS `Info.plist` 의 `CFBundleURLSchemes` (아이폰 지원 시작할 때)
+
+**App Links(브라우저에서 앱이 바로 열리는 방식)는 지금 못 한다.** 정식 서명 키의 지문을
+`assetlinks.json` 에 올려야 하는데 아직 임시 키를 쓴다. 설정 자리는 이미 만들어져 있다
+(`app.deeplink.android-sha256-cert-fingerprints`) — 스토어 등록 때 채운다.
+
 ### 1-A. "BOTTOM OVERFLOWED BY 63 PIXELS" — 원인 미확인 ❗
 
 제보만 받고 **끝내 재현하지 못했다.** 어느 화면인지 특정하지 못한 채 남아 있다.
