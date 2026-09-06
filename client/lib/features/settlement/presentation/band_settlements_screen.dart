@@ -86,7 +86,7 @@ class _BandSettlementsScreenState extends ConsumerState<BandSettlementsScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
           child: Text(
-            e is ApiException ? e.message : '정산을 불러오지 못했습니다.',
+            e is ApiException ? e.message : '정산을 불러오지 못했어요.',
             style: const TextStyle(color: AppColors.textDim),
           ),
         ),
@@ -309,7 +309,7 @@ class _Empty extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Text(
-        '아직 정산이 없어요.\n합주 일정 상세에서 정산을 만들면 여기에 모입니다.',
+        '아직 정산이 없어요.\n합주 일정 상세에서 정산을 만들면 여기에 모여요.',
         textAlign: TextAlign.center,
         style:
             TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.6),

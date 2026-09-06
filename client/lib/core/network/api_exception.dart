@@ -41,14 +41,14 @@ class ApiException implements Exception {
         }
         return ApiException(
           code: (error['code'] ?? 'UNKNOWN').toString(),
-          message: (error['message'] ?? '요청을 처리하지 못했습니다.').toString(),
+          message: (error['message'] ?? '요청을 처리하지 못했어요.').toString(),
           statusCode: res.statusCode,
           fieldErrors: fields,
         );
       }
       return ApiException(
         code: 'UNKNOWN',
-        message: '요청을 처리하지 못했습니다. (${res.statusCode})',
+        message: '요청을 처리하지 못했어요. (${res.statusCode})',
         statusCode: res.statusCode,
       );
     }
@@ -60,7 +60,7 @@ class ApiException implements Exception {
     return ApiException(
       code: 'NETWORK',
       message: isTimeout
-          ? '서버에 연결하지 못했습니다. 네트워크를 확인해 주세요.'
+          ? '서버에 연결하지 못했어요. 네트워크를 확인해 주세요.'
           : (e.message ?? '알 수 없는 네트워크 오류'),
     );
   }

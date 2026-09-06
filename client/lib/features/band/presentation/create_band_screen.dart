@@ -44,7 +44,7 @@ class _CreateBandScreenState extends ConsumerState<CreateBandScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = '밴드를 만들지 못했습니다.');
+      setState(() => _error = '밴드를 만들지 못했어요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -86,7 +86,7 @@ class _CreateBandScreenState extends ConsumerState<CreateBandScreen> {
                   border: Border.all(color: AppColors.borderFaint),
                 ),
                 child: const Text(
-                  '밴드를 만들면 자동으로 밴드장이 되고, 초대코드가 발급됩니다. '
+                  '밴드를 만들면 내가 밴드장이 되고, 초대코드가 만들어져요. '
                   '장르·파트 설정은 추후 지원 예정이에요.',
                   style: TextStyle(
                       fontSize: 11.5, height: 1.6, color: AppColors.textDim),

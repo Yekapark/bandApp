@@ -150,9 +150,12 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
       if (!mounted) return;
       context.pop(true);
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      // 요금제 때문에 막힌 것은 "실패"가 아니라 안내다. 어디로 가면 되는지까지 알려준다.
+      setState(() => _error = e.code == 'PLAN_REQUIRED'
+          ? '정기 합주 자동 등록은 프리미엄 기능이에요. 설정 > 요금제에서 시작할 수 있어요.'
+          : e.message);
     } catch (_) {
-      setState(() => _error = '정기 일정을 등록하지 못했습니다.');
+      setState(() => _error = '정기 일정을 등록하지 못했어요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -170,7 +173,7 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
           children: [
             Text(
               '앞으로 ${result.occurrenceCount}개 회차가 캘린더에 생겼어요. '
-              '이후 회차는 배치가 이어서 만듭니다.',
+              '다음 회차는 자동으로 이어서 만들어져요.',
               style: const TextStyle(
                   fontSize: 12.5, color: AppColors.textDim, height: 1.5),
             ),

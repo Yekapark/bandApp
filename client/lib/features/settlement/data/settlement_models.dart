@@ -46,7 +46,7 @@ class SettlementShare {
   factory SettlementShare.fromJson(Map<String, dynamic> json) {
     return SettlementShare(
       userId: (json['userId'] as num).toInt(),
-      name: json['name'] as String? ?? '(알 수 없음)',
+      name: json['name'] as String? ?? '탈퇴한 사용자',
       role: json['role'] as String? ?? 'MEMBER',
       amount: (json['amount'] as num?)?.toInt() ?? 0,
       paid: json['paid'] as bool? ?? false,

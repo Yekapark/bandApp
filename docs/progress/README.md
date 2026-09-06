@@ -35,6 +35,8 @@
 | 10 | [phase-10-plan.md](phase-10-plan.md) — 밴드 FREE/PREMIUM 요금제 · 미디어 보관기한을 현재 플랜에 연결(FREE 30일 / PREMIUM 무제한) · 티어 변경 시 기존 미디어 만료일 재계산(업그레이드=NULL, 다운그레이드=30일 유예) · `PaymentGateway` 인터페이스 + no-op 구현체 · 동시 전환 `SELECT … FOR UPDATE` 직렬화 | ✅ 완료 — CI 통과 (PR #33) |
 | 11 | [phase-11-deploy.md](phase-11-deploy.md) — 배포: 운영 Docker Compose(포트 비공개·Redis 비밀번호·prod 프로파일) · Nginx 리버스 프록시 + Let's Encrypt 자동 갱신 · GitHub Actions 배포(CI 통과 시 GHCR → SSH) · DB 일 1회 백업(자체 검증 → R2 → 7개 보관) · 복구 스크립트(훈련 모드) · X-Forwarded-For 위조 차단 | ✅ 완료 — 백업·복구 로컬 실증(빈 DB 복구 성공). 실제 VM 배포는 서버 확보 후 |
 
+| — | [2026-09-06-premium-and-copy.md](2026-09-06-premium-and-copy.md) — 프리미엄에 정기 합주 자동 등록 추가 · 구독 만료 예고(푸시 30·7·1일 전 + 홈 배너) · 앱 문구를 사용자 말로(Firebase·개발자 콘솔 노출 제거, 말투 ~어요 통일) | ✅ 완료 |
+
 ### 클라이언트 (Flutter, `client/`)
 
 > **이어받기: [client-DEVLOG.md](client-DEVLOG.md) 를 먼저 읽는다.** 현재 상태·다음 할 일·로컬 환경 함정(Flutter PATH, DB 포트 5432 충돌 등).

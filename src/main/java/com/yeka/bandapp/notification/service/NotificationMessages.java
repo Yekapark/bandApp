@@ -62,6 +62,26 @@ public final class NotificationMessages {
                 "참석 응답 부탁해요", when(startAt) + " 합주 참석 여부를 아직 응답하지 않았어요.");
     }
 
+    public static PushMessage planExpiringSoon(long bandId, int daysLeft) {
+        return planMessage(NotificationType.PLAN_EXPIRING_SOON, bandId,
+                "프리미엄이 " + daysLeft + "일 남았어요",
+                "기간이 끝나면 무료로 바뀌고, 30일 뒤부터 올려 둔 사진·영상이 차례로 사라져요.");
+    }
+
+    public static PushMessage planExpired(long bandId, int graceDays) {
+        return planMessage(NotificationType.PLAN_EXPIRED, bandId,
+                "프리미엄이 끝났어요",
+                "지금부터 " + graceDays + "일 뒤에 올려 둔 사진·영상이 차례로 사라져요. "
+                        + "계속 보관하려면 다시 시작해 주세요.");
+    }
+
+    /** 일정과 무관한 밴드 단위 알림. 눌렀을 때 갈 곳이 일정이 아니라 밴드라 reservationId 를 싣지 않는다. */
+    private static PushMessage planMessage(NotificationType type, long bandId, String title, String body) {
+        return new PushMessage(title, body, Map.of(
+                "type", type.name(),
+                "bandId", Long.toString(bandId)));
+    }
+
     private static PushMessage message(NotificationType type, long bandId, long reservationId,
                                        String title, String body) {
         return new PushMessage(title, body, Map.of(

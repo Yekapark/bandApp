@@ -52,7 +52,7 @@ class _RoomPickerSheetState extends ConsumerState<_RoomPickerSheet> {
         title:
             Text('${room.name} 삭제할까요?', style: const TextStyle(fontSize: 16)),
         content: const Text(
-          '이미 등록된 일정에는 영향이 없어요(합주실 이름은 그대로 남습니다). '
+          '이미 등록된 일정은 그대로예요(합주실 이름도 남아요). '
           '앞으로 이 합주실은 목록에서 고를 수 없어요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
@@ -82,7 +82,7 @@ class _RoomPickerSheetState extends ConsumerState<_RoomPickerSheet> {
     } on ApiException catch (e) {
       _snack(e.message);
     } catch (_) {
-      _snack('삭제하지 못했습니다.');
+      _snack('삭제하지 못했어요.');
     }
   }
 
@@ -171,7 +171,7 @@ class _RoomPickerSheetState extends ConsumerState<_RoomPickerSheet> {
                   child: Column(
                     children: [
                       const Text(
-                        '합주실을 불러오지 못했습니다.',
+                        '합주실을 불러오지 못했어요.',
                         style: TextStyle(
                           fontSize: 12.5,
                           color: AppColors.textDim,

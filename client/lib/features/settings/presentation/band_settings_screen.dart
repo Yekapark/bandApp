@@ -59,7 +59,7 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => _InlineError(
-              e is ApiException ? e.message : '설정을 불러오지 못했습니다.',
+              e is ApiException ? e.message : '설정을 불러오지 못했어요.',
               () => ref.invalidate(bandDetailProvider(band.id)),
             ),
             data: (detail) => Column(
@@ -100,7 +100,7 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => _InlineError(
-              e is ApiException ? e.message : '멤버를 불러오지 못했습니다.',
+              e is ApiException ? e.message : '멤버를 불러오지 못했어요.',
               () => ref.invalidate(bandMembersProvider(band.id)),
             ),
             data: (members) => Column(
@@ -137,8 +137,6 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
             const SizedBox(height: 28),
             const Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 20),
-            const _SectionTitle('위험한 작업'),
-            const SizedBox(height: 10),
             TextButton(
               onPressed: _busy ? null : () => _deleteBand(band.id, band.name),
               child: const Text('밴드 삭제',
@@ -149,7 +147,7 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
             ),
             const SizedBox(height: 4),
             const Text(
-              '밴드와 그 안의 모든 기록이 영구히 사라집니다.',
+              '밴드와 그 안의 모든 기록이 사라져요. 되돌릴 수 없어요.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 11, color: AppColors.textFaint),
             ),
@@ -176,15 +174,14 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '밴드를 삭제하면 되돌릴 수 없습니다.\n\n'
-              '합주 일정, 정산 내역, 게시글과 첨부한 사진·영상, 합주실 정보, '
-              '셋리스트가 모두 영구 삭제됩니다.',
+              '일정과 정산, 게시글에 올린 사진·영상까지 모두 사라져요.\n'
+              '되돌릴 수 없어요.',
               style: TextStyle(
                   fontSize: 12.5, color: AppColors.textDim, height: 1.5),
             ),
             const SizedBox(height: 14),
             Text(
-              '확인을 위해 밴드 이름 「$bandName」을 입력해 주세요.',
+              '맞다면 밴드 이름 \'$bandName\' 을 그대로 입력해 주세요.',
               style: const TextStyle(
                   fontSize: 12.5, color: AppColors.textDim, height: 1.5),
             ),
@@ -229,7 +226,7 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('밴드를 삭제하지 못했습니다.');
+      _toast('밴드를 삭제하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -246,7 +243,7 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('권한을 바꾸지 못했습니다.');
+      _toast('권한을 바꾸지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -289,7 +286,7 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('위임하지 못했습니다.');
+      _toast('위임하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -330,7 +327,7 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('내보내지 못했습니다.');
+      _toast('내보내지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -373,7 +370,7 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('나가지 못했습니다.');
+      _toast('나가지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

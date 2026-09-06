@@ -57,7 +57,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         _fieldErrors.addAll(e.fieldErrors);
       });
     } catch (_) {
-      setState(() => _error = '가입 중 문제가 발생했습니다.');
+      setState(() => _error = '가입하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -134,8 +134,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                   validator: (v) {
                     final s = v ?? '';
-                    if (s.length < 8) return '비밀번호는 8자 이상이어야 합니다.';
-                    if (s.length > 64) return '비밀번호는 64자 이하여야 합니다.';
+                    if (s.length < 8) return '비밀번호는 8자 이상이어야 해요.';
+                    if (s.length > 64) return '비밀번호는 64자까지 쓸 수 있어요.';
                     return null;
                   },
                 ),

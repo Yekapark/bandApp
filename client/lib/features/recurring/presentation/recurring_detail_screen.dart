@@ -50,7 +50,7 @@ class RecurringDetailScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  e is ApiException ? e.message : '정기 일정을 불러오지 못했습니다.',
+                  e is ApiException ? e.message : '정기 일정을 불러오지 못했어요.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: AppColors.textDim),
                 ),
@@ -141,7 +141,7 @@ class RecurringDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    '아직 시작하지 않은 회차만 취소돼요. 개별로 수정해 둔 회차·과거 회차는 남습니다.',
+                    '아직 시작하지 않은 회차만 취소돼요. 따로 손댄 회차와 지난 회차는 그대로 남아요.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 11, color: AppColors.textFaint),
                   ),
@@ -197,7 +197,7 @@ class RecurringDetailScreen extends ConsumerWidget {
     } on ApiException catch (e) {
       _snack(context, e.message);
     } catch (_) {
-      _snack(context, '삭제하지 못했습니다.');
+      _snack(context, '삭제하지 못했어요.');
     }
   }
 

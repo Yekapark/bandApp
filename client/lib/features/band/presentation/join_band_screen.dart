@@ -61,7 +61,7 @@ class _JoinBandScreenState extends ConsumerState<JoinBandScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = '밴드에 합류하지 못했습니다.');
+      setState(() => _error = '밴드에 합류하지 못했어요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -91,7 +91,7 @@ class _JoinBandScreenState extends ConsumerState<JoinBandScreen> {
                     style: Theme.of(context).textTheme.headlineLarge),
                 const SizedBox(height: 10),
                 const Text(
-                  '코드 8자를 넣으면 밴드에 바로 합류됩니다.\n합주 일정과 정산이 자동으로 공유돼요.',
+                  '코드 8자를 넣으면 바로 밴드에 들어가요.\n합주 일정과 정산이 자동으로 공유돼요.',
                   style: TextStyle(
                       fontSize: 13.5, height: 1.6, color: AppColors.textDim),
                 ),

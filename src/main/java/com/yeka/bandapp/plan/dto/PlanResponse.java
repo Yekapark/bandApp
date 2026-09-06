@@ -20,7 +20,7 @@ public record PlanResponse(
         Instant startedAt,
 
         @Schema(description = "PREMIUM 현재 구독기간 종료 시각. FREE 면 null. "
-                + "이번 릴리스에서는 정보성 — 경과해도 자동으로 FREE 로 되돌리지 않는다.")
+                + "이 시각이 지나면 야간 배치(PlanExpirationJob)가 FREE 로 되돌린다. 되돌아간 뒤 유예 기간이 지나면 첨부 미디어가 만료된다.")
         Instant expiresAt
 ) {
 

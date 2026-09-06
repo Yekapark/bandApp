@@ -111,7 +111,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
           appBar: AppBar(),
           body: Center(
             child: Text(
-              e is ApiException ? e.message : '게시글을 불러오지 못했습니다.',
+              e is ApiException ? e.message : '게시글을 불러오지 못했어요.',
               style: const TextStyle(color: AppColors.textDim),
             ),
           ),
@@ -293,7 +293,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('게시글을 등록하지 못했습니다.');
+      _toast('게시글을 등록하지 못했어요.');
     } finally {
       if (mounted) {
         setState(() {
@@ -334,7 +334,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       _toast(e.message);
       return false;
     } catch (_) {
-      _toast('첨부를 올리지 못했습니다.');
+      _toast('첨부를 올리지 못했어요.');
       return false;
     }
   }
@@ -359,7 +359,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('수정하지 못했습니다.');
+      _toast('수정하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -424,7 +424,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
         contentType.startsWith('video/') ? _videoMaxBytes : _imageMaxBytes;
     if (await item.file.length() > limit) {
       _toast(contentType.startsWith('video/')
-          ? '영상이 너무 길어요. 압축해도 200MB를 넘습니다.'
+          ? '영상이 너무 커요. 200MB 아래로 줄여야 올릴 수 있어요.'
           : '이미지는 최대 10MB까지예요.');
       return;
     }
@@ -513,7 +513,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       if (mounted) {
         setState(() => _compressPct = null);
         if (stalled) {
-          _toast('영상 압축이 진행되지 않아 원본으로 올려요. 용량이 크면 등록이 막힐 수 있어요.');
+          _toast('영상을 줄이지 못해 원본 그대로 올려요. 너무 크면 등록이 안 될 수 있어요.');
         }
       }
     }
@@ -542,7 +542,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('첨부를 지우지 못했습니다.');
+      _toast('첨부를 지우지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

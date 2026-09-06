@@ -9,8 +9,10 @@ import '../../band/application/band_providers.dart';
 import '../../notification/application/notification_providers.dart';
 import '../../band/data/band_models.dart';
 import '../application/home_providers.dart';
+import '../../plan/application/plan_providers.dart';
 import 'widgets/band_switch_sheet.dart';
 import 'widgets/home_sections.dart';
+import 'widgets/plan_expiry_banner.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -23,7 +25,7 @@ class HomeScreen extends ConsumerWidget {
       body: bandsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _ErrorState(
-          message: '밴드 정보를 불러오지 못했습니다.',
+          message: '밴드 정보를 불러오지 못했어요.',
           onRetry: () => ref.invalidate(myBandsProvider),
         ),
         data: (bands) {
@@ -69,6 +71,10 @@ class _HomeBody extends ConsumerWidget {
         children: [
           _Header(band: band),
           const SizedBox(height: 18),
+          PlanExpiryBanner(
+            plan: ref.watch(bandPlanProvider(band.id)).valueOrNull,
+            isLeader: band.isLeader,
+          ),
           MemberRail(membersAsync: membersAsync),
           const SizedBox(height: 20),
           NextRehearsalCard(reservation: next),

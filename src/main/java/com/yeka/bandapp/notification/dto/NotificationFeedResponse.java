@@ -33,14 +33,21 @@ public record NotificationFeedResponse(
     public record NotificationItem(
             @Schema(example = "128") long id,
             @Schema(description = "알림 종류.", example = "RESERVATION_REMINDER") String type,
-            @Schema(description = "알림이 가리키는 일정 id.", example = "12") long reservationId,
+            @Schema(description = "알림이 가리키는 일정 id. 일정과 무관한 알림(요금제 등)은 null.",
+                    example = "12") Long reservationId,
             @Schema(example = "합주 리마인더") String title,
             @Schema(example = "9월 4일 19:00 합주가 60분 뒤 시작해요.") String body,
             @Schema(description = "발송 시각(UTC).") Instant sentAt
     ) {
         static NotificationItem from(NotificationDispatch d) {
+            // targetId 는 알림 종류마다 가리키는 대상이 다르다. 일정 알림은 일정 id 지만
+            // 요금제 알림은 밴드 id 라, 그대로 내보내면 없는 일정으로 보내는 딥링크가 된다.
+            Long reservationId = switch (d.getType()) {
+                case PLAN_EXPIRING_SOON, PLAN_EXPIRED -> null;
+                default -> d.getTargetId();
+            };
             return new NotificationItem(
-                    d.getId(), d.getType().name(), d.getTargetId(),
+                    d.getId(), d.getType().name(), reservationId,
                     d.getTitle(), d.getBody(), d.getCreatedAt());
         }
     }

@@ -22,7 +22,7 @@ class MemberRail extends StatelessWidget {
         loading: () => const _RailSkeleton(),
         error: (_, __) => const Align(
           alignment: Alignment.centerLeft,
-          child: Text('멤버를 불러오지 못했습니다.',
+          child: Text('멤버를 불러오지 못했어요.',
               style: TextStyle(fontSize: 12, color: AppColors.textDim)),
         ),
         data: (members) => ListView.separated(
@@ -318,7 +318,7 @@ class UpcomingList extends StatelessWidget {
         const SizedBox(height: 10),
         upcomingAsync.when(
           loading: () => const _ListSkeleton(),
-          error: (_, __) => const Text('일정을 불러오지 못했습니다.',
+          error: (_, __) => const Text('일정을 불러오지 못했어요.',
               style: TextStyle(fontSize: 12, color: AppColors.textDim)),
           data: (items) {
             if (items.isEmpty) {

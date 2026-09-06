@@ -6,6 +6,7 @@ import com.yeka.bandapp.band.service.BandAccessGuard;
 import com.yeka.bandapp.band.service.BandDirectoryService;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import com.yeka.bandapp.plan.service.PlanDirectoryService;
 import com.yeka.bandapp.recurring.dto.CreateRecurringRuleRequest;
 import com.yeka.bandapp.recurring.dto.RecurringRuleDetailResponse;
 import com.yeka.bandapp.recurring.dto.RecurringRuleListResponse;
@@ -59,17 +60,19 @@ public class RecurringRuleService {
     private final RoomDirectoryService roomDirectory;
     private final ReservationDirectoryService reservationDirectory;
     private final RecurringProperties properties;
+    private final PlanDirectoryService planDirectory;
 
     public RecurringRuleService(RecurringRuleRepository ruleRepository, BandAccessGuard accessGuard,
                                 BandDirectoryService bandDirectory, RoomDirectoryService roomDirectory,
                                 ReservationDirectoryService reservationDirectory,
-                                RecurringProperties properties) {
+                                RecurringProperties properties, PlanDirectoryService planDirectory) {
         this.ruleRepository = ruleRepository;
         this.accessGuard = accessGuard;
         this.bandDirectory = bandDirectory;
         this.roomDirectory = roomDirectory;
         this.reservationDirectory = reservationDirectory;
         this.properties = properties;
+        this.planDirectory = planDirectory;
     }
 
     /**
@@ -80,6 +83,10 @@ public class RecurringRuleService {
     public RecurringRuleWriteResponse create(long bandId, long userId, CreateRecurringRuleRequest request) {
         BandMember member = accessGuard.requireActiveMember(bandId, userId);
         requireRuleCreationAllowed(bandId, member);
+        // 정기 일정은 PREMIUM 기능이다. 새 규칙을 만드는 것만 막는다 — 이미 있는 규칙의 회차 생성은
+        // 요금제가 FREE 로 내려가도 계속된다(RecurringExtensionJob). 배치까지 멈추면 사용자가
+        // 모르는 사이 다음 주 합주가 안 생긴다.
+        planDirectory.requirePremium(bandId);
         validate(request);
         roomDirectory.requireActiveRoom(bandId, request.roomId());
 

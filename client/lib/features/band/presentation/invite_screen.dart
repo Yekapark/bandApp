@@ -94,7 +94,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('코드를 발급하지 못했습니다.');
+      _toast('코드를 발급하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -132,7 +132,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('무효화하지 못했습니다.');
+      _toast('무효화하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -183,7 +183,7 @@ class _LeaderBody extends ConsumerWidget {
               child: Column(
                 children: [
                   Text(
-                    e is ApiException ? e.message : '초대코드를 불러오지 못했습니다.',
+                    e is ApiException ? e.message : '초대코드를 불러오지 못했어요.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: AppColors.textDim),
                   ),

@@ -25,7 +25,7 @@ class _TermsScreenState extends State<TermsScreen> {
   };
 
   static const _rows = [
-    ('age', '만 14세 이상입니다', true),
+    ('age', '만 14세 이상이에요', true),
     ('tos', '이용약관 동의', true),
     ('privacy', '개인정보 수집·이용 동의', true),
     ('marketing', '공연·이벤트 소식 받기', false),
@@ -67,7 +67,7 @@ class _TermsScreenState extends State<TermsScreen> {
                   style: Theme.of(context).textTheme.headlineLarge),
               const SizedBox(height: 8),
               const Text(
-                '이름·이메일·프로필은 같은 밴드 멤버에게만 공개됩니다.',
+                '이름·이메일·프로필은 같은 밴드 멤버에게만 보여요.',
                 style: TextStyle(
                     fontSize: 12.5, height: 1.6, color: AppColors.textDim),
               ),
@@ -83,7 +83,7 @@ class _TermsScreenState extends State<TermsScreen> {
                 ),
               const Spacer(),
               const Text(
-                '개인정보처리방침·이용약관 전문은 설정 > 약관에서 다시 볼 수 있습니다.',
+                '전문은 아래 링크에서 언제든 다시 볼 수 있어요.',
                 style: TextStyle(
                     fontSize: 11, height: 1.7, color: AppColors.textFaint),
               ),

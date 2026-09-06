@@ -157,7 +157,7 @@ T unwrap<T>(Response<dynamic> res, T Function(Object? data) parse) {
     }
     throw ApiException(
       code: (err['code'] ?? 'UNKNOWN').toString(),
-      message: (err['message'] ?? '요청을 처리하지 못했습니다.').toString(),
+      message: (err['message'] ?? '요청을 처리하지 못했어요.').toString(),
       statusCode: res.statusCode,
       fieldErrors: fields,
     );
