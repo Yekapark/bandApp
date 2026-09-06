@@ -15,7 +15,29 @@
 
 ---
 
-## 1. APK 만들기
+## 1. 한 줄로 보내기 (평소에는 이것만)
+
+```bash
+cd client && python tools/release_tester.py "이번에 뭐가 바뀌었는지 · 뭘 봐줬으면 하는지"
+```
+
+빌드 번호 올리기 → 릴리스 APK 빌드 → 서버 주소가 박혔는지 확인 → App Distribution 업로드까지
+한 번에 한다. 15분쯤 걸린다(대부분 빌드).
+
+| 옵션 | |
+|---|---|
+| `--no-upload` | 빌드까지만. APK 를 직접 확인하고 싶을 때 |
+| `--group 이름` | 보낼 테스터 그룹 (기본 `밴듈테스트`) |
+| `--api-url 주소` | 붙을 서버 (기본 `https://api.bandule.com`) |
+
+끝나면 `client/pubspec.yaml` 의 빌드 번호가 올라가 있다. **커밋해 둔다** — 안 하면 다음에
+같은 번호로 올라가고, 테스터 목록에서 어느 게 새 것인지 구분이 안 된다.
+
+아래 §2~§3 은 **스크립트가 대신 해주는 일**이다. 손으로 할 일이 생겼을 때만 읽으면 된다.
+
+---
+
+## 1-B. 손으로 APK 만들기
 
 ```bash
 cd client
@@ -77,17 +99,32 @@ SHA-1 을 base64 로 바꾼 값이 카카오 콘솔에 등록된 키 해시와 �
 이미 Firebase 프로젝트가 있으므로 **추가 비용·심사가 없다.** 테스터는 메일 초대를 받고
 링크로 설치한다. 새 버전을 올리면 알림도 간다.
 
+**이미 켜져 있다.** 프로젝트 `bandapp-dev-67c6f`, 그룹 `밴듈테스트`. §1 스크립트가 여기로 보낸다.
+
+한 번만 준비하면 되는 것:
+
 ```bash
 npm install -g firebase-tools
 firebase login
-firebase appdistribution:distribute \
-  client/build/app/outputs/flutter-apk/app-debug.apk \
-  --app <Firebase 콘솔의 Android 앱 ID> \
-  --testers "tester1@example.com,tester2@example.com" \
-  --release-notes "첫 테스트 빌드"
+firebase appdistribution:group:list --project bandapp-dev-67c6f
 ```
 
-앱 ID 는 Firebase 콘솔 > 프로젝트 설정 > 내 앱 에서 `1:숫자:android:문자열` 형태로 보인다.
+마지막 줄로 그룹이 보이면 준비 끝이다. 손으로 올릴 때는:
+
+```bash
+firebase appdistribution:distribute \
+  client/build/app/outputs/flutter-apk/app-release.apk \
+  --app 1:973100232123:android:45aab9e3dfda38629a289e \
+  --groups 밴듈테스트 \
+  --release-notes "무엇이 바뀌었는지"
+```
+
+앱 ID 는 `client/android/app/google-services.json` 의 `mobilesdk_app_id` 와 같은 값이고,
+Firebase 콘솔 > 프로젝트 설정 > 내 앱 에서도 `1:숫자:android:문자열` 형태로 보인다.
+
+**테스터 쪽에서 어떻게 보이나** — 초대 링크는 한 번만 받으면 되고 이후로는 안 바뀐다.
+새 빌드를 올리면 같은 링크·같은 App Tester 앱에서 새 버전이 뜨고 알림이 간다.
+자동으로 깔리지는 않는다 — 테스터가 "업데이트" 를 눌러야 한다.
 
 ### 그냥 APK 파일 보내기
 
