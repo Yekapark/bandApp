@@ -256,8 +256,7 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(
-          () => _error = _isEdit ? '합주실을 수정하지 못했어요.' : '합주실을 등록하지 못했어요.');
+      setState(() => _error = _isEdit ? '합주실을 수정하지 못했어요.' : '합주실을 등록하지 못했어요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -434,8 +433,7 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
 }
 
 class _SuggestionList extends StatelessWidget {
-  const _SuggestionList(
-      {super.key, required this.items, required this.onTap});
+  const _SuggestionList({super.key, required this.items, required this.onTap});
   final List<PlaceSuggestion> items;
   final ValueChanged<PlaceSuggestion> onTap;
 

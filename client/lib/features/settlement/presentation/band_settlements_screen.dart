@@ -176,9 +176,7 @@ class _OutstandingCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            settled
-                ? (hasAny ? '없어요' : '정산 없음')
-                : '${_won.format(amount)}원',
+            settled ? (hasAny ? '없어요' : '정산 없음') : '${_won.format(amount)}원',
             style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w900,
@@ -311,8 +309,7 @@ class _Empty extends StatelessWidget {
       child: Text(
         '아직 정산이 없어요.\n합주 일정 상세에서 정산을 만들면 여기에 모여요.',
         textAlign: TextAlign.center,
-        style:
-            TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.6),
+        style: TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.6),
       ),
     );
   }
