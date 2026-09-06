@@ -53,6 +53,14 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
+        // firebase_app_distribution 플러그인의 안드로이드 모듈은 `production`(진짜 SDK)과
+        // `staging`(아무것도 안 하는 껍데기) 두 갈래로 갈라져 있다. 우리 앱에는 그런 구분이
+        // 없어서, 지정해 주지 않으면 Gradle 이 어느 쪽인지 못 고르고 빌드가 멈춘다.
+        //
+        // `production` 을 고른다. 실제로 켜지는지는 Dart 쪽 `TESTER_BUILD` 가 정하고,
+        // 스토어로 갈 때는 이 의존성 자체를 걷어낸다.
+        missingDimensionStrategy("default", "production")
+
         // AndroidManifest 의 카카오 로그인 리다이렉트 스킴에 꽂힌다.
         manifestPlaceholders["kakaoAppKey"] = kakaoAppKey
     }

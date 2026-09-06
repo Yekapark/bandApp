@@ -117,6 +117,9 @@ def main():
             "flutter", "build", "apk", "--release", "--split-per-abi",
             f"--dart-define-from-file={DART_DEFINES.name}",
             f"--dart-define=API_BASE_URL={args.api_url}",
+            # 앱 안에서 "새 버전 있어요" 를 띄우게 한다. 이 스위치가 없으면 그 코드가
+            # 아예 안 돈다 — 스토어 빌드가 스토어 밖에서 앱을 받는 일이 없도록.
+            "--dart-define=TESTER_BUILD=true",
         ],
         "릴리스 APK 빌드",
     )

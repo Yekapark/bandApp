@@ -32,6 +32,13 @@ class AppConfig {
 
   static const String apiPrefix = '/api/v1';
 
+  /// 테스터에게 배포하는 빌드인지. `tools/release_tester.py` 가 켜서 빌드한다.
+  ///
+  /// 켜져 있으면 앱을 열 때 새 버전이 있는지 물어본다. 스토어 빌드에서는 이 값이 false 라
+  /// 그 코드 경로를 아예 타지 않는다 — 스토어 앱이 스토어 밖에서 앱을 받아 까는 건
+  /// 정책 위반이기도 하다.
+  static const bool testerBuild = bool.fromEnvironment('TESTER_BUILD');
+
   /// 카카오 네이티브 앱 키 (Android/iOS). 카카오 개발자센터 → 내 앱 → 앱 키.
   /// 빈 값이면 카카오 버튼이 "설정 안 됨" 스낵바를 띄운다.
   /// 실행 시 --dart-define=KAKAO_NATIVE_APP_KEY=xxxx 로 주입한다(저장소에 키를 커밋하지 않는다).
