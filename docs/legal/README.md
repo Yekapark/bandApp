@@ -17,8 +17,10 @@
 
 | | |
 |---|---|
-| [privacy-facts.md](privacy-facts.md) | 개인정보처리방침에 넣을 사실 — 수집 항목, 보관 기간, 제3자, 국외 이전 |
-| [terms-draft.md](terms-draft.md) | 이용약관 초안 — 조항별 골격과 **지금 상태에서 쓰면 안 되는 문구** |
+| **[privacy-policy-ko.md](privacy-policy-ko.md)** | **개인정보처리방침 한글 초안 — 게시할 본문.** `⟨⟩` 만 채우면 된다 |
+| [privacy-facts.md](privacy-facts.md) | 위 방침의 근거 — 코드에서 확인한 수집 항목·보관 기간·제3자 |
+| [generated-policy-review.md](generated-policy-review.md) | 생성기 결과물을 왜 그대로 쓰지 않았는지. 다른 생성기를 쓸 때 먼저 볼 것 |
+| [terms-draft.md](terms-draft.md) | 이용약관 초안 — 조항별 골격과 **지금 상태에서 쓰면 안 되는 문구**. 본문은 아직 없다 |
 
 ## 채워야 하는 것
 
