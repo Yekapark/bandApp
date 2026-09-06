@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../routing/app_router.dart';
@@ -88,6 +89,15 @@ class SettingsHomeScreen extends ConsumerWidget {
             label: '로그아웃',
             danger: true,
             onTap: () => _logout(context, ref),
+          ),
+          // 어느 빌드가 깔려 있는지. 테스터가 "고쳤다는 게 안 보인다" 고 할 때
+          // 먼저 물어볼 것이 이것이라, 화면에서 바로 읽히게 둔다.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Text(
+              AppConfig.versionLabel,
+              style: const TextStyle(fontSize: 11, color: AppColors.textFaint),
+            ),
           ),
         ],
       ),

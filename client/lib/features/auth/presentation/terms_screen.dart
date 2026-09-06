@@ -9,8 +9,18 @@ import '../../../shared/widgets/primary_button.dart';
 
 /// 회원가입 STEP 1 — 약관 동의. 서버 호출 없이 클라이언트에서만 게이트한다.
 /// (백엔드 signup 은 email/password/name 만 받는다.)
+///
+/// **카카오 가입도 여기를 거친다.** 예전에는 카카오 버튼이 곧바로 로그인으로 갔고, 그
+/// 첫 로그인이 곧 가입이라 **약관도 나이 확인도 없이 계정이 생겼다.** 개인정보보호법은
+/// 만 14세 미만의 개인정보를 처리하려면 법정대리인 동의를 받으라고 하는데, 우리는 그
+/// 절차가 없으므로 "만 14세 이상" 을 필수 항목으로 확인하고 받지 않는 쪽을 택한다.
+///
+/// [next] 가 있으면 동의 후 그 길로 간다(카카오). 없으면 이메일 가입 폼으로 간다.
 class TermsScreen extends StatefulWidget {
-  const TermsScreen({super.key});
+  const TermsScreen({super.key, this.next});
+
+  /// 동의를 마친 뒤 갈 곳. 이메일 가입이면 null.
+  final VoidCallback? next;
 
   @override
   State<TermsScreen> createState() => _TermsScreenState();
@@ -91,7 +101,17 @@ class _TermsScreenState extends State<TermsScreen> {
               PrimaryButton(
                 label: '동의하고 계속하기',
                 enabled: _requiredDone,
-                onPressed: () => context.push(Routes.signup),
+                onPressed: () {
+                  final next = widget.next;
+                  if (next == null) {
+                    context.push(Routes.signup);
+                  } else {
+                    // 동의 화면을 스택에서 걷어내고 원래 하려던 일로 — 뒤로 눌렀을 때
+                    // 동의 화면이 다시 나오면 이미 동의한 사람에게는 막다른 길이 된다.
+                    context.pop();
+                    next();
+                  }
+                },
               ),
             ],
           ),

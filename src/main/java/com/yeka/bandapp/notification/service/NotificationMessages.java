@@ -75,6 +75,21 @@ public final class NotificationMessages {
                         + "계속 보관하려면 다시 시작해 주세요.");
     }
 
+    /**
+     * 신고 접수를 운영자에게 알린다.
+     *
+     * <p><b>밴드 정보를 싣지 않는다.</b> 운영자는 그 밴드 멤버가 아니라서, 밴드를 실으면
+     * 눌러도 못 여는 알림이 된다. 내용도 신고 사유를 그대로 옮기지 않는다 — 남의 글에서
+     * 온 문장이라 알림창에 무엇이 뜰지 알 수 없다. 확인은 신고 번호로 한다.
+     */
+    public static PushMessage reportReceived(long reportId, String targetLabel) {
+        return new PushMessage(
+                "신고가 들어왔어요",
+                targetLabel + " 신고 1건이 접수됐어요. (신고 #" + reportId + ")",
+                Map.of("type", NotificationType.REPORT_RECEIVED.name(),
+                        "reportId", Long.toString(reportId)));
+    }
+
     /** 일정과 무관한 밴드 단위 알림. 눌렀을 때 갈 곳이 일정이 아니라 밴드라 reservationId 를 싣지 않는다. */
     private static PushMessage planMessage(NotificationType type, long bandId, String title, String body) {
         return new PushMessage(title, body, Map.of(

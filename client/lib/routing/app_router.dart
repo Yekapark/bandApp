@@ -123,7 +123,11 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: Routes.splash, builder: (_, __) => const SplashScreen()),
       GoRoute(path: Routes.login, builder: (_, __) => const LoginScreen()),
-      GoRoute(path: Routes.terms, builder: (_, __) => const TermsScreen()),
+      // extra 로 "동의 후 할 일" 을 받는다 — 카카오 가입이 이 길로 온다.
+      GoRoute(
+        path: Routes.terms,
+        builder: (_, state) => TermsScreen(next: state.extra as VoidCallback?),
+      ),
       GoRoute(path: Routes.signup, builder: (_, __) => const SignupScreen()),
       GoRoute(
           path: Routes.bandGate, builder: (_, __) => const BandGateScreen()),

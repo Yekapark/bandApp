@@ -28,6 +28,7 @@ import json
 import re
 import shutil
 import subprocess
+import time
 import sys
 from pathlib import Path
 
@@ -108,6 +109,7 @@ def main():
 
     name, build = bump_build_number()
     print(f"== 버전 {name}+{build}")
+    started = time.time()
 
     # `--split-per-abi` — 하나로 합치면 CPU 4종류용 기계어를 다 실어 99MB 가 된다.
     # 테스터는 새 빌드마다 그걸 통째로 받는다(안드로이드는 부분 업데이트가 없다).
@@ -120,6 +122,9 @@ def main():
             # 앱 안에서 "새 버전 있어요" 를 띄우게 한다. 이 스위치가 없으면 그 코드가
             # 아예 안 돈다 — 스토어 빌드가 스토어 밖에서 앱을 받는 일이 없도록.
             "--dart-define=TESTER_BUILD=true",
+            # 설정 화면 맨 아래에 찍힌다. 테스터가 "고쳤다는 게 안 보인다" 고 할 때
+            # 어느 빌드를 깔고 있는지 물어볼 곳이 필요하다.
+            f"--dart-define=BUILD_LABEL={name}+{build}",
         ],
         "릴리스 APK 빌드",
     )
@@ -128,6 +133,13 @@ def main():
     if not apk.exists():
         made = sorted(p.name for p in APK_DIR.glob("app-*-release.apk"))
         fail(f"{apk.name} 이 없다. 만들어진 것: {', '.join(made) or '없음'}")
+    # 방금 만든 것이 맞는지. 빌드가 조용히 실패하고 앞선 APK 가 그 자리에 남아 있으면
+    # 옛 빌드를 새 것이라고 테스터에게 올리게 된다 — 아래 서버 주소 검사는 그걸 못 잡는다.
+    # (실제로 한 번 헷갈렸다. APK 안에서 Dart 문자열을 찾아 확인하려 했지만, 문자열은
+    #  압축돼 저장돼서 그 방법으로는 있는 것도 없다고 나온다.)
+    if apk.stat().st_mtime < started:
+        fail(f"{apk.name} 이 이번 빌드보다 오래됐다 — 빌드가 실제로 돌지 않았다")
+
     size_mb = apk.stat().st_size / 1024 / 1024
     print(f"   {apk.name}  {size_mb:.0f}MB")
 

@@ -75,7 +75,8 @@ public abstract class IntegrationTestSupport {
         // android-package 를 빠뜨렸다가 application.yml 의 운영 기본값이 바뀌는 순간
         // InviteDeepLinkIntegrationTest 가 깨졌다. 검증 파일에 들어가는 값은 여기서 전부 고정한다.
         registry.add("app.deeplink.base-url", () -> "https://band.test");
-        registry.add("app.deeplink.scheme", () -> "bandapp");
+        // bandapp 이 아니라 bandule — bandapp:// 는 네이버 밴드가 쓰는 스킴이라 겹치면 그 앱이 열린다.
+        registry.add("app.deeplink.scheme", () -> "bandule");
         registry.add("app.deeplink.ios-app-id", () -> "ABCDE12345.com.yeka.bandule");
         registry.add("app.deeplink.android-package", () -> "com.yeka.bandule");
         registry.add("app.deeplink.android-sha256-cert-fingerprints", () -> "AA:BB:CC");

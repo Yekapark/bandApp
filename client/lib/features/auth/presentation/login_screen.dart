@@ -12,6 +12,7 @@ import '../../../routing/app_router.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/auth_controller.dart';
 import '../data/kakao_sdk.dart';
+import '../data/social_terms_storage.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -61,6 +62,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text('$what 은 아직 준비 중이에요.')));
+  }
+
+  /// 카카오 버튼. **첫 사용이면 약관 동의를 먼저 받는다.**
+  ///
+  /// 카카오는 첫 로그인이 곧 가입이라, 그냥 통과시키면 약관도 나이 확인도 없이 계정이
+  /// 생긴다. 로그인 전에는 이 사람이 처음인지 알 수 없어서 기기 기준으로 한 번만 묻는다.
+  Future<void> _kakaoWithTerms() async {
+    final storage = ref.read(socialTermsStorageProvider);
+    if (await storage.agreed()) {
+      await _kakao();
+      return;
+    }
+    if (!mounted) return;
+    context.push(Routes.terms, extra: () async {
+      await storage.markAgreed();
+      await _kakao();
+    });
   }
 
   Future<void> _kakao() async {
@@ -190,15 +208,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     label: '카카오로 계속하기',
                     background: AppColors.kakao,
                     foreground: AppColors.onKakao,
-                    onTap: _loading ? null : _kakao,
+                    onTap: _loading ? null : _kakaoWithTerms,
                   ),
-                  const SizedBox(height: 9),
-                  _SocialButton(
-                    label: '네이버로 계속하기 (준비 중)',
-                    background: AppColors.surfaceRaised,
-                    foreground: AppColors.textFaint,
-                    onTap: null,
-                  ),
+                  // 네이버 로그인 버튼을 뺐다. 눌리지 않는 버튼은 "이 앱은 아직 덜
+                  // 됐구나" 라는 인상만 준다 — 되는 길(이메일·카카오)이 이미 둘 있다.
+                  // 실제로 붙일 때 다시 넣는다.
                   const SizedBox(height: 18),
                   const Text(
                     '계속하면 이용약관과 개인정보처리방침에 동의하는 것으로 봐요.',
@@ -218,7 +232,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 }
-
 
 class _SocialButton extends StatelessWidget {
   const _SocialButton({

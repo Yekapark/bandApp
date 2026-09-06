@@ -29,6 +29,20 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- 초대 링크. 랜딩 페이지(https://.../invite/{code})가 bandule://invite/{code} 로
+                 앱을 부른다. 이 필터가 없으면 링크를 눌러도 앱이 열리지 않는다.
+
+                 스킴이 `bandapp` 이 아니라 `bandule` 인 이유 - `bandapp://` 는 네이버 밴드가
+                 쓰는 주소다. 예전 값으로 두면 초대 링크가 네이버 밴드 앱을 연다(실제로 그랬다).
+
+                 브라우저 주소창에서 앱이 바로 열리는 App Links 는 릴리스 서명 키의 지문을
+                 assetlinks.json 에 올려야 해서 스토어 등록 뒤에 붙인다. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="bandule" android:host="invite" />
+            </intent-filter>
         </activity>
         <!-- 카카오 로그인: 브라우저(커스텀 탭)가 인가 코드를 kakao{네이티브앱키}://oauth 로 돌려준다.
              이 intent-filter 가 없으면 카카오계정 로그인이 브라우저에서 멈추고 앱으로 못 돌아온다.

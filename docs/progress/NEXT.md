@@ -56,6 +56,31 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 ## 1. 못 끝낸 것
 
+### 1-Z. 초대 링크 ✅ **고쳤다 (2026-09-06)** — 확인만 남았다
+
+지시자 제보로 드러난 문제였다. 랜딩 페이지가 `bandapp://invite/{code}` 로 앱을 불렀는데
+**`bandapp://` 는 네이버 밴드가 쓰는 주소**라 그 앱이 열렸고, 게다가 우리 앱에는 링크를
+받는 설정도 처리 코드도 없어서 **스킴이 겹치지 않았어도 안 열렸다.**
+
+고친 것:
+
+- 스킴 `bandapp` → `bandule` (`application.yml`, `DeeplinkProperties`)
+- `AndroidManifest.xml` 에 `bandule://invite` 를 받는 `intent-filter`
+- `app_links` 로 받아 합류 화면(`/band-gate/join?code=...`)으로 넘긴다
+  (`core/deeplink/invite_link_handler.dart`)
+- 같이 발견해 고친 것 — `DeeplinkProperties` 의 패키지명 기본값이 `com.yeka.bandapp`
+  으로 남아 있었다(오늘 `com.yeka.bandule` 로 바꾼 것이 안 따라왔다)
+
+**실기기 확인이 남았다.** 밴드 설정 > 멤버 초대에서 링크를 만들어 카톡 등으로 자신에게
+보낸 뒤 눌러 본다. **밴듈이 열려 합류 화면에 코드가 채워져 있어야 한다.**
+
+> 브라우저 주소창에서 앱이 **바로** 열리는 App Links 는 아직이다. 릴리스 서명 키의 지문을
+> `assetlinks.json` 에 올려야 해서 스토어 등록 뒤에 붙인다
+> (`app.deeplink.android-sha256-cert-fingerprints`). 지금은 랜딩 페이지를 한 번 거친다.
+
+> **서버에 `DEEPLINK_SCHEME` 이 박혀 있으면 그것도 바꿔야 한다.** `.env.prod` 를 확인하고,
+> 있으면 `bandule` 로 고쳐 올린다(§0 의 scp 명령).
+
 ### 1-A. "BOTTOM OVERFLOWED BY 63 PIXELS" — 원인 미확인 ❗
 
 제보만 받고 **끝내 재현하지 못했다.** 어느 화면인지 특정하지 못한 채 남아 있다.

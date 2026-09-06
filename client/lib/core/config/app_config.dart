@@ -39,6 +39,16 @@ class AppConfig {
   /// 정책 위반이기도 하다.
   static const bool testerBuild = bool.fromEnvironment('TESTER_BUILD');
 
+  /// 설정 화면 맨 아래에 찍는 버전. `tools/release_tester.py` 가 pubspec 의 값을 넣는다.
+  ///
+  /// pubspec 을 앱에서 직접 읽을 수는 없어서 빌드할 때 주입한다. 안 넣고 빌드하면
+  /// (로컬 `flutter run` 등) "개발 빌드" 로 나온다 — 테스터 빌드와 헷갈리지 않게.
+  static String get versionLabel {
+    const injected = String.fromEnvironment('BUILD_LABEL');
+    if (injected.isEmpty) return '개발 빌드';
+    return '버전 $injected${testerBuild ? ' · 테스터' : ''}';
+  }
+
   /// 카카오 네이티브 앱 키 (Android/iOS). 카카오 개발자센터 → 내 앱 → 앱 키.
   /// 빈 값이면 카카오 버튼이 "설정 안 됨" 스낵바를 띄운다.
   /// 실행 시 --dart-define=KAKAO_NATIVE_APP_KEY=xxxx 로 주입한다(저장소에 키를 커밋하지 않는다).
@@ -61,7 +71,8 @@ class AppConfig {
   /// 조용히 폴백해야 한다.
   static bool mapAuthFailed = false;
 
-  static bool get mapEnabled => !kIsWeb &&
+  static bool get mapEnabled =>
+      !kIsWeb &&
       kakaoMapAbiSupported &&
       kakaoNativeAppKey.isNotEmpty &&
       !mapAuthFailed;

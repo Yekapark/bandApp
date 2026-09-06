@@ -18,5 +18,13 @@ public enum NotificationType {
     PLAN_EXPIRING_SOON,
 
     /** PREMIUM 이 끝나 FREE 로 내려간 직후. 유예 기간이 지나면 첨부가 사라진다는 안내다. */
-    PLAN_EXPIRED
+    PLAN_EXPIRED,
+
+    /**
+     * 신고가 접수됐다. <b>운영자에게만</b> 간다({@code app.report.notify-user-ids}).
+     *
+     * <p>이게 없으면 신고는 표에 한 줄 쌓일 뿐 아무도 모른다. 약관에 "신고를 검토한다" 고
+     * 쓰려면 최소한 접수 사실이 사람에게 닿아야 한다.
+     */
+    REPORT_RECEIVED
 }

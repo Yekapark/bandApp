@@ -40,6 +40,4 @@ class AppColors {
   // 소셜
   static const Color kakao = Color(0xFFFEE500);
   static const Color onKakao = Color(0xFF1A1200);
-  static const Color naver = Color(0xFF03C75A);
-  static const Color onNaver = Color(0xFF04210F);
 }

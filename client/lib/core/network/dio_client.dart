@@ -33,7 +33,8 @@ final dioProvider = Provider<Dio>((ref) {
 
   if (kDebugMode) {
     dio.interceptors.add(
-      LogInterceptor(requestBody: true, responseBody: true, requestHeader: false),
+      LogInterceptor(
+          requestBody: true, responseBody: true, requestHeader: false),
     );
   }
 
