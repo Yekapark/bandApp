@@ -36,7 +36,10 @@ CLIENT = Path(__file__).resolve().parent.parent
 PUBSPEC = CLIENT / "pubspec.yaml"
 DART_DEFINES = CLIENT / "dart_defines.json"
 GOOGLE_SERVICES = CLIENT / "android/app/google-services.json"
+# flavor 를 쓰면 산출물 이름에 flavor 가 붙는다: app-arm64-v8a-prod-release.apk
+# (abi 가 먼저, flavor 가 뒤다 — 반대로 짐작했다가 한 번 틀렸다)
 APK_DIR = CLIENT / "build/app/outputs/flutter-apk"
+FLAVOR = "prod"
 
 DEFAULT_API = "https://api.bandule.com"
 # 64비트 ARM. 2015년 이후 안드로이드 폰은 사실상 전부 여기 해당한다.
@@ -117,6 +120,9 @@ def main():
     run(
         [
             "flutter", "build", "apk", "--release", "--split-per-abi",
+            # 운영 Firebase 를 쓰는 빌드. flavor 를 빼면 Gradle 이 어느 쪽인지 못 골라
+            # 빌드가 멈춘다. 개발용은 `flutter run --flavor dev`.
+            "--flavor", "prod",
             f"--dart-define-from-file={DART_DEFINES.name}",
             f"--dart-define=API_BASE_URL={args.api_url}",
             # 앱 안에서 "새 버전 있어요" 를 띄우게 한다. 이 스위치가 없으면 그 코드가
@@ -129,7 +135,7 @@ def main():
         "릴리스 APK 빌드",
     )
 
-    apk = APK_DIR / f"app-{args.abi}-release.apk"
+    apk = APK_DIR / f"app-{args.abi}-{FLAVOR}-release.apk"
     if not apk.exists():
         made = sorted(p.name for p in APK_DIR.glob("app-*-release.apk"))
         fail(f"{apk.name} 이 없다. 만들어진 것: {', '.join(made) or '없음'}")

@@ -16,8 +16,8 @@
 | ✅ **카카오 개발자 앱** | `.env` 에 `KAKAO_APP_ID`·`KAKAO_ADMIN_KEY`·`KAKAO_REST_API_KEY` 가 채워져 있다. 로그인·장소검색·지도가 이 앱 하나를 쓴다 |
 | ✅ **도메인 + 운영 서버 + 자동 배포** | `bandule.com`, `api.bandule.com` 운영 중. HTTPS·백업·감시까지 — [NEXT.md §0](progress/NEXT.md) |
 | ✅ **기기 푸시** | 개발용 Firebase 로 **실기기에서 수신 확인**(2026-09-06). 운영 프로젝트는 아직 |
-| ⚠️ **Cloudflare 계정 + R2 버킷** | **개발용만 있다**(`bandapp-media-dev`). 계정·결제·사용법은 검증됐으니 운영 버킷만 하나 더 만들면 된다 |
-| ⚠️ **Firebase 프로젝트(FCM)** | **개발용만 있다**(`bandapp-dev-67c6f`). 운영 분리는 7-B |
+| ✅ **Cloudflare R2** | 운영 버킷 `bandule-prod` 사용 중 |
+| ✅ **Firebase 프로젝트(FCM)** | **운영 `bandule-b94d2` / 개발 `bandapp-dev-67c6f` 분리 완료 (2026-09-06).** 앱은 빌드 flavor(`dev`/`prod`), 서버는 `.env.prod` 로 고른다 |
 | ✅ **백엔드 Phase 0~11** | 배포 설정·자동 백업·복구까지. 운영에서 돈다 |
 | ✅ **Flutter 앱 화면 13개** | 요구 화면 전부 도달 |
 | ✅ **테스터 배포** | Firebase App Distribution, 그룹 `밴듈테스트`. `python tools/release_tester.py "설명"` 한 줄 — [TESTING.md](TESTING.md) |
@@ -31,7 +31,7 @@
 | ❌ **릴리스 서명 키** | 지금은 디버그 키로 서명 중이라 스토어에 못 올린다. **여기부터가 진짜 병목** — 9단계 |
 | ❌ **개인정보처리방침·이용약관 페이지** | 스토어 등록 필수 + 한국은 법적 요건 — 8단계 |
 | ❌ **스토어 개발자 계정** | Google Play 1회 $25 / Apple 연 $99 — 10단계 |
-| ❌ **운영 R2 버킷 · 운영 Firebase** | 지금은 개발용을 그대로 쓴다. 테스터 데이터와 실사용자 데이터가 한곳에 섞인다 |
+| ✅ ~~**운영 R2 버킷 · 운영 Firebase**~~ | **분리 완료 (2026-09-06)** |
 
 > **병목이 도메인에서 서명 키로 옮겨갔다.** 서버·배포·푸시·테스터 배포는 끝났다.
 > 남은 것은 **스토어에 올리기 위한 준비**(서명 키 · 약관 · 계정)와 **운영/개발 자원 분리**다.
@@ -269,25 +269,36 @@ Dart 쪽(`PushService`)·매니페스트 권한(`POST_NOTIFICATIONS`)·`Firebase
   맥과 연회비가 필요하다
 - 심사 대응은 이미 코드에 들어가 있다 — 계정 삭제(Phase 1), 신고·차단(Phase 8)
 
+**2026-09-06 — 개발자 계정 등록을 시작했다(신원 확인 심사 중).** 심사가 끝나면 아래가 필요하다.
+
+- [ ] **약관·개인정보처리방침 URL** — `bandule.com/privacy`, `bandule.com/terms`
+      (Cloudflare Pages 연결만 하면 된다)
+- [ ] **데이터 안전 설문** — 스토어 등록 양식의 필수 항목이다. 답할 내용은
+      [legal/privacy-facts.md](legal/privacy-facts.md) 에 그대로 있다:
+      수집 항목, 국외 전송(있음), 암호화(있음), 계정 삭제 가능(있음)
+- [ ] **앱 아이콘·스크린샷·설명문** — 스토어 페이지에 들어갈 것. 아이콘은 이미 있고
+      스크린샷은 실기기에서 찍으면 된다
+- [ ] **콘텐츠 등급 설문**
+- [ ] **AAB 로 빌드** — 스토어는 APK 가 아니라 `.aab` 를 받는다.
+      `flutter build appbundle --release --dart-define-from-file=dart_defines.json
+      --dart-define=API_BASE_URL=https://api.bandule.com`
+      (테스터 배포용 `release_tester.py` 는 APK 를 만든다 — 스토어용과 다르다)
+- [ ] **ProGuard 켠 뒤 재확인** — 9단계
+
 ---
 
 ## 테스터에게 미리 돌려보게 하려면
 
-서버가 없어도 **Cloudflare Tunnel** 로 내 PC 의 백엔드를 공개 주소로 뚫으면 오늘 시작할 수
-있다. 배포 방법·주의점은 [TESTING.md](TESTING.md) 참조. 정식 배포(2~5단계)를 마치면
-그쪽 주소로 갈아타면 된다.
+**이미 하고 있다.** Firebase App Distribution, 그룹 `밴듈테스트`.
+`cd client && python tools/release_tester.py "설명"` 한 줄이면 빌드부터 배포까지 간다 —
+[TESTING.md](TESTING.md).
 
 ## 병행 가능 / 순서에 안 걸리는 것
 
-아래는 도메인·서버를 기다리는 동안 할 수 있다.
-
-- **7단계 카카오 콘솔 정리** — 지금 바로. 안 하면 실기기 로그인이 계속 막힌다
-- **8단계 약관 문서 작성** — 글쓰기라 서버가 필요 없다
 - **[NEXT.md](progress/NEXT.md) §1-B 실기기 검증 체크리스트** — 영상 첨부·정산 유지·밴드 삭제 등
-  아직 눈으로 확인 안 한 것들. 로컬 백엔드 + USB 테더링으로 지금 가능
+  아직 눈으로 확인 안 한 것들
 - **[NEXT.md](progress/NEXT.md) §1-A "BOTTOM OVERFLOWED" 재현** — 아직 원인 미확인
-- **7-B 단계 Firebase** — 운영 프로젝트 생성과 `google-services.json` 배선은 서버가 없어도 된다.
-  기기 푸시가 아예 안 오는 상태라 우선순위가 낮지 않다
+- **7-B 단계 운영 Firebase 분리** — 지금은 개발용 프로젝트를 앱·서버가 함께 쓴다
 
 ---
 

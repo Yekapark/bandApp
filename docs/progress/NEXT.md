@@ -69,8 +69,19 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 ```powershell
 cd C:\band\bandApp; docker compose up -d
 & "$env:LOCALAPPDATA\Android\sdk\platform-tools\adb.exe" -s R3CX40J7QJE reverse tcp:8080 tcp:8080
-cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=dart_defines.json
+cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --flavor dev --dart-define-from-file=dart_defines.json
 ```
+
+> **`--flavor dev` 가 필요하다 (2026-09-06 부터).** 개발용·운영용 Firebase 를 나눠서,
+> flavor 없이 빌드하면 Gradle 이 어느 쪽인지 못 골라 멈춘다.
+>
+> | | Firebase | 언제 |
+> |---|---|---|
+> | `--flavor dev` | `bandapp-dev-67c6f` | 로컬 개발 |
+> | `--flavor prod` | `bandule-b94d2` | 테스터 배포·스토어 (`release_tester.py` 가 자동으로 붙인다) |
+>
+> 설정 파일은 `client/android/app/src/dev/`·`src/prod/` 에 각각 있고 **커밋되지 않는다** —
+> PC 마다 콘솔에서 받아 넣는다. 산출물 이름은 `app-<abi>-<flavor>-release.apk` 다.
 
 ---
 
@@ -80,9 +91,10 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=da
 
 | | 누가 | 안 하면 |
 |---|---|---|
-| **카카오 콘솔에 새 키 해시 등록** — `7zGOncUg+QW8Yt2dmsgmgmI5TPQ=` | 지시자 | **릴리스 빌드에서 카카오 로그인이 막힌다.** 서명 키가 바뀌었다 |
-| **테스터는 기존 앱을 지우고 새로 설치** | 테스터 | "앱이 설치되지 않음". 안드로이드는 서명이 다른 앱을 업데이트로 받지 않는다 |
-| 약관·개인정보처리방침 웹페이지 게시 | 아직 | 스토어 등록에 URL 이 필수. 본문은 [docs/legal/](../legal/) 에 있다 |
+| ~~카카오 콘솔에 새 키 해시 등록~~ | ✅ 완료 | |
+| ~~기존 앱 지우고 재설치~~ | ✅ 완료 | 서명이 바뀐 뒤로는 그냥 업데이트된다 |
+| **Cloudflare Pages 연결** | 지시자 | 약관 URL 이 없으면 스토어 등록을 못 한다. 페이지는 `site/` 에 만들어 뒀고 연결만 하면 된다 |
+| **ProGuard 켜고 재확인** | 나 | 스토어 제출 빌드에는 켜는 게 맞다. 켠 뒤 지도·로그인·푸시를 실기기로 다시 봐야 한다 |
 
 **릴리스 서명 키가 생겼다 (2026-09-06).** `client/android/bandule-release.jks`, 인증서
 `CN=yeka, L=seoul`. `android/key.properties` 가 있으면 그 키로 서명하고 없으면 디버그 키로
@@ -290,10 +302,12 @@ autoDispose 가 아니라 캐시된 옛 값을 계속 그렸고, 앱을 완전�
   `local.properties`(카카오 키), 키스토어, `*.iml`, 빌드 산출물, `GeneratedPluginRegistrant.java`.
   `/ios/`·`/web/`·`/windows/` 는 아직 `flutter create` 기본값 그대로라 계속 무시한다.
   손댈 일이 생기면 그때 푼다.
-- **릴리스 서명 설정 없음** — `build.gradle.kts` 의 `release` 블록이 아직 디버그 키로 서명한다.
-- **ProGuard 가 꺼져 있다** — `isMinifyEnabled` 미설정. 카카오맵 규칙은 미리 넣어 뒀지만
-  아직 동작하지 않는다. 켤 때 릴리스 빌드로 지도·로그인을 다시 확인해야 한다.
-- 릴리스 키스토어의 **키 해시도 카카오 콘솔에 추가**해야 한다(디버그 것과 다르다).
+- ~~**릴리스 서명 설정 없음**~~ **완료 (2026-09-06)** — `client/android/bandule-release.jks`
+  로 서명한다. `android/key.properties` 가 없으면 디버그 키로 넘어가므로 키 없는 PC 에서도
+  빌드는 된다. 카카오 콘솔에 새 키 해시(`7zGOncUg+QW8Yt2dmsgmgmI5TPQ=`)도 등록했다.
+- **ProGuard 가 꺼져 있다** ❗ — `isMinifyEnabled` 미설정. 카카오맵 규칙은 미리 넣어 뒀지만
+  아직 동작하지 않는다. **켠 뒤 릴리스 빌드로 지도·로그인·푸시를 다시 확인해야 한다**
+  (난독화가 SDK 를 깨는 일이 흔하다). 스토어 제출 전에 한 번은 켜서 확인할 것.
 
 ---
 
@@ -309,9 +323,9 @@ autoDispose 가 아니라 캐시된 옛 값을 계속 그렸고, 앱을 완전�
 | 정기 일정 규칙 상세/수정 | 등록·목록·삭제만 있다 |
 | 캘린더 주간 뷰 | 월간만 |
 | 셋리스트 완료 체크 | 추가·수정·삭제·재정렬만 |
-| 네이버 로그인 | 버튼만 있고 "준비 중" 스낵바 |
+| ~~네이버 로그인~~ | **버튼을 뺐다 (2026-09-06).** 눌리지 않는 버튼이 앱을 덜 된 것처럼 보이게 해서. 실제로 붙일 때 다시 넣는다 |
 | 밴드 장르·파트 | "추후 지원 예정" 안내문만 |
-| 약관 동의 기록 | 클라 게이트만, 백엔드 없음 |
+| ~~약관 동의 기록~~ | **완료 (2026-09-06).** 가입 시점에 `terms_agreements` 에 남긴다(누가·언제·어느 시행일 버전에). 재동의 화면은 아직 없다 — 약관을 고쳐 새로 게시하면 `app.terms.version` 을 올리고, 기존 회원 재동의가 필요해지면 그때 만든다 |
 
 ---
 

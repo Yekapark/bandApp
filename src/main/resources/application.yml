@@ -116,6 +116,11 @@ app:
     android-package: ${ANDROID_PACKAGE:com.yeka.bandule}     # 클라이언트 applicationId 와 같아야 한다 (App Links 검증)
     android-play-store-url: ${ANDROID_PLAY_STORE_URL:https://play.google.com/store/apps/details?id=com.yeka.bandule}
     android-sha256-cert-fingerprints: ${ANDROID_SHA256_CERT_FINGERPRINTS:}   # 쉼표 구분, assetlinks.json 검증용
+  terms:
+    # 지금 게시 중인 문서의 시행일. 회원가입 시 이 값으로 동의 기록을 남긴다.
+    # 문서를 고쳐 새로 게시하면 이 값도 함께 올린다 (docs/legal/).
+    version: ${TERMS_VERSION:2026-09-06}
+    privacy-version: ${PRIVACY_VERSION:2026-09-06}
   report:
     # 신고가 접수되면 푸시를 받을 계정(users.id). 비우면 알림이 안 나간다 - 접수 자체는 그대로 된다.
     # 운영자 역할이 따로 없어서 계정 id 로 지정한다. 쉼표로 여럿.

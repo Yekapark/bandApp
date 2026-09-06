@@ -22,6 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -40,10 +41,13 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final KakaoClient kakaoClient;
     private final KakaoProperties kakaoProperties;
+    /** 가입 시점에 동의 사실을 남긴다 — 앱의 동의 화면을 두 가입 경로가 모두 거친다. */
+    private final TermsAgreementService termsAgreements;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                        JwtTokenProvider tokenProvider, RefreshTokenStore refreshTokenStore,
-                       JwtProperties jwtProperties, KakaoClient kakaoClient, KakaoProperties kakaoProperties) {
+                       JwtProperties jwtProperties, KakaoClient kakaoClient, KakaoProperties kakaoProperties,
+                       TermsAgreementService termsAgreements) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
@@ -51,6 +55,7 @@ public class AuthService {
         this.jwtProperties = jwtProperties;
         this.kakaoClient = kakaoClient;
         this.kakaoProperties = kakaoProperties;
+        this.termsAgreements = termsAgreements;
     }
 
     @Transactional
@@ -68,6 +73,7 @@ public class AuthService {
             // 위반은 여기서 409 로 변환한다(변환이 없으면 공통 Exception 핸들러에 걸려 500).
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }
+        termsAgreements.record(user.getId(), Instant.now());
         return AuthResponse.of(user, issue(user.getId()), true);
     }
 
@@ -100,6 +106,7 @@ public class AuthService {
         try {
             User created = userRepository.saveAndFlush(User.ofSocial(SocialProvider.KAKAO, identity.id(),
                     normalizeEmail(identity.email()), resolveName(identity.nickname(), identity.id())));
+            termsAgreements.record(created.getId(), Instant.now());
             return AuthResponse.of(created, issue(created.getId()), true);
         } catch (DataIntegrityViolationException race) {
             // 같은 카카오 계정의 동시 최초 로그인 — 다른 요청이 먼저 INSERT 했다.
