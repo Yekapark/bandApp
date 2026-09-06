@@ -5,6 +5,13 @@
 > `PlanExpiryReminderJob` 이 30·7·1일 전에 밴드장에게 예고한다. 정기 일정 자동 생성도
 > PREMIUM 기능이 됐다. 자세한 것은 `2026-09-05-plan-lifecycle-and-media-fix.md` 와
 > `2026-09-06-premium-and-copy.md`.
+>
+> **문서 정정 (2026-09-06)** — 아래 §7의 "실제 PG 연동 없음 — BUILD_PLAN Phase 10 명시"와
+> 인터페이스 주석의 "토스·포트원 등" 표현은 실제 결제 수단을 카드사 PG로 전제하고 쓴 것인데,
+> 정정한다: 프리미엄 구독의 실제 결제는 카드사 PG가 아니라 **스토어 인앱결제**(Google Play
+> Billing / Apple In-App Purchase)로 열려야 한다. "결제는 앱 밖에서 이루어진다"는 이
+> 프로젝트의 전제는 합주실 예약·합주 비용 정산 얘기이지 프리미엄 결제를 금지하는 게
+> 아니다. 실제 연동 계획은 `BUILD_PLAN.md` Phase 12, 배경은 `DESIGN.md` §1·§4.4 참조.
 
 ## 1. 한 줄 요약
 

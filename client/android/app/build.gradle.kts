@@ -106,6 +106,15 @@ android {
                 )
                 signingConfigs.getByName("debug")
             }
+            // 스토어 제출 빌드는 난독화·리소스 축소를 켠다. proguard-rules.pro 에 카카오
+            // SDK(로그인·지도) 유지 규칙이 있다 — 켠 뒤 실기기 릴리스 빌드로 지도·로그인·
+            // 푸시를 반드시 재확인할 것(docs/progress/NEXT.md §2-A).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
