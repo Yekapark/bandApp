@@ -72,7 +72,9 @@ android {
         // 만드는 법은 docs/LAUNCH_CHECKLIST.md 9단계.
         if (keystoreProperties != null) {
             create("release") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                // `android/` 기준으로 찾는다 — key.properties 가 거기 있으니 storeFile 도
+                // 같은 기준이어야 한다. `file(...)` 은 `android/app/` 기준이라 못 찾는다.
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
