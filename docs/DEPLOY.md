@@ -24,8 +24,14 @@
 
 ## 1. 사전 준비
 
-**VM** — Oracle Cloud Always Free(ARM) 또는 저가 VPS. Ubuntu 22.04+ 기준.
-메모리 2GB 이상(1GB 면 Postgres + JVM 이 빠듯하다).
+**VM** — 한국 사용자 대상이므로 **서울 리전이 있는 곳**을 고른다(Vultr·AWS Lightsail·국내 VPS).
+Oracle Cloud Always Free(ARM)는 공짜지만 가입·용량 확보가 까다롭다.
+
+- **Ubuntu 24.04 LTS** 권장. 22.04 는 2027-04 에 표준 지원이 끝나고, 26.04 는 아직
+  써드파티 지원이 덜 따라온다. 24.04 가 성숙도와 지원 기간이 가장 균형 잡혀 있다
+- **메모리 2GB 이상.** 1GB 면 Postgres + JVM 이 빠듯하다
+- 디스크는 **NVMe** 가 있으면 그쪽으로 — PostgreSQL 이 올라가서 체감된다
+- 업체 자동 백업(스냅샷)은 꺼도 된다. DB 는 §4 가 매일 R2 로 뜬다
 
 ```bash
 # docker + compose plugin
