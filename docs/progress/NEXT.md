@@ -10,24 +10,47 @@
 
 ## 0. 지금 상태 (이어받을 때 먼저 볼 것)
 
+### 🟢 운영 서버가 살아 있다 (2026-09-06)
+
+**https://api.bandule.com** — 실사용 가능한 상태다. 터널·`adb reverse` 없이 인터넷에서 붙는다.
+
 | | |
 |---|---|
-| 백엔드 | **Phase 0~11 전부 완료.** PR 스택(#39~#41)은 머지 순서가 엇갈려 ②③이 `main` 에 안 들어갔었고, [#42](https://github.com/Yekapark/bandApp/pull/42) 로 바로잡았다 |
-| 진행 중 | `phase-11-deploy` — 운영 compose·Nginx·Let's Encrypt·GitHub Actions 배포·DB 백업/복구. 배포 방법은 [docs/DEPLOY.md](../DEPLOY.md) |
-| 마이그레이션 | `V13` 까지. **`docker compose up -d --build app` 으로 다시 띄워야** 반영된다 |
-| 남은 것 | **출시까지 순서는 [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) 를 본다** (도메인 → 서버 → 배포 → 카카오 콘솔 → 약관 → 서명 → 스토어). 이 문서는 코드로 남은 것만 다룬다 |
-| 실기기 | 갤럭시 S24(`R3CX40J7QJE`) USB 테더링 + `adb reverse tcp:8080` |
+| 서버 | Vultr 서울, `64.176.231.126`, Ubuntu 24.04, 1vCPU/2GB |
+| 접속 | `ssh -i ~/.ssh/bandule_deploy root@64.176.231.126` |
+| 서버 운영 명령 | `bandule ps` / `logs` / `errors` / `health` / `backup` / `db` — `bandule` 만 쳐도 사용법이 나온다 |
+| 배포 | **`main` 에 머지하면 자동.** CI 통과 → 이미지 빌드 → GHCR → SSH → 교체 → 바깥 주소 200 확인 |
+| 롤백 | `ssh ... 'cd /opt/bandapp && sh deploy/deploy.sh sha-<이전>'` |
+| HTTPS | Let's Encrypt 자동 갱신. Cloudflare 주황 구름 ON (실제 접속자 IP 복원 확인) |
+| 백업 | 매일 03:30 KST → R2 `s3://bandule-prod/db-backups/`, 7개 보관 |
+| 감시 | UptimeRobot 등록됨 |
 
-실행:
+**설정·비밀값은 git 에 없다.** 로컬 `.env.prod` 가 정본이고, 고치면 올려야 한다:
+
+```bash
+cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126:/opt/bandapp/.env.prod && ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && chmod 600 .env.prod && bandule restart'
+```
+
+> **FCM 키 파일은 `chown 999:999`** 여야 한다. root 소유면 앱이 아예 안 뜬다(앱은 uid 999).
+
+### 나머지
+
+| | |
+|---|---|
+| 백엔드 | Phase 0~11 완료. 운영 배포까지 끝 |
+| 클라이언트 | 요구 화면 13개 완료. 패키지명 `com.yeka.bandule` |
+| 테스터 배포 | [docs/TESTING.md](../TESTING.md) — 서버가 살았으니 APK 만 만들면 된다 |
+| 출시까지 순서 | [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) |
+| 남은 것 | 릴리스 서명 키 · 약관/개인정보처리방침 · 카카오 콘솔 패키지명 · 운영 Firebase 분리 · 스토어 계정 |
+
+**로컬 개발**은 그대로다 — `docker compose up -d` + `adb reverse tcp:8080 tcp:8080`.
+실기기 빌드에 **`--dart-define-from-file=dart_defines.json` 을 빠뜨리면 카카오 로그인이 막힌다.**
 
 ```powershell
 cd C:\band\bandApp; docker compose up -d
 & "$env:LOCALAPPDATA\Android\sdk\platform-tools\adb.exe" -s R3CX40J7QJE reverse tcp:8080 tcp:8080
 cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=dart_defines.json
 ```
-
-> `adb reverse` 는 USB 를 뽑으면 사라진다. 백엔드 **코드**를 고쳤으면
-> `docker compose up -d --build app` (그냥 `up -d` 는 옛 이미지를 그대로 쓴다).
 
 ---
 

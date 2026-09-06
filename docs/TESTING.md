@@ -6,71 +6,69 @@
 
 ---
 
-## 0. 지금 왜 그냥은 안 되는가
+## 0. 준비 상태 — 서버가 살아 있다 (2026-09-06)
 
-지금 폰에 깔린 앱은 서버 주소가 `http://localhost:8080` 이다. `adb reverse` 로 USB 를 통해
-내 PC 로 넘겨주고 있어서 도는 것이라, **USB 를 뽑으면 그 폰에서도 안 된다.**
-테스터 폰에는 USB 가 없다. 그래서 **인터넷에서 닿는 서버 주소**가 먼저 필요하다.
+**https://api.bandule.com 이 운영 중이다.** 예전에 적어 뒀던 "터널로 임시 노출" 은 이제 필요 없다.
+테스터에게 줄 것은 **그 주소가 박힌 APK 하나**뿐이다.
 
-필요한 것은 세 가지다.
-
-| | |
-|---|---|
-| ① 인터넷에서 닿는 백엔드 | 아래 A안(터널) 또는 B안(진짜 서버) |
-| ② 그 주소가 박힌 APK | 빌드할 때 `--dart-define` 으로 넣는다 |
-| ③ 테스터에게 APK 전달 | Firebase App Distribution 권장 |
+> 예전 방식(Cloudflare Tunnel)은 §6 에 남겨 뒀다 — 서버가 없거나 내려간 동안에만 쓴다.
 
 ---
 
-## 1. 백엔드를 인터넷에 노출하기
-
-### A안 — Cloudflare Tunnel (서버 없이, 오늘 가능) ⭐ 먼저 이걸로 시작
-
-내 PC 의 도커를 그대로 두고 공개 HTTPS 주소만 하나 뚫는다. 무료이고 설정이 거의 없다.
-
-```bash
-winget install --id Cloudflare.cloudflared
-cloudflared tunnel --url http://localhost:8080
-```
-
-실행하면 `https://<임의문자열>.trycloudflare.com` 주소가 뜬다. 그게 서버 주소다.
-
-**알고 있어야 할 것**
-
-- **내 PC 가 켜져 있고 도커가 떠 있어야만** 테스터가 쓸 수 있다. PC 를 끄면 앱이 먹통이 된다
-- 주소는 실행할 때마다 바뀐다. 고정하려면 Cloudflare 계정에 터널을 만들어
-  `test-api.bandule.com` 에 붙인다(`api.bandule.com` 은 나중에 진짜 서버용으로 남겨 둔다)
-- **개발용 DB 에 테스터 데이터가 섞인다.** 테스트가 끝나면 정리할 것을 염두에 둔다
-- 인터넷에 열리는 것이므로, `.env` 의 `JWT_SECRET`·`DB_PASSWORD` 가 예시값이면 바꾼다
-
-### B안 — 진짜 서버 (정식)
-
-[LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md) 2~5단계. 서버를 잡고 `api.bandule.com` 을 붙인다.
-한 번 해두면 PC 를 꺼도 테스터가 계속 쓸 수 있다. **결국 가야 할 길이다.**
-
----
-
-## 2. 그 주소가 박힌 APK 만들기
-
-앱의 기본값은 로컬이라, **빌드할 때 주소를 넣지 않으면 테스터 폰에서 아무 데도 못 붙는다.**
+## 1. APK 만들기
 
 ```bash
 cd client
-flutter build apk --debug \
-  --dart-define-from-file=dart_defines.json \
-  --dart-define=API_BASE_URL=https://<터널주소-또는-api.bandule.com>
+flutter build apk --release   --dart-define-from-file=dart_defines.json   --dart-define=API_BASE_URL=https://api.bandule.com
 ```
 
-- `--dart-define-from-file=dart_defines.json` **을 빠뜨리면 카카오 앱 키가 안 들어가서**
-  카카오 로그인이 "앱 키 미설정" 으로 막힌다. 실제로 한 번 겪었다
-- 뒤에 쓴 `--dart-define` 이 파일의 값을 덮어쓴다
-- 결과물: `client/build/app/outputs/flutter-apk/app-debug.apk`
+결과물: `client/build/app/outputs/flutter-apk/app-release.apk`
 
-**왜 `--debug` 인가** — 릴리스 빌드는 서명 키가 아직 없고(9단계), 평문 HTTP 도 막혀 있다.
-디버그 빌드는 용량이 크고 조금 느리지만 테스트에는 문제가 없다. HTTPS 터널을 쓰면
-릴리스 빌드도 가능하지만, 서명부터 갖춘 뒤에 넘어가는 게 순서다.
+**빠뜨리면 안 되는 것**
 
----
+| | |
+|---|---|
+| `--dart-define-from-file=dart_defines.json` | 카카오 앱 키가 여기 있다. **빠뜨리면 카카오 로그인이 "앱 키 미설정" 으로 막힌다** — 실제로 겪었다 |
+| `--dart-define=API_BASE_URL=...` | 앱 기본값은 `localhost` 다. **안 넣으면 테스터 폰에서 아무 데도 못 붙는다** |
+
+두 값은 빌드하는 순간 앱에 구워진다. 나중에 바꾸려면 다시 빌드해야 한다.
+
+**`--release` 인 이유** — 디버그 빌드는 280MB 가 넘어 배포에 부담이다. 릴리스는 훨씬 작고 빠르다.
+서명은 아직 디버그 키로 하고 있어서(`build.gradle.kts` 의 `release` 블록) 스토어에는 못 올리지만,
+직접 배포에는 문제가 없다. 디버그 키를 계속 쓰므로 **카카오 키 해시도 그대로**다.
+
+> 릴리스 빌드는 평문 HTTP 를 허용하지 않는다. 로컬 백엔드(`http://10.0.2.2:8080`)에 붙이려면
+> `--debug` 로 빌드해야 한다 — 평문 허용은 디버그 매니페스트에만 있다.
+
+## 2. 잘 만들어졌는지 확인
+
+릴리스 빌드는 Dart 코드가 기계어로 컴파일돼 `libapp.so` 안에 들어간다. **`aapt dump strings`
+로는 안 보인다**(안드로이드 리소스만 훑기 때문에 0건으로 나온다 — 실제로 한 번 속았다).
+APK 를 열어 그 파일을 직접 봐야 한다.
+
+```bash
+python -c "
+import zipfile
+d = zipfile.ZipFile('client/build/app/outputs/flutter-apk/app-release.apk').read('lib/arm64-v8a/libapp.so')
+for p in (b'api.bandule.com', b'localhost:8080', b'10.0.2.2'):
+    print(p.decode().ljust(20), 'FOUND' if p in d else 'not found')
+"
+```
+
+`api.bandule.com` 이 **FOUND**, `localhost`·`10.0.2.2` 가 **not found** 면 제대로 박힌 것이다.
+
+패키지명과 카카오 키 해시는 이렇게 본다:
+
+```bash
+AAPT="$LOCALAPPDATA/Android/sdk/build-tools/36.1.0/aapt2.exe"
+"$AAPT" dump packagename client/build/app/outputs/flutter-apk/app-release.apk
+"$LOCALAPPDATA/Android/sdk/build-tools/36.1.0/apksigner.bat" verify --print-certs   client/build/app/outputs/flutter-apk/app-release.apk | grep "SHA-1"
+```
+
+SHA-1 을 base64 로 바꾼 값이 카카오 콘솔에 등록된 키 해시와 같아야 한다.
+디버그 키로 서명하는 동안은 `ahCJ5a5dXyiPh3x9ksny6yMbjzk=` 로 일정하다.
+
+그래도 **폰에 깔아서 로그인까지 되는지 보는 게 가장 확실하다.**
 
 ## 3. 테스터에게 전달하기
 
@@ -111,12 +109,23 @@ firebase appdistribution:distribute \
 - 푸시 알림 권한 요청이 뜨면 허용해야 알림이 온다
 - 아직 안 되는 것: 네이버 로그인(준비 중), 정기 일정 상세/수정, 캘린더 주간 뷰
   ([client-SCREENS.md](progress/client-SCREENS.md) §4)
-- **A안(터널)이면 "내 PC 가 꺼져 있으면 앱이 안 된다"** 는 것을 반드시 말해 둔다
+- 서버가 상시 떠 있으므로 **내 PC 를 꺼도 테스터는 계속 쓸 수 있다**(§6 의 터널을 쓸 때만 예외)
 
 ---
 
 ## 5. 테스트가 끝나면
 
-- 터널을 쓴 경우: `cloudflared` 를 끄면 즉시 접근이 막힌다
-- 개발 DB 에 섞인 테스터 계정·밴드 정리
+- **운영 DB 에 테스터 계정·밴드가 그대로 쌓인다.** 정식 오픈 전에 한 번 비운다
+  (`bandule backup` 으로 백업 먼저 → `deploy/backup/pg-restore.sh` 절차 참고)
 - 받은 피드백은 [progress/NEXT.md](progress/NEXT.md) 에 적는다
+
+## 6. 서버가 없거나 내려갔을 때 — Cloudflare Tunnel
+
+내 PC 의 도커를 공개 HTTPS 로 잠깐 뚫는 방법이다. **평소에는 쓸 일이 없다.**
+
+```bash
+cloudflared tunnel --url http://localhost:8080
+```
+
+나온 주소를 `API_BASE_URL` 에 넣어 빌드한다. **내 PC 가 켜져 있어야만** 테스터가 쓸 수 있고,
+주소는 실행할 때마다 바뀐다.

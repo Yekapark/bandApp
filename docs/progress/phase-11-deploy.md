@@ -249,7 +249,59 @@ DOMAIN=api.example.com DB_NAME=b DB_USERNAME=b DB_PASSWORD=p REDIS_PASSWORD=r JW
 | Cloudflare 프록시(주황 구름) | **켠다** | 원본 IP 를 감추는 이점이 무료 VM 한 대 구성에서 크다. API 라 캐시 이득은 없다. 레이트리밋이 뭉치는 부작용은 `cloudflare-realip.conf` 로 닫았고 테스트로 확인했다 |
 | Cloudflare 대역 목록 관리 | 파일로 커밋 + 갱신 스크립트 | 기동할 때마다 받아 오면 Cloudflare 가 응답을 안 줄 때 서버가 못 뜬다. 갱신 스크립트도 목록이 비면 기존 파일을 그대로 둔다 |
 
-## 8. 커밋 · CI
+## 8. 실서버 배포 기록 (2026-09-06)
+
+**https://api.bandule.com 이 살아 있다.** Vultr 서울(`64.176.231.126`), Ubuntu 24.04, 1vCPU/2GB.
+
+준비 순서는 `docs/DEPLOY.md` 그대로였다 — 방화벽(SSH·80·443만) → 도커 + 로그 로테이션 →
+리포 클론 → `.env.prod`·FCM 키 업로드 → DNS(회색) → 인증서 발급 → 기동 → 주황 구름 →
+GitHub 시크릿 → 백업 크론 → UptimeRobot.
+
+### 올려 보고서야 드러난 결함 4개
+
+문서와 스크립트가 다 준비돼 있었는데도 **실제로 올리기 전엔 하나도 못 잡았다.**
+전부 Phase 11 코드/문서의 결함이다.
+
+| | 증상 | 원인 | 고친 곳 |
+|---|---|---|---|
+| ① | 인증서·컨테이너 다 정상인데 https 연결 안 되고 http 404 | nginx 공식 이미지는 **명령의 첫 낱말이 `nginx` 일 때만** 초기화 스크립트를 돌린다. 인증서 reload 루프를 넣으며 `command` 를 `sh -c` 로 덮어써서 **템플릿 치환이 통째로 건너뛰어졌다** | `docker-entrypoint.d/` 확장 지점으로 이동 |
+| ② | 앱이 아예 기동 실패 | FCM 키를 문서대로 `chmod 600`(root 소유) 했는데 앱은 `USER app`(uid 999). `FcmPushSender` 생성 실패가 `NotificationSender`까지 번져 **푸시만 꺼지는 게 아니라 앱 전체가 안 떴다** | `chown 999:999` 를 문서에 |
+| ③ | **배포할 때마다 502** | `proxy_pass` 에 이름을 쓰면 nginx 가 기동 때 한 번만 주소를 푼다. 배포로 앱 컨테이너가 재생성되면 IP 가 바뀌는데 옛 주소를 붙잡는다 | 도커 내장 DNS resolver + 변수 upstream |
+| ④ | 배포 검증에서 `DOMAIN: parameter not set` | 바깥 주소 확인을 추가하며 변수를 채우는 코드를 안 넣었다. `.env.prod` 는 compose 에만 넘어가고 스크립트 셸에는 안 들어온다 | `.env.prod` 에서 `DOMAIN` 한 줄만 추출 |
+
+**③ 이 제일 컸다** — 자동 배포를 켰으면 배포마다 터졌을 것이다.
+
+### 왜 테스트가 못 잡았나
+
+`deploy/nginx/test-realip.sh` 가 **`docker-compose.prod.yml` 이 아니라 같은 마운트로 컨테이너를
+따로 띄웠다.** 그때는 기본 CMD(`nginx …`)라 초기화가 정상으로 돌았다. **배포되는 물건이 아니라
+비슷한 것을 검증한 셈**이다.
+
+그래서 `deploy.sh` 가 **실제 사용자 경로**(`https://$DOMAIN/actuator/health` 200)를 확인하도록
+했다. 앱 컨테이너의 healthcheck 는 "컨테이너 안에서" 응답한다는 뜻일 뿐이라 nginx 문제를 못 잡는다.
+
+### 운영에서 확인한 것
+
+| | |
+|---|---|
+| HTTPS·인증서 | Let's Encrypt, 2026-12-05 까지, 자동 갱신 |
+| Cloudflare 주황 구름 | ON. **nginx 로그에 실제 접속자 IP 가 찍힌다**(엣지 IP 로 뭉치지 않음) |
+| 가입 → 밴드 → 게시글 | 201 · 201 · 201 |
+| 사진 업로드 (폰 → R2 직접) | `PUT 200` → `READY` |
+| 사진 조회 (서명 URL) | 200, 실제 다운로드됨 |
+| DB 백업 → R2 | `s3://bandule-prod/db-backups/` |
+| 앱 컨테이너 재생성 후 | 200 (③ 수정 확인) |
+| 자동 배포 | `== 배포 완료: sha-54007d3` 까지 완주 |
+| actuator·Swagger | `/actuator/info` 404, health 는 상세 없음 |
+
+### 운영 시 알아둘 것
+
+- **`bandule` 명령**이 서버에 깔려 있다 — `ps`/`logs`/`errors`/`health`/`backup`/`db`/`version`
+- **`.env.prod` 와 `secrets/` 는 git 에 없다.** 로컬이 정본이고 고치면 `scp` 로 올린다
+- Cloudflare 대역 목록은 분기에 한 번 `sh deploy/nginx/update-cloudflare-ips.sh`
+- `Python-urllib` UA 는 Cloudflare 가 막는다(1010). Flutter 의 `Dart/dio` 는 정상
+
+## 9. 커밋 · CI
 
 - 브랜치: `phase-11-deploy`
 - PR: (머지 시 채운다)
