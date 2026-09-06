@@ -50,6 +50,12 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    mail:
+      # spring-boot-starter-mail 추가로 자동 등록된 헬스 인디케이터. SMTP 서버(Gmail)에
+      # 실제로 접속해 보고 실패하면 전체 /actuator/health 를 DOWN(503)으로 끌어내린다.
+      # 메일 발송은 카카오·FCM·R2 처럼 실패해도 무해한 부가 기능이라 앱 헬스와 분리한다.
+      enabled: false
 
 springdoc:
   # 운영에서는 prod 프로파일이 이 둘을 false 로 덮어 API 명세 노출을 막는다(application-prod.yml).
