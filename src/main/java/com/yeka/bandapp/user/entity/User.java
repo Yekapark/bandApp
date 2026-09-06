@@ -48,24 +48,35 @@ public class User extends BaseTimeEntity {
     @Column(name = "social_id", length = 64)
     private String socialId;
 
+    /**
+     * 소셜 가입자는 카카오가 이미 확인해 준 이메일이라 항상 {@code true}. 이메일 가입자만
+     * 가입 시점에 {@code false}로 시작해 인증 코드 메일을 받는다. 강제하지 않는다 — 미인증
+     * 이어도 모든 기능을 그대로 쓸 수 있고, 클라이언트가 배너로만 안내한다.
+     */
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
     @Builder(access = AccessLevel.PRIVATE)
-    private User(String email, String passwordHash, String name, SocialProvider socialProvider, String socialId) {
+    private User(String email, String passwordHash, String name, SocialProvider socialProvider, String socialId,
+                boolean emailVerified) {
         this.email = email;
         this.passwordHash = passwordHash;
         this.name = name;
         this.socialProvider = socialProvider;
         this.socialId = socialId;
+        this.emailVerified = emailVerified;
     }
 
     public static User ofEmail(String email, String passwordHash, String name) {
-        return User.builder().email(email).passwordHash(passwordHash).name(name).build();
+        return User.builder().email(email).passwordHash(passwordHash).name(name).emailVerified(false).build();
     }
 
     public static User ofSocial(SocialProvider provider, String socialId, String email, String name) {
-        return User.builder().socialProvider(provider).socialId(socialId).email(email).name(name).build();
+        return User.builder().socialProvider(provider).socialId(socialId).email(email).name(name)
+                .emailVerified(true).build();
     }
 
     public boolean isEmailAccount() {
@@ -81,6 +92,16 @@ public class User extends BaseTimeEntity {
         if (deletedAt == null) {
             this.deletedAt = when;
         }
+    }
+
+    /** 비밀번호 재설정. 이미 인코딩된 해시를 받는다 — 인코딩은 서비스 레이어 책임. */
+    public void changePassword(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+    }
+
+    /** 이메일 인증 완료 처리. 이미 인증된 상태여도 안전하게 다시 호출할 수 있다(멱등). */
+    public void verifyEmail() {
+        this.emailVerified = true;
     }
 
     /**

@@ -94,7 +94,8 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --flavor dev --dart-define
 | ~~카카오 콘솔에 새 키 해시 등록~~ | ✅ 완료 | |
 | ~~기존 앱 지우고 재설치~~ | ✅ 완료 | 서명이 바뀐 뒤로는 그냥 업데이트된다 |
 | **Cloudflare Pages 연결** | 지시자 | 약관 URL 이 없으면 스토어 등록을 못 한다. 페이지는 `site/` 에 만들어 뒀고 연결만 하면 된다 |
-| **ProGuard 켜고 재확인** | 나 | 스토어 제출 빌드에는 켜는 게 맞다. 켠 뒤 지도·로그인·푸시를 실기기로 다시 봐야 한다 |
+| ~~ProGuard 켜기~~ | ✅ 완료(코드) | `isMinifyEnabled`/`isShrinkResources` 켰고 카카오·트랜스코더 keep 규칙도 넣었다. **실기기 릴리스 빌드로 지도·로그인·푸시 재확인은 아직 — 나** |
+| **Gmail 앱 비밀번호 발급** | 지시자 | 비밀번호 재설정·이메일 인증 메일이 안 나간다(가입·로그인 자체는 정상). 구글 계정 > 보안 > 2단계 인증 켜기 > 앱 비밀번호에서 발급 → `.env`/`.env.prod` 의 `MAIL_SMTP_USERNAME`(그 지메일 주소)·`MAIL_SMTP_PASSWORD`(발급된 16자리)·`MAIL_FROM`(예: `밴듈 <그주소@gmail.com>`) 채우기 |
 
 **릴리스 서명 키가 생겼다 (2026-09-06).** `client/android/bandule-release.jks`, 인증서
 `CN=yeka, L=seoul`. `android/key.properties` 가 있으면 그 키로 서명하고 없으면 디버그 키로

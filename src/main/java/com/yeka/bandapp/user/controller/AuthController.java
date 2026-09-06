@@ -5,10 +5,13 @@ import com.yeka.bandapp.user.dto.AuthResponse;
 import com.yeka.bandapp.user.dto.KakaoLoginRequest;
 import com.yeka.bandapp.user.dto.LoginRequest;
 import com.yeka.bandapp.user.dto.LogoutRequest;
+import com.yeka.bandapp.user.dto.PasswordResetConfirmRequest;
+import com.yeka.bandapp.user.dto.PasswordResetRequestRequest;
 import com.yeka.bandapp.user.dto.SignupRequest;
 import com.yeka.bandapp.user.dto.TokenRefreshRequest;
 import com.yeka.bandapp.user.dto.TokenResponse;
 import com.yeka.bandapp.user.service.AuthService;
+import com.yeka.bandapp.user.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,9 +34,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, PasswordResetService passwordResetService) {
         this.authService = authService;
+        this.passwordResetService = passwordResetService;
     }
 
     @Operation(summary = "이메일 회원가입",
@@ -79,5 +84,24 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@Valid @RequestBody LogoutRequest request) {
         authService.logout(request.refreshToken());
+    }
+
+    @Operation(summary = "비밀번호 재설정 인증번호 발송",
+            description = "이메일 계정에 6자리 인증번호를 보낸다(204). 존재하지 않는 이메일·소셜 "
+                    + "계정이어도 항상 204를 반환한다(계정 존재 여부 비노출). 15분간 유효.")
+    @PostMapping("/password-reset/request")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void requestPasswordReset(@Valid @RequestBody PasswordResetRequestRequest request) {
+        passwordResetService.request(request.email());
+    }
+
+    @Operation(summary = "비밀번호 재설정 확인",
+            description = "인증번호와 새 비밀번호로 재설정한다(204). 인증번호가 틀리거나 만료되면 "
+                    + "400 PASSWORD_RESET_CODE_INVALID(5회 오답 시 인증번호 자체가 무효화된다). "
+                    + "성공하면 이 계정의 모든 기기 세션이 로그아웃된다 — 다시 로그인해야 한다.")
+    @PostMapping("/password-reset/confirm")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+        passwordResetService.confirm(request.email(), request.code(), request.newPassword());
     }
 }

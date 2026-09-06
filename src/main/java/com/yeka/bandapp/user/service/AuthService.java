@@ -21,6 +21,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -43,11 +45,12 @@ public class AuthService {
     private final KakaoProperties kakaoProperties;
     /** 가입 시점에 동의 사실을 남긴다 — 앱의 동의 화면을 두 가입 경로가 모두 거친다. */
     private final TermsAgreementService termsAgreements;
+    private final EmailVerificationService emailVerificationService;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                        JwtTokenProvider tokenProvider, RefreshTokenStore refreshTokenStore,
                        JwtProperties jwtProperties, KakaoClient kakaoClient, KakaoProperties kakaoProperties,
-                       TermsAgreementService termsAgreements) {
+                       TermsAgreementService termsAgreements, EmailVerificationService emailVerificationService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
@@ -56,6 +59,7 @@ public class AuthService {
         this.kakaoClient = kakaoClient;
         this.kakaoProperties = kakaoProperties;
         this.termsAgreements = termsAgreements;
+        this.emailVerificationService = emailVerificationService;
     }
 
     @Transactional
@@ -74,7 +78,27 @@ public class AuthService {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }
         termsAgreements.record(user.getId(), Instant.now());
+        sendVerificationEmailAfterCommit(user.getId());
         return AuthResponse.of(user, issue(user.getId()), true);
+    }
+
+    /**
+     * 인증 메일 발송(SMTP, 외부 I/O)은 커밋 뒤로 미룬다 — {@link UserAccountService}의 카카오
+     * unlink 처리와 같은 이유로, 트랜잭션 중에 외부 호출을 걸어 DB 커넥션을 붙잡지 않는다.
+     * 발송 실패는 가입을 막지 않는다({@link EmailVerificationService#sendVerification}이 이미
+     * 실패를 삼킨다).
+     */
+    private void sendVerificationEmailAfterCommit(long userId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            emailVerificationService.sendVerification(userId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                emailVerificationService.sendVerification(userId);
+            }
+        });
     }
 
     @Transactional(readOnly = true)
