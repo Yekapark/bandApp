@@ -1,0 +1,37 @@
+#!/bin/sh
+# 서버에서 자주 쓰는 명령 모음. compose 옵션(-f, --env-file)을 매번 치지 않게 한다.
+# 설치: cp deploy/bandule /usr/local/bin/bandule && chmod +x /usr/local/bin/bandule
+cd /opt/bandapp 2>/dev/null || { echo "/opt/bandapp 이 없다"; exit 1; }
+C="docker compose -f docker-compose.prod.yml --env-file .env.prod"
+
+case "${1:-help}" in
+  ps|status)  $C ps ;;
+  logs)       $C logs -f --tail "${2:-100}" app ;;
+  nginx)      $C logs -f --tail "${2:-100}" nginx ;;
+  errors)     $C logs --tail 2000 app | grep -iE "error|exception|warn" | tail -40 ;;
+  health)     echo "서버 안:  $(curl -s localhost:8080/actuator/health 2>/dev/null || echo 응답없음)"
+              echo "바깥에서: $(curl -s https://api.bandule.com/actuator/health 2>/dev/null || echo 응답없음)" ;;
+  restart)    $C restart app && echo "앱 재시작함" ;;
+  backup)     sh deploy/backup/pg-backup.sh ;;
+  backups)    ls -lh backups/ 2>/dev/null || echo "아직 없다" ;;
+  db)         $C exec postgres psql -U "$(sed -n 's/^DB_USERNAME=//p' .env.prod | tr -d '[:space:]')" \
+                 -d "$(sed -n 's/^DB_NAME=//p' .env.prod | tr -d '[:space:]')" ;;
+  version)    docker inspect bandapp-app-1 --format '{{.Config.Image}}' ;;
+  disk)       df -h / | tail -1; echo; docker system df ;;
+  *) cat <<'USAGE'
+사용법: bandule <명령>
+
+  ps        컨테이너 5개 상태
+  logs      앱 로그 실시간          (Ctrl+C 로 빠져나옴)
+  nginx     접속 로그 실시간
+  errors    최근 로그에서 에러만 추려 보기
+  health    서비스 살아있는지 (안/밖 둘 다)
+  version   지금 돌고 있는 앱 버전
+  restart   앱만 재시작
+  backup    지금 백업 한 번 뜨기
+  backups   쌓인 백업 목록
+  db        데이터베이스 접속        (\q 로 나감)
+  disk      디스크 여유
+USAGE
+  ;;
+esac
