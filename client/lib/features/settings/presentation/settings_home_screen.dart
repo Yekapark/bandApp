@@ -45,7 +45,7 @@ class SettingsHomeScreen extends ConsumerWidget {
           _Tile(
             icon: Icons.notifications_none,
             label: '알림 설정',
-            sub: '푸시 on/off · 리마인더 시점',
+            sub: '알림 켜기·끄기 · 미리 알림 시점',
             onTap: () => context.push(Routes.notificationSettings),
           ),
           _Tile(

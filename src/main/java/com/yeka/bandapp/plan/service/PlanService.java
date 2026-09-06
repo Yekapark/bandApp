@@ -3,18 +3,20 @@ package com.yeka.bandapp.plan.service;
 import com.yeka.bandapp.band.service.BandAccessGuard;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import com.yeka.bandapp.notification.event.NotificationEvents;
 import com.yeka.bandapp.plan.config.PlanProperties;
 import com.yeka.bandapp.plan.dto.PlanResponse;
 import com.yeka.bandapp.plan.entity.BandPlan;
-import com.yeka.bandapp.plan.gateway.PaymentGateway;
 import com.yeka.bandapp.plan.gateway.PaymentGateway.CancelCommand;
 import com.yeka.bandapp.plan.gateway.PaymentGateway.CancellationResult;
 import com.yeka.bandapp.plan.gateway.PaymentGateway.RenewCommand;
 import com.yeka.bandapp.plan.gateway.PaymentGateway.SubscribeCommand;
 import com.yeka.bandapp.plan.gateway.PaymentGateway.SubscriptionResult;
+import com.yeka.bandapp.plan.gateway.PaymentGateway;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -47,16 +49,19 @@ public class PlanService {
     private final PlanMutationService planMutationService;
     private final PaymentGateway paymentGateway;
     private final PlanProperties planProperties;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PlanService(BandAccessGuard accessGuard, BandPlanRepository bandPlanRepository,
                        PlanDirectoryService planDirectory, PlanMutationService planMutationService,
-                       PaymentGateway paymentGateway, PlanProperties planProperties) {
+                       PaymentGateway paymentGateway, PlanProperties planProperties,
+                       ApplicationEventPublisher eventPublisher) {
         this.accessGuard = accessGuard;
         this.bandPlanRepository = bandPlanRepository;
         this.planDirectory = planDirectory;
         this.planMutationService = planMutationService;
         this.paymentGateway = paymentGateway;
         this.planProperties = planProperties;
+        this.eventPublisher = eventPublisher;
     }
 
     /** 현재 요금제 조회. 밴드 멤버면 누구나. */
@@ -152,6 +157,9 @@ public class PlanService {
         for (Long bandId : bandIds) {
             try {
                 planMutationService.applyDowngrade(bandId, now, graceUntil);
+                // 구독이 조용히 끝나면 유예 뒤 사진·영상이 예고 없이 사라진다. 밴드장에게 알린다.
+                eventPublisher.publishEvent(new NotificationEvents.PlanExpired(
+                        bandId, planProperties.downgradeGraceDays()));
                 done++;
             } catch (RuntimeException e) {
                 log.warn("요금제 만료 강등 실패 bandId={} — 다음 실행에서 재시도한다", bandId, e);

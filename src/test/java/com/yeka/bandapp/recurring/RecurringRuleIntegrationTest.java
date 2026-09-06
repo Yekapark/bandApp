@@ -100,6 +100,7 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
         String leader = signup("rec-wk-l@band.app", "리더");
         long bandId = createBand(leader, "브로콜리너마저");
         long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        makePremium(leader, bandId);   // 정기 일정은 PREMIUM 기능
 
         LocalDate firstDate = today().plusDays(1);
         ResponseEntity<String> res = postRule(leader, bandId, ruleBody(
@@ -218,6 +219,7 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
         long bandId = createBand(leader, "혁오");
         join(member, issueInvite(leader, bandId, null));
         long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        makePremium(leader, bandId);   // 정기 일정은 PREMIUM 기능
         LocalDate firstDate = today().plusDays(1);
         String body = ruleBody(roomId, "WEEKLY", firstDate.getDayOfWeek(), "15:00", "18:00", firstDate, null);
 
@@ -252,6 +254,7 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
         String leader = signup("rec-ov-l@band.app", "리더");
         long bandId = createBand(leader, "장기하와얼굴들");
         long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        makePremium(leader, bandId);   // 정기 일정은 PREMIUM 기능
 
         // 규칙의 첫 회차와 같은 시각에 단발 일정을 먼저 만든다.
         LocalDate firstDate = today().plusDays(2);
@@ -363,6 +366,7 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
         String leader = signup("rec-f1-l@band.app", "리더");
         long bandId = createBand(leader, "브로콜리");
         long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        makePremium(leader, bandId);   // 정기 일정은 PREMIUM 기능
 
         LocalDate start = today().minusYears(1);   // 1년 전 → 제한 없으면 ~50+ 회차
         ResponseEntity<String> res = postRule(leader, bandId, ruleBody(

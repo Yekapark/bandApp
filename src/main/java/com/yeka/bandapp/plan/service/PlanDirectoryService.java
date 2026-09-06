@@ -7,10 +7,12 @@ import com.yeka.bandapp.plan.entity.PlanTier;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * 다른 도메인(게시판 미디어 등)이 밴드 요금제를 읽을 때 쓰는 창구. 도메인 간 참조는 저장소가 아니라 이
@@ -51,6 +53,41 @@ public class PlanDirectoryService {
         return bandPlanRepository.findByBandId(bandId)
                 .map(PlanView::from)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PLAN_NOT_FOUND));
+    }
+
+    /**
+     * PREMIUM 전용 기능의 문지기. FREE 이거나 요금제 행이 없으면 {@code PLAN_REQUIRED}(403).
+     *
+     * <p>행이 없을 때 {@code PLAN_NOT_FOUND}(404)를 던지지 않는 이유: 사용자 입장에서 "정기 일정을
+     * 못 만든 이유"는 어느 쪽이든 같고, 404 는 "그런 밴드가 없다"로 읽혀 더 헷갈린다. 데이터 이상은
+     * {@code warn} 로그로 남기고 사용자에게는 일관된 답을 준다({@link #mediaExpiresAt} 과 같은 태도).
+     */
+    @Transactional(readOnly = true)
+    public void requirePremium(long bandId) {
+        BandPlan plan = bandPlanRepository.findByBandId(bandId).orElse(null);
+        if (plan == null) {
+            log.warn("밴드 {} 의 요금제 행이 없어 FREE 로 보고 막는다", bandId);
+            throw new BusinessException(ErrorCode.PLAN_REQUIRED);
+        }
+        if (plan.getTier() != PlanTier.PREMIUM) {
+            throw new BusinessException(ErrorCode.PLAN_REQUIRED);
+        }
+    }
+
+    /**
+     * 구독기간이 {@code until} 까지 끝나는 PREMIUM 밴드 id. 만료 예고 알림이 쓴다.
+     * 아직 안 지난 것만 고른다 — 이미 지난 밴드는 강등 배치의 몫이다.
+     */
+    @Transactional(readOnly = true)
+    public List<ExpiringBand> premiumBandsExpiringBy(Instant now, Instant until, int limit) {
+        return bandPlanRepository.findPremiumExpiringBetween(now, until, PageRequest.of(0, limit))
+                .stream()
+                .map(p -> new ExpiringBand(p.getBandId(), p.getExpiresAt()))
+                .toList();
+    }
+
+    /** 만료가 다가온 밴드. 남은 일수를 부르는 쪽에서 계산할 수 있도록 만료 시각을 함께 준다. */
+    public record ExpiringBand(long bandId, Instant expiresAt) {
     }
 
     /** 요금제 표시용 요약. 컨트롤러 응답과 테스트가 쓴다. */

@@ -1,5 +1,11 @@
 # Phase 10 — 요금제 (결제 어댑터 제외)
 
+> **이후 변경 (2026-09-05~06)** — 이 문서의 "만료돼도 자동 강등하지 않는다" 서술은 더 이상 맞지
+> 않는다. `PlanExpirationJob` 이 매일 04:45 에 기간 지난 PREMIUM 을 FREE 로 되돌리고,
+> `PlanExpiryReminderJob` 이 30·7·1일 전에 밴드장에게 예고한다. 정기 일정 자동 생성도
+> PREMIUM 기능이 됐다. 자세한 것은 `2026-09-05-plan-lifecycle-and-media-fix.md` 와
+> `2026-09-06-premium-and-copy.md`.
+
 ## 1. 한 줄 요약
 
 밴드마다 **FREE / PREMIUM 요금제**가 생겼다. FREE 는 사진·영상 첨부를 **업로드일 + 30일** 보관하고,

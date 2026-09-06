@@ -63,7 +63,7 @@ class RecurringListScreen extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => _Scrollable(
             child: _Message(
-              e is ApiException ? e.message : '정기 일정을 불러오지 못했습니다.',
+              e is ApiException ? e.message : '정기 일정을 불러오지 못했어요.',
             ),
           ),
           data: (rules) {
@@ -113,7 +113,7 @@ class RecurringListScreen extends ConsumerWidget {
         title: const Text('정기 일정을 삭제할까요?', style: TextStyle(fontSize: 16)),
         content: const Text(
           '아직 시작하지 않은 회차만 취소돼요. 이미 지난 회차와 오늘 이후라도 개별로 '
-          '수정해 둔 회차는 그대로 남습니다. 합주실에는 직접 취소 연락을 하세요.',
+          '따로 손댄 회차는 그대로 남아요. 합주실에는 직접 연락해 주세요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
         ),
@@ -144,7 +144,7 @@ class RecurringListScreen extends ConsumerWidget {
     } on ApiException catch (e) {
       _snack(context, e.message);
     } catch (_) {
-      _snack(context, '삭제하지 못했습니다.');
+      _snack(context, '삭제하지 못했어요.');
     }
   }
 

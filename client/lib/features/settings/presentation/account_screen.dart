@@ -119,7 +119,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('탈퇴하지 못했습니다.');
+      _toast('탈퇴하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

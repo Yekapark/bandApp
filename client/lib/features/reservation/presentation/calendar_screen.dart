@@ -530,7 +530,7 @@ class _InlineError extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Text(
-          '일정을 불러오지 못했습니다.',
+          '일정을 불러오지 못했어요.',
           style: TextStyle(fontSize: 12, color: AppColors.textDim),
         ),
         TextButton(onPressed: onRetry, child: const Text('다시 시도')),

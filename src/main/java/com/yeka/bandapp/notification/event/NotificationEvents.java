@@ -40,4 +40,12 @@ public final class NotificationEvents {
     public record SettlementRequested(long bandId, long reservationId, int totalAmount,
                                       List<Long> recipientUserIds) {
     }
+
+    /**
+     * PREMIUM 구독기간이 끝나 FREE 로 내려감. 밴드장에게.
+     *
+     * <p>{@code graceDays} 뒤 첨부 사진·영상이 사라지므로 이 알림이 사실상 마지막 경고다.
+     */
+    public record PlanExpired(long bandId, int graceDays) {
+    }
 }

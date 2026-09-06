@@ -184,7 +184,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     } on ApiException catch (e) {
       _snack(e.message);
     } catch (_) {
-      _snack('삭제하지 못했습니다.');
+      _snack('삭제하지 못했어요.');
     }
   }
 
@@ -404,7 +404,7 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('합주실을 불러오지 못했습니다.',
+          const Text('합주실을 불러오지 못했어요.',
               style: TextStyle(color: AppColors.textDim)),
           const SizedBox(height: 12),
           TextButton(onPressed: onRetry, child: const Text('다시 시도')),

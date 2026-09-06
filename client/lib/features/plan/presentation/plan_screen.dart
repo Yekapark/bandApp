@@ -48,7 +48,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  e is ApiException ? e.message : '요금제를 불러오지 못했습니다.',
+                  e is ApiException ? e.message : '요금제를 불러오지 못했어요.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: AppColors.textDim),
                 ),
@@ -106,7 +106,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
             ],
             const SizedBox(height: 12),
             const Text(
-              '이 릴리스에서는 실제 결제 없이 요금제가 전환됩니다(스토어 결제 연동 예정).',
+              '지금은 시험 기간이라 결제 없이 바꿀 수 있어요.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 10.5, color: AppColors.textFaint),
             ),
@@ -118,9 +118,11 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
 
   Future<void> _confirmSubscribe(int bandId) async {
     final ok = await _confirm(
-      title: 'PREMIUM 을 시작할까요?',
-      body: '첨부한 사진·영상의 보관기한이 무제한이 됩니다. '
-          '(이미 만료·삭제된 미디어는 복구되지 않아요.)',
+      title: '프리미엄을 시작할까요?',
+      body: '올린 사진·영상이 사라지지 않고, 정기 합주를 자동으로 등록할 수 있어요.\n\n'
+          '기간은 1년이에요. 끝나면 자동으로 무료로 바뀌고, 그때부터 30일 뒤에 '
+          '사진·영상이 차례로 사라져요. 끝나기 전에 미리 알려드릴게요.\n'
+          '(이미 사라진 사진·영상은 되돌릴 수 없어요.)',
       action: '시작',
     );
     if (ok) _run(bandId, 'subscribe');
@@ -128,8 +130,9 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
 
   Future<void> _confirmCancel(int bandId) async {
     final ok = await _confirm(
-      title: 'PREMIUM 을 해지할까요?',
-      body: '해지 시점부터 30일이 지나면 첨부 미디어가 순차적으로 만료됩니다.',
+      title: '프리미엄을 해지할까요?',
+      body: '지금부터 30일이 지나면 올려 둔 사진·영상이 차례로 사라져요.\n'
+          '정기 합주도 새로 등록할 수 없어요(이미 등록한 건 그대로예요).',
       action: '해지',
       danger: true,
     );
@@ -181,7 +184,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '받은 쿠폰 코드를 넣으면 PREMIUM 기간이 더해집니다.',
+              '받은 쿠폰 코드를 넣으면 프리미엄 기간이 늘어나요.',
               style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
             ),
             const SizedBox(height: 12),
@@ -237,7 +240,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast(op == 'coupon' ? '쿠폰을 사용하지 못했습니다.' : '요금제를 변경하지 못했습니다.');
+      _toast(op == 'coupon' ? '쿠폰을 사용하지 못했어요.' : '요금제를 변경하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -365,9 +368,9 @@ class _CompareTable extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, color: AppColors.borderFaint),
-          row('미디어 보관기한', '30일', '무제한'),
+          row('사진·영상 보관', '30일', '무제한'),
           const Divider(height: 1, color: AppColors.borderFaint),
-          row('게시판·일정·정산', '제한 없음', '제한 없음'),
+          row('정기 합주 자동 등록', '—', '무제한'),
         ],
       ),
     );

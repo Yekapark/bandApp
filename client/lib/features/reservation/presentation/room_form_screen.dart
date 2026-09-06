@@ -257,7 +257,7 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
       setState(() => _error = e.message);
     } catch (_) {
       setState(
-          () => _error = _isEdit ? '합주실을 수정하지 못했습니다.' : '합주실을 등록하지 못했습니다.');
+          () => _error = _isEdit ? '합주실을 수정하지 못했어요.' : '합주실을 등록하지 못했어요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

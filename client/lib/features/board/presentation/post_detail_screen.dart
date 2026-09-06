@@ -66,7 +66,7 @@ class PostDetailScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  e is ApiException ? e.message : '게시글을 불러오지 못했습니다.',
+                  e is ApiException ? e.message : '게시글을 불러오지 못했어요.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: AppColors.textDim),
                 ),
@@ -169,7 +169,7 @@ class PostDetailScreen extends ConsumerWidget {
     } on ApiException catch (e) {
       _snack(context, e.message);
     } catch (_) {
-      _snack(context, '삭제하지 못했습니다.');
+      _snack(context, '삭제하지 못했어요.');
     }
   }
 
@@ -214,7 +214,7 @@ class PostDetailScreen extends ConsumerWidget {
     } on ApiException catch (e) {
       _snack(context, e.message);
     } catch (_) {
-      _snack(context, '신고하지 못했습니다.');
+      _snack(context, '신고하지 못했어요.');
     }
   }
 
@@ -230,7 +230,7 @@ class PostDetailScreen extends ConsumerWidget {
         backgroundColor: AppColors.surface,
         title: Text('$name 님을 차단할까요?', style: const TextStyle(fontSize: 16)),
         content: const Text(
-          '차단하면 게시판에서 서로의 글이 보이지 않습니다. 설정에서 해제할 수 있어요.',
+          '차단하면 게시판에서 서로의 글이 보이지 않아요. 설정에서 다시 풀 수 있어요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
         ),
@@ -259,7 +259,7 @@ class PostDetailScreen extends ConsumerWidget {
     } on ApiException catch (e) {
       _snack(context, e.message);
     } catch (_) {
-      _snack(context, '차단하지 못했습니다.');
+      _snack(context, '차단하지 못했어요.');
     }
   }
 

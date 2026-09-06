@@ -41,14 +41,14 @@ class ApiException implements Exception {
         }
         return ApiException(
           code: (error['code'] ?? 'UNKNOWN').toString(),
-          message: (error['message'] ?? '요청을 처리하지 못했습니다.').toString(),
+          message: (error['message'] ?? '요청을 처리하지 못했어요.').toString(),
           statusCode: res.statusCode,
           fieldErrors: fields,
         );
       }
       return ApiException(
         code: 'UNKNOWN',
-        message: '요청을 처리하지 못했습니다. (${res.statusCode})',
+        message: _messageForStatus(res.statusCode ?? 0),
         statusCode: res.statusCode,
       );
     }
@@ -73,7 +73,7 @@ class ApiException implements Exception {
     return ApiException(
       code: 'NETWORK',
       message: isTimeout
-          ? '서버에 연결하지 못했습니다. 네트워크를 확인해 주세요.'
+          ? '서버에 연결하지 못했어요. 네트워크를 확인해 주세요.'
           : '통신 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
     );
   }
@@ -88,6 +88,6 @@ class ApiException implements Exception {
     if (status >= 500) return '서버에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
     if (status == 429) return '요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.';
     if (status == 413) return '파일이 너무 커요.';
-    return '요청을 처리하지 못했습니다. ($status)';
+    return '요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.';
   }
 }

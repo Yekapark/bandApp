@@ -87,7 +87,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
               const _CenterInScroll(child: CircularProgressIndicator()),
           error: (e, _) => _CenterInScroll(
             child: _ErrorBody(
-              message: e is ApiException ? e.message : '게시글을 불러오지 못했습니다.',
+              message: e is ApiException ? e.message : '게시글을 불러오지 못했어요.',
               onRetry: () =>
                   ref.read(boardFeedProvider(band.id).notifier).refresh(),
             ),

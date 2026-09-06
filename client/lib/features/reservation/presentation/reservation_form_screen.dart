@@ -167,7 +167,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = _isEdit ? '일정을 수정하지 못했습니다.' : '일정을 등록하지 못했습니다.');
+      setState(() => _error = _isEdit ? '일정을 수정하지 못했어요.' : '일정을 등록하지 못했어요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

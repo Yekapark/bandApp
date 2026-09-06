@@ -45,14 +45,14 @@ class BandGateScreen extends ConsumerWidget {
               const SizedBox(height: 26),
               _GateCard(
                 title: '밴드 만들기',
-                subtitle: '내가 밴드장이 되고, 초대코드를 멤버에게 보냅니다',
+                subtitle: '내가 밴드장이 되고, 초대코드를 멤버에게 보내요',
                 filled: true,
                 onTap: () => context.push(Routes.createBand),
               ),
               const SizedBox(height: 11),
               _GateCard(
                 title: '밴드 가입하기',
-                subtitle: '밴드장이 준 초대코드 8자를 입력합니다',
+                subtitle: '밴드장이 준 초대코드 8자를 넣어요',
                 filled: false,
                 onTap: () => context.push(Routes.joinBand),
               ),

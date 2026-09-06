@@ -3,6 +3,7 @@ package com.yeka.bandapp.notification.event;
 import com.yeka.bandapp.notification.entity.NotificationType;
 import com.yeka.bandapp.notification.service.NotificationMessages;
 import com.yeka.bandapp.notification.service.NotificationSender;
+import com.yeka.bandapp.notification.service.PlanExpiryReminderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -31,9 +32,12 @@ public class NotificationEventListener {
     private static final Logger log = LoggerFactory.getLogger(NotificationEventListener.class);
 
     private final NotificationSender sender;
+    private final PlanExpiryReminderService planExpiryReminderService;
 
-    public NotificationEventListener(NotificationSender sender) {
+    public NotificationEventListener(NotificationSender sender,
+                                     PlanExpiryReminderService planExpiryReminderService) {
         this.sender = sender;
+        this.planExpiryReminderService = planExpiryReminderService;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
@@ -79,5 +83,10 @@ public class NotificationEventListener {
         } catch (RuntimeException e) {
             log.error("알림 발송 실패", e);
         }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onPlanExpired(NotificationEvents.PlanExpired e) {
+        planExpiryReminderService.notifyExpired(e.bandId(), e.graceDays());
     }
 }

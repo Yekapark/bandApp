@@ -31,7 +31,7 @@ class BlockedUsersScreen extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => _Center(
             child: Text(
-              e is ApiException ? e.message : '차단 목록을 불러오지 못했습니다.',
+              e is ApiException ? e.message : '차단 목록을 불러오지 못했어요.',
               style: const TextStyle(color: AppColors.textDim),
             ),
           ),

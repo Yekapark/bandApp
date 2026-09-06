@@ -38,8 +38,27 @@ public abstract class RecurringApiSupport extends ReservationApiSupport {
         return post("/api/v1/bands/" + bandId + "/recurring-rules", jsonBody, token);
     }
 
-    /** 규칙을 등록하고(201 기대) ruleId 를 돌려준다. */
+    /**
+     * 밴드를 PREMIUM 으로. 결제 게이트웨이가 no-op 이라 구독 API 를 그대로 부르면 된다(밴드장만 가능).
+     * 이미 PREMIUM 이면 409 가 오는데 그것도 원하는 상태이므로 성공으로 친다.
+     */
+    protected void makePremium(String leaderToken, long bandId) {
+        ResponseEntity<String> res = post("/api/v1/bands/" + bandId + "/plan/subscribe", "{}", leaderToken);
+        int status = res.getStatusCode().value();
+        if (status != 200 && status != 409) {
+            throw new IllegalStateException("PREMIUM 전환 실패: " + res.getBody());
+        }
+    }
+
+    /**
+     * 규칙을 등록하고(201 기대) ruleId 를 돌려준다.
+     *
+     * <p>정기 일정은 PREMIUM 기능이라 <b>여기서 밴드를 PREMIUM 으로 만들어 준다.</b> 이 헬퍼를 쓰는
+     * 테스트들은 "규칙이 있는 상태"가 필요한 것이지 요금제를 검증하려는 게 아니다.
+     * 요금제 게이트 자체를 보는 테스트는 {@link #postRule}로 날것의 응답을 받아 확인한다.
+     */
     protected long createRule(String token, long bandId, String jsonBody) {
+        makePremium(token, bandId);
         ResponseEntity<String> res = postRule(token, bandId, jsonBody);
         if (res.getStatusCode().value() != 201) {
             throw new IllegalStateException("정기 규칙 등록 실패: " + res.getBody());

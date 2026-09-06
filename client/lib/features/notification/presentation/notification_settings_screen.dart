@@ -214,8 +214,7 @@ class _Body extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               const Text(
-                '이 기기에서 실제 푸시를 받으려면 앱 알림 권한과 Firebase 설정이 필요해요. '
-                '설정을 저장해 두면 발송 준비가 끝나는 대로 적용돼요.',
+                '휴대폰 설정에서 밴듈 알림을 꺼두면, 여기서 켜 두어도 알림이 오지 않아요.',
                 style: TextStyle(
                     fontSize: 11, color: AppColors.textFaint, height: 1.5),
               ),

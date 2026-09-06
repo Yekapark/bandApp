@@ -65,7 +65,7 @@ class _ReservationDetailScreenState
       body: detailAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => _ErrorBody(
-          message: e is ApiException ? e.message : '일정을 불러오지 못했습니다.',
+          message: e is ApiException ? e.message : '일정을 불러오지 못했어요.',
           onRetry: () => ref.invalidate(reservationDetailProvider(key)),
         ),
         data: (detail) {
@@ -224,7 +224,7 @@ class _ReservationDetailScreenState
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('참석 상태를 바꾸지 못했습니다.');
+      _toast('참석 상태를 바꾸지 못했어요.');
     } finally {
       if (mounted) setState(() => _savingRsvp = false);
     }
@@ -249,7 +249,7 @@ class _ReservationDetailScreenState
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('곡을 추가하지 못했습니다.');
+      _toast('곡을 추가하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -275,7 +275,7 @@ class _ReservationDetailScreenState
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('곡을 수정하지 못했습니다.');
+      _toast('곡을 수정하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -293,7 +293,7 @@ class _ReservationDetailScreenState
       _toast(e.message);
       ref.invalidate(reservationDetailProvider(_key(bandId)));
     } catch (_) {
-      _toast('순서를 바꾸지 못했습니다.');
+      _toast('순서를 바꾸지 못했어요.');
       ref.invalidate(reservationDetailProvider(_key(bandId)));
     }
   }
@@ -310,7 +310,7 @@ class _ReservationDetailScreenState
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('곡을 삭제하지 못했습니다.');
+      _toast('곡을 삭제하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -359,7 +359,7 @@ class _ReservationDetailScreenState
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast('취소하지 못했습니다.');
+      _toast('취소하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -409,7 +409,7 @@ class _ReservationDetailScreenState
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast(approve ? '승인하지 못했습니다.' : '거절하지 못했습니다.');
+      _toast(approve ? '승인하지 못했어요.' : '거절하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

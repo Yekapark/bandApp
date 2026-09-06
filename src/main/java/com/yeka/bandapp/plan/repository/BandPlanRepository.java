@@ -48,6 +48,20 @@ public interface BandPlanRepository extends JpaRepository<BandPlan, Long> {
             + "order by p.expiresAt")
     List<Long> findExpiredPremiumBandIds(@Param("now") Instant now, Pageable pageable);
 
+    /**
+     * 구독기간이 {@code (now, until]} 사이에 끝나는 PREMIUM 밴드 — 만료 예고 배치가 쓴다.
+     *
+     * <p>강등 배치의 {@code < :now} 와 겹치지 않도록 <b>아직 안 지난 것만</b> 고른다. 이미 지난 밴드는
+     * 예고할 게 아니라 강등 대상이고, 강등 직후 별도 알림({@code PLAN_EXPIRED})이 나간다.
+     */
+    @Query("select p from BandPlan p "
+            + "where p.tier = com.yeka.bandapp.plan.entity.PlanTier.PREMIUM "
+            + "and p.expiresAt > :now and p.expiresAt <= :until "
+            + "order by p.expiresAt")
+    List<BandPlan> findPremiumExpiringBetween(@Param("now") Instant now,
+                                              @Param("until") Instant until,
+                                              Pageable pageable);
+
     /** 밴드 삭제 정리. */
     @Modifying
     @Query("delete from BandPlan p where p.bandId = :bandId")

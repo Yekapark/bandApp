@@ -28,20 +28,25 @@ Future<PoiStyle> roomPoiStyle() async {
   return PoiStyle(icon: icon);
 }
 
-/// 지도를 못 띄우는 이유를 사용자 말로. 셋 다 "고칠 방법"이 달라 문구를 나눈다.
+/// 지도를 못 띄울 때 화면에 놓을 안내.
+///
+/// **원인은 사용자에게 말하지 않는다.** 키 미설정·키 해시 미등록·ABI 는 개발자가 고칠 일이고,
+/// 그 문구를 본 사용자는 할 수 있는 게 하나도 없다(예전에는 환경변수 이름과 카카오 개발자 콘솔
+/// 안내가 그대로 떴다). 원인 구분은 [debugPrint] 로 내리고 화면에는 한 줄만 남긴다.
+///
+/// 웹만 예외다 — "모바일 앱에서 보라"는 사실이고 사용자가 실제로 할 수 있는 행동이다.
 String mapUnavailableMessage() {
   if (kIsWeb) {
-    return '지도는 모바일 앱에서만 표시됩니다. 목록으로 확인하세요.';
+    return '지도는 모바일 앱에서만 볼 수 있어요. 아래 목록으로 확인해 주세요.';
   }
   if (!kakaoMapAbiSupported) {
-    return '카카오맵은 ARM 기기 전용이라 이 환경(x86 에뮬레이터 등)에서는 표시되지 않습니다. '
-        '실제 기기에서 확인하세요.';
+    debugPrint('지도 비활성: 카카오맵은 ARM 전용 — x86 에뮬레이터에서는 뜨지 않는다');
+  } else if (AppConfig.kakaoNativeAppKey.isEmpty) {
+    debugPrint('지도 비활성: KAKAO_NATIVE_APP_KEY 가 비어 있다 (--dart-define 확인)');
+  } else {
+    debugPrint('지도 비활성: 카카오맵 인증 실패 — 콘솔에 패키지명·키 해시가 등록됐는지 확인');
   }
-  if (AppConfig.kakaoNativeAppKey.isEmpty) {
-    return '카카오 네이티브 앱 키(KAKAO_NATIVE_APP_KEY)를 설정하면 지도가 표시됩니다.';
-  }
-  return '카카오맵 인증에 실패했습니다. 카카오 개발자 콘솔에 이 앱의 패키지명과 키 해시가 '
-      '등록돼 있는지 확인하세요.';
+  return '지도를 지금 불러올 수 없어요. 아래 목록으로 확인해 주세요.';
 }
 
 /// 지도를 못 띄울 때(웹·키 미설정·SDK 인증 실패) 지도 자리에 대신 놓는 안내.

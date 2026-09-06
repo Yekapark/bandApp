@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -50,7 +51,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = '로그인 중 문제가 발생했습니다.');
+      setState(() => _error = '로그인하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -59,12 +60,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _todo(String what) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('$what 은 준비 중입니다.')));
+      ..showSnackBar(SnackBar(content: Text('$what 은 아직 준비 중이에요.')));
   }
 
   Future<void> _kakao() async {
     if (!AppConfig.kakaoEnabled) {
-      _todo('카카오 로그인 (앱 키 미설정)');
+      // 키가 안 들어간 건 빌드 문제다. 사용자에게 사유를 실토하지 않고 로그로만 남긴다
+      // (--dart-define-from-file 을 빠뜨리면 이 상태가 된다).
+      debugPrint('카카오 로그인 비활성: KAKAO_NATIVE_APP_KEY 가 비어 있다');
+      _todo('카카오 로그인');
       return;
     }
     FocusScope.of(context).unfocus();
@@ -82,7 +86,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       debugPrint('kakao login failed: $e');
       final msg = e.toString().toLowerCase();
       final canceled = msg.contains('cancel') || msg.contains('access_denied');
-      if (!canceled) setState(() => _error = '카카오 로그인 중 문제가 발생했습니다.');
+      if (!canceled) setState(() => _error = '카카오 로그인을 마치지 못했어요. 다시 시도해 주세요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -197,7 +201,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    '계속하면 이용약관과 개인정보처리방침에 동의하는 것으로 간주됩니다.',
+                    '계속하면 이용약관과 개인정보처리방침에 동의하는 것으로 봐요.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 10.5,

@@ -183,7 +183,7 @@ class BoardRepository {
       if (code < 200 || code >= 300) {
         throw ApiException(
           code: 'MEDIA_UPLOAD_FAILED',
-          message: '파일을 저장소에 올리지 못했습니다. ($code)',
+          message: '파일을 저장소에 올리지 못했어요. ($code)',
           statusCode: code,
         );
       }
