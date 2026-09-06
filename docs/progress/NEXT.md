@@ -69,8 +69,19 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 ```powershell
 cd C:\band\bandApp; docker compose up -d
 & "$env:LOCALAPPDATA\Android\sdk\platform-tools\adb.exe" -s R3CX40J7QJE reverse tcp:8080 tcp:8080
-cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --dart-define-from-file=dart_defines.json
+cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --flavor dev --dart-define-from-file=dart_defines.json
 ```
+
+> **`--flavor dev` 가 필요하다 (2026-09-06 부터).** 개발용·운영용 Firebase 를 나눠서,
+> flavor 없이 빌드하면 Gradle 이 어느 쪽인지 못 골라 멈춘다.
+>
+> | | Firebase | 언제 |
+> |---|---|---|
+> | `--flavor dev` | `bandapp-dev-67c6f` | 로컬 개발 |
+> | `--flavor prod` | `bandule-b94d2` | 테스터 배포·스토어 (`release_tester.py` 가 자동으로 붙인다) |
+>
+> 설정 파일은 `client/android/app/src/dev/`·`src/prod/` 에 각각 있고 **커밋되지 않는다** —
+> PC 마다 콘솔에서 받아 넣는다. 산출물 이름은 `app-<abi>-<flavor>-release.apk` 다.
 
 ---
 

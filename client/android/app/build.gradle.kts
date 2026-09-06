@@ -14,10 +14,6 @@ val kakaoAppKey: String = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }.getProperty("kakao.appKey") ?: ""
 
-// FCM 은 google-services.json 이 있어야 동작한다. 이 파일은 Firebase 콘솔에서 받아
-// android/app/ 에 넣으며, 저장소에는 커밋하지 않는다(개발용·운영용 프로젝트가 다르다 —
-// android/.gitignore 참조). 없으면 플러그인을 아예 적용하지 않아서 빌드는 그대로 되고
-// 푸시만 조용히 비활성화된다 — 카카오 키가 없을 때와 같은 방식(PushService 주석 참조).
 // 릴리스 서명 키 정보. 없으면 null 이고, 그때는 디버그 키로 서명한다(아래 signingConfigs).
 // 이 파일과 .jks 는 저장소에 절대 넣지 않는다 — 잃어버리면 그 앱은 영원히 업데이트할 수 없고,
 // 새어 나가면 남이 우리 앱 행세를 할 수 있다.
@@ -25,13 +21,18 @@ val keystoreProperties: Properties? = rootProject.file("key.properties").let { f
     if (f.exists()) Properties().apply { f.inputStream().use { load(it) } } else null
 }
 
-val googleServicesJson = file("google-services.json")
-if (googleServicesJson.exists()) {
+// Firebase 설정은 개발용·운영용이 따로 있고, 아래 flavor 가 고른다
+// (app/src/dev/google-services.json, app/src/prod/google-services.json).
+// 둘 다 없으면 플러그인을 아예 적용하지 않아서 빌드는 그대로 되고 푸시만 조용히 꺼진다 —
+// 카카오 키가 없을 때와 같은 방식(PushService 주석 참조).
+val hasAnyGoogleServices = listOf("dev", "prod")
+    .any { file("src/$it/google-services.json").exists() }
+if (hasAnyGoogleServices) {
     apply(plugin = "com.google.gms.google-services")
 } else {
     logger.lifecycle(
-        "[bandule] android/app/google-services.json 이 없다 — FCM 푸시 비활성화 상태로 빌드한다. " +
-            "켜려면 docs/LAUNCH_CHECKLIST.md 7-B 단계 참조.",
+        "[bandule] google-services.json 이 없다 — FCM 푸시 비활성화 상태로 빌드한다. " +
+            "android/app/src/dev/ 또는 src/prod/ 에 넣는다(docs/LAUNCH_CHECKLIST.md 7-B).",
     )
 }
 
@@ -80,6 +81,16 @@ android {
                 keyPassword = keystoreProperties.getProperty("keyPassword")
             }
         }
+    }
+
+    // 개발용·운영용 Firebase 프로젝트를 나눈다. 하나뿐이면 테스트 알림이 실사용자에게 가거나
+    // 그 반대가 된다. **applicationId 는 둘이 같다** — 다르게 하면 카카오 콘솔에 플랫폼을
+    // 하나 더 등록하고 키 해시도 따로 넣어야 해서, 얻는 것에 비해 손이 많이 간다.
+    // 대신 두 빌드를 한 기기에 같이 깔 수는 없다(나중에 필요해지면 그때 나눈다).
+    flavorDimensions += "env"
+    productFlavors {
+        create("dev") { dimension = "env" }
+        create("prod") { dimension = "env" }
     }
 
     buildTypes {
