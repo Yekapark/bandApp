@@ -101,13 +101,12 @@ services:
       - ./deploy/nginx/templates:/etc/nginx/templates:ro
       - ./deploy/nginx/proxy-headers.conf:/etc/nginx/proxy-headers.conf:ro
       - ./deploy/nginx/cloudflare-realip.conf:/etc/nginx/cloudflare-realip.conf:ro
+      # 인증서 갱신분을 집어 들게 6시간마다 reload 하는 스크립트.
+      # command 를 덮어쓰면 안 된다 — 공식 이미지는 명령이 nginx 로 시작할 때만
+      # 이 디렉터리와 템플릿 치환을 돌린다(99-cert-reload.sh 주석 참조).
+      - ./deploy/nginx/docker-entrypoint.d/99-cert-reload.sh:/docker-entrypoint.d/99-cert-reload.sh:ro
       - certbot-conf:/etc/letsencrypt:ro
       - certbot-www:/var/www/certbot
-    # 인증서가 갱신돼도 nginx 는 그걸 모른다(파일을 기동 때 한 번 읽는다). 6시간마다 reload 해서
-    # 갱신분을 집어 들게 한다. reload 는 무중단이다.
-    command: >
-      sh -c "while :; do sleep 6h & wait $$!; nginx -s reload; done & 
-             exec nginx -g 'daemon off;'"
 
   certbot:
     image: certbot/certbot:latest

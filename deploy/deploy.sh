@@ -25,10 +25,32 @@ sh deploy/backup/pg-backup.sh || echo "!! 백업 실패 — 배포는 계속하�
 echo "== 교체"
 $COMPOSE up -d --remove-orphans
 
-echo "== 헬스체크 대기"
+echo "== 헬스체크 대기 (앱 컨테이너 내부)"
 i=0
+healthy=0
 while [ $i -lt 60 ]; do
     if [ "$($COMPOSE ps -q app | xargs docker inspect -f '{{.State.Health.Status}}')" = "healthy" ]; then
+        healthy=1
+        break
+    fi
+    sleep 5
+    i=$((i + 1))
+done
+
+if [ "$healthy" != 1 ]; then
+    echo "!! 5분 안에 healthy 가 되지 않았다. 로그:"
+    $COMPOSE logs --tail 100 app
+    exit 1
+fi
+
+# 앱이 healthy 라는 건 "컨테이너 안에서" 응답한다는 뜻일 뿐이다. 실제 사용자는 Nginx 를
+# 거쳐 들어오므로 바깥 주소로도 확인한다. 실제로 nginx 설정이 통째로 생성되지 않아
+# 기본 페이지만 뜨는데 앱은 healthy 였던 적이 있다(deploy/nginx/docker-entrypoint.d 주석 참조).
+echo "== 바깥 주소 확인 https://$DOMAIN/actuator/health"
+i=0
+while [ $i -lt 12 ]; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://$DOMAIN/actuator/health" || echo 000)
+    if [ "$code" = "200" ]; then
         echo "== 배포 완료: $TAG"
         docker image prune -f >/dev/null 2>&1 || true
         exit 0
@@ -37,6 +59,8 @@ while [ $i -lt 60 ]; do
     i=$((i + 1))
 done
 
-echo "!! 5분 안에 healthy 가 되지 않았다. 로그:"
-$COMPOSE logs --tail 100 app
+echo "!! 앱은 떴는데 https://$DOMAIN 으로는 200 이 아니다 (마지막 응답 $code)."
+echo "   Nginx 설정과 인증서를 확인한다:"
+$COMPOSE exec -T nginx ls -l /etc/nginx/conf.d/ 2>&1 || true
+$COMPOSE logs --tail 30 nginx
 exit 1
