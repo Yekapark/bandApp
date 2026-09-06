@@ -8,6 +8,11 @@ set -eu
 cd "$(dirname "$0")/.."
 COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.prod"
 
+# 배포 끝에 https://$DOMAIN 을 확인하므로 값이 필요하다. .env.prod 는 compose 에만 넘기고
+# 이 셸에는 안 들어오기 때문에 직접 뽑는다(전체를 source 하면 비밀값이 이 셸에 다 풀린다).
+DOMAIN=$(sed -n 's/^DOMAIN=//p' .env.prod | head -1 | sed 's/#.*//' | tr -d '[:space:]')
+[ -n "$DOMAIN" ] || { echo "!! .env.prod 에 DOMAIN 이 없다"; exit 1; }
+
 TAG="${1:-latest}"
 # .env.prod 의 IMAGE_TAG 줄을 이번 태그로 갈아 끼운다(없으면 추가). 롤백할 때 이 파일만 보면 된다.
 if grep -q '^IMAGE_TAG=' .env.prod; then
