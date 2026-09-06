@@ -61,6 +61,7 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 | 클라이언트 | 요구 화면 13개 완료. 패키지명 `com.yeka.bandule` |
 | 테스터 배포 | [docs/TESTING.md](../TESTING.md) — 서버가 살았으니 APK 만 만들면 된다 |
 | 출시까지 순서 | [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) |
+| **다른 PC 에서 이어서** | **[docs/NEW_PC_SETUP.md](../NEW_PC_SETUP.md)** — git 에 없는 파일 목록과 확인 절차 |
 | 남은 것 | 릴리스 서명 키 · 약관/개인정보처리방침 · 카카오 콘솔 패키지명 · 운영 Firebase 분리 · 스토어 계정 |
 
 **로컬 개발**은 그대로다 — `docker compose up -d` + `adb reverse tcp:8080 tcp:8080`.
