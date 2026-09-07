@@ -14,12 +14,19 @@ import java.util.List;
  * <p>비워 두면 알림이 나가지 않는다 — 신고 접수 자체는 그대로 동작한다. 로컬·테스트에서
  * 기본값이 이쪽이라, 설정을 안 넣었다고 개발이 막히지는 않는다.
  *
+ * <p>메일 수신자는 <b>계정과 따로</b> 둔다. 푸시는 기기 토큰이 있어야 닿는데(앱을 깔고 로그인해야
+ * 한다) 신고는 앱을 안 켜고 있어도 알아야 하고, 운영자가 앱 계정을 갖고 있으리라는 보장도 없다.
+ * 그래서 주소를 직접 적는다.
+ *
  * @param notifyUserIds 신고 접수 푸시를 받을 사용자 id 목록
+ * @param notifyEmails  신고 접수 메일을 받을 주소 목록
  */
 @ConfigurationProperties(prefix = "app.report")
-public record ReportProperties(List<Long> notifyUserIds) {
+public record ReportProperties(List<Long> notifyUserIds, List<String> notifyEmails) {
 
     public ReportProperties {
         notifyUserIds = notifyUserIds == null ? List.of() : List.copyOf(notifyUserIds);
+        notifyEmails = notifyEmails == null ? List.of()
+                : notifyEmails.stream().map(String::trim).filter(e -> !e.isEmpty()).toList();
     }
 }

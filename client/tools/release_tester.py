@@ -45,7 +45,7 @@ DEFAULT_API = "https://api.bandule.com"
 # 64비트 ARM. 2015년 이후 안드로이드 폰은 사실상 전부 여기 해당한다.
 # 32비트 기기(armeabi-v7a)를 쓰는 테스터가 나오면 `--abi armeabi-v7a` 로 한 번 더 올린다.
 DEFAULT_ABI = "arm64-v8a"
-DEFAULT_GROUP = "나만"  # 테스터 전체 배포는 지시가 있을 때만. 그때 "밴듈테스트" 로 되돌린다
+DEFAULT_GROUP = "밴듈테스트"  # 테스터 2명. 본인만 볼 때는 --group 나만
 
 # App Distribution 은 배포 채널일 뿐이고, 앱 안의 FCM 프로젝트와는 별개다 — 서로 달라도 된다.
 #
