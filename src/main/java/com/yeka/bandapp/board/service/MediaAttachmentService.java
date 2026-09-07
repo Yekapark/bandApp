@@ -86,6 +86,15 @@ public class MediaAttachmentService {
         MediaType type = MediaPolicy.resolveType(contentType);
         MediaPolicy.requireWithinLimit(type, request.sizeBytes());
 
+        // 영상은 PREMIUM 전용이다. 사진은 클라이언트가 긴 변 2048px 로 줄여 400~700KB 로 올라오는데
+        // 영상은 상한이 200MB 라 300배 차이가 난다 — 무료 밴드의 저장 비용은 사실상 전부 영상에서 나온다.
+        // 총 용량 상한을 따로 두지 않는 이유: FREE 는 이미 보관기한 30일이라 쌓을 수 있는 총량이
+        // 그 안에 묶여 있고, 밴드별 누적 용량을 세려면 업로드·삭제·만료 배치 세 곳에서 정합성을
+        // 맞춰야 해서 값에 비해 비싸다. 필요해지면 실제 사용량을 보고 그때 넣는다.
+        if (type == MediaType.VIDEO) {
+            planDirectory.requirePremium(bandId);
+        }
+
         if (mediaRepository.countByBoardPostIdAndStatusIn(
                 postId, List.of(MediaStatus.PENDING, MediaStatus.READY)) >= MediaPolicy.MAX_ATTACHMENTS_PER_POST) {
             throw new BusinessException(ErrorCode.MEDIA_LIMIT_EXCEEDED);

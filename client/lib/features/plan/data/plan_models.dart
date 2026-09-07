@@ -6,6 +6,7 @@ class BandPlan {
     this.mediaRetentionDays,
     this.startedAt,
     this.expiresAt,
+    this.canceled = false,
   });
 
   /// FREE | PREMIUM
@@ -17,6 +18,10 @@ class BandPlan {
 
   /// PREMIUM 구독기간 종료 시각. FREE 면 null.
   final DateTime? expiresAt;
+
+  /// 해지 예약됨. PREMIUM 인 채로 true 면 "결제한 기간은 남아 있지만 갱신하지 않는다" 는 뜻이다.
+  /// 해지해도 [expiresAt] 까지는 혜택이 그대로고, 그 뒤에 서버 배치가 무료로 내린다.
+  final bool canceled;
 
   bool get isPremium => tier == 'PREMIUM';
 
@@ -33,6 +38,7 @@ class BandPlan {
       expiresAt: json['expiresAt'] == null
           ? null
           : DateTime.parse(json['expiresAt'] as String),
+      canceled: json['canceled'] as bool? ?? false,
     );
   }
 }

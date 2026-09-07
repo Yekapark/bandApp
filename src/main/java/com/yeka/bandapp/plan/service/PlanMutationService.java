@@ -59,6 +59,24 @@ public class PlanMutationService {
         return plan;
     }
 
+    /**
+     * 해지 예약. 티어·만료일·미디어 보관기한을 <b>건드리지 않는다</b> — 아직 PREMIUM 이라 첨부는
+     * 계속 무제한 보관이고, 만료일 밤에 {@code PlanExpirationJob} 이 강등하며 그때 유예가 시작된다.
+     * FREE 면 {@code PLAN_ALREADY_FREE}, 이미 해지 예약됐으면 {@code PLAN_ALREADY_CANCELED}.
+     */
+    @Transactional
+    public BandPlan applyCancelAtPeriodEnd(long bandId, Instant now) {
+        BandPlan plan = requirePlan(bandId);
+        if (!plan.isPremium()) {
+            throw new BusinessException(ErrorCode.PLAN_ALREADY_FREE);
+        }
+        if (plan.isCanceled()) {
+            throw new BusinessException(ErrorCode.PLAN_ALREADY_CANCELED);
+        }
+        plan.cancelAtPeriodEnd(now);
+        return plan;
+    }
+
     /** PREMIUM 구독기간 연장. FREE 이면 {@code PLAN_ALREADY_FREE}. 미디어 재계산은 없다(이미 무제한). */
     @Transactional
     public BandPlan applyRenew(long bandId, Instant now, Instant newPeriodEnd) {

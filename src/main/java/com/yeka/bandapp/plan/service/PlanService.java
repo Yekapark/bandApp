@@ -107,12 +107,20 @@ public class PlanService {
             throw new BusinessException(ErrorCode.PAYMENT_FAILED);
         }
 
-        Instant graceUntil = now.plus(planProperties.downgradeGraceDays(), ChronoUnit.DAYS);
-        BandPlan updated = planMutationService.applyDowngrade(bandId, now, graceUntil);
+        // 여기서 FREE 로 내리지 않는다. 결제한 기간이 끝날 때까지 혜택을 그대로 두고, 만료일 밤에
+        // PlanExpirationJob 이 강등하며 미디어 유예도 그때 시작한다. 예전에는 이 자리에서 즉시
+        // 강등해서 1년치를 결제하고 하루 뒤 해지하면 364일이 증발했고, 스토어 인앱결제
+        // (구독 취소 = 자동 갱신 중지, 기간 끝까지 이용)와도 상태가 어긋났다.
+        BandPlan updated = planMutationService.applyCancelAtPeriodEnd(bandId, now);
         return PlanResponse.from(updated);
     }
 
-    /** PREMIUM 구독기간 연장. 밴드장만. FREE 이면 409. */
+    /**
+     * PREMIUM 구독기간 연장. 밴드장만. FREE 이면 409.
+     *
+     * <p>해지 예약된 플랜은 구독 식별자가 없어 게이트웨이 갱신을 부를 수 없다. 실제 PG 를 붙이면
+     * 이 경우는 "갱신" 이 아니라 새 구독(subscribe)으로 보내야 한다 — 화면 버튼도 그때 바꾼다.
+     */
     public PlanResponse renew(long bandId, long userId) {
         accessGuard.requireLeader(bandId, userId);
         BandPlan current = requirePlan(bandId);

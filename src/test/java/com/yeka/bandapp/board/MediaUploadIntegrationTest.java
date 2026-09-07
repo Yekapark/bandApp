@@ -96,14 +96,16 @@ class MediaUploadIntegrationTest extends BoardApiSupport {
         long bandId = createBand(leader, "새소년");
         long postId = createPost(leader, bandId, "글", "본문");
 
-        long mediaId = data(issueUploadUrl(leader, bandId, postId, "video/mp4", 4 * ONE_MB)).get("mediaId").asLong();
+        // 여기서 보려는 건 PENDING→재시도 흐름이지 형식이 아니다. 영상은 PREMIUM 전용이 되어
+        // 이 테스트에 구독 절차를 끼워 넣을 이유가 없으므로 이미지로 검증한다.
+        long mediaId = data(issueUploadUrl(leader, bandId, postId, "image/jpeg", 4 * ONE_MB)).get("mediaId").asLong();
         String key = storage.lastPresignedPutKey();
 
         ResponseEntity<String> tooEarly = completeUpload(leader, bandId, postId, mediaId);
         assertThat(tooEarly.getStatusCode().value()).isEqualTo(409);
         assertThat(errorCode(tooEarly)).isEqualTo("MEDIA_NOT_UPLOADED");
 
-        storage.putObject(key, 4 * ONE_MB, "video/mp4");
+        storage.putObject(key, 4 * ONE_MB, "image/jpeg");
         ResponseEntity<String> ok = completeUpload(leader, bandId, postId, mediaId);
         assertThat(ok.getStatusCode().value()).isEqualTo(200);
         assertThat(data(ok).get("status").asText()).isEqualTo("READY");
@@ -162,6 +164,7 @@ class MediaUploadIntegrationTest extends BoardApiSupport {
     void upload_url_accepts_a_video_larger_than_the_old_50mb_cap() {
         String leader = signup("md-vid-l@band.app", "리더");
         long bandId = createBand(leader, "영상밴드");
+        subscribePremium(leader, bandId); // 영상은 PREMIUM 전용
         long postId = createPost(leader, bandId, "글", "본문");
 
         ResponseEntity<String> res = issueUploadUrl(leader, bandId, postId, "video/mp4", 100 * ONE_MB);
@@ -171,6 +174,7 @@ class MediaUploadIntegrationTest extends BoardApiSupport {
         assertThat(data(res).get("maxSizeBytes").asLong()).isEqualTo(200 * ONE_MB);
     }
 
+    /** 크기 검사가 요금제 검사보다 앞이라, FREE 밴드여도 403 이 아니라 400 이 온다. */
     @Test
     void upload_url_rejects_oversized_video_above_the_200mb_cap() {
         String leader = signup("md-vid-big@band.app", "리더");
@@ -181,6 +185,41 @@ class MediaUploadIntegrationTest extends BoardApiSupport {
 
         assertThat(res.getStatusCode().value()).isEqualTo(400);
         assertThat(errorCode(res)).isEqualTo("MEDIA_SIZE_EXCEEDED");
+    }
+
+    /**
+     * 영상은 PREMIUM 전용이다 — 사진은 클라이언트가 줄여 400~700KB 로 오는데 영상은 상한이
+     * 200MB 라 무료 밴드의 저장 비용이 사실상 전부 영상에서 나온다.
+     */
+    @Test
+    void free_band_cannot_upload_video() {
+        String leader = signup("md-vid-free@band.app", "리더");
+        long bandId = createBand(leader, "무료영상밴드");
+        long postId = createPost(leader, bandId, "글", "본문");
+
+        ResponseEntity<String> res = issueUploadUrl(leader, bandId, postId, "video/mp4", 4 * ONE_MB);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(403);
+        assertThat(errorCode(res)).isEqualTo("PLAN_REQUIRED");
+        // 막힌 요청은 행을 남기지 않는다 — 고아 PENDING 이 쌓이면 청소 배치가 헛돈다.
+        assertThat(data(get(postPath(bandId, postId), leader)).get("mediaCount").asInt()).isZero();
+    }
+
+    /** 사진은 FREE 에서도 그대로 올라간다 — 막은 것은 영상뿐이다. */
+    @Test
+    void free_band_can_still_upload_images() {
+        String leader = signup("md-img-free@band.app", "리더");
+        long bandId = createBand(leader, "무료사진밴드");
+        long postId = createPost(leader, bandId, "글", "본문");
+
+        assertThat(issueUploadUrl(leader, bandId, postId, "image/jpeg", 3 * ONE_MB)
+                .getStatusCode().value()).isEqualTo(201);
+    }
+
+    private void subscribePremium(String token, long bandId) {
+        ResponseEntity<String> res =
+                post("/api/v1/bands/" + bandId + "/plan/subscribe", "{}", token);
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
     }
 
     @Test

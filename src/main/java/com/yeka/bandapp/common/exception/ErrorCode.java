@@ -117,6 +117,7 @@ public enum ErrorCode {
     PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "밴드의 요금제 정보를 찾을 수 없습니다."),
     PLAN_ALREADY_PREMIUM(HttpStatus.CONFLICT, "이미 프리미엄 요금제입니다."),
     PLAN_ALREADY_FREE(HttpStatus.CONFLICT, "이미 무료 요금제입니다."),
+    PLAN_ALREADY_CANCELED(HttpStatus.CONFLICT, "이미 해지 예약된 요금제입니다."),
     PAYMENT_FAILED(HttpStatus.PAYMENT_REQUIRED, "결제 처리에 실패했습니다."),
     PLAN_REQUIRED(HttpStatus.FORBIDDEN, "프리미엄에서만 쓸 수 있는 기능이에요."),
 
