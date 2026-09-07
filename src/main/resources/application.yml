@@ -147,6 +147,10 @@ app:
     # 신고가 접수되면 푸시를 받을 계정(users.id). 비우면 알림이 안 나간다 - 접수 자체는 그대로 된다.
     # 운영자 역할이 따로 없어서 계정 id 로 지정한다. 쉼표로 여럿.
     notify-user-ids: ${REPORT_NOTIFY_USER_IDS:}
+    # 신고가 접수되면 메일을 받을 주소. 쉼표로 여럿. 계정과 무관하게 주소를 직접 적는다 -
+    # 푸시는 앱을 깔고 로그인해야 닿지만 신고는 앱을 안 켜고 있어도 알아야 한다.
+    # 비우면 메일이 안 나간다(MAIL_FROM 이 비어 있어도 마찬가지). 접수 자체는 그대로 된다.
+    notify-emails: ${REPORT_NOTIFY_EMAILS:}
   mail:
     from: ${MAIL_FROM:}                                         # 예: "밴듈 <내계정@gmail.com>". 비우면 발송 전체 no-op
   ratelimit:

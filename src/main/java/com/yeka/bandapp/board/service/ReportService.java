@@ -11,6 +11,7 @@ import com.yeka.bandapp.board.entity.ReportTargetType;
 import com.yeka.bandapp.board.repository.BoardPostRepository;
 import com.yeka.bandapp.board.repository.MediaAttachmentRepository;
 import com.yeka.bandapp.board.repository.ReportRepository;
+import com.yeka.bandapp.common.mail.EmailSender;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.board.config.ReportProperties;
@@ -55,6 +56,7 @@ public class ReportService {
     private final RateLimitProperties rateLimitProperties;
     private final NotificationSender notificationSender;
     private final ReportProperties reportProperties;
+    private final EmailSender emailSender;
 
     public ReportService(ReportRepository reportRepository,
                          BoardPostRepository postRepository,
@@ -64,7 +66,8 @@ public class ReportService {
                          RedisRateLimiter rateLimiter,
                          RateLimitProperties rateLimitProperties,
                          NotificationSender notificationSender,
-                         ReportProperties reportProperties) {
+                         ReportProperties reportProperties,
+                         EmailSender emailSender) {
         this.reportRepository = reportRepository;
         this.postRepository = postRepository;
         this.mediaRepository = mediaRepository;
@@ -74,6 +77,7 @@ public class ReportService {
         this.rateLimitProperties = rateLimitProperties;
         this.notificationSender = notificationSender;
         this.reportProperties = reportProperties;
+        this.emailSender = emailSender;
     }
 
     @Transactional
@@ -108,7 +112,9 @@ public class ReportService {
      * 로그로 남는다.
      */
     private void notifyOperatorsAfterCommit(Report report) {
-        if (reportProperties.notifyUserIds().isEmpty()) {
+        boolean push = !reportProperties.notifyUserIds().isEmpty();
+        boolean mail = !reportProperties.notifyEmails().isEmpty();
+        if (!push && !mail) {
             return;
         }
         long reportId = report.getId();
@@ -116,15 +122,39 @@ public class ReportService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                try {
-                    notificationSender.notify(NotificationType.REPORT_RECEIVED, reportId, 0,
-                            reportProperties.notifyUserIds(),
-                            NotificationMessages.reportReceived(reportId, label));
-                } catch (RuntimeException e) {
-                    log.warn("신고 접수 알림 실패 reportId={}", reportId, e);
+                if (push) {
+                    try {
+                        notificationSender.notify(NotificationType.REPORT_RECEIVED, reportId, 0,
+                                reportProperties.notifyUserIds(),
+                                NotificationMessages.reportReceived(reportId, label));
+                    } catch (RuntimeException e) {
+                        log.warn("신고 접수 푸시 실패 reportId={}", reportId, e);
+                    }
+                }
+                if (mail) {
+                    sendMail(report, label);
                 }
             }
         });
+    }
+
+    /**
+     * 신고 접수 메일. 푸시와 <b>함께</b> 보낸다 — 푸시는 기기 토큰이 있어야 닿고(앱을 지웠거나
+     * 알림 권한을 껐으면 조용히 사라진다) 앱을 켜야 본다. 신고는 놓치면 곤란한 종류라 두 경로로 민다.
+     *
+     * <p>한 사람에게 실패해도 나머지에게는 보낸다. 발송 실패가 이미 끝난 접수를 되돌리지는 않는다
+     * ({@link EmailSender} 도 자체적으로 예외를 삼키지만, 주소가 잘못돼 던지는 경우까지 막는다).
+     */
+    private void sendMail(Report report, String label) {
+        String subject = ReportMail.subject(report, label);
+        String body = ReportMail.body(report, label);
+        for (String to : reportProperties.notifyEmails()) {
+            try {
+                emailSender.send(to, subject, body);
+            } catch (RuntimeException e) {
+                log.warn("신고 접수 메일 실패 reportId={} to={}", report.getId(), to, e);
+            }
+        }
     }
 
     private static String targetLabel(ReportTargetType targetType) {

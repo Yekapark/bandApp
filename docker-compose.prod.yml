@@ -13,6 +13,11 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    # VM 의 루프백에만 연다. 0.0.0.0 이 아니라 127.0.0.1 이므로 밖에서는 닿지 않고
+    # (방화벽과 무관하게 커널이 막는다), SSH 로 들어온 사람만 쓸 수 있다.
+    # DB 도구(HeidiSQL·DBeaver)를 SSH 터널로 붙이려면 이 줄이 필요하다 - docs/OPERATIONS.md.
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USERNAME}

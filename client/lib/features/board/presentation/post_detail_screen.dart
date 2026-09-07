@@ -51,6 +51,7 @@ class PostDetailScreen extends ConsumerWidget {
               },
               onDelete: () => _delete(context, ref, band.id),
               onReport: () => _report(context, ref, 'POST', d.id),
+              onReportMedia: () => _reportMedia(context, ref, d),
               onBlock: () => _block(context, ref, d.authorId, d.authorName),
             ),
             orElse: () => const SizedBox.shrink(),
@@ -116,15 +117,9 @@ class PostDetailScreen extends ConsumerWidget {
                 for (final m in d.media) ...[
                   _MediaBlock(
                     media: m,
-                    onReport: () => _report(context, ref, 'MEDIA', m.id),
                   ),
                   const SizedBox(height: 10),
                 ],
-                const SizedBox(height: 2),
-                const Text(
-                  '첨부를 길게 누르면 신고할 수 있어요.',
-                  style: TextStyle(fontSize: 10.5, color: AppColors.textFaint),
-                ),
               ],
             ],
           ),
@@ -171,6 +166,55 @@ class PostDetailScreen extends ConsumerWidget {
     } catch (_) {
       _snack(context, '삭제하지 못했어요.');
     }
+  }
+
+  /// 어느 첨부를 신고할지 고르게 한 뒤 신고 흐름으로 넘긴다.
+  ///
+  /// 첨부가 하나뿐이면 고를 것이 없으므로 바로 넘어간다. 여럿이면 몇 번째인지로 고른다 -
+  /// 운영자에게는 어느 사진인지가 중요해서 글 신고로 뭉뚱그릴 수 없다.
+  Future<void> _reportMedia(
+    BuildContext context,
+    WidgetRef ref,
+    PostDetail detail,
+  ) async {
+    final media = detail.media;
+    if (media.isEmpty) return;
+    if (media.length == 1) {
+      await _report(context, ref, 'MEDIA', media.first.id);
+      return;
+    }
+
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('어느 첨부를 신고할까요?',
+                    style:
+                        TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              ),
+            ),
+            for (var i = 0; i < media.length; i++)
+              ListTile(
+                leading: Icon(media[i].isImage
+                    ? Icons.photo_outlined
+                    : Icons.videocam_outlined),
+                title: Text('${i + 1}번째 ${media[i].isImage ? '사진' : '영상'}'),
+                onTap: () => Navigator.pop(ctx, media[i].id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    if (!context.mounted) return;
+    await _report(context, ref, 'MEDIA', picked);
   }
 
   Future<void> _report(
@@ -278,6 +322,7 @@ class _OverflowMenu extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onReport,
+    required this.onReportMedia,
     required this.onBlock,
   });
 
@@ -286,6 +331,7 @@ class _OverflowMenu extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onReport;
+  final VoidCallback onReportMedia;
   final VoidCallback onBlock;
 
   @override
@@ -301,6 +347,8 @@ class _OverflowMenu extends StatelessWidget {
             onDelete();
           case 'report':
             onReport();
+          case 'report-media':
+            onReportMedia();
           case 'block':
             onBlock();
         }
@@ -314,7 +362,11 @@ class _OverflowMenu extends StatelessWidget {
           ),
         ],
         if (!isMine) ...[
-          const PopupMenuItem(value: 'report', child: Text('신고')),
+          const PopupMenuItem(value: 'report', child: Text('게시글 신고')),
+          // 첨부는 글과 따로 신고한다 - 운영자가 어느 사진인지 알아야 한다.
+          if (detail.media.isNotEmpty)
+            const PopupMenuItem(
+                value: 'report-media', child: Text('사진·영상 신고')),
           const PopupMenuItem(value: 'block', child: Text('작성자 차단')),
         ],
       ],
@@ -323,18 +375,14 @@ class _OverflowMenu extends StatelessWidget {
 }
 
 class _MediaBlock extends StatelessWidget {
-  const _MediaBlock({required this.media, required this.onReport});
+  const _MediaBlock({required this.media});
 
   final PostMedia media;
-  final VoidCallback onReport;
 
+  // 첨부 신고는 오른쪽 위 점 세 개 메뉴에 있다. 예전에는 길게 누르기였는데, 안내 문구를
+  // 달아 둬도 아무도 찾지 못했다 — 숨은 제스처는 없는 기능이나 마찬가지다.
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onLongPress: onReport,
-      child: _content(context),
-    );
-  }
+  Widget build(BuildContext context) => _content(context);
 
   Widget _content(BuildContext context) {
     if (media.state == MediaState.expired) {
