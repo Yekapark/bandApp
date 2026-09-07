@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_compress/video_compress.dart';
 
+import '../../plan/application/plan_providers.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/primary_button.dart';
@@ -181,6 +182,20 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
                   : '이미지 최대 10MB · 영상 최대 200MB · 글당 10개 · 등록할 때 함께 올라가요',
               style: const TextStyle(fontSize: 11, color: AppColors.textFaint),
             ),
+            // 무료 밴드는 첨부가 30일 뒤 사라진다. 요금제 화면과 홈 배너에만 적혀 있어서
+            // 정작 올리는 순간에는 모르고 올렸다 — 사진이 사라지는 건 되돌릴 수 없으니
+            // 올리기 전에 알린다. 요금제를 못 불러왔으면 아무 말도 하지 않는다(단정 금지).
+            if (ref
+                    .watch(bandPlanProvider(bandId))
+                    .valueOrNull
+                    ?.isPremium ==
+                false) ...[
+              const SizedBox(height: 3),
+              const Text(
+                '무료 요금제라 올린 사진·영상은 30일 뒤 사라져요.',
+                style: TextStyle(fontSize: 11, color: AppColors.primarySoft),
+              ),
+            ],
             const SizedBox(height: 10),
             _MediaStrip(
               media: _media,
@@ -394,46 +409,66 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     );
     if (kind == null) return;
 
+    // 남은 자리만큼만 고르게 한다 — 12장 고른 뒤 "10개까지예요" 를 보는 것보다 낫다.
+    final room = 10 - _attachmentCount;
+
     // 이미지는 고르는 시점에 줄인다 — imageQuality 만으로는 재인코딩만 되고 해상도가 그대로라,
     // 요즘 폰의 1200만 화소 사진이 4000x3000 그대로 장당 2~4MB 로 올라갔다. 긴 변 2048px 로
     // 비율 유지 축소하면 400~700KB 로 떨어진다. 피드·상세에서 보는 용도라 이 정도면 충분하고,
     // PREMIUM 은 보관기한이 무제한이라 원본을 그대로 쌓을 이유가 없다.
-    // (영상은 아래 _compressIfVideo 가 720p 로 따로 압축한다.)
-    final XFile? file = kind == 'video'
-        ? await _picker.pickVideo(source: ImageSource.gallery)
-        : await _picker.pickImage(
-            source: ImageSource.gallery,
-            imageQuality: 88,
-            maxWidth: 2048,
-            maxHeight: 2048,
-          );
-    if (file == null) return;
+    //
+    // 사진은 여러 장을 한 번에 고른다(합주 사진은 원래 여러 장이다). 영상은 한 번에 하나만
+    // 받는다 — 압축이 건당 수십 초라 여러 개를 줄줄이 돌리면 앱이 멈춘 것처럼 보인다.
+    final List<XFile> picked;
+    if (kind == 'video') {
+      final one = await _picker.pickVideo(source: ImageSource.gallery);
+      picked = one == null ? const [] : [one];
+    } else {
+      picked = await _picker.pickMultiImage(
+        imageQuality: 88,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        limit: room,
+      );
+    }
+    if (picked.isEmpty) return;
 
-    final contentType = _resolveContentType(file, kind);
-    if (contentType == null || !_allowedTypes.contains(contentType)) {
-      _toast('지원하지 않는 형식이에요. (JPG·PNG·WEBP·MP4·MOV)');
-      return;
+    // 갤러리가 limit 을 안 지키는 기기가 있다 — 넘치면 앞에서부터 자른다.
+    final files = picked.take(room).toList();
+    if (picked.length > files.length) {
+      _toast('첨부는 글당 10개까지예요. 앞의 ${files.length}개만 담았어요.');
     }
 
-    // 영상은 압축한 뒤에 재야 한다 — 폰 기본 촬영은 6분이면 700MB 를 넘지만 압축하면 들어온다.
-    final item = _PendingMedia(
-        await _compressIfVideo(file, contentType), contentType);
+    final items = <_PendingMedia>[];
+    for (final file in files) {
+      final contentType = _resolveContentType(file, kind);
+      if (contentType == null || !_allowedTypes.contains(contentType)) {
+        _toast('지원하지 않는 형식이에요. (JPG·PNG·WEBP·MP4·MOV)');
+        continue;
+      }
 
-    // 길이만 확인한다 — 상한 검사하려고 파일을 통째로 메모리에 올릴 이유가 없다.
-    final limit =
-        contentType.startsWith('video/') ? _videoMaxBytes : _imageMaxBytes;
-    if (await item.file.length() > limit) {
-      _toast(contentType.startsWith('video/')
-          ? '영상이 너무 커요. 200MB 아래로 줄여야 올릴 수 있어요.'
-          : '이미지는 최대 10MB까지예요.');
-      return;
+      // 영상은 압축한 뒤에 재야 한다 — 폰 기본 촬영은 6분이면 700MB 를 넘지만 압축하면 들어온다.
+      final item = _PendingMedia(
+          await _compressIfVideo(file, contentType), contentType);
+
+      // 길이만 확인한다 — 상한 검사하려고 파일을 통째로 메모리에 올릴 이유가 없다.
+      final limit =
+          contentType.startsWith('video/') ? _videoMaxBytes : _imageMaxBytes;
+      if (await item.file.length() > limit) {
+        _toast(contentType.startsWith('video/')
+            ? '영상이 너무 커요. 200MB 아래로 줄여야 올릴 수 있어요.'
+            : '이미지는 최대 10MB까지예요.');
+        continue;
+      }
+      items.add(item);
     }
+    if (items.isEmpty) return;
 
     // 새 글: 아직 글이 없어 매달 곳이 없다. 등록할 때 함께 올린다.
     if (!_isEdit) {
       if (!mounted) return;
       setState(() {
-        _pending = [..._pending, item];
+        _pending = [..._pending, ...items];
         _dirty = true;
       });
       return;
@@ -441,10 +476,16 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
     setState(() {
       _busy = true;
-      _uploadTotal = 1;
+      _uploadTotal = items.length;
     });
     try {
-      if (await _uploadOne(bandId, _postId!, item)) {
+      var uploaded = 0;
+      for (var i = 0; i < items.length; i++) {
+        if (await _uploadOne(bandId, _postId!, items[i], index: i + 1)) {
+          uploaded++;
+        }
+      }
+      if (uploaded > 0) {
         ref.invalidate(
           postDetailProvider((bandId: bandId, postId: _postId!)),
         );
