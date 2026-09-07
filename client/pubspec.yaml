@@ -1,7 +1,7 @@
 name: bandapp_client
 description: 밴드 합주 관리 앱 Flutter 클라이언트
 publish_to: "none"
-version: 0.1.0+22
+version: 0.1.0+23
 environment:
   sdk: ">=3.4.0 <4.0.0"
 
