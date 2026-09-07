@@ -23,6 +23,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 /**
  * 요금제 전환과 첨부 미디어 보관기한 재계산.
@@ -83,8 +84,12 @@ class PlanSubscriptionIntegrationTest extends PlanApiSupport {
         assertThat(expiresAt(mediaId)).isNull();
     }
 
+    /**
+     * 해지해도 결제한 기간까지는 PREMIUM 이다. 예전에는 해지 버튼을 누른 자리에서 FREE 로
+     * 내려서, 1년치를 결제하고 하루 뒤 해지하면 364일이 증발했다.
+     */
     @Test
-    void cancel_gives_existing_media_a_thirty_day_grace() {
+    void cancel_keeps_premium_and_media_until_the_period_ends() {
         String leader = signup("dn-a@band.app", "리더");
         long bandId = createBand(leader, "다운그레이드밴드");
         assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
@@ -95,16 +100,18 @@ class PlanSubscriptionIntegrationTest extends PlanApiSupport {
 
         ResponseEntity<String> res = cancel(leader, bandId);
         assertThat(res.getStatusCode().value()).isEqualTo(200);
-        assertThat(data(res).get("tier").asText()).isEqualTo("FREE");
-        assertThat(data(res).get("mediaRetentionDays").asInt()).isEqualTo(30);
+        assertThat(data(res).get("tier").asText()).isEqualTo("PREMIUM");
+        assertThat(data(res).get("canceled").asBoolean()).isTrue();
+        assertThat(data(res).get("mediaRetentionDays").isNull()).isTrue(); // 여전히 무제한
+        assertThat(data(res).get("expiresAt").isNull()).isFalse();        // 남은 기간 그대로
 
-        Instant grace = expiresAt(mediaId);
-        assertThat(grace).isNotNull();
-        assertThat(Duration.between(Instant.now(), grace).toDays()).isBetween(28L, 31L);
+        // 미디어에는 아직 유예를 주지 않는다 — 만료일 배치가 그때 준다
+        // (PlanExpirationIntegrationTest.overdue_premium_is_downgraded_and_media_gets_the_grace_expiry).
+        assertThat(expiresAt(mediaId)).isNull();
     }
 
     @Test
-    void cancel_leaves_already_expired_media_untouched() {
+    void cancel_does_not_touch_media() {
         String leader = signup("dn-b@band.app", "리더");
         long bandId = createBand(leader, "만료밴드");
         assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
@@ -112,18 +119,32 @@ class PlanSubscriptionIntegrationTest extends PlanApiSupport {
         long mediaId = uploadReadyMedia(storage, leader, bandId, postId);
 
         // 이미 EXPIRED 로 강제(과거 만료일)
+        Instant past = Instant.now().minusSeconds(3600);
         jdbc.update("update media_attachments set status = 'EXPIRED', expires_at = ? where id = ?",
-                Timestamp.from(Instant.now().minusSeconds(3600)), mediaId);
+                Timestamp.from(past), mediaId);
 
         assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
 
         String status = jdbc.queryForObject(
                 "select status from media_attachments where id = ?", String.class, mediaId);
         assertThat(status).isEqualTo("EXPIRED");
+        assertThat(expiresAt(mediaId)).isCloseTo(past, within(1, ChronoUnit.SECONDS));
     }
 
     @Test
-    void downgraded_bands_media_expires_via_the_phase9_batch_after_grace() {
+    void cancelling_twice_is_conflict() {
+        String leader = signup("dn-c@band.app", "리더");
+        long bandId = createBand(leader, "이중해지밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        ResponseEntity<String> second = cancel(leader, bandId);
+        assertThat(second.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(second)).isEqualTo("PLAN_ALREADY_CANCELED");
+    }
+
+    @Test
+    void media_past_its_expiry_is_expired_by_the_phase9_batch() {
         String leader = signup("dn-batch@band.app", "리더");
         long bandId = createBand(leader, "유예만료밴드");
         assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
@@ -131,7 +152,8 @@ class PlanSubscriptionIntegrationTest extends PlanApiSupport {
         long mediaId = uploadReadyMedia(storage, leader, bandId, postId);
 
         assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
-        // 유예기간이 지난 것처럼 만료일을 과거로 당긴다(다운그레이드가 넣은 값을 교체).
+        // 해지는 미디어를 건드리지 않아 만료일이 아직 없다(PREMIUM 무제한). 유예까지 지난 상태를
+        // 만들려고 직접 과거로 넣는다 — 여기서 보려는 건 배치가 지난 것을 실제로 만료시키는지다.
         jdbc.update("update media_attachments set expires_at = ? where id = ?",
                 Timestamp.from(Instant.now().minus(1, ChronoUnit.DAYS)), mediaId);
 

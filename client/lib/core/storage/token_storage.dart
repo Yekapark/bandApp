@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'secure_read.dart';
+
 final tokenStorageProvider = Provider<TokenStorage>((ref) {
   return TokenStorage(const FlutterSecureStorage());
 });
@@ -18,8 +20,8 @@ class TokenStorage {
 
   /// 앱 시작 시 한 번 호출해 캐시를 채운다.
   Future<Tokens?> load() async {
-    final access = await _storage.read(key: _kAccess);
-    final refresh = await _storage.read(key: _kRefresh);
+    final access = await secureRead(_storage, _kAccess);
+    final refresh = await secureRead(_storage, _kRefresh);
     if (access == null || refresh == null) {
       _cache = null;
       return null;

@@ -20,12 +20,12 @@
                     번호를 먹지 않게. 커밋할 것이 남지 않는다
     --group NAME    보낼 테스터 그룹 (기본 밴듈테스트)
     --api-url URL   서버 주소 (기본 https://api.bandule.com)
+    --app ID        App Distribution 앱 ID (기본은 dev 프로젝트. 아래 주석 참고)
     --abi 이름      올릴 CPU 종류 (기본 arm64-v8a). 32비트 폰을 쓰는 테스터가
                     "설치되지 않음" 이라고 하면 `--abi armeabi-v7a` 로 한 번 더 올린다
 """
 
 import argparse
-import json
 import re
 import shutil
 import subprocess
@@ -36,7 +36,6 @@ from pathlib import Path
 CLIENT = Path(__file__).resolve().parent.parent
 PUBSPEC = CLIENT / "pubspec.yaml"
 DART_DEFINES = CLIENT / "dart_defines.json"
-GOOGLE_SERVICES = CLIENT / "android/app/google-services.json"
 # flavor 를 쓰면 산출물 이름에 flavor 가 붙는다: app-arm64-v8a-prod-release.apk
 # (abi 가 먼저, flavor 가 뒤다 — 반대로 짐작했다가 한 번 틀렸다)
 APK_DIR = CLIENT / "build/app/outputs/flutter-apk"
@@ -46,7 +45,19 @@ DEFAULT_API = "https://api.bandule.com"
 # 64비트 ARM. 2015년 이후 안드로이드 폰은 사실상 전부 여기 해당한다.
 # 32비트 기기(armeabi-v7a)를 쓰는 테스터가 나오면 `--abi armeabi-v7a` 로 한 번 더 올린다.
 DEFAULT_ABI = "arm64-v8a"
-DEFAULT_GROUP = "밴듈테스트"
+DEFAULT_GROUP = "나만"  # 테스터 전체 배포는 지시가 있을 때만. 그때 "밴듈테스트" 로 되돌린다
+
+# App Distribution 은 배포 채널일 뿐이고, 앱 안의 FCM 프로젝트와는 별개다 — 서로 달라도 된다.
+#
+#   테스터 배포 : bandapp-dev-67c6f  ← 이 앱 ID. 그룹 `밴듈테스트`와 지난 릴리스 이력이
+#                 전부 여기 쌓여 있다. 프로젝트를 옮기면 테스터가 초대를 다시 받아야 한다.
+#   앱의 푸시  : bandule-b94d2      ← prod flavor 의 google-services.json.
+#                 서버 .env.prod 의 FCM_PROJECT_ID 와 같아야 한다.
+#
+# 패키지명이 같으므로 prod flavor APK 를 이 앱 ID 로 올리는 데 문제가 없다.
+# 예전에는 android/app/google-services.json 에서 읽었지만, Firebase 설정이 개발용·운영용으로
+# 갈리면서 그 파일이 src/{dev,prod}/ 로 옮겨져 경로가 깨졌다(docs/TROUBLESHOOTING.md).
+DISTRIBUTION_APP_ID = "1:973100232123:android:45aab9e3dfda38629a289e"
 
 
 def fail(message):
@@ -74,20 +85,6 @@ def bump_build_number():
     return name, build, text
 
 
-def firebase_app_id():
-    """앱 ID 를 google-services.json 에서 읽는다 — 하드코딩하면 프로젝트를 바꿀 때 어긋난다."""
-    if not GOOGLE_SERVICES.exists():
-        fail(
-            f"{GOOGLE_SERVICES} 가 없다.\n"
-            "   Firebase 콘솔에서 받아 넣는다 (docs/LAUNCH_CHECKLIST.md 7-B 단계)."
-        )
-    data = json.loads(GOOGLE_SERVICES.read_text(encoding="utf-8"))
-    clients = data.get("client") or []
-    if not clients:
-        fail("google-services.json 에 android 앱이 등록돼 있지 않다")
-    return clients[0]["client_info"]["mobilesdk_app_id"]
-
-
 def run(command, what):
     """첫 칸은 PATH 에서 찾아서 쓴다.
 
@@ -110,6 +107,7 @@ def main():
     parser.add_argument("--group", default=DEFAULT_GROUP)
     parser.add_argument("--api-url", default=DEFAULT_API)
     parser.add_argument("--abi", default=DEFAULT_ABI)
+    parser.add_argument("--app", default=DISTRIBUTION_APP_ID, help="App Distribution 앱 ID")
     parser.add_argument("--no-upload", action="store_true")
     args = parser.parse_args()
 
@@ -175,7 +173,7 @@ def main():
     run(
         [
             "firebase", "appdistribution:distribute", str(apk),
-            "--app", firebase_app_id(),
+            "--app", args.app,
             "--groups", args.group,
             "--release-notes", args.release_notes,
         ],

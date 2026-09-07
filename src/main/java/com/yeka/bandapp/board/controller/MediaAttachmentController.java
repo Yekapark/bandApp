@@ -44,7 +44,8 @@ public class MediaAttachmentController {
             description = "contentType(허용: image/jpeg·png·webp, video/mp4·quicktime)·sizeBytes 필수. "
                     + "PENDING 첨부를 선생성하고 presigned PUT URL 을 준다. 게시글 작성자만(그 외 403 NOT_POST_OWNER, "
                     + "타 밴드 글 404 POST_NOT_FOUND). 형식 위반 400 MEDIA_TYPE_NOT_SUPPORTED, 크기 초과 400 "
-                    + "MEDIA_SIZE_EXCEEDED, 첨부 수 상한 409 MEDIA_LIMIT_EXCEEDED, 과다 요청 429, 저장소 미설정 503.")
+                    + "MEDIA_SIZE_EXCEEDED, 첨부 수 상한 409 MEDIA_LIMIT_EXCEEDED, 과다 요청 429, 저장소 미설정 503. "
+                    + "영상(video/*)은 PREMIUM 전용이라 FREE 밴드는 403 PLAN_REQUIRED.")
     @PostMapping("/upload-url")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<UploadUrlResponse> issueUploadUrl(@AuthenticationPrincipal AuthPrincipal principal,

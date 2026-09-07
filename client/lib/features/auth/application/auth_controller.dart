@@ -38,18 +38,26 @@ class AuthController extends Notifier<AuthState> {
   AuthRepository get _repo => ref.read(authRepositoryProvider);
 
   /// 앱 시작 시 1회. 저장된 토큰이 있으면 /users/me 로 유효성까지 확인한다.
+  ///
+  /// **무슨 일이 있어도 예외를 밖으로 내보내지 않는다.** 여기서 던지면 status 가 unknown 에
+  /// 머물고 라우터가 어디로도 못 보내서 스플래시에 영원히 갇힌다. 안전 저장소 읽기도
+  /// 실패할 수 있다 — 기기 백업이 SharedPreferences 만 복원하고 KeyStore 키는 못 살려서
+  /// 복호화가 깨지는 경우가 실제로 있다. 그럴 땐 저장된 것을 버리고 로그아웃 상태로 시작한다.
   Future<void> bootstrap() async {
-    final tokens = await _storage.load();
-    if (tokens == null) {
-      state = const AuthState.signedOut();
-      return;
-    }
     try {
+      final tokens = await _storage.load();
+      if (tokens == null) {
+        state = const AuthState.signedOut();
+        return;
+      }
       final user = await _repo.me();
       state = AuthState(status: AuthStatus.authenticated, user: user);
     } catch (_) {
-      // 토큰 만료/무효 — 인터셉터가 refresh 를 시도했고 그래도 실패한 경우.
-      await _storage.clear();
+      // 토큰 만료/무효(인터셉터의 refresh 도 실패) 또는 저장소 자체가 깨진 경우.
+      // clear() 마저 던질 수 있으므로 여기서 한 번 더 삼킨다 — 상태 전환이 최우선이다.
+      try {
+        await _storage.clear();
+      } catch (_) {}
       state = const AuthState.signedOut();
     }
   }

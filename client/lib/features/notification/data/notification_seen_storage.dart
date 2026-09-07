@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../../core/storage/secure_read.dart';
+
 final notificationSeenStorageProvider = Provider<NotificationSeenStorage>((ref) {
   return NotificationSeenStorage(const FlutterSecureStorage());
 });
@@ -18,7 +20,7 @@ class NotificationSeenStorage {
   static String _key(int bandId) => 'notifications.lastSeenAt.$bandId';
 
   Future<DateTime?> lastSeen(int bandId) async {
-    final raw = await _storage.read(key: _key(bandId));
+    final raw = await secureRead(_storage, _key(bandId));
     if (raw == null) return null;
     return DateTime.tryParse(raw);
   }

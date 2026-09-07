@@ -74,6 +74,13 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
               )
+            // 해지를 눌러도 결제한 기간까지는 PREMIUM 이다. 그동안은 해지 버튼 대신
+            // "언제까지 쓸 수 있는지" 를 보여준다 — 두 번 눌러 봐야 409 만 돌아온다.
+            //
+            // 연장 버튼도 감춘다: 해지하면 구독 식별자가 없어져 게이트웨이 갱신을 못 부른다.
+            // 실제 PG 를 붙이면 이 자리는 "다시 구독"(새 구독 생성)이 되어야 한다.
+            else if (plan.isPremium && plan.canceled)
+              const _CanceledNotice()
             else if (plan.isPremium) ...[
               _ActionButton(
                 label: '구독기간 연장',
@@ -131,8 +138,9 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   Future<void> _confirmCancel(int bandId) async {
     final ok = await _confirm(
       title: '프리미엄을 해지할까요?',
-      body: '지금부터 30일이 지나면 올려 둔 사진·영상이 차례로 사라져요.\n'
-          '정기 합주도 새로 등록할 수 없어요(이미 등록한 건 그대로예요).',
+      body: '결제하신 기간이 끝날 때까지는 그대로 쓰실 수 있어요. 지금 사라지는 건 없어요.\n\n'
+          '기간이 끝나면 무료로 바뀌고, 그때부터 30일 뒤에 사진·영상이 차례로 사라져요. '
+          '정기 합주도 그때부터 새로 등록할 수 없어요(이미 등록한 건 그대로예요).',
       action: '해지',
       danger: true,
     );
@@ -405,6 +413,40 @@ class _ActionButton extends StatelessWidget {
                   strokeWidth: 2, color: AppColors.onPrimary),
             )
           : Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+/// 해지 예약된 PREMIUM. 남은 기간을 알려주고 버튼은 두지 않는다 — 이 상태에서 할 수 있는
+/// 조작이 없다(해지는 409, 연장은 구독 식별자가 없어 부를 수 없다).
+class _CanceledNotice extends StatelessWidget {
+  const _CanceledNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '해지 예약됨',
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+          ),
+          SizedBox(height: 5),
+          Text(
+            '위에 적힌 날짜까지는 프리미엄 그대로예요. 그 뒤에 무료로 바뀌고, 30일이 더 지나면 '
+            '사진·영상이 차례로 사라져요.',
+            style:
+                TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
+          ),
+        ],
+      ),
     );
   }
 }

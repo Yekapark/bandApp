@@ -95,6 +95,28 @@ public class BandPlan extends BaseTimeEntity {
         this.updatedAt = now;
     }
 
+    /**
+     * 해지 예약 — <b>티어와 {@code expiresAt} 은 건드리지 않는다.</b> 구독 식별자만 비운다.
+     *
+     * <p>결제한 기간의 혜택은 끝까지 준다. 실제 강등은 만료일 밤에 {@code PlanExpirationJob} 이
+     * 하고, 미디어 유예도 그때 시작된다. 예전에는 해지 버튼을 누른 자리에서 FREE 로 내렸는데,
+     * 1년치를 결제하고 하루 뒤 해지하면 364일이 증발했다. 스토어 인앱결제(구독 취소 = 자동 갱신
+     * 중지, 기간 끝까지 이용)와도 어긋났다.
+     *
+     * <p>{@code subscriptionRef} 를 비우는 것이 "해지했다" 는 표시를 겸한다 — 게이트웨이의 구독이
+     * 실제로 사라졌으니 의미상 맞고, 컬럼을 늘리지 않아도 {@link #isCanceled()} 로 구분된다.
+     * 실제 PG 를 붙여 해지 뒤에도 식별자가 필요해지면 그때 {@code canceled_at} 을 따로 둔다.
+     */
+    public void cancelAtPeriodEnd(Instant now) {
+        this.subscriptionRef = null;
+        this.updatedAt = now;
+    }
+
+    /** 해지 예약된 PREMIUM(만료일까지는 계속 이용). {@link #cancelAtPeriodEnd} 참고. */
+    public boolean isCanceled() {
+        return tier == PlanTier.PREMIUM && subscriptionRef == null;
+    }
+
     /** PREMIUM 구독기간 연장. PREMIUM 이 아니면 호출 오류다. */
     public void renew(Instant now, Instant newPeriodEnd) {
         if (tier != PlanTier.PREMIUM) {

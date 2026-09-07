@@ -24,20 +24,12 @@ class TabShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = navigationShell.currentIndex;
-    // 시스템 내비게이션 바만큼 아래를 띄운다. 예전엔 26 을 박아 뒀는데, 그건 제스처
-    // 내비(≈24) 한 종류에만 맞는 값이라 3버튼 내비(≈48) 폰에서 탭 라벨이 가려졌다.
-    // `padding` 이 아니라 `viewPadding` 인 이유 — 키보드가 올라오면 `padding.bottom`
-    // 은 0 이 된다.
-    final systemNav = MediaQuery.viewPaddingOf(context).bottom;
+    // 시스템 내비게이션 바만큼 띄우는 일은 app.dart 의 전역 SafeArea 가 한다.
+    // 여기서 viewPadding 을 또 더하면 3버튼 내비 폰에서 탭바가 두 번 밀린다.
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: Container(
-        padding: EdgeInsets.only(
-          top: 8,
-          bottom: 8 + systemNav,
-          left: 10,
-          right: 10,
-        ),
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
         decoration: const BoxDecoration(
           color: AppColors.background,
           border: Border(top: BorderSide(color: AppColors.border)),

@@ -1,5 +1,6 @@
 package com.yeka.bandapp.plan;
 
+import com.yeka.bandapp.plan.service.PlanService;
 import com.yeka.bandapp.support.FakeStorageClient;
 import com.yeka.bandapp.support.StorageTestConfig;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,6 +26,9 @@ class PlanCrossBandIsolationIntegrationTest extends PlanApiSupport {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private PlanService planService;
 
     @BeforeEach
     void resetStorage() {
@@ -55,7 +60,15 @@ class PlanCrossBandIsolationIntegrationTest extends PlanApiSupport {
         long mediaA = uploadReadyMedia(storage, leader, bandA, createPost(leader, bandA, "a", "a"));
         long mediaB = uploadReadyMedia(storage, leader, bandB, createPost(leader, bandB, "b", "b"));
 
+        // 해지는 이제 미디어를 건드리지 않는다 — 결제한 기간까지는 PREMIUM 이고, 유예 재계산은
+        // 만료 배치의 몫이다. 그래서 밴드A 의 구독기간만 과거로 옮겨 배치를 돌린다.
+        // 여기서 보려는 건 그 재계산이 밴드A 에만 닿는지다.
         assertThat(cancel(leader, bandA).getStatusCode().value()).isEqualTo(200);
+        assertThat(expiresAt(mediaA)).isNull();          // 해지 직후에는 아직 무제한
+
+        jdbc.update("update band_plans set expires_at = ? where band_id = ?",
+                Timestamp.from(Instant.now().minus(1, ChronoUnit.DAYS)), bandA);
+        assertThat(planService.expireOverdue(Instant.now())).isEqualTo(1);
 
         assertThat(expiresAt(mediaA)).isNotNull();       // A: 유예 30일 설정
         assertThat(expiresAt(mediaB)).isNull();          // B: 여전히 무제한

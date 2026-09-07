@@ -91,11 +91,12 @@ public class PlanDirectoryService {
     }
 
     /** 요금제 표시용 요약. 컨트롤러 응답과 테스트가 쓴다. */
-    public record PlanView(PlanTier tier, Integer mediaRetentionDays, Instant startedAt, Instant expiresAt) {
+    public record PlanView(PlanTier tier, Integer mediaRetentionDays, Instant startedAt,
+                           Instant expiresAt, boolean canceled) {
 
         static PlanView from(BandPlan plan) {
             return new PlanView(plan.getTier(), plan.retentionDaysOrNull(), plan.getStartedAt(),
-                    plan.getExpiresAt());
+                    plan.getExpiresAt(), plan.isCanceled());
         }
     }
 }

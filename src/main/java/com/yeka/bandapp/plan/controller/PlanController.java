@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>결제 자체는 앱 밖(앱스토어·구글플레이 결제 모듈)에서 이루어진다 — 여기서는 no-op 게이트웨이를
  * 거쳐 요금제 상태만 바꾼다. PREMIUM 전환 시 밴드의 기존 첨부 미디어 보관기한이 무제한으로,
- * 해지 시 30일 유예로 재계산된다.
+ * 해지는 즉시 강등이 아니라 만료일 강등이다 — 미디어 30일 유예는 만료 뒤에 시작된다.
  */
 @Tag(name = "16. 요금제",
         description = "밴드 FREE/PREMIUM 요금제 조회·전환. 전환 시 첨부 미디어 보관기한 재계산 "
@@ -59,7 +59,9 @@ public class PlanController {
 
     @Operation(summary = "PREMIUM 구독 해지",
             description = "PREMIUM → FREE. 밴드장만(그 외 403 NOT_BAND_LEADER). 이미 FREE 이면 "
-                    + "409 PLAN_ALREADY_FREE. 밴드의 기존 READY 미디어는 해지 시점부터 30일간 유예된 뒤 만료된다.")
+                    + "409 PLAN_ALREADY_FREE, 이미 해지 예약됐으면 409 PLAN_ALREADY_CANCELED. "
+                    + "**즉시 FREE 가 되지 않는다** — 결제한 기간(expiresAt)까지 PREMIUM 혜택이 그대로고 "
+                    + "응답의 canceled 가 true 로 온다. 만료일 밤 배치가 FREE 로 내리며, 미디어 30일 유예는 그때 시작된다.")
     @PostMapping("/cancel")
     public ApiResponse<PlanResponse> cancel(@AuthenticationPrincipal AuthPrincipal principal,
                                             @PathVariable long bandId) {
