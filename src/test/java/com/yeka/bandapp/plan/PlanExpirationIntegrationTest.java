@@ -61,7 +61,8 @@ class PlanExpirationIntegrationTest extends PlanApiSupport {
         assertThat(planService.expireOverdue(Instant.now())).isEqualTo(1);
 
         assertThat(tierOf(bandId)).isEqualTo(PlanTier.FREE);
-        // 강등은 기존 미디어에 유예기간(기본 30일)을 준다 — 수동 해지와 같은 동작.
+        // 강등은 기존 미디어에 유예기간(기본 30일)을 준다. 수동 해지도 결국 이 경로로 온다 —
+        // 해지는 즉시 강등이 아니라 만료일 강등 예약이다(BandPlan.cancelAtPeriodEnd).
         Instant grace = mediaExpiresAt(mediaId);
         assertThat(grace).isNotNull();
         assertThat(Duration.between(Instant.now(), grace).toDays()).isBetween(28L, 31L);

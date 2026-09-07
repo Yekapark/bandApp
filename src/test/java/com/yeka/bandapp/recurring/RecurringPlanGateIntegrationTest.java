@@ -1,14 +1,19 @@
 package com.yeka.bandapp.recurring;
 
+import com.yeka.bandapp.plan.service.PlanService;
 import com.yeka.bandapp.recurring.service.RecurringRuleService;
 import com.yeka.bandapp.reservation.repository.ReservationRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.sql.Timestamp;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,6 +30,12 @@ class RecurringPlanGateIntegrationTest extends RecurringApiSupport {
 
     @Autowired
     private ReservationRepository reservationRepository;
+
+    @Autowired
+    private PlanService planService;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private String body(long roomId, LocalDate startDate) {
         return ruleBody(roomId, "WEEKLY", DayOfWeek.WEDNESDAY, "19:00", "21:00", startDate, null);
@@ -68,17 +79,27 @@ class RecurringPlanGateIntegrationTest extends RecurringApiSupport {
         int before = reservationRepository.findAll().size();
         assertThat(before).isGreaterThan(0);
 
-        // 해지 — 요금제만 FREE 로 내려간다.
+        // 해지 — 결제한 기간이 끝날 때까지는 PREMIUM 그대로다.
         ResponseEntity<String> cancelled = post("/api/v1/bands/" + bandId + "/plan/cancel", "{}", leader);
         assertThat(cancelled.getStatusCode().value()).isEqualTo(200);
+        assertThat(data(cancelled).get("tier").asText()).isEqualTo("PREMIUM");
 
-        // 회차 이어 만들기 배치가 도는 것과 같은 경로.
+        // 그래서 해지 직후에는 새 규칙도 아직 만들 수 있다.
+        assertThat(postRule(leader, bandId, body(roomId, today().plusDays(2)))
+                .getStatusCode().value()).isEqualTo(201);
+
+        // 구독기간이 지나면 배치가 FREE 로 내린다.
+        jdbc.update("update band_plans set expires_at = ? where band_id = ?",
+                Timestamp.from(Instant.now().minus(1, ChronoUnit.DAYS)), bandId);
+        assertThat(planService.expireOverdue(Instant.now())).isEqualTo(1);
+
+        // 회차 이어 만들기 배치가 도는 것과 같은 경로 — FREE 로 내려가도 계속 돈다.
         recurringRuleService.extendRule(ruleId);
 
         assertThat(reservationRepository.findAll().size()).isGreaterThanOrEqualTo(before);
 
         // 다만 새 규칙은 이제 못 만든다.
-        ResponseEntity<String> denied = postRule(leader, bandId, body(roomId, today().plusDays(2)));
+        ResponseEntity<String> denied = postRule(leader, bandId, body(roomId, today().plusDays(3)));
         assertThat(denied.getStatusCode().value()).isEqualTo(403);
     }
 }
