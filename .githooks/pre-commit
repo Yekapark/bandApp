@@ -1,0 +1,73 @@
+#!/bin/sh
+# 비밀값이 담긴 파일이 커밋에 딸려 들어가는 것을 막는다.
+#
+# 왜 있나 — 2026-09-08 에 서버의 `.env.prod` 를 비교하려고 내려받은 `env.prod.server` 가
+# `git add -A` 에 휩쓸려 **공개 저장소에 푸시됐다.** DB·Redis 비밀번호, JWT 서명키, R2 키,
+# 카카오 어드민 키가 몇 분간 공개됐고 전부 교체해야 했다.
+#
+# .gitignore 로는 부족하다. 그때 그 파일은 새로 만들어진 이름이라 목록에 없었고,
+# `git add -A` 는 목록에 없는 것을 전부 담는다. 그래서 **이름 패턴으로 한 번 더 막는다.**
+#
+# 새 PC 에서는 한 번만 켜면 된다 (docs/NEW_PC_SETUP.md):
+#     git config core.hooksPath .githooks
+#
+# 정말 올려야 하는 예외적인 경우에만:
+#     ALLOW_SECRET_COMMIT=1 git commit ...
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+blocked=""
+
+for f in $staged; do
+    base=$(basename "$f")
+    case "$base" in
+        # 예시·견본은 값이 비어 있으므로 통과시킨다
+        *.example|*.sample|*.template) continue ;;
+    esac
+
+    case "$f" in
+        .env|.env.*|env.*|*/.env|*/.env.*)                    blocked="$blocked $f" ;;
+        *.jks|*.keystore|*.p12|*.pfx|*.pem|*.ppk)             blocked="$blocked $f" ;;
+        *key.properties|*/local.properties|local.properties)  blocked="$blocked $f" ;;
+        *google-services.json|*GoogleService-Info.plist)      blocked="$blocked $f" ;;
+        *dart_defines.json)                                   blocked="$blocked $f" ;;
+        secrets/*|*/secrets/*)                                blocked="$blocked $f" ;;
+        *-adminsdk-*.json|*serviceAccount*.json)              blocked="$blocked $f" ;;
+        id_rsa|id_ed25519|*/id_rsa|*/id_ed25519)              blocked="$blocked $f" ;;
+    esac
+done
+
+# 개인키 블록이 통째로 들어간 파일 (이름이 뭐든).
+#
+# 패턴에 `.*` 를 쓰면 **이 훅 파일 자신이 걸린다** — 여기 적힌 패턴 문자열과 매칭되기
+# 때문이다(실제로 처음에 그랬다). 대괄호 문자클래스는 자기 자신에 안 걸린다.
+for f in $staged; do
+    if git show ":$f" 2>/dev/null | head -c 4096 | grep -qE "BEGIN [A-Z ]*PRIVATE KEY"; then
+        blocked="$blocked $f"
+    fi
+done
+
+[ -z "$blocked" ] && exit 0
+
+if [ -n "$ALLOW_SECRET_COMMIT" ]; then
+    echo "pre-commit: ALLOW_SECRET_COMMIT 이 켜져 있어 통과시킨다:$blocked" >&2
+    exit 0
+fi
+
+cat >&2 <<MSG
+
+  ✗ 커밋을 멈췄다 — 비밀값이 들어 있을 수 있는 파일이 담겨 있다:
+$(for f in $blocked; do echo "      $f"; done)
+
+  이 저장소는 **공개**다. 한 번 푸시되면 지워도 남는다 — 되돌리는 길은 값을 전부 교체하는 것뿐이다.
+
+  빼는 법:
+      git restore --staged <파일>
+
+  담긴 적이 없어야 할 파일이면 .gitignore 에도 넣는다.
+  정말 올려야 하는 파일이면(값이 비어 있는 견본 등) 이름을 *.example 로 하거나,
+  확인한 뒤에만:  ALLOW_SECRET_COMMIT=1 git commit ...
+
+MSG
+exit 1

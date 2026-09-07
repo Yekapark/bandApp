@@ -18,6 +18,48 @@
 
 ---
 
+## 2026-09-08 — 공개 저장소에 서버 비밀값을 커밋했다 🔴
+
+**증상** — 서버 `.env.prod` 사본(`env.prod.server`)이 커밋에 딸려 들어가 **공개 저장소에
+푸시됐다.** DB·Redis 비밀번호, JWT 서명키, R2 액세스 키, 카카오 어드민 키가 담긴 파일이다.
+
+**원인** — 세 가지가 겹쳤다.
+
+1. 서버와 로컬 설정을 비교하려고 `env.prod.server` 를 **새로 만들었다.** 이름이 새것이라
+   `.gitignore` 에 없었다.
+2. 커밋할 때 `git add -A` 를 썼다. **목록에 없는 파일을 전부 담는 명령**이다.
+3. 담긴 것을 눈으로 확인하지 않고 바로 커밋·푸시했다.
+
+`.gitignore` 만 믿은 것이 핵심 실수다. 방금 만든 파일은 그 목록에 있을 수가 없다.
+
+**해결**
+
+- 커밋에서 제거하고 `--force-with-lease` 로 강제 푸시 → 현재 `main` 에는 없다.
+  **다만 GitHub 은 지워진 객체를 한동안 보관하므로 값 자체는 노출된 것으로 본다.**
+  교체 절차는 `docs/progress/NEXT.md` §1-A 에 순서대로 적었다.
+- `.gitignore` 에 `env.prod.server`, `.env.prod.*` 추가.
+- **`.githooks/pre-commit` 신설** — `.env*`·`*.jks`·`*.pem`·`key.properties`·
+  `google-services.json`·`dart_defines.json`·`secrets/`·개인키 블록이 담기면 커밋을 멈춘다.
+  `*.example` 은 통과시킨다. 새 PC 에서 한 번 켠다: `git config core.hooksPath .githooks`.
+- `CLAUDE.md` 에 규칙 추가 — **`git add -A`/`git add .` 금지, 파일을 하나씩 적는다.
+  커밋 전 `git status --short` 로 눈으로 확인한다.**
+
+**확인법**
+
+```bash
+git config core.hooksPath          # .githooks 가 나와야 한다
+git add -f .env.prod && git commit -m x   # 막혀야 한다
+git restore --staged .env.prod
+```
+
+> **교훈 두 가지.**
+> 1. **문서만으로는 못 막는다.** 같은 규칙을 사람이 매번 지킬 것으로 기대하지 말고
+>    기계가 거절하게 만든다. 훅이 없었으면 이 규칙도 다음에 또 잊혔을 것이다.
+> 2. **비밀 파일은 저장소 밖에 만든다.** 비교용 사본이 필요하면 작업 폴더가 아니라
+>    임시 폴더에 내려받는다. 저장소 안에 두는 순간 실수 한 번이면 끝이다.
+
+---
+
 ## 2026-09-08 — 신고 접수 메일이 안 온다 ⚠️ **아직 안 고침**
 
 **증상** — 신고 접수를 푸시 + 메일 두 경로로 보내게 만들고 서버까지 배포했는데(`f57d304`),

@@ -88,6 +88,50 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --flavor dev --dart-define
 
 ## 1. 못 끝낸 것
 
+### 1-A. 🔴 비밀값 전부 교체 (2026-09-08 유출) — 가장 급함
+
+**무슨 일** — 서버 `.env.prod` 를 로컬 것과 비교하려고 `env.prod.server` 로 내려받았는데,
+`git add -A` 에 휩쓸려 **공개 저장소에 커밋·푸시됐다.** 몇 분 뒤 커밋에서 빼고 강제 푸시해
+현재 `main` 에는 없지만, **GitHub 은 지워진 객체를 한동안 보관하고 공개 저장소 이벤트를 긁는
+봇이 있다.** 노출된 값은 살아 있다고 봐야 한다.
+
+**교체할 것 — 이 순서로** (아래로 갈수록 영향이 작다)
+
+| | 키 | 어디서 | 주의 |
+|---|---|---|---|
+| 1 | `JWT_SECRET` | 아무 랜덤 문자열(32자 이상) | **바꾸면 모든 사용자가 로그아웃된다.** 그래도 1순위다 — 이게 있으면 남의 토큰을 위조할 수 있다 |
+| 2 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Cloudflare 대시보드 > R2 > API 토큰 재발급 | 옛 토큰을 **삭제**까지 해야 한다 |
+| 3 | `DB_PASSWORD` | Postgres 사용자 비밀번호 변경 + `.env.prod` | 아래 순서 참고 |
+| 4 | `REDIS_PASSWORD` | `.env.prod` 만 바꾸고 redis 재시작 | 리프레시 토큰이 날아가 재로그인이 필요할 수 있다 |
+| 5 | `KAKAO_ADMIN_KEY` / `KAKAO_REST_API_KEY` | 카카오 개발자 콘솔에서 재발급 | 앱 키(네이티브)는 안 바꿔도 된다 |
+
+`DB_PASSWORD` 는 컨테이너와 설정을 함께 바꿔야 한다:
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126
+cd /opt/bandapp
+cp .env.prod .env.prod.bak-$(date +%Y%m%d-%H%M)
+
+# 1) DB 안에서 비밀번호 변경
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres   psql -U bandapp -d bandapp -c "ALTER USER bandapp WITH PASSWORD '새비밀번호';"
+
+# 2) 설정 갱신 (한 줄만)
+sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=새비밀번호|' .env.prod
+
+# 3) 앱만 재시작 (postgres 는 건드리지 않는다)
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d app
+sleep 10 && curl -s https://api.bandule.com/actuator/health
+```
+
+**로컬 `.env.prod` 도 같은 값으로 맞춘다.** 두 파일이 갈라지면 다음에 또 사고가 난다.
+
+> **재발 방지는 이미 넣어 뒀다** — `.githooks/pre-commit` 이 `.env*`·`*.jks`·
+> `google-services.json` 같은 이름을 커밋에서 막는다. 새 PC 에서 한 번 켠다:
+> `git config core.hooksPath .githooks` (docs/NEW_PC_SETUP.md §2-B).
+> `CLAUDE.md` 에도 "`git add -A` 를 쓰지 않는다" 를 규칙으로 박아 뒀다.
+
+---
+
 ### 1-Z. 지금 손에 잡혀 있던 것 (2026-09-08 새벽에 멈춤) ★ 여기부터
 
 **신고 접수 메일이 안 온다 — 아직 안 고침.**

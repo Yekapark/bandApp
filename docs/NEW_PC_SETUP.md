@@ -59,6 +59,25 @@ USB·개인 클라우드 등으로 직접 옮긴다. **메일·메신저·채팅
 
 ---
 
+## 2-B. 저장소를 받은 직후 한 번 — 비밀값 커밋 방지 훅 켜기
+
+```bash
+cd C:andandApp
+git config core.hooksPath .githooks
+```
+
+`.env*`·`*.jks`·`google-services.json` 같은 파일이 커밋에 담기면 **커밋이 멈춘다.**
+이 저장소는 **공개**라서 한 번 푸시되면 지워도 남는다 — 2026-09-08 에 실제로
+서버 `.env.prod` 사본이 올라가 비밀값을 전부 교체해야 했다.
+
+켜졌는지 확인:
+
+```bash
+git config core.hooksPath   # .githooks 가 나와야 한다
+```
+
+---
+
 ## 3. 옮긴 뒤 확인
 
 ```bash
