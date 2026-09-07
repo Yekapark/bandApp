@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../../core/storage/secure_read.dart';
+
 final socialTermsStorageProvider = Provider<SocialTermsStorage>((ref) {
   return SocialTermsStorage(const FlutterSecureStorage());
 });
@@ -22,7 +24,7 @@ class SocialTermsStorage {
 
   static const _key = 'auth.socialTermsAgreed';
 
-  Future<bool> agreed() async => await _storage.read(key: _key) == 'true';
+  Future<bool> agreed() async => await secureRead(_storage, _key) == 'true';
 
   Future<void> markAgreed() => _storage.write(key: _key, value: 'true');
 }

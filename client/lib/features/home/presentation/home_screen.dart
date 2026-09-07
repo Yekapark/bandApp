@@ -99,8 +99,12 @@ class _Header extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 안 읽은 알림 수. 기기에 저장된 "마지막 확인 시각" 이후에 온 것만 센다(서버에 읽음 상태 없음).
     // 아직 못 불러왔으면 0 — 배지 때문에 헤더가 흔들리지 않게 한다.
+    //
+    // `.value` 가 아니라 `.valueOrNull` 이다. AsyncValue.value 는 실패 상태일 때 그 예외를
+    // **다시 던진다** — 배지 숫자 하나 못 구했다고 홈 화면 전체가 죽는다(릴리스에서는
+    // 회색 사각형으로 보인다). 실제로 그랬다: docs/TROUBLESHOOTING.md 2026-09-07.
     final unread =
-        ref.watch(unreadNotificationCountProvider(band.id)).value ?? 0;
+        ref.watch(unreadNotificationCountProvider(band.id)).valueOrNull ?? 0;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

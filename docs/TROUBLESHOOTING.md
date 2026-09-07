@@ -18,6 +18,57 @@
 
 ---
 
+## 2026-09-07 (2차) — 재설치 후 홈 화면만 회색 사각형
+
+**증상** — 0.1.0+20 을 재설치로 깔았더니 홈 탭만 아무것도 없는 연회색 사각형이고,
+캘린더·지도·게시판·정산은 정상. 앱이 죽지는 않는다.
+
+**원인** — 바로 위 항목 (1) 과 **같은 뿌리인데 다른 장소**다. 두 가지가 겹쳤다.
+
+1. 백업 복원으로 안전 저장소의 옛 항목이 복호화 불가 상태다. 알림 배지가 쓰는
+   `notifications.lastSeenAt.{bandId}` 를 읽을 때마다
+   `PlatformException(... BadPaddingException: BAD_DECRYPT)` 가 난다.
+   앞 항목에서 `bootstrap()` 만 막았고 나머지 저장소 두 곳은 그대로였다.
+   (로그인 토큰은 재로그인하며 **새 열쇠로** 다시 써서 멀쩡했다 — 그래서 로그인은 됐다.)
+2. 홈 헤더가 그 값을 `ref.watch(...).value` 로 읽었다. **`AsyncValue.value` 는 실패 상태일 때
+   그 예외를 다시 던진다** (`valueOrNull` 은 null 을 준다). 배지 숫자 하나를 못 구했다고
+   위젯 build 가 예외로 끝났고, 릴리스 빌드에서 build 예외는 `RenderErrorBox` — 글자 없는
+   **연회색 사각형**으로 그려진다(디버그였다면 빨간 화면이었을 것이다).
+
+logcat 에 남은 결정적 두 줄:
+
+```
+PlatformException(Exception encountered, read, javax.crypto.BadPaddingException: BAD_DECRYPT)
+#2  _Header.build (package:bandapp_client/features/home/presentation/home_screen.dart:103)
+```
+
+**해결** — 뿌리 하나와 증상 하나를 같이 고쳤다.
+
+- `lib/core/storage/secure_read.dart` 신설. 읽기가 실패하면 **그 항목을 지우고 null 을 돌려준다.**
+  되살릴 방법이 없는 값이고, 안 지우면 앱을 다시 깔기 전까지 매번 같은 예외가 난다.
+  안전 저장소를 쓰는 **세 곳 모두**(`TokenStorage`, `NotificationSeenStorage`,
+  `SocialTermsStorage`) 이걸 통한다. 쓰기는 감싸지 않는다 — 새 값은 현재 열쇠로 암호화된다.
+- `home_screen.dart:103` 의 `.value` → `.valueOrNull`. 곁다리 데이터 하나가 화면 전체를
+  죽이지 않게. 코드베이스 전체를 훑어 `.value` 로 읽던 곳은 여기 하나뿐이었다.
+- 회귀 테스트 `client/test/secure_read_test.dart`.
+
+**확인법**
+
+```bash
+cd client && flutter test
+```
+
+실기기에서는 재설치 → 로그인 → 홈 탭에 내용이 뜨면 된다. 로그를 볼 수 있으면
+`secureRead: ... 를 읽지 못해 버린다` 가 **한 번만** 찍히고 그 뒤로 안 찍혀야 한다(지웠으니까).
+
+> **교훈 두 가지.**
+> 1. 저장소가 깨지는 상황을 한 군데(`bootstrap`)만 막은 것이 실수였다. 같은 저장소를 읽는
+>    곳을 전부 찾아 공통 함수로 막았어야 했다.
+> 2. **릴리스 빌드의 글자 없는 연회색 사각형 = 위젯 build 중 예외**다. 다음에 이 화면을 보면
+>    바로 `adb logcat | grep -i flutter` 로 스택을 본다.
+
+---
+
 ## 2026-09-07 — 푸시 알림이 아예 안 오고, 재설치하면 스플래시에서 멈춤
 
 테스터 제보 "푸시 알림을 껐다 켜도 `device_tokens` 값이 안 바뀐다" 에서 시작해
