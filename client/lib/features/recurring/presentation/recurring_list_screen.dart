@@ -9,6 +9,7 @@ import '../../../routing/app_router.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../band/application/band_providers.dart';
 import '../../home/application/home_providers.dart';
+import '../../plan/application/plan_providers.dart';
 import '../../reservation/application/calendar_providers.dart';
 import '../application/recurring_providers.dart';
 import '../data/recurring_models.dart';
@@ -32,27 +33,43 @@ class RecurringListScreen extends ConsumerWidget {
     final meId = ref.watch(authControllerProvider).user?.id;
     final rulesAsync = ref.watch(recurringRulesProvider(band.id));
 
+    // 정기 일정 *등록*은 PREMIUM 기능이다(서버 RecurringRuleService.create 가 막는다).
+    // 목록은 FREE 에서도 보여준다 — PREMIUM 을 쓰다 내려온 밴드의 기존 규칙은 계속 회차를
+    // 만들기 때문에, 감추면 그 일정이 어디서 생겼는지 알 길이 없다.
+    //
+    // 아직 못 불러왔거나 조회에 실패했으면(null) 잠그지 않는다. 서버가 최종 방어선이라
+    // 최악이라도 예전과 같은 동작(저장 시 403)이고, 반대로 잠가 버리면 통신이 잠깐 불안한
+    // 것만으로 PREMIUM 사용자가 기능을 못 쓴다.
+    final isFree =
+        ref.watch(bandPlanProvider(band.id)).valueOrNull?.isPremium == false;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('정기 일정',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final added = await context.push<bool>(Routes.newRecurring);
-          if (added == true) {
-            ref.invalidate(recurringRulesProvider(band.id));
-            ref.invalidate(monthReservationsProvider);
-            ref.invalidate(upcomingReservationsProvider(band.id));
-          }
-        },
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.onPrimary,
-        icon: const Icon(Icons.add, size: 18),
-        label: const Text('정기 일정 추가',
-            style: TextStyle(fontWeight: FontWeight.w700)),
-      ),
-      body: RefreshIndicator(
+      floatingActionButton: isFree
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () async {
+                final added = await context.push<bool>(Routes.newRecurring);
+                if (added == true) {
+                  ref.invalidate(recurringRulesProvider(band.id));
+                  ref.invalidate(monthReservationsProvider);
+                  ref.invalidate(upcomingReservationsProvider(band.id));
+                }
+              },
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.onPrimary,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('정기 일정 추가',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+      body: Column(
+        children: [
+          if (isFree) const _PremiumLock(),
+          Expanded(
+            child: RefreshIndicator(
         color: AppColors.primary,
         backgroundColor: AppColors.surface,
         onRefresh: () async {
@@ -96,6 +113,9 @@ class RecurringListScreen extends ConsumerWidget {
             );
           },
         ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -260,4 +280,73 @@ class _Message extends StatelessWidget {
         textAlign: TextAlign.center,
         style: const TextStyle(color: AppColors.textDim, height: 1.6),
       );
+}
+
+/// FREE 밴드에 보여주는 잠금 안내. 기능을 감추지 않고 무엇이 잠겼는지 알린 뒤 요금제
+/// 화면으로 보낸다 — 폼을 다 채우고 저장할 때 403 을 만나는 것보다 낫다.
+class _PremiumLock extends StatelessWidget {
+  const _PremiumLock();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.lock_outline,
+                  size: 15, color: AppColors.primary),
+              const SizedBox(width: 6),
+              Text(
+                '프리미엄 전용',
+                style: AppTypography.display(
+                  fontSize: 11,
+                  letterSpacing: 2,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '정기 일정 등록은 프리미엄 밴드만 쓸 수 있어요.',
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            '한 번만 등록해 두면 앞으로 8주분 합주가 캘린더에 자동으로 생겨요.',
+            style:
+                TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => context.push(Routes.plan),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                '요금제 보기',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
