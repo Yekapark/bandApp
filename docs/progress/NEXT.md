@@ -88,6 +88,60 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --flavor dev --dart-define
 
 ## 1. 못 끝낸 것
 
+### 1-Z. 지금 손에 잡혀 있던 것 (2026-09-08 새벽에 멈춤) ★ 여기부터
+
+**신고 접수 메일이 안 온다 — 아직 안 고침.**
+
+오늘 신고 접수를 푸시 + **메일** 두 경로로 보내게 만들었고(`ReportMail`, `REPORT_NOTIFY_EMAILS`)
+서버까지 배포했다(`f57d304`). 그런데 실제로 신고해 보니 메일이 오지 않는다.
+
+**여기까지 밝혀진 것**
+
+- 서버 `/opt/bandapp/.env.prod` 에 **`MAIL_*` 세 줄이 아예 없었다**(로컬 `.env.prod` 에는 있다).
+  `MAIL_FROM` 이 비면 `EmailSender.isConfigured()` 가 false 라 발송을 통째로 건너뛴다.
+  → 신고 메일뿐 아니라 **비밀번호 재설정·이메일 인증 메일도 그동안 안 나갔다.**
+- `REPORT_NOTIFY_EMAILS` 는 서버에 들어갔지만 **같은 줄이 두 번** 있다(`echo >>` 를 두 번 실행).
+- 지시자가 서버 파일을 손본 뒤에도 메일이 안 온다고 했다. **거기서 멈췄다.**
+
+**다음에 할 것 — 이 순서로**
+
+```bash
+# 1) 설정이 실제로 컨테이너에 실렸는지
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126   "cd /opt/bandapp && grep -c '^MAIL_' .env.prod && docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app printenv | grep -c '^MAIL_'"
+```
+
+둘 다 `3` 이어야 한다. `.env.prod` 는 3인데 `printenv` 가 0이면 **앱 컨테이너를 다시 안 띄운 것**이다
+(환경변수는 컨테이너가 시작할 때만 읽는다).
+
+```bash
+# 2) 로그에서 어디서 막혔는지
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126   "cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 200 app | grep -i mail"
+```
+
+| 로그 | 뜻 |
+|---|---|
+| `[email] 발신 계정 미설정` | `MAIL_FROM` 이 앱까지 안 갔다 → 컨테이너 재시작 |
+| `[email] 발송 실패` | SMTP 인증·주소 형식 문제 → 앱 비밀번호, `MAIL_FROM` 의 꺾쇠 확인 |
+| 아무것도 없음 | **신고 자체가 접수 안 됐다** → `SELECT * FROM reports ORDER BY id DESC LIMIT 5;` |
+
+```bash
+# 3) 신고가 DB 에 들어왔는지
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126   "cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres psql -U bandapp -d bandapp -c 'SELECT id, target_type, target_id, reporter_id, created_at FROM reports ORDER BY id DESC LIMIT 5;'"
+```
+
+> **주의** — 자기 글·자기 사진은 신고할 수 없고 앱에서 메뉴 자체가 안 뜬다.
+> 테스트하려면 **다른 계정의 글**을 신고해야 한다.
+
+**참고**
+
+- `MAIL_FROM` 형식은 `밴듈 <주소@gmail.com>` 처럼 **꺾쇠가 필요하다.** 꺾쇠 없이 `밴듈 주소@gmail.com`
+  으로 두면 `AddressException: Local address contains control or whitespace` 로 발송이 실패한다
+  (실제로 파싱해 확인했다).
+- 앱 비밀번호가 2026-09-07 대화 중 노출됐다. **폐기하고 재발급이 필요하다.**
+- 메일 본문 형식과 조회 쿼리는 `ReportMail` 에 있고 `ReportMailTest` 가 지킨다.
+
+---
+
 ### 1-Y. 지금 당장 걸려 있는 것 (2026-09-06 저녁)
 
 | | 누가 | 안 하면 |

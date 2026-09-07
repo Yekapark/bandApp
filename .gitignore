@@ -36,3 +36,6 @@ hs_err_pid*.log
 replay_pid*.log
 
 *firebase-adminsdk*.json
+# 서버 .env 비교용으로 내려받은 사본 — 절대 커밋하지 않는다
+env.prod.server
+.env.prod.*

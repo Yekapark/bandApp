@@ -2,7 +2,7 @@
 
 > 저장소만 받아서는 **빌드가 안 되거나, 되더라도 로그인·지도·푸시가 죽는다.**
 > 필요한 파일이 일부러 git 에 안 들어가 있기 때문이다(비밀값이거나 PC 마다 다르다).
-> 마지막 갱신: **2026-09-06**
+> 마지막 갱신: **2026-09-08**
 
 ---
 
@@ -54,7 +54,7 @@ USB·개인 클라우드 등으로 직접 옮긴다. **메일·메신저·채팅
 | Java 21 | `java -version` (백엔드 빌드용) |
 | Docker Desktop | 로컬 백엔드·테스트에 필요 |
 | Python 3 | 릴리스 스크립트·약관 페이지 빌드 |
-| Node.js + `npm i -g firebase-tools` | 테스터 배포. 깔고 `firebase login` |
+| Node.js + `npm i -g firebase-tools` | 테스터 배포. 깔고 `firebase login` (로그인 상태는 PC 마다 따로다) |
 | Git | |
 
 ---
@@ -98,9 +98,16 @@ cd C:\band\bandApp
 | | |
 |---|---|
 | [progress/NEXT.md](progress/NEXT.md) | **여기부터.** 지금 상태, 서버 정보, 걸려 있는 일 |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | **겪은 문제와 해결.** 같은 함정을 두 번 밟지 않으려면 훑는다 |
+| [OPERATIONS.md](OPERATIONS.md) | DB 접속(HeidiSQL 포함), 통계·쿠폰·신고 확인 쿼리 |
 | [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md) | 출시까지 남은 순서 |
 | [TESTING.md](TESTING.md) | 테스터에게 빌드 보내는 법 |
 | [progress/client-DEVLOG.md](progress/client-DEVLOG.md) | 클라이언트 작업 이력 |
+
+> **Claude 세션은 PC 를 따라오지 않는다.** 대화 기록도, `~/.claude` 의 메모리도 이 PC 에만 있다.
+> 그래서 이어받는 데 필요한 것은 전부 **git 에 들어 있는 문서**로 남긴다 — 새 PC 에서는
+> 저장소를 받고 위 문서를 읽으면 된다. `CLAUDE.md` 는 세션마다 자동으로 읽히므로
+> 규칙(문제를 고치면 TROUBLESHOOTING 에 적는다 등)은 따로 챙길 필요가 없다.
 
 ---
 
