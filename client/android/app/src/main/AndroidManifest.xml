@@ -4,7 +4,11 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Auto Backup 을 끈다. flutter_secure_storage 는 토큰을 SharedPreferences 에 암호화해 넣고
+         복호화 키는 Android KeyStore 에 두는데, KeyStore 는 백업 대상이 아니다. 백업이 켜져 있으면
+         재설치 시 "열쇠 없는 금고"만 복원돼서 토큰을 읽을 수 없다. 복원해도 못 쓰는 데이터다. -->
     <application
+        android:allowBackup="false"
         android:label="밴듈"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

@@ -119,8 +119,14 @@ firebase appdistribution:distribute \
   --release-notes "무엇이 바뀌었는지"
 ```
 
-앱 ID 는 `client/android/app/google-services.json` 의 `mobilesdk_app_id` 와 같은 값이고,
-Firebase 콘솔 > 프로젝트 설정 > 내 앱 에서도 `1:숫자:android:문자열` 형태로 보인다.
+앱 ID 는 `release_tester.py` 의 `DISTRIBUTION_APP_ID` 와 같은 값이고, Firebase 콘솔 >
+프로젝트 설정 > 내 앱 에서도 `1:숫자:android:문자열` 형태로 보인다.
+
+> **배포 프로젝트와 푸시 프로젝트가 다르다 — 그래도 된다.** 테스터 배포는
+> `bandapp-dev-67c6f`(그룹과 릴리스 이력이 여기 쌓여 있다), 앱 안의 FCM 은 prod flavor 의
+> `bandule-b94d2`(서버 `.env.prod` 의 `FCM_PROJECT_ID` 와 같다). 배포 채널과 푸시 발송
+> 경로는 서로 무관하고, 패키지명이 같아서 업로드에도 문제가 없다.
+> 자세한 경위는 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 참고.
 
 **테스터 쪽에서 어떻게 보이나** — 초대 링크는 한 번만 받으면 되고 이후로는 안 바뀐다.
 새 빌드를 올리면 같은 링크·같은 App Tester 앱에서 새 버전이 뜨고 알림이 간다.
