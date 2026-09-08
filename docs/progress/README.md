@@ -34,6 +34,7 @@
 | 9 | [phase-09-notification-batch.md](phase-09-notification-batch.md) — FCM 푸시(디바이스 토큰·알림 on/off·리마인더 시점) · 트리거(새 일정·승인·정산·취소, AFTER_COMMIT 이벤트) · 리마인더·참석 독촉 배치(멱등) · 미디어 만료·고아 PENDING 정리 배치(R2 삭제 실패 재시도) | ✅ 완료 — CI 통과 (PR #30) |
 | 10 | [phase-10-plan.md](phase-10-plan.md) — 밴드 FREE/PREMIUM 요금제 · 미디어 보관기한을 현재 플랜에 연결(FREE 30일 / PREMIUM 무제한) · 티어 변경 시 기존 미디어 만료일 재계산(업그레이드=NULL, 다운그레이드=30일 유예) · `PaymentGateway` 인터페이스 + no-op 구현체 · 동시 전환 `SELECT … FOR UPDATE` 직렬화 | ✅ 완료 — CI 통과 (PR #33) |
 | 11 | [phase-11-deploy.md](phase-11-deploy.md) — 배포: 운영 Docker Compose(포트 비공개·Redis 비밀번호·prod 프로파일) · Nginx 리버스 프록시 + Let's Encrypt 자동 갱신 · GitHub Actions 배포(CI 통과 시 GHCR → SSH) · DB 일 1회 백업(자체 검증 → R2 → 7개 보관) · 복구 스크립트(훈련 모드) · X-Forwarded-For 위조 차단 | ✅ 완료 — 백업·복구 로컬 실증(빈 DB 복구 성공). 실제 VM 배포는 서버 확보 후 |
+| 12 | [phase-12-iap.md](phase-12-iap.md) — 인앱결제(Google Play, Android): 구매 토큰 검증(`/plan/google/verify`) · RTDN 웹훅(갱신·해지·환불, 멱등) · `StoreBillingGateway` 재설계 + no-op/Google 어댑터 · 웹훅 OIDC·공유시크릿 인증 · Flutter `in_app_purchase` 결제 UI · 환불(REVOKED) 즉시 강등 | 🟡 코드 완료(슬라이스 1~3, PR #69·#70·#71 · CI 통과). Play Console 설정(슬라이스 0)·실기기 e2e(슬라이스 4) 남음 |
 
 | — | [2026-09-06-premium-and-copy.md](2026-09-06-premium-and-copy.md) — 프리미엄에 정기 합주 자동 등록 추가 · 구독 만료 예고(푸시 30·7·1일 전 + 홈 배너) · 앱 문구를 사용자 말로(Firebase·개발자 콘솔 노출 제거, 말투 ~어요 통일) | ✅ 완료 |
 

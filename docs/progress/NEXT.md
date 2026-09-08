@@ -69,10 +69,12 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 
 ### Phase 12 (인앱결제) — 코드는 됐고 스토어 설정만 남음
 
-슬라이스 1~3 머지 완료 (PR #69·#70·#71). `app.plan.billing.gateway=noop` 이 기본이라 **지금 운영
-동작은 안 바뀐다.** 켜려면:
+슬라이스 1~3 머지 완료 (PR #69·#70·#71). 상세 기록: **[phase-12-iap.md](phase-12-iap.md)**.
+`app.plan.billing.gateway=noop` 이 기본이라 **지금 운영 동작은 안 바뀐다.** 켜려면:
 
 1. **슬라이스 0 (사람)** — Play Console 에서
+   - ~~축소 서비스 수수료 15% 프로그램 등록~~ ✅ 완료 (2026-09-08)
+   - 결제 프로필 은행계좌 확인 — Google 소액 테스트 입금(영업일 2~3일) → 금액 입력. **진행 중**
    - 구독 상품 `premium_yearly`, 기본 요금제 ₩19,000 / 1년
    - Google Cloud 서비스 계정 → Play Console 에서 "재무 데이터 보기" 권한 부여, JSON 키 발급
    - RTDN 용 Pub/Sub 토픽 생성 → Play Console > 수익 창출 설정에 등록, **push 구독**을
