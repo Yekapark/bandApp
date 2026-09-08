@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/format/formatters.dart';
 import '../../../core/network/api_exception.dart';
@@ -7,10 +10,12 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../band/application/band_providers.dart';
 import '../application/plan_providers.dart';
+import '../data/iap_service.dart';
 import '../data/plan_models.dart';
 import '../data/plan_repository.dart';
 
-/// 밴드 요금제 — FREE/PREMIUM 조회와 전환(밴드장). 실제 결제 연동은 없다.
+/// 밴드 요금제 — FREE/PREMIUM 조회, Play 결제로 PREMIUM 전환(밴드장), 맛보기 쿠폰.
+/// 해지·연장은 Play 스토어에서 하고 서버가 웹훅으로 받으므로 앱에는 버튼이 없다.
 class PlanScreen extends ConsumerStatefulWidget {
   const PlanScreen({super.key});
 
@@ -19,7 +24,98 @@ class PlanScreen extends ConsumerStatefulWidget {
 }
 
 class _PlanScreenState extends ConsumerState<PlanScreen> {
+  final IapService _iap = IapService();
+  StreamSubscription<List<PurchaseDetails>>? _iapSub;
+  ProductDetails? _product;
+  bool _storeReady = true;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 스트림을 먼저 연다 — 지난번에 결제는 됐는데 서버 검증을 못 끝낸 구매가 여기로 다시 들어온다.
+    _iapSub = _iap.purchaseStream.listen(
+      _onPurchaseUpdates,
+      onError: (_) {},
+    );
+    _initStore();
+  }
+
+  @override
+  void dispose() {
+    _iapSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initStore() async {
+    final available = await _iap.isAvailable();
+    final product = available ? await _iap.loadProduct() : null;
+    if (!mounted) return;
+    setState(() {
+      _storeReady = available && product != null;
+      _product = product;
+    });
+  }
+
+  Future<void> _onPurchaseUpdates(List<PurchaseDetails> purchases) async {
+    for (final p in purchases) {
+      if (p.productID != IapService.productId) continue;
+      switch (p.status) {
+        case PurchaseStatus.pending:
+          if (mounted) setState(() => _busy = true);
+        case PurchaseStatus.canceled:
+          if (mounted) setState(() => _busy = false);
+          if (p.pendingCompletePurchase) await _iap.complete(p);
+        case PurchaseStatus.error:
+          if (mounted) setState(() => _busy = false);
+          _toast(p.error?.message ?? '결제에 실패했어요.');
+          if (p.pendingCompletePurchase) await _iap.complete(p);
+        case PurchaseStatus.purchased:
+        case PurchaseStatus.restored:
+          await _verifyPurchase(p);
+      }
+    }
+  }
+
+  /// 결제된 구매를 서버에 검증받고, 성공했을 때만 스토어에 완료를 알린다.
+  /// 검증이 일시적으로 실패하면 완료하지 않는다 — 다음에 앱을 켜면 스트림으로 다시 들어와 재시도된다.
+  Future<void> _verifyPurchase(PurchaseDetails p) async {
+    final band = ref.read(currentBandProvider);
+    final token = _iap.purchaseToken(p);
+    if (band == null || token == null) {
+      if (mounted) setState(() => _busy = false);
+      return;
+    }
+    try {
+      await ref
+          .read(planRepositoryProvider)
+          .verifyGooglePurchase(band.id, token);
+      ref.invalidate(bandPlanProvider(band.id));
+      _toast('프리미엄이 시작됐어요.');
+      await _iap.complete(p);
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (_) {
+      _toast('구매를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _startPurchase() async {
+    final product = _product;
+    if (product == null) {
+      _toast('지금은 결제를 시작할 수 없어요. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await _iap.buy(product);
+    } catch (_) {
+      if (mounted) setState(() => _busy = false);
+      _toast('결제를 시작하지 못했어요.');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,35 +170,28 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
               )
-            // 해지를 눌러도 결제한 기간까지는 PREMIUM 이다. 그동안은 해지 버튼 대신
-            // "언제까지 쓸 수 있는지" 를 보여준다 — 두 번 눌러 봐야 409 만 돌아온다.
-            //
-            // 연장 버튼도 감춘다: 해지하면 구독 식별자가 없어져 게이트웨이 갱신을 못 부른다.
-            // 실제 PG 를 붙이면 이 자리는 "다시 구독"(새 구독 생성)이 되어야 한다.
             else if (plan.isPremium && plan.canceled)
               const _CanceledNotice()
-            else if (plan.isPremium) ...[
+            else if (plan.isPremium)
+              const _ManageNotice()
+            else ...[
               _ActionButton(
-                label: '구독기간 연장',
+                label: _product == null
+                    ? 'PREMIUM 시작'
+                    : 'PREMIUM 시작 · ${_product!.price} / 년',
                 busy: _busy,
-                onTap: () => _run(band.id, 'renew'),
+                onTap: _storeReady ? () => _startPurchase() : null,
               ),
-              const SizedBox(height: 10),
-              OutlinedButton(
-                onPressed: _busy ? null : () => _confirmCancel(band.id),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                  side: const BorderSide(color: AppColors.danger),
-                  foregroundColor: AppColors.danger,
+              if (!_storeReady)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    '지금은 스토어 결제를 쓸 수 없어요. 잠시 후 다시 시도해 주세요.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 11, color: AppColors.textFaint),
+                  ),
                 ),
-                child: const Text('PREMIUM 해지'),
-              ),
-            ] else
-              _ActionButton(
-                label: 'PREMIUM 시작',
-                busy: _busy,
-                onTap: () => _confirmSubscribe(band.id),
-              ),
+            ],
             if (band.isLeader) ...[
               const SizedBox(height: 10),
               TextButton(
@@ -113,7 +202,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
             ],
             const SizedBox(height: 12),
             const Text(
-              '지금은 시험 기간이라 결제 없이 바꿀 수 있어요.',
+              '결제는 Google Play 를 통해 진행돼요. 해지·환불도 Play 스토어 > 구독에서 해요.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 10.5, color: AppColors.textFaint),
             ),
@@ -121,60 +210,6 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _confirmSubscribe(int bandId) async {
-    final ok = await _confirm(
-      title: '프리미엄을 시작할까요?',
-      body: '올린 사진·영상이 사라지지 않고, 정기 합주를 자동으로 등록할 수 있어요.\n\n'
-          '기간은 1년이에요. 끝나면 자동으로 무료로 바뀌고, 그때부터 30일 뒤에 '
-          '사진·영상이 차례로 사라져요. 끝나기 전에 미리 알려드릴게요.\n'
-          '(이미 사라진 사진·영상은 되돌릴 수 없어요.)',
-      action: '시작',
-    );
-    if (ok) _run(bandId, 'subscribe');
-  }
-
-  Future<void> _confirmCancel(int bandId) async {
-    final ok = await _confirm(
-      title: '프리미엄을 해지할까요?',
-      body: '결제하신 기간이 끝날 때까지는 그대로 쓰실 수 있어요. 지금 사라지는 건 없어요.\n\n'
-          '기간이 끝나면 무료로 바뀌고, 그때부터 30일 뒤에 사진·영상이 차례로 사라져요. '
-          '정기 합주도 그때부터 새로 등록할 수 없어요(이미 등록한 건 그대로예요).',
-      action: '해지',
-      danger: true,
-    );
-    if (ok) _run(bandId, 'cancel');
-  }
-
-  Future<bool> _confirm({
-    required String title,
-    required String body,
-    required String action,
-    bool danger = false,
-  }) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text(title, style: const TextStyle(fontSize: 16)),
-        content: Text(body,
-            style: const TextStyle(
-                fontSize: 12.5, color: AppColors.textDim, height: 1.5)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('취소')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(action,
-                style:
-                    danger ? const TextStyle(color: AppColors.danger) : null),
-          ),
-        ],
-      ),
-    );
-    return ok ?? false;
   }
 
   /// 쿠폰 코드를 받아 사용한다. 코드를 넣어야만 버튼이 살아난다.
@@ -211,8 +246,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('취소')),
+              onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
           ValueListenableBuilder<TextEditingValue>(
             valueListenable: controller,
             builder: (_, value, __) => TextButton(
@@ -226,29 +260,19 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       ),
     );
     if (code == null || code.isEmpty) return;
-    await _run(bandId, 'coupon', code: code);
+    await _redeemCoupon(bandId, code);
   }
 
-  Future<void> _run(int bandId, String op, {String? code}) async {
+  Future<void> _redeemCoupon(int bandId, String code) async {
     setState(() => _busy = true);
     try {
-      final repo = ref.read(planRepositoryProvider);
-      switch (op) {
-        case 'subscribe':
-          await repo.subscribe(bandId);
-        case 'cancel':
-          await repo.cancel(bandId);
-        case 'renew':
-          await repo.renew(bandId);
-        case 'coupon':
-          await repo.redeemCoupon(bandId, code!);
-      }
+      await ref.read(planRepositoryProvider).redeemCoupon(bandId, code);
       ref.invalidate(bandPlanProvider(bandId));
-      _toast(op == 'coupon' ? '쿠폰을 사용했어요.' : '요금제를 변경했어요.');
+      _toast('쿠폰을 사용했어요.');
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
-      _toast(op == 'coupon' ? '쿠폰을 사용하지 못했어요.' : '요금제를 변경하지 못했어요.');
+      _toast('쿠폰을 사용하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -394,7 +418,7 @@ class _ActionButton extends StatelessWidget {
 
   final String label;
   final bool busy;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -417,8 +441,39 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-/// 해지 예약된 PREMIUM. 남은 기간을 알려주고 버튼은 두지 않는다 — 이 상태에서 할 수 있는
-/// 조작이 없다(해지는 409, 연장은 구독 식별자가 없어 부를 수 없다).
+/// 정상 PREMIUM. 갱신은 자동이고 해지·환불은 Play 스토어에서 한다 — 앱에는 버튼이 없다.
+class _ManageNotice extends StatelessWidget {
+  const _ManageNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('프리미엄 이용 중',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+          SizedBox(height: 5),
+          Text(
+            '기간이 끝나면 Google Play 가 자동으로 1년씩 갱신해요. 해지하거나 환불받으려면 '
+            'Play 스토어 > 메뉴 > 구독에서 하면 돼요.',
+            style:
+                TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 해지 예약된 PREMIUM. 남은 기간을 알려주고 버튼은 두지 않는다 — 결제한 기간이 끝나면
+/// 서버가 만료 배치로 FREE 로 내린다.
 class _CanceledNotice extends StatelessWidget {
   const _CanceledNotice();
 
