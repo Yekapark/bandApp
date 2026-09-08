@@ -26,7 +26,7 @@ public class RejectingStoreBillingGatewayConfig {
             }
 
             @Override
-            public void acknowledge(Store store, String purchaseToken) {
+            public void acknowledge(Store store, String productId, String purchaseToken) {
                 // no-op
             }
         };

@@ -131,6 +131,9 @@ app:
     billing:
       gateway: ${PLAN_BILLING_GATEWAY:noop}            # noop(로컬·CI) | google(실제 Play 검증)
       webhook-secret: ${PLAN_BILLING_WEBHOOK_SECRET:}  # RTDN Pub/Sub push 공유 시크릿. 비면 웹훅 차단(fail-closed)
+      google-package-name: ${PLAN_BILLING_GOOGLE_PACKAGE:com.yeka.bandule}
+      google-credentials-path: ${PLAN_BILLING_GOOGLE_CREDENTIALS_PATH:}  # 서비스 계정 JSON. gateway=google 이면 필수
+      google-application-name: ${PLAN_BILLING_GOOGLE_APP_NAME:bandule}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
   deeplink:

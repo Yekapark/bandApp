@@ -56,6 +56,12 @@ dependencies {
     // (R2StorageClient 선례), 알림은 부가 기능이라 미설정이 일정 등록·정산을 깨지 않는다.
     implementation("com.google.firebase:firebase-admin:9.4.3")
 
+    // Google Play Developer API — 인앱결제 구독 검증(Phase 12). purchases.subscriptionsv2.get 로 구매
+    // 토큰의 현재 상태를 읽고, purchases.subscriptions.acknowledge 로 확인 처리한다. google-api-client·
+    // google-auth-library 는 firebase-admin 이 이미 가져오므로 얇은 생성 모델 jar 만 더한다.
+    // app.plan.billing.gateway=google 일 때만 GooglePlayBillingGateway 가 뜬다(그 전엔 no-op).
+    implementation("com.google.apis:google-api-services-androidpublisher:v3-rev20260528-2.0.0")
+
     runtimeOnly("org.postgresql:postgresql")
 
     compileOnly("org.projectlombok:lombok")
