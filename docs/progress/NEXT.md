@@ -63,9 +63,9 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 | 테스터 배포 | [docs/TESTING.md](../TESTING.md) — 서버가 살았으니 APK 만 만들면 된다 |
 | 출시까지 순서 | [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) |
 | **다른 PC 에서 이어서** | **[docs/NEW_PC_SETUP.md](../NEW_PC_SETUP.md)** — git 에 없는 파일 목록과 확인 절차 |
-| 남은 것 | 스토어 심사 제출 · (Phase 12) 인앱결제 — 아래 요금 정책으로 착수 가능 |
+| 남은 것 | 스토어 심사 제출 · (Phase 12) 인앱결제 — 요금 정책 확정됐으니 착수 가능 |
 | 끝난 것 | 릴리스 서명 키 · 약관·개인정보 URL(`bandule.com/privacy`,`/terms`) · 카카오 콘솔 패키지명 · 개발자 등록 · 비밀값 로테이션(2026-09-08) · 운영 Firebase 분리(서버 `bandule-b94d2`, 앱 `--flavor prod`) |
-| 요금 정책 | **밴드당 연 구독**(`PREMIUM_YEARLY`, 365일). 가격 미확정 — 검토 후보 ₩22,000~29,000/년. Phase 12 착수 전 확정 |
+| 요금 정책 | **밴드당 연 구독 ₩19,000 / 년** 확정 (2026-09-08). `PREMIUM_YEARLY`, 365일. 유료 잠금은 미디어 만료 해제 하나 — 무료는 업로드 30일 뒤 삭제. 가격은 스토어 상품 설정값이라 코드 변경 없음, Phase 12 에서 상품 등록 시 입력 |
 
 **로컬 개발**은 그대로다 — `docker compose up -d` + `adb reverse tcp:8080 tcp:8080`.
 실기기 빌드에 **`--dart-define-from-file=dart_defines.json` 을 빠뜨리면 카카오 로그인이 막힌다.**
