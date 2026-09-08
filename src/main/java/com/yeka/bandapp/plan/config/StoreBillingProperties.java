@@ -12,12 +12,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param googlePackageName     앱 패키지명(Play Developer API 호출 대상). 예: {@code com.yeka.bandule}
  * @param googleCredentialsPath Play Developer API 권한을 가진 서비스 계정 JSON 키 파일 경로.
  *                              {@code gateway=google} 인데 비어 있으면 기동에 실패한다(FCM 키와 같은 방식).
- * @param googleApplicationName API 클라이언트 User-Agent 에 들어가는 이름. 아무 값이나 되며 기본 {@code bandule}.
+ * @param googleApplicationName    API 클라이언트 User-Agent 에 들어가는 이름. 아무 값이나 되며 기본 {@code bandule}.
+ * @param googlePubsubAudience     RTDN push 구독의 OIDC 토큰 audience. 설정하면 웹훅이 Bearer 토큰을
+ *                                 Google 공개키로 검증한다. 비면 {@code ?token=} 공유 시크릿으로만 인증.
+ * @param googlePubsubServiceAccount OIDC 토큰의 {@code email} 이 이 값과 같아야 한다(선택). Pub/Sub
+ *                                 구독에 지정한 인증 서비스 계정 주소.
  */
 @ConfigurationProperties(prefix = "app.plan.billing")
 public record StoreBillingProperties(String gateway, String webhookSecret,
                                      String googlePackageName, String googleCredentialsPath,
-                                     String googleApplicationName) {
+                                     String googleApplicationName, String googlePubsubAudience,
+                                     String googlePubsubServiceAccount) {
 
     public StoreBillingProperties {
         if (gateway == null || gateway.isBlank()) {
@@ -34,6 +39,12 @@ public record StoreBillingProperties(String gateway, String webhookSecret,
         }
         if (googleApplicationName == null || googleApplicationName.isBlank()) {
             googleApplicationName = "bandule";
+        }
+        if (googlePubsubAudience != null && googlePubsubAudience.isBlank()) {
+            googlePubsubAudience = null;
+        }
+        if (googlePubsubServiceAccount != null && googlePubsubServiceAccount.isBlank()) {
+            googlePubsubServiceAccount = null;
         }
     }
 }
