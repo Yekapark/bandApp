@@ -18,6 +18,37 @@
 
 ---
 
+## 2026-09-08 — 신고·인증 메일이 한 통도 안 나갔다 (`.env.prod` 는 채웠는데)
+
+**증상** — 신고 접수를 메일로도 보내게 만들고(`f57d304`) 서버 `.env.prod` 에
+`MAIL_SMTP_USERNAME`·`MAIL_SMTP_PASSWORD`·`MAIL_FROM` 세 줄을 채운 뒤에도 메일이
+오지 않았다. 신고뿐 아니라 비밀번호 재설정·이메일 인증 메일도 그동안 안 나갔다.
+
+**원인** — `docker-compose.prod.yml` 의 `app` 서비스 `environment:` 블록에 `MAIL_*`·
+`REPORT_NOTIFY_*` 항목이 **아예 없었다.** compose 는 `.env.prod` 의 값을 파일 안에서
+`${VAR}` 로 **참조된 자리에만** 넣는다 — 참조가 없으면 `.env.prod` 에 무슨 값을 적어도
+컨테이너 환경에는 안 들어간다. 앱은 `MAIL_FROM` 이 비었다고 보고
+`EmailSender.isConfigured()` 가 false 라 발송을 통째로 건너뛴다.
+컨테이너 안에서 `printenv | grep '^MAIL_'` 이 0줄이면 이 경우다(`.env.prod` 는 3줄인데).
+
+**해결** — 그 5개(`MAIL_SMTP_USERNAME`, `MAIL_SMTP_PASSWORD`, `MAIL_FROM`,
+`REPORT_NOTIFY_USER_IDS`, `REPORT_NOTIFY_EMAILS`)를 `app` `environment:` 에 추가.
+`main` 머지 → 자동 배포로 서버 반영된다.
+**앱 비밀번호(`MAIL_SMTP_PASSWORD`)는 2026-09-07 대화 중 노출됐으니 폐기·재발급이 먼저다**
+(NEXT.md §1-Y). 재발급 값을 `.env.prod`(서버·로컬 둘 다)에 넣고 배포해야 실제로 나간다.
+
+**확인법**
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 \
+  "cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app printenv | grep -c '^MAIL_'"
+# 3 이 나와야 한다. 그다음 다른 계정 글을 신고해 보고 로그:
+#   docker compose ... logs --tail 200 app | grep -i mail
+#   [email] 발송 실패  → SMTP 인증·MAIL_FROM 꺾쇠 문제
+#   (아무것도 없음)   → 신고 자체가 접수 안 됨
+```
+
+---
+
 ## 2026-09-08 — 공개 저장소에 서버 비밀값을 커밋했다 🔴
 
 **증상** — 서버 `.env.prod` 사본(`env.prod.server`)이 커밋에 딸려 들어가 **공개 저장소에
