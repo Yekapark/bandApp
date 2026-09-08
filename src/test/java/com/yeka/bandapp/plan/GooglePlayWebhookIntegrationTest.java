@@ -83,9 +83,33 @@ class GooglePlayWebhookIntegrationTest extends PlanApiSupport {
     }
 
     @Test
-    void unknown_purchase_token_is_a_no_op_200() {
-        assertThat(googlePlayWebhook(RTDN_RENEWED, "tok-nobody-has-this").getStatusCode().value())
+    void renewed_with_a_failed_store_lookup_asks_pubsub_to_retry() {
+        String leader = signup("wh-retry@band.app", "리더");
+        long bandId = createBand(leader, "재시도밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        // 조회가 실패하는(=noop 이 empty 를 주는) 토큰으로 바꿔 둔다.
+        jdbc.update("update band_plans set purchase_token = 'invalid-x' where band_id = ?", bandId);
+
+        // 갱신 알림인데 스토어 조회가 안 되면 삼키지 말고 5xx → Pub/Sub 재전송.
+        assertThat(googlePlayWebhook(RTDN_RENEWED, "invalid-x").getStatusCode().value()).isEqualTo(503);
+        // 기록도 남기지 않아 재전송이 다시 처리된다.
+        Integer marked = jdbc.queryForObject("select count(*) from processed_store_events", Integer.class);
+        assertThat(marked).isZero();
+    }
+
+    @Test
+    void unknown_token_on_a_terminal_event_is_a_no_op_200() {
+        // 종료성 이벤트(REVOKED/EXPIRED/CANCELED)는 이미 밴드에서 토큰이 지워졌을 수 있다 — 무시.
+        assertThat(googlePlayWebhook(RTDN_REVOKED, "tok-nobody-has-this").getStatusCode().value())
                 .isEqualTo(200);
+    }
+
+    @Test
+    void unknown_token_on_a_grant_event_asks_pubsub_to_retry() {
+        // 갱신·구매인데 아직 밴드에 토큰이 안 붙었다 = verify 가 곧 온다 — 재전송받는다.
+        assertThat(googlePlayWebhook(RTDN_RENEWED, "tok-not-linked-yet").getStatusCode().value())
+                .isEqualTo(503);
     }
 
     @Test

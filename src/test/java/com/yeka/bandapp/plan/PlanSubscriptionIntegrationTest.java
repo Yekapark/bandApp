@@ -170,6 +170,20 @@ class PlanSubscriptionIntegrationTest extends PlanApiSupport {
     }
 
     @Test
+    void a_purchase_token_cannot_be_linked_to_a_second_band() {
+        String leader = signup("link@band.app", "리더");
+        long bandA = createBand(leader, "구매밴드A");
+        long bandB = createBand(leader, "구매밴드B");
+
+        assertThat(verifyGoogle(leader, bandA, "shared-tok").getStatusCode().value()).isEqualTo(200);
+
+        ResponseEntity<String> reused = verifyGoogle(leader, bandB, "shared-tok");
+        assertThat(reused.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(reused)).isEqualTo("PURCHASE_ALREADY_LINKED");
+        assertThat(data(viewPlan(leader, bandB)).get("tier").asText()).isEqualTo("FREE");
+    }
+
+    @Test
     void re_verifying_an_active_purchase_extends_instead_of_erroring() {
         String leader = signup("idem@band.app", "리더");
         long bandId = createBand(leader, "멱등밴드");

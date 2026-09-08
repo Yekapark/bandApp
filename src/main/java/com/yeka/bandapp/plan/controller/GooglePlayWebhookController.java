@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yeka.bandapp.plan.config.StoreBillingProperties;
 import com.yeka.bandapp.plan.service.StoreSubscriptionService;
+import com.yeka.bandapp.plan.service.StoreWebhookRetryException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -60,9 +61,12 @@ public class GooglePlayWebhookController {
         }
         try {
             handle(envelope);
+        } catch (StoreWebhookRetryException retryable) {
+            // 일시적 실패 — Pub/Sub 가 재전송하도록 5xx 를 준다(멱등 기록은 아직 안 남았다).
+            log.warn("Google Play 웹훅: 재시도 요청 — {}", retryable.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         } catch (RuntimeException e) {
-            // 파싱·처리 실패를 재전송으로 되돌리지 않는다 — 멱등 테이블이 이미 messageId 를 잡았고,
-            // 잘못된 메시지는 재전송해도 똑같이 실패한다. 로그만 남긴다.
+            // 파싱·처리 실패를 재전송으로 되돌리지 않는다 — 잘못된 메시지는 재전송해도 똑같이 실패한다.
             log.error("Google Play 웹훅 처리 실패", e);
         }
         return ResponseEntity.ok().build();
