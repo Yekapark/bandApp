@@ -2,9 +2,13 @@
 
 ## 1. 한 줄 요약
 
-밴드 요금제 화면을 추가했다 — 현재 티어 표시, FREE/PREMIUM 비교(미디어 보관기한),
-밴드장의 **구독 시작 / 해지 / 연장**. Phase 10 전체가 클라에 없던 상태였다.
-백엔드 변경 없음(`16. 요금제`). **실제 결제 연동은 없음** — 백엔드가 no-op 게이트웨이라 버튼만.
+밴드 요금제 화면 — 현재 티어, FREE/PREMIUM 비교(미디어 보관기한), 밴드장의 구독.
+
+> **2026-09-08 갱신 (Phase 12 슬라이스 3-B).** 처음엔 no-op 게이트웨이라 버튼만이었는데, 그 뒤
+> 백엔드 인앱결제(Phase 12)가 붙어 **실제 Play Billing 결제**로 바뀌었다. `구독 시작 / 해지 / 연장`
+> API 는 없어졌고(`/plan/subscribe`·`/cancel`·`/renew` 제거), 이제 `POST /plan/google/verify` 하나다.
+> 해지·연장은 Play 스토어·자동갱신·RTDN 웹훅 몫이라 화면에 버튼이 없다. 아래 §3~§7 은 옛 내용이고,
+> 최신 흐름은 이 문단과 `client/lib/features/plan/{data/iap_service.dart,presentation/plan_screen.dart}`.
 
 ## 2. 무엇을 만들었나
 
