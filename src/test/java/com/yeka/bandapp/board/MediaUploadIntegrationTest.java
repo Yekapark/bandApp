@@ -217,8 +217,8 @@ class MediaUploadIntegrationTest extends BoardApiSupport {
     }
 
     private void subscribePremium(String token, long bandId) {
-        ResponseEntity<String> res =
-                post("/api/v1/bands/" + bandId + "/plan/subscribe", "{}", token);
+        ResponseEntity<String> res = post("/api/v1/bands/" + bandId + "/plan/google/verify",
+                "{\"purchaseToken\":\"tok" + bandId + "\"}", token);
         assertThat(res.getStatusCode().value()).isEqualTo(200);
     }
 

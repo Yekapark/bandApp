@@ -4,6 +4,7 @@ import com.yeka.bandapp.notification.entity.NotificationType;
 import com.yeka.bandapp.notification.repository.NotificationDispatchRepository;
 import com.yeka.bandapp.notification.service.PlanExpiryReminderService;
 import com.yeka.bandapp.plan.entity.BandPlan;
+import com.yeka.bandapp.plan.entity.Store;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,7 +35,7 @@ class PlanExpiryReminderIntegrationTest extends PlanApiSupport {
     /** 구독 만료일을 원하는 시점으로 당긴다 — 1년을 기다릴 수는 없다. */
     private void setExpiry(long bandId, Instant expiresAt) {
         BandPlan plan = bandPlanRepository.findByBandId(bandId).orElseThrow();
-        plan.upgradeToPremium(plan.getStartedAt(), expiresAt, "noop-" + bandId);
+        plan.upgradeToPremium(plan.getStartedAt(), expiresAt, "GPA-" + bandId, Store.GOOGLE_PLAY, "tok" + bandId);
         bandPlanRepository.saveAndFlush(plan);
     }
 

@@ -119,6 +119,8 @@ public enum ErrorCode {
     PLAN_ALREADY_FREE(HttpStatus.CONFLICT, "이미 무료 요금제입니다."),
     PLAN_ALREADY_CANCELED(HttpStatus.CONFLICT, "이미 해지 예약된 요금제입니다."),
     PAYMENT_FAILED(HttpStatus.PAYMENT_REQUIRED, "결제 처리에 실패했습니다."),
+    PURCHASE_NOT_VERIFIED(HttpStatus.PAYMENT_REQUIRED, "구매를 확인하지 못했습니다. 결제가 끝난 뒤 잠시 후 다시 시도해 주세요."),
+    PURCHASE_ALREADY_LINKED(HttpStatus.CONFLICT, "이 구매는 다른 밴드에 이미 연결되어 있습니다."),
     PLAN_REQUIRED(HttpStatus.FORBIDDEN, "프리미엄에서만 쓸 수 있는 기능이에요."),
 
     // 요금제 쿠폰

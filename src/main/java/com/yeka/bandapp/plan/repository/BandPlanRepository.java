@@ -62,6 +62,13 @@ public interface BandPlanRepository extends JpaRepository<BandPlan, Long> {
                                               @Param("until") Instant until,
                                               Pageable pageable);
 
+    /**
+     * 스토어 구매 토큰으로 밴드 id 를 찾는다 — RTDN 웹훅이 밴드를 특정할 때. 토큰은 PREMIUM 인 동안만
+     * 채워지고 유니크하지는 않지만(재구독 시 옛 토큰이 잠깐 남을 수 있다) 최신 한 행만 있으면 된다.
+     */
+    @Query("select p.bandId from BandPlan p where p.purchaseToken = :token")
+    Optional<Long> findBandIdByPurchaseToken(@Param("token") String token);
+
     /** 밴드 삭제 정리. */
     @Modifying
     @Query("delete from BandPlan p where p.bandId = :bandId")

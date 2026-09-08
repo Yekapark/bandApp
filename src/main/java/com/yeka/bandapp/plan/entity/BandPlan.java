@@ -51,6 +51,15 @@ public class BandPlan extends BaseTimeEntity {
     @Column(name = "subscription_ref", length = 100)
     private String subscriptionRef;
 
+    /** 결제 스토어. 쿠폰·no-op 업그레이드는 null. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "store", length = 20)
+    private Store store;
+
+    /** Google Play 구독 구매 토큰 — 서버가 구독 상태를 재조회하는 키. PREMIUM 동안만 채워진다. */
+    @Column(name = "purchase_token")
+    private String purchaseToken;
+
     @Column(name = "started_at", nullable = false)
     private Instant startedAt;
 
@@ -75,21 +84,31 @@ public class BandPlan extends BaseTimeEntity {
         return new BandPlan(bandId, now);
     }
 
-    /** FREE → PREMIUM. 보관기한 무제한(NULL), 구독기간 종료일과 구독 식별자를 기록한다. */
-    public void upgradeToPremium(Instant now, Instant periodEnd, String subscriptionRef) {
+    /**
+     * FREE → PREMIUM. 보관기한 무제한(NULL), 구독기간 종료일과 구독 식별자를 기록한다.
+     *
+     * @param store         결제 스토어. 쿠폰이면 null.
+     * @param purchaseToken 스토어 구매 토큰. 쿠폰이면 null. ({@code store} 와 짝 — DB CHECK 가 강제)
+     */
+    public void upgradeToPremium(Instant now, Instant periodEnd, String subscriptionRef,
+                                 Store store, String purchaseToken) {
         this.tier = PlanTier.PREMIUM;
         this.mediaRetentionDays = null;
         this.subscriptionRef = subscriptionRef;
+        this.store = store;
+        this.purchaseToken = purchaseToken;
         this.startedAt = now;
         this.expiresAt = periodEnd;
         this.updatedAt = now;
     }
 
-    /** PREMIUM → FREE. 보관기한 30일로 복귀, 구독기간·식별자를 비운다. */
+    /** PREMIUM → FREE. 보관기한 30일로 복귀, 구독기간·식별자·스토어 정보를 비운다. */
     public void downgradeToFree(Instant now) {
         this.tier = PlanTier.FREE;
         this.mediaRetentionDays = FREE_RETENTION_DAYS;
         this.subscriptionRef = null;
+        this.store = null;
+        this.purchaseToken = null;
         this.startedAt = now;
         this.expiresAt = null;
         this.updatedAt = now;
@@ -123,6 +142,23 @@ public class BandPlan extends BaseTimeEntity {
             throw new IllegalStateException("PREMIUM 이 아닌 플랜은 갱신할 수 없습니다: bandId=" + bandId);
         }
         this.expiresAt = newPeriodEnd;
+        this.updatedAt = now;
+    }
+
+    /**
+     * 스토어 결제로 PREMIUM 을 연장 — 기간을 늘리고 스토어 식별자를 (없었으면) 붙인다.
+     * 쿠폰으로 PREMIUM 이 된 밴드가 나중에 실제로 결제한 경우, 이후 RTDN 웹훅이 이 토큰으로 밴드를
+     * 찾을 수 있게 한다. PREMIUM 이 아니면 호출 오류다.
+     */
+    public void renewFromStore(Instant now, Instant newPeriodEnd, String subscriptionRef,
+                               Store store, String purchaseToken) {
+        if (tier != PlanTier.PREMIUM) {
+            throw new IllegalStateException("PREMIUM 이 아닌 플랜은 갱신할 수 없습니다: bandId=" + bandId);
+        }
+        this.expiresAt = newPeriodEnd;
+        this.subscriptionRef = subscriptionRef;
+        this.store = store;
+        this.purchaseToken = purchaseToken;
         this.updatedAt = now;
     }
 

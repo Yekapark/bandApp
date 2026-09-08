@@ -98,12 +98,14 @@ class PlanSubscriptionIntegrationTest extends PlanApiSupport {
         long mediaId = uploadReadyMedia(storage, leader, bandId, postId);
         assertThat(expiresAt(mediaId)).isNull(); // PREMIUM 무제한
 
-        ResponseEntity<String> res = cancel(leader, bandId);
-        assertThat(res.getStatusCode().value()).isEqualTo(200);
-        assertThat(data(res).get("tier").asText()).isEqualTo("PREMIUM");
-        assertThat(data(res).get("canceled").asBoolean()).isTrue();
-        assertThat(data(res).get("mediaRetentionDays").isNull()).isTrue(); // 여전히 무제한
-        assertThat(data(res).get("expiresAt").isNull()).isFalse();        // 남은 기간 그대로
+        // 사용자가 Play 스토어에서 자동갱신을 끄면 RTDN CANCELED 웹훅이 온다.
+        assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        var plan = data(viewPlan(leader, bandId));
+        assertThat(plan.get("tier").asText()).isEqualTo("PREMIUM");
+        assertThat(plan.get("canceled").asBoolean()).isTrue();
+        assertThat(plan.get("mediaRetentionDays").isNull()).isTrue(); // 여전히 무제한
+        assertThat(plan.get("expiresAt").isNull()).isFalse();         // 남은 기간 그대로
 
         // 미디어에는 아직 유예를 주지 않는다 — 만료일 배치가 그때 준다
         // (PlanExpirationIntegrationTest.overdue_premium_is_downgraded_and_media_gets_the_grace_expiry).
@@ -132,15 +134,18 @@ class PlanSubscriptionIntegrationTest extends PlanApiSupport {
     }
 
     @Test
-    void cancelling_twice_is_conflict() {
+    void cancel_webhook_is_idempotent() {
         String leader = signup("dn-c@band.app", "리더");
         long bandId = createBand(leader, "이중해지밴드");
         assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
 
+        // RTDN 은 같은 이벤트를 재전송할 수 있다 — 두 번 와도 상태는 한 번 온 것과 같아야 한다.
         assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
-        ResponseEntity<String> second = cancel(leader, bandId);
-        assertThat(second.getStatusCode().value()).isEqualTo(409);
-        assertThat(errorCode(second)).isEqualTo("PLAN_ALREADY_CANCELED");
+        assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        var plan = data(viewPlan(leader, bandId));
+        assertThat(plan.get("tier").asText()).isEqualTo("PREMIUM");
+        assertThat(plan.get("canceled").asBoolean()).isTrue();
     }
 
     @Test
@@ -165,21 +170,37 @@ class PlanSubscriptionIntegrationTest extends PlanApiSupport {
     }
 
     @Test
-    void repeated_transition_in_the_same_direction_is_conflict() {
-        String leader = signup("idem@band.app", "리더");
-        long bandId = createBand(leader, "멱등밴드");
+    void a_purchase_token_cannot_be_linked_to_a_second_band() {
+        String leader = signup("link@band.app", "리더");
+        long bandA = createBand(leader, "구매밴드A");
+        long bandB = createBand(leader, "구매밴드B");
 
-        assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(409);
-        assertThat(errorCode(cancel(leader, bandId))).isEqualTo("PLAN_ALREADY_FREE");
+        assertThat(verifyGoogle(leader, bandA, "shared-tok").getStatusCode().value()).isEqualTo(200);
 
-        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
-        ResponseEntity<String> second = subscribe(leader, bandId);
-        assertThat(second.getStatusCode().value()).isEqualTo(409);
-        assertThat(errorCode(second)).isEqualTo("PLAN_ALREADY_PREMIUM");
+        ResponseEntity<String> reused = verifyGoogle(leader, bandB, "shared-tok");
+        assertThat(reused.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(reused)).isEqualTo("PURCHASE_ALREADY_LINKED");
+        assertThat(data(viewPlan(leader, bandB)).get("tier").asText()).isEqualTo("FREE");
     }
 
     @Test
-    void concurrent_subscribe_lands_exactly_one_premium_and_never_500() throws Exception {
+    void re_verifying_an_active_purchase_extends_instead_of_erroring() {
+        String leader = signup("idem@band.app", "리더");
+        long bandId = createBand(leader, "멱등밴드");
+
+        // 아직 결제 안 한 밴드에 CANCELED 웹훅이 와도(모르는 토큰) 조용히 무시.
+        assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("FREE");
+
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        // 앱 재시작 등으로 같은 구매 토큰을 다시 보내도 409 가 아니라 200(만료일 연장).
+        ResponseEntity<String> second = subscribe(leader, bandId);
+        assertThat(second.getStatusCode().value()).isEqualTo(200);
+        assertThat(data(second).get("tier").asText()).isEqualTo("PREMIUM");
+    }
+
+    @Test
+    void concurrent_verify_never_500s_and_lands_on_premium() throws Exception {
         String leader = signup("conc@band.app", "리더");
         long bandId = createBand(leader, "동시밴드");
 
@@ -193,18 +214,14 @@ class PlanSubscriptionIntegrationTest extends PlanApiSupport {
             List<Future<Integer>> results = pool.invokeAll(calls);
 
             int ok = 0;
-            int conflict = 0;
             for (Future<Integer> f : results) {
                 int status = f.get();
-                assertThat(status).isIn(200, 409); // 500 절대 없음
+                assertThat(status).isIn(200, 409); // 첫 업그레이드가 이기고 나머지는 연장(200) 또는 경합(409). 500 없음.
                 if (status == 200) {
                     ok++;
-                } else {
-                    conflict++;
                 }
             }
-            assertThat(ok).isEqualTo(1);
-            assertThat(conflict).isEqualTo(threads - 1);
+            assertThat(ok).isGreaterThanOrEqualTo(1);
         } finally {
             pool.shutdownNow();
         }

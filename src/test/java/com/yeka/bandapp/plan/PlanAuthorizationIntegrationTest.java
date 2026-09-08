@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PlanAuthorizationIntegrationTest extends PlanApiSupport {
 
     @Test
-    void non_leader_member_cannot_subscribe_or_cancel() {
+    void non_leader_member_cannot_verify_a_purchase() {
         String leader = signup("authz-l@band.app", "리더");
         long bandId = createBand(leader, "인가밴드");
         String member = signup("authz-m@band.app", "멤버");
@@ -20,9 +20,14 @@ class PlanAuthorizationIntegrationTest extends PlanApiSupport {
         ResponseEntity<String> sub = subscribe(member, bandId);
         assertThat(sub.getStatusCode().value()).isEqualTo(403);
         assertThat(errorCode(sub)).isEqualTo("NOT_BAND_LEADER");
+    }
 
-        assertThat(cancel(member, bandId).getStatusCode().value()).isEqualTo(403);
-        assertThat(renew(member, bandId).getStatusCode().value()).isEqualTo(403);
+    @Test
+    void rtdn_webhook_rejects_a_wrong_or_missing_secret() {
+        assertThat(googlePlayWebhook(RTDN_RENEWED, "tok1", "m1", "wrong-secret")
+                .getStatusCode().value()).isEqualTo(403);
+        assertThat(googlePlayWebhook(RTDN_RENEWED, "tok1", "m2", null)
+                .getStatusCode().value()).isEqualTo(403);
     }
 
     @Test

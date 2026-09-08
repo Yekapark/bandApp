@@ -4,6 +4,7 @@ import com.yeka.bandapp.board.service.MediaDirectoryService;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.plan.entity.BandPlan;
+import com.yeka.bandapp.plan.entity.Store;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,8 +16,11 @@ import java.time.Instant;
  * {@code BandPlan} 엔티티를 수정하고 밴드 미디어 보관기한을 재계산한다 — 티어 플립과 미디어
  * 재계산이 원자적으로 커밋된다.
  *
- * <p>결제 게이트웨이 호출은 이 서비스가 아니라 {@link PlanService} 가 <b>트랜잭션 밖에서</b> 먼저 끝낸다.
+ * <p>스토어 조회는 이 서비스가 아니라 {@link StoreSubscriptionService} 가 <b>트랜잭션 밖에서</b> 먼저 끝낸다.
  * 그래서 이 메서드들 안에는 외부 I/O 가 없고, 한 트랜잭션으로 묶는 것이 안전하다.
+ *
+ * <p>사용자 요청 경로(쿠폰 등)는 이미 확인된 선행조건이라 위반 시 예외를 던진다. 웹훅 경로는
+ * 중복·순서 뒤바뀜을 전제로 하므로 {@code …IfPremium} 계열이 조용히 no-op 한다.
  */
 @Service
 public class PlanMutationService {
@@ -32,14 +36,18 @@ public class PlanMutationService {
     /**
      * FREE → PREMIUM. 이미 PREMIUM 이면 {@code PLAN_ALREADY_PREMIUM}(동시 요청 가드 겸용).
      * 밴드의 기존 READY 미디어 보관기한을 무제한(NULL)으로 만든다.
+     *
+     * @param store         결제 스토어. 쿠폰이면 null.
+     * @param purchaseToken 스토어 구매 토큰. 쿠폰이면 null.
      */
     @Transactional
-    public BandPlan applyUpgrade(long bandId, Instant now, Instant periodEnd, String subscriptionRef) {
+    public BandPlan applyUpgrade(long bandId, Instant now, Instant periodEnd, String subscriptionRef,
+                                 Store store, String purchaseToken) {
         BandPlan plan = requirePlan(bandId);
         if (!plan.isFree()) {
             throw new BusinessException(ErrorCode.PLAN_ALREADY_PREMIUM);
         }
-        plan.upgradeToPremium(now, periodEnd, subscriptionRef);
+        plan.upgradeToPremium(now, periodEnd, subscriptionRef, store, purchaseToken);
         mediaDirectory.extendRetentionForBand(bandId);
         return plan;
     }
@@ -86,6 +94,64 @@ public class PlanMutationService {
         }
         plan.renew(now, newPeriodEnd);
         return plan;
+    }
+
+    /**
+     * 스토어 결제로 PREMIUM 연장 — 기간을 늘리고 스토어 식별자를 붙인다(쿠폰으로 PREMIUM 이던 밴드가
+     * 이후 실제 결제한 경우 웹훅이 토큰으로 밴드를 찾을 수 있게). FREE 이면 {@code PLAN_ALREADY_FREE}.
+     */
+    @Transactional
+    public BandPlan applyStoreRenew(long bandId, Instant now, Instant newPeriodEnd, String subscriptionRef,
+                                    Store store, String purchaseToken) {
+        BandPlan plan = requirePlan(bandId);
+        if (!plan.isPremium()) {
+            throw new BusinessException(ErrorCode.PLAN_ALREADY_FREE);
+        }
+        plan.renewFromStore(now, newPeriodEnd, subscriptionRef, store, purchaseToken);
+        return plan;
+    }
+
+    // --- 웹훅 경로 (조용히 no-op) --------------------------------------------------------
+
+    /**
+     * RTDN "해지" 반영. PREMIUM 이면 해지 예약, 아니면(이미 FREE·이미 해지) 아무것도 안 한다.
+     * 웹훅은 중복·재전송이 정상이라 예외를 던지지 않는다.
+     */
+    @Transactional
+    public void applyCancelAtPeriodEndIfPremium(long bandId, Instant now) {
+        BandPlan plan = bandPlanRepository.findByBandIdForUpdate(bandId).orElse(null);
+        if (plan == null || !plan.isPremium() || plan.isCanceled()) {
+            return;
+        }
+        plan.cancelAtPeriodEnd(now);
+    }
+
+    /**
+     * RTDN "만료·보류" 반영. PREMIUM 이면 유예기간을 주고 FREE 로, 아니면 no-op.
+     * 유예 길이·의미는 {@link #applyDowngrade} 와 같다(수동 만료 배치와 동일하게 보이도록).
+     */
+    @Transactional
+    public void applyDowngradeIfPremium(long bandId, Instant now, Instant graceUntil) {
+        BandPlan plan = bandPlanRepository.findByBandIdForUpdate(bandId).orElse(null);
+        if (plan == null || !plan.isPremium()) {
+            return;
+        }
+        plan.downgradeToFree(now);
+        mediaDirectory.applyGracePeriodForBand(bandId, graceUntil);
+    }
+
+    /**
+     * RTDN "환불·강제취소" 반영. <b>즉시</b> FREE 로 내리고 미디어 유예를 주지 않는다(만료 시각 = now).
+     * 돈을 돌려줬으니 혜택도 바로 거둔다(BUILD_PLAN Phase 12). PREMIUM 이 아니면 no-op.
+     */
+    @Transactional
+    public void applyRevoke(long bandId, Instant now) {
+        BandPlan plan = bandPlanRepository.findByBandIdForUpdate(bandId).orElse(null);
+        if (plan == null || !plan.isPremium()) {
+            return;
+        }
+        plan.downgradeToFree(now);
+        mediaDirectory.applyGracePeriodForBand(bandId, now);
     }
 
     private BandPlan requirePlan(long bandId) {

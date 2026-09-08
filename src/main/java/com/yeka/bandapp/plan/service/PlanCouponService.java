@@ -92,7 +92,7 @@ public class PlanCouponService {
         Instant newEnd = base.plus(coupon.getGrantDays(), ChronoUnit.DAYS);
 
         BandPlan updated = current.isFree()
-                ? planMutationService.applyUpgrade(bandId, now, newEnd, "coupon-" + coupon.getCode())
+                ? planMutationService.applyUpgrade(bandId, now, newEnd, "coupon-" + coupon.getCode(), null, null)
                 : planMutationService.applyRenew(bandId, now, newEnd);
         return PlanResponse.from(updated);
     }
