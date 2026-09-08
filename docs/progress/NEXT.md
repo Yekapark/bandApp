@@ -139,15 +139,25 @@ sleep 10 && curl -s https://api.bandule.com/actuator/health
 오늘 신고 접수를 푸시 + **메일** 두 경로로 보내게 만들었고(`ReportMail`, `REPORT_NOTIFY_EMAILS`)
 서버까지 배포했다(`f57d304`). 그런데 실제로 신고해 보니 메일이 오지 않는다.
 
-**여기까지 밝혀진 것**
+**원인 찾음 (2026-09-08) — `docker-compose.prod.yml` 이 `MAIL_*` 를 컨테이너에 안 넘겼다.**
 
-- 서버 `/opt/bandapp/.env.prod` 에 **`MAIL_*` 세 줄이 아예 없었다**(로컬 `.env.prod` 에는 있다).
-  `MAIL_FROM` 이 비면 `EmailSender.isConfigured()` 가 false 라 발송을 통째로 건너뛴다.
-  → 신고 메일뿐 아니라 **비밀번호 재설정·이메일 인증 메일도 그동안 안 나갔다.**
-- `REPORT_NOTIFY_EMAILS` 는 서버에 들어갔지만 **같은 줄이 두 번** 있다(`echo >>` 를 두 번 실행).
-- 지시자가 서버 파일을 손본 뒤에도 메일이 안 온다고 했다. **거기서 멈췄다.**
+서버 `.env.prod` 에는 `MAIL_SMTP_USERNAME`·`MAIL_SMTP_PASSWORD`·`MAIL_FROM` 3줄이
+들어 있는데(`grep -c '^MAIL_' .env.prod` = 3), 앱 컨테이너 안에서 `printenv | grep '^MAIL_'`
+은 **0줄**이었다. compose 는 `.env.prod` 값을 파일에서 `${VAR}` 로 참조한 자리에만 넣는데
+`app` 서비스 `environment:` 블록에 `MAIL_*`·`REPORT_NOTIFY_*` 항목이 **아예 없었다.**
+→ `EmailSender.isConfigured()` 가 false → 신고·비밀번호 재설정·이메일 인증 메일 전부 no-op.
 
-**다음에 할 것 — 이 순서로**
+**고친 것** — 그 5개(`MAIL_SMTP_USERNAME`, `MAIL_SMTP_PASSWORD`, `MAIL_FROM`,
+`REPORT_NOTIFY_USER_IDS`, `REPORT_NOTIFY_EMAILS`)를 `docker-compose.prod.yml` 의 `app`
+`environment:` 에 추가했다. `main` 머지 → 자동 배포로 서버 반영. (`REPORT_NOTIFY_EMAILS`
+중복 줄은 그 사이 정리돼 지금은 1줄.)
+
+**아직 남은 것**
+1. 앱 비밀번호(`MAIL_SMTP_PASSWORD=kimfzwkgxqoqyydm`)가 2026-09-07 노출됐다 →
+   **폐기·재발급 먼저** (§1-Y). 재발급 값을 서버·로컬 `.env.prod` 둘 다에 넣는다.
+2. 배포 뒤 `printenv | grep -c '^MAIL_'` = 3 확인 → 다른 계정 글 신고해서 메일 도착 확인.
+
+**확인 순서 (배포 후)**
 
 ```bash
 # 1) 설정이 실제로 컨테이너에 실렸는지
@@ -405,9 +415,9 @@ autoDispose 가 아니라 캐시된 옛 값을 계속 그렸고, 앱을 완전�
 - ~~**릴리스 서명 설정 없음**~~ **완료 (2026-09-06)** — `client/android/bandule-release.jks`
   로 서명한다. `android/key.properties` 가 없으면 디버그 키로 넘어가므로 키 없는 PC 에서도
   빌드는 된다. 카카오 콘솔에 새 키 해시(`7zGOncUg+QW8Yt2dmsgmgmI5TPQ=`)도 등록했다.
-- **ProGuard 가 꺼져 있다** ❗ — `isMinifyEnabled` 미설정. 카카오맵 규칙은 미리 넣어 뒀지만
-  아직 동작하지 않는다. **켠 뒤 릴리스 빌드로 지도·로그인·푸시를 다시 확인해야 한다**
-  (난독화가 SDK 를 깨는 일이 흔하다). 스토어 제출 전에 한 번은 켜서 확인할 것.
+- **ProGuard 코드는 켜져 있다** — `client/android/app/build.gradle.kts:112` 에서
+  `isMinifyEnabled = true` / `isShrinkResources = true`. 카카오·트랜스코더 keep 규칙도 있다.
+  **남은 건 실기기 릴리스 빌드로 지도·로그인·푸시 재확인** (난독화가 SDK 를 깨는 일이 흔하다).
 
 ---
 
