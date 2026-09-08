@@ -128,6 +128,9 @@ app:
     expire-cron: ${PLAN_EXPIRE_CRON:0 45 4 * * *}        # 매일 04:45 KST 구독기간 지난 PREMIUM → FREE
     # 만료 예고. 강등보다 이른 시각에 돌아야 "오늘 끝난다"는 알림이 강등 전에 나간다.
     expiry-reminder-cron: ${PLAN_EXPIRY_REMINDER_CRON:0 30 4 * * *}   # 매일 04:30 KST 30·7·1일 전 예고
+    billing:
+      gateway: ${PLAN_BILLING_GATEWAY:noop}            # noop(로컬·CI) | google(실제 Play 검증)
+      webhook-secret: ${PLAN_BILLING_WEBHOOK_SECRET:}  # RTDN Pub/Sub push 공유 시크릿. 비면 웹훅 차단(fail-closed)
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
   deeplink:

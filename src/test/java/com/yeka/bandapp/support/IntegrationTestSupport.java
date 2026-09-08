@@ -29,6 +29,9 @@ public abstract class IntegrationTestSupport {
     /** 테스트가 만료·변조 토큰을 직접 만들 수 있도록 공개한다. */
     public static final String TEST_JWT_SECRET = "integration-test-secret-key-0123456789-abcdefghijklmnop";
 
+    /** RTDN 웹훅 호출에 붙이는 공유 시크릿(?token=). */
+    public static final String TEST_WEBHOOK_SECRET = "test-webhook-secret";
+
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
@@ -71,6 +74,8 @@ public abstract class IntegrationTestSupport {
         registry.add("app.media.expire-cron", () -> "-");
         registry.add("app.media.orphan-cron", () -> "-");
         registry.add("app.plan.expire-cron", () -> "-");
+        // 스토어 결제: no-op 게이트웨이(기본)로 검증 없이 동작한다. RTDN 웹훅 공유 시크릿은 고정.
+        registry.add("app.plan.billing.webhook-secret", () -> TEST_WEBHOOK_SECRET);
         // 초대 딥링크: 링크·검증 파일의 값을 고정해 assertion 을 쓸 수 있게 한다.
         // android-package 를 빠뜨렸다가 application.yml 의 운영 기본값이 바뀌는 순간
         // InviteDeepLinkIntegrationTest 가 깨졌다. 검증 파일에 들어가는 값은 여기서 전부 고정한다.

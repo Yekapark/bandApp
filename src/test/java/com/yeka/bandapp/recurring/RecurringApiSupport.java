@@ -39,11 +39,12 @@ public abstract class RecurringApiSupport extends ReservationApiSupport {
     }
 
     /**
-     * 밴드를 PREMIUM 으로. 결제 게이트웨이가 no-op 이라 구독 API 를 그대로 부르면 된다(밴드장만 가능).
-     * 이미 PREMIUM 이면 409 가 오는데 그것도 원하는 상태이므로 성공으로 친다.
+     * 밴드를 PREMIUM 으로. 스토어 게이트웨이가 no-op 이라 구매 토큰만 있으면 검증을 통과한다(밴드장만).
+     * 이미 PREMIUM 이면 만료일이 연장되며 그대로 200 이다.
      */
     protected void makePremium(String leaderToken, long bandId) {
-        ResponseEntity<String> res = post("/api/v1/bands/" + bandId + "/plan/subscribe", "{}", leaderToken);
+        ResponseEntity<String> res = post("/api/v1/bands/" + bandId + "/plan/google/verify",
+                "{\"purchaseToken\":\"tokrec" + bandId + "\"}", leaderToken);
         int status = res.getStatusCode().value();
         if (status != 200 && status != 409) {
             throw new IllegalStateException("PREMIUM 전환 실패: " + res.getBody());

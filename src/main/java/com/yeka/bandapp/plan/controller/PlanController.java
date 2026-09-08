@@ -4,8 +4,10 @@ import com.yeka.bandapp.common.response.ApiResponse;
 import com.yeka.bandapp.common.security.AuthPrincipal;
 import com.yeka.bandapp.plan.dto.PlanResponse;
 import com.yeka.bandapp.plan.dto.RedeemCouponRequest;
+import com.yeka.bandapp.plan.dto.VerifyGooglePurchaseRequest;
 import com.yeka.bandapp.plan.service.PlanCouponService;
 import com.yeka.bandapp.plan.service.PlanService;
+import com.yeka.bandapp.plan.service.StoreSubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -18,24 +20,30 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 밴드 요금제(FREE/PREMIUM). 조회는 밴드 멤버, 전환(구독/해지/갱신)은 밴드장만 한다.
+ * 밴드 요금제(FREE/PREMIUM). 조회는 밴드 멤버, 전환은 밴드장만.
  *
- * <p>결제 자체는 앱 밖(앱스토어·구글플레이 결제 모듈)에서 이루어진다 — 여기서는 no-op 게이트웨이를
- * 거쳐 요금제 상태만 바꾼다. PREMIUM 전환 시 밴드의 기존 첨부 미디어 보관기한이 무제한으로,
- * 해지는 즉시 강등이 아니라 만료일 강등이다 — 미디어 30일 유예는 만료 뒤에 시작된다.
+ * <p><b>구독은 스토어에서 산다.</b> 클라이언트가 Play Billing 으로 결제하고 받은 구매 토큰을
+ * {@code POST /google/verify} 로 보내면 서버가 스토어에 확인하고 PREMIUM 으로 올린다. 갱신·해지·환불은
+ * 사용자가 Play 스토어에서 하고, 서버는 RTDN 웹훅({@code /api/v1/webhooks/google-play})으로 받는다 —
+ * 이 컨트롤러에 해지·갱신 엔드포인트는 없다.
+ *
+ * <p>맛보기 쿠폰({@code /coupons/redeem})은 결제와 무관하게 PREMIUM 기간을 준다.
  */
 @Tag(name = "16. 요금제",
-        description = "밴드 FREE/PREMIUM 요금제 조회·전환. 전환 시 첨부 미디어 보관기한 재계산 "
-                + "(업그레이드=무제한, 다운그레이드=30일 유예). 실제 결제 연동은 포함하지 않는다.")
+        description = "밴드 FREE/PREMIUM 요금제 조회, Play 결제 검증, 맛보기 쿠폰. 전환 시 첨부 미디어 "
+                + "보관기한 재계산(업그레이드=무제한, 다운그레이드=30일 유예).")
 @RestController
 @RequestMapping("/api/v1/bands/{bandId}/plan")
 public class PlanController {
 
     private final PlanService planService;
+    private final StoreSubscriptionService storeSubscriptionService;
     private final PlanCouponService planCouponService;
 
-    public PlanController(PlanService planService, PlanCouponService planCouponService) {
+    public PlanController(PlanService planService, StoreSubscriptionService storeSubscriptionService,
+                         PlanCouponService planCouponService) {
         this.planService = planService;
+        this.storeSubscriptionService = storeSubscriptionService;
         this.planCouponService = planCouponService;
     }
 
@@ -47,34 +55,17 @@ public class PlanController {
         return ApiResponse.ok(planService.view(bandId, principal.userId()));
     }
 
-    @Operation(summary = "PREMIUM 구독 시작",
-            description = "FREE → PREMIUM. 밴드장만(그 외 403 NOT_BAND_LEADER). 이미 PREMIUM 이면 "
-                    + "409 PLAN_ALREADY_PREMIUM, 결제 실패면 402 PAYMENT_FAILED. 성공 시 밴드의 기존 "
-                    + "READY 미디어 보관기한이 무제한으로 바뀐다(이미 만료·삭제된 미디어는 복구되지 않는다).")
-    @PostMapping("/subscribe")
-    public ApiResponse<PlanResponse> subscribe(@AuthenticationPrincipal AuthPrincipal principal,
-                                               @PathVariable long bandId) {
-        return ApiResponse.ok(planService.subscribe(bandId, principal.userId()));
-    }
-
-    @Operation(summary = "PREMIUM 구독 해지",
-            description = "PREMIUM → FREE. 밴드장만(그 외 403 NOT_BAND_LEADER). 이미 FREE 이면 "
-                    + "409 PLAN_ALREADY_FREE, 이미 해지 예약됐으면 409 PLAN_ALREADY_CANCELED. "
-                    + "**즉시 FREE 가 되지 않는다** — 결제한 기간(expiresAt)까지 PREMIUM 혜택이 그대로고 "
-                    + "응답의 canceled 가 true 로 온다. 만료일 밤 배치가 FREE 로 내리며, 미디어 30일 유예는 그때 시작된다.")
-    @PostMapping("/cancel")
-    public ApiResponse<PlanResponse> cancel(@AuthenticationPrincipal AuthPrincipal principal,
-                                            @PathVariable long bandId) {
-        return ApiResponse.ok(planService.cancel(bandId, principal.userId()));
-    }
-
-    @Operation(summary = "PREMIUM 구독기간 연장",
-            description = "PREMIUM 구독기간 종료일을 연장한다. 밴드장만(그 외 403 NOT_BAND_LEADER). "
-                    + "FREE 이면 409 PLAN_ALREADY_FREE.")
-    @PostMapping("/renew")
-    public ApiResponse<PlanResponse> renew(@AuthenticationPrincipal AuthPrincipal principal,
-                                           @PathVariable long bandId) {
-        return ApiResponse.ok(planService.renew(bandId, principal.userId()));
+    @Operation(summary = "Google Play 결제 검증",
+            description = "클라이언트가 Play Billing 으로 결제하고 받은 구매 토큰을 검증해 PREMIUM 으로 올린다. "
+                    + "밴드장만(그 외 403 NOT_BAND_LEADER). 토큰이 스토어에 없거나 구독이 유효 상태가 아니면 "
+                    + "402 PURCHASE_NOT_VERIFIED. 이미 PREMIUM 이면 조회된 만료일로 연장한다(재전송에 안전). "
+                    + "성공 시 밴드의 기존 READY 미디어 보관기한이 무제한으로 바뀐다.")
+    @PostMapping("/google/verify")
+    public ApiResponse<PlanResponse> verifyGoogle(@AuthenticationPrincipal AuthPrincipal principal,
+                                                  @PathVariable long bandId,
+                                                  @Valid @RequestBody VerifyGooglePurchaseRequest request) {
+        return ApiResponse.ok(
+                storeSubscriptionService.verifyGooglePurchase(bandId, principal.userId(), request.purchaseToken()));
     }
 
     @Operation(summary = "맛보기 쿠폰 사용",

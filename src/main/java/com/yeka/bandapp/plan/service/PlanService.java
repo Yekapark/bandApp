@@ -1,18 +1,9 @@
 package com.yeka.bandapp.plan.service;
 
 import com.yeka.bandapp.band.service.BandAccessGuard;
-import com.yeka.bandapp.common.exception.BusinessException;
-import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.notification.event.NotificationEvents;
 import com.yeka.bandapp.plan.config.PlanProperties;
 import com.yeka.bandapp.plan.dto.PlanResponse;
-import com.yeka.bandapp.plan.entity.BandPlan;
-import com.yeka.bandapp.plan.gateway.PaymentGateway.CancelCommand;
-import com.yeka.bandapp.plan.gateway.PaymentGateway.CancellationResult;
-import com.yeka.bandapp.plan.gateway.PaymentGateway.RenewCommand;
-import com.yeka.bandapp.plan.gateway.PaymentGateway.SubscribeCommand;
-import com.yeka.bandapp.plan.gateway.PaymentGateway.SubscriptionResult;
-import com.yeka.bandapp.plan.gateway.PaymentGateway;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,15 +16,13 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * 요금제 조회·전환 오케스트레이션.
+ * 요금제 조회, 그리고 구독기간이 지난 PREMIUM 을 FREE 로 되돌리는 야간 배치.
  *
- * <p><b>{@code @Transactional} 없음</b> — 결제 게이트웨이 호출(외부 I/O 가능)이 트랜잭션 안에서
- * 커넥션을 붙잡지 않도록(CLAUDE.md 규칙). 게이트웨이를 트랜잭션 밖에서 먼저 끝내고, 확정된 값으로
- * {@link PlanMutationService} 의 짧은 트랜잭션(티어 플립 + 미디어 재계산)을 호출한다.
+ * <p>구독 시작·갱신·해지는 스토어(Play Billing)에서 일어나고 {@link StoreSubscriptionService} 가
+ * 검증·웹훅으로 반영한다 — 이 서비스는 더 이상 결제를 건드리지 않는다.
  *
- * <p>구독기간이 지난 PREMIUM 을 FREE 로 되돌리는 일은 {@link #expireOverdue(Instant)} 가 맡고,
- * {@code PlanExpirationJob} 이 매일 밤 호출한다. 실제 PG 연동과 무관하게 DB 상태만 정리하면 되는 일이라
- * 게이트웨이 어댑터를 기다리지 않는다.
+ * <p>{@link #expireOverdue(Instant)} 는 스토어 연동과 무관하게 DB 상태만 정리한다(웹훅이 늦거나
+ * 빠졌을 때의 안전망). 요청자가 없어 {@code accessGuard} 를 타지 않는다.
  */
 @Service
 public class PlanService {
@@ -47,19 +36,16 @@ public class PlanService {
     private final BandPlanRepository bandPlanRepository;
     private final PlanDirectoryService planDirectory;
     private final PlanMutationService planMutationService;
-    private final PaymentGateway paymentGateway;
     private final PlanProperties planProperties;
     private final ApplicationEventPublisher eventPublisher;
 
     public PlanService(BandAccessGuard accessGuard, BandPlanRepository bandPlanRepository,
                        PlanDirectoryService planDirectory, PlanMutationService planMutationService,
-                       PaymentGateway paymentGateway, PlanProperties planProperties,
-                       ApplicationEventPublisher eventPublisher) {
+                       PlanProperties planProperties, ApplicationEventPublisher eventPublisher) {
         this.accessGuard = accessGuard;
         this.bandPlanRepository = bandPlanRepository;
         this.planDirectory = planDirectory;
         this.planMutationService = planMutationService;
-        this.paymentGateway = paymentGateway;
         this.planProperties = planProperties;
         this.eventPublisher = eventPublisher;
     }
@@ -70,84 +56,12 @@ public class PlanService {
         return PlanResponse.from(planDirectory.currentPlan(bandId));
     }
 
-    /** FREE → PREMIUM. 밴드장만. 이미 PREMIUM 이면 409, 결제 실패면 402. */
-    public PlanResponse subscribe(long bandId, long userId) {
-        accessGuard.requireLeader(bandId, userId);
-        BandPlan current = requirePlan(bandId);
-        if (current.isPremium()) {
-            throw new BusinessException(ErrorCode.PLAN_ALREADY_PREMIUM);
-        }
-
-        Instant now = Instant.now();
-        SubscriptionResult result = paymentGateway.subscribe(
-                new SubscribeCommand(bandId, userId, planProperties.planCode(), now));
-        if (!result.success()) {
-            throw new BusinessException(ErrorCode.PAYMENT_FAILED);
-        }
-
-        Instant periodEnd = result.currentPeriodEnd() != null
-                ? result.currentPeriodEnd()
-                : now.plus(planProperties.premiumPeriodDays(), ChronoUnit.DAYS);
-        BandPlan updated = planMutationService.applyUpgrade(bandId, now, periodEnd, result.subscriptionRef());
-        return PlanResponse.from(updated);
-    }
-
-    /** PREMIUM → FREE. 밴드장만. 이미 FREE 이면 409. 기존 미디어에 유예기간(기본 30일)을 준다. */
-    public PlanResponse cancel(long bandId, long userId) {
-        accessGuard.requireLeader(bandId, userId);
-        BandPlan current = requirePlan(bandId);
-        if (current.isFree()) {
-            throw new BusinessException(ErrorCode.PLAN_ALREADY_FREE);
-        }
-
-        Instant now = Instant.now();
-        CancellationResult result = paymentGateway.cancel(
-                new CancelCommand(bandId, current.getSubscriptionRef(), now));
-        if (!result.success()) {
-            throw new BusinessException(ErrorCode.PAYMENT_FAILED);
-        }
-
-        // 여기서 FREE 로 내리지 않는다. 결제한 기간이 끝날 때까지 혜택을 그대로 두고, 만료일 밤에
-        // PlanExpirationJob 이 강등하며 미디어 유예도 그때 시작한다. 예전에는 이 자리에서 즉시
-        // 강등해서 1년치를 결제하고 하루 뒤 해지하면 364일이 증발했고, 스토어 인앱결제
-        // (구독 취소 = 자동 갱신 중지, 기간 끝까지 이용)와도 상태가 어긋났다.
-        BandPlan updated = planMutationService.applyCancelAtPeriodEnd(bandId, now);
-        return PlanResponse.from(updated);
-    }
-
-    /**
-     * PREMIUM 구독기간 연장. 밴드장만. FREE 이면 409.
-     *
-     * <p>해지 예약된 플랜은 구독 식별자가 없어 게이트웨이 갱신을 부를 수 없다. 실제 PG 를 붙이면
-     * 이 경우는 "갱신" 이 아니라 새 구독(subscribe)으로 보내야 한다 — 화면 버튼도 그때 바꾼다.
-     */
-    public PlanResponse renew(long bandId, long userId) {
-        accessGuard.requireLeader(bandId, userId);
-        BandPlan current = requirePlan(bandId);
-        if (current.isFree()) {
-            throw new BusinessException(ErrorCode.PLAN_ALREADY_FREE);
-        }
-
-        Instant now = Instant.now();
-        SubscriptionResult result = paymentGateway.renew(
-                new RenewCommand(bandId, current.getSubscriptionRef(), now));
-        if (!result.success()) {
-            throw new BusinessException(ErrorCode.PAYMENT_FAILED);
-        }
-
-        Instant periodEnd = result.currentPeriodEnd() != null
-                ? result.currentPeriodEnd()
-                : now.plus(planProperties.premiumPeriodDays(), ChronoUnit.DAYS);
-        BandPlan updated = planMutationService.applyRenew(bandId, now, periodEnd);
-        return PlanResponse.from(updated);
-    }
-
     /**
      * 구독기간이 지난 PREMIUM 밴드를 FREE 로 되돌린다. <b>배치 전용</b> — 요청자가 없어
      * {@code accessGuard} 를 타지 않는다({@code PlanExpirationJob} 만 호출한다).
      *
-     * <p><b>결제 게이트웨이를 호출하지 않는다.</b> 만료는 PG 쪽에서 이미 끝난 구독을 DB 에 반영하는
-     * 것이라 취소를 보낼 대상이 없다. 게이트웨이를 타는 건 사용자가 직접 누르는 {@link #cancel} 뿐이다.
+     * <p>스토어 웹훅(EXPIRED)이 정상이면 이 배치가 할 일이 없다. 웹훅이 늦거나 빠진 경우를 위한
+     * 안전망이라 스토어를 호출하지 않고 {@code expires_at} 만 보고 정리한다.
      *
      * <p>유예기간은 수동 해지와 같다({@code downgradeGraceDays}, 기본 30일) — 사용자에게
      * "해지든 만료든 30일" 로 설명이 단순해진다.
@@ -174,10 +88,5 @@ public class PlanService {
             }
         }
         return done;
-    }
-
-    private BandPlan requirePlan(long bandId) {
-        return bandPlanRepository.findByBandId(bandId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PLAN_NOT_FOUND));
     }
 }

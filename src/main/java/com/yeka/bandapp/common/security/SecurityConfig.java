@@ -56,6 +56,9 @@ public class SecurityConfig {
                     auth.requestMatchers("/api/v1/auth/**").permitAll()
                             // 초대 딥링크: 랜딩 페이지와 Universal Link / App Link 검증 파일은 무인증.
                             .requestMatchers(HttpMethod.GET, "/invite/**", "/.well-known/**").permitAll()
+                            // 스토어 RTDN 웹훅: Pub/Sub 가 부르므로 JWT 가 없다. 컨트롤러가 ?token= 공유
+                            // 시크릿을 검증한다(시크릿 미설정 시 전부 거부 — fail-closed).
+                            .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/google-play").permitAll()
                             .anyRequest().authenticated();
                 })
                 .exceptionHandling(ex -> ex

@@ -2,6 +2,7 @@ package com.yeka.bandapp.plan;
 
 import com.yeka.bandapp.plan.entity.BandPlan;
 import com.yeka.bandapp.plan.entity.PlanTier;
+import com.yeka.bandapp.plan.entity.Store;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -35,19 +36,21 @@ class BandPlanTest {
         BandPlan plan = BandPlan.freePlan(1L, NOW);
         Instant periodEnd = NOW.plus(30, ChronoUnit.DAYS);
 
-        plan.upgradeToPremium(NOW, periodEnd, "noop-1");
+        plan.upgradeToPremium(NOW, periodEnd, "GPA.1", Store.GOOGLE_PLAY, "purchase-tok-1");
 
         assertThat(plan.getTier()).isEqualTo(PlanTier.PREMIUM);
         assertThat(plan.isPremium()).isTrue();
         assertThat(plan.retentionDaysOrNull()).isNull();
         assertThat(plan.getExpiresAt()).isEqualTo(periodEnd);
-        assertThat(plan.getSubscriptionRef()).isEqualTo("noop-1");
+        assertThat(plan.getSubscriptionRef()).isEqualTo("GPA.1");
+        assertThat(plan.getStore()).isEqualTo(Store.GOOGLE_PLAY);
+        assertThat(plan.getPurchaseToken()).isEqualTo("purchase-tok-1");
     }
 
     @Test
     void downgrade_to_free_restores_retention_and_clears_period_and_ref() {
         BandPlan plan = BandPlan.freePlan(1L, NOW);
-        plan.upgradeToPremium(NOW, NOW.plus(30, ChronoUnit.DAYS), "noop-1");
+        plan.upgradeToPremium(NOW, NOW.plus(30, ChronoUnit.DAYS), "GPA.1", Store.GOOGLE_PLAY, "purchase-tok-1");
 
         Instant later = NOW.plus(10, ChronoUnit.DAYS);
         plan.downgradeToFree(later);
@@ -56,13 +59,15 @@ class BandPlanTest {
         assertThat(plan.retentionDaysOrNull()).isEqualTo(BandPlan.FREE_RETENTION_DAYS);
         assertThat(plan.getExpiresAt()).isNull();
         assertThat(plan.getSubscriptionRef()).isNull();
+        assertThat(plan.getStore()).isNull();
+        assertThat(plan.getPurchaseToken()).isNull();
         assertThat(plan.getStartedAt()).isEqualTo(later);
     }
 
     @Test
     void renew_extends_the_period_only_for_premium() {
         BandPlan premium = BandPlan.freePlan(1L, NOW);
-        premium.upgradeToPremium(NOW, NOW.plus(30, ChronoUnit.DAYS), "noop-1");
+        premium.upgradeToPremium(NOW, NOW.plus(30, ChronoUnit.DAYS), "GPA.1", Store.GOOGLE_PLAY, "purchase-tok-1");
         Instant newEnd = NOW.plus(60, ChronoUnit.DAYS);
 
         premium.renew(NOW, newEnd);

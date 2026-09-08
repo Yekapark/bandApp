@@ -79,12 +79,10 @@ class RecurringPlanGateIntegrationTest extends RecurringApiSupport {
         int before = reservationRepository.findAll().size();
         assertThat(before).isGreaterThan(0);
 
-        // 해지 — 결제한 기간이 끝날 때까지는 PREMIUM 그대로다.
-        ResponseEntity<String> cancelled = post("/api/v1/bands/" + bandId + "/plan/cancel", "{}", leader);
-        assertThat(cancelled.getStatusCode().value()).isEqualTo(200);
-        assertThat(data(cancelled).get("tier").asText()).isEqualTo("PREMIUM");
-
-        // 그래서 해지 직후에는 새 규칙도 아직 만들 수 있다.
+        // 해지(Play 스토어에서, 자동갱신만 끔)는 결제 기간이 끝날 때까지 PREMIUM 을 유지한다 —
+        // 그래서 아직 새 규칙도 만들 수 있다.
+        assertThat(data(get("/api/v1/bands/" + bandId + "/plan", leader)).get("tier").asText())
+                .isEqualTo("PREMIUM");
         assertThat(postRule(leader, bandId, body(roomId, today().plusDays(2)))
                 .getStatusCode().value()).isEqualTo(201);
 
