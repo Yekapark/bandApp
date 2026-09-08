@@ -47,7 +47,8 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 ```
 
 > **FCM 키 파일은 `chown 999:999`** 여야 한다. root 소유면 앱이 아예 안 뜬다(앱은 uid 999).
-> 실제 파일명은 `secrets/bandapp-dev-67c6f-firebase-adminsdk-fbsvc-bf6d067a95.json` 이다.
+> 운영은 `secrets/fcm-prod.json` (project `bandule-b94d2`) 를 쓴다 — `.env.prod` 의
+> `FCM_CREDENTIALS_HOST_PATH` 참조. 같은 폴더의 `bandapp-dev-67c6f-...json` 은 안 쓰는 잔재.
 
 > **`bandule restart` 가 설정을 다시 읽지 않던 것도 고쳤다.** `docker compose restart` 는
 > 컨테이너만 다시 띄울 뿐 `.env.prod` 를 안 읽는다 — 설정을 고쳐 올리고 restart 해도 옛 값
@@ -62,8 +63,9 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 | 테스터 배포 | [docs/TESTING.md](../TESTING.md) — 서버가 살았으니 APK 만 만들면 된다 |
 | 출시까지 순서 | [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) |
 | **다른 PC 에서 이어서** | **[docs/NEW_PC_SETUP.md](../NEW_PC_SETUP.md)** — git 에 없는 파일 목록과 확인 절차 |
-| 남은 것 | 운영 Firebase 분리 · 스토어 심사 제출 · (Phase 12) 인앱결제 — 요금 정책 확정되면 |
-| 끝난 것 | 릴리스 서명 키 · 약관·개인정보 URL(`bandule.com/privacy`,`/terms`) · 카카오 콘솔 패키지명 · 개발자 등록 · 비밀값 로테이션(2026-09-08) |
+| 남은 것 | 스토어 심사 제출 · (Phase 12) 인앱결제 — 아래 요금 정책으로 착수 가능 |
+| 끝난 것 | 릴리스 서명 키 · 약관·개인정보 URL(`bandule.com/privacy`,`/terms`) · 카카오 콘솔 패키지명 · 개발자 등록 · 비밀값 로테이션(2026-09-08) · 운영 Firebase 분리(서버 `bandule-b94d2`, 앱 `--flavor prod`) |
+| 요금 정책 | **밴드당 연 구독**(`PREMIUM_YEARLY`, 365일). 가격 미확정 — 검토 후보 ₩22,000~29,000/년. Phase 12 착수 전 확정 |
 
 **로컬 개발**은 그대로다 — `docker compose up -d` + `adb reverse tcp:8080 tcp:8080`.
 실기기 빌드에 **`--dart-define-from-file=dart_defines.json` 을 빠뜨리면 카카오 로그인이 막힌다.**
@@ -241,9 +243,12 @@ autoDispose 가 아니라 캐시된 옛 값을 계속 그렸고, 앱을 완전�
 (`AppLifecycleListener.onResume` — 백그라운드에서 받은 경우가 이쪽이고 더 흔하다)
 알림 목록 캐시를 비우도록 했다. 기기에서 `배지 0 → 백그라운드 → 푸시 → 복귀 → 배지 1` 확인.
 
-**남은 것**: 운영 Firebase 프로젝트 분리(지금은 개발용을 앱·서버가 함께 쓴다).
-알림 채널이 FCM 기본값(`fcm_fallback_notification_channel`)이라 설정 화면에 "기타" 로 보인다 —
-앱에서 채널을 만들어 이름을 주면 좋다(출시 전 다듬기).
+**운영 Firebase 분리 완료 (2026-09-06 확인 2026-09-08).** 서버는 `secrets/fcm-prod.json` →
+`FCM 푸시 발송 활성화 projectId=bandule-b94d2`, 앱은 `--flavor prod` → `bandule-b94d2`.
+개발용 `bandapp-dev-67c6f` 는 로컬(`--flavor dev`)만.
+
+**남은 것**: 알림 채널이 FCM 기본값(`fcm_fallback_notification_channel`)이라 설정 화면에
+"기타" 로 보인다 — 앱에서 채널을 만들어 이름을 주면 좋다(출시 전 다듬기).
 
 ### 1-E. 게시판·지도 후속 (2026-09-06, 지시자 제보로 발견)
 
