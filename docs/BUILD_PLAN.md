@@ -320,6 +320,16 @@ CI에서 빌드·테스트가 통과한다.
 >
 > **확정 (2026-09-08)**: 개발자 등록 완료. 요금 = **밴드당 연 구독 ₩19,000 / 년**
 > (`PREMIUM_YEARLY`, 365일). 가격은 스토어 상품 등록 시 입력하는 값이다.
+>
+> **진행 (2026-09-08)** — **Android 만.** 클라이언트에 iOS 빌드 타깃이 없어 StoreKit 은 뒤로 미룬다.
+> - 슬라이스 1 (PR #69): `StoreBillingGateway` 재설계(`fetch`/`acknowledge` + 웹훅 핸들러),
+>   `band_plans.store`·`purchase_token`(V17), `processed_store_events`(멱등), no-op 게이트웨이,
+>   `POST /bands/{id}/plan/google/verify`, `POST /api/v1/webhooks/google-play`
+> - 슬라이스 2 (PR #70): `GooglePlayBillingGateway`(`purchases.subscriptionsv2.get`/`acknowledge`),
+>   `google-api-services-androidpublisher` 의존성. `app.plan.billing.gateway=google` 로 켠다
+> - 슬라이스 3 (PR #71): 웹훅 Pub/Sub OIDC 검증, Flutter `in_app_purchase` 결제 UI
+> - **남음**: 슬라이스 0(Play Console 상품·서비스계정·Pub/Sub·라이선스 테스터 — 사람),
+>   슬라이스 4(샌드박스 결제 e2e). 절차는 `docs/progress/NEXT.md` "Phase 12" 절.
 
 프리미엄 구독의 실제 결제는 카드사 PG가 아니라 **스토어 인앱결제**로 연다.
 "이 앱은 결제를 앱 밖에서 처리한다"는 §0/§2 전제는 합주실 예약·합주 비용 정산에
