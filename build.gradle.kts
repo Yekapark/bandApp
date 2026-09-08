@@ -1,6 +1,6 @@
 plugins {
     java
-    id("org.springframework.boot") version "3.4.1"
+    id("org.springframework.boot") version "3.5.16"
     id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -35,7 +35,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-mail")
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.9.0")
 
     implementation("io.jsonwebtoken:jjwt-api:0.13.0")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
@@ -45,7 +45,7 @@ dependencies {
     // 오프라인 서명이라 네트워크를 타지 않고, S3Client 는 업로드 검증(headObject)·정리(deleteObject)에만
     // 쓴다 — 파일 바이트는 서버를 지나지 않는다(BUILD_PLAN §2-5). 동기 호출만 하므로 기본 비동기 스택
     // (netty-nio-client)은 빼고 가벼운 url-connection-client 를 sync HTTP 클라이언트로 쓴다.
-    implementation(platform("software.amazon.awssdk:bom:2.31.16"))
+    implementation(platform("software.amazon.awssdk:bom:2.54.13"))
     implementation("software.amazon.awssdk:s3") {
         exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
     }
@@ -54,7 +54,7 @@ dependencies {
     // FCM 푸시 발송(Phase 9). BUILD_PLAN Phase 9 "FCM 연동" + DESIGN.md 스택(Firebase Cloud Messaging)에
     // 근거가 있는 의존성이다. 서비스 계정 키가 없으면 FcmPushSender 가 조용히 비활성으로 뜨고
     // (R2StorageClient 선례), 알림은 부가 기능이라 미설정이 일정 등록·정산을 깨지 않는다.
-    implementation("com.google.firebase:firebase-admin:9.4.3")
+    implementation("com.google.firebase:firebase-admin:9.10.0")
 
     // Google Play Developer API — 인앱결제 구독 검증(Phase 12). purchases.subscriptionsv2.get 로 구매
     // 토큰의 현재 상태를 읽고, purchases.subscriptions.acknowledge 로 확인 처리한다. google-api-client·
