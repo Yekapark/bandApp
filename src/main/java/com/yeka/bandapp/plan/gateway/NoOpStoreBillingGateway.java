@@ -54,11 +54,11 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
         }
         Instant expiry = Instant.now().plus(planProperties.premiumPeriodDays(), ChronoUnit.DAYS);
         return Optional.of(new StoreSubscription(
-                store, purchaseToken, "noop-order-" + purchaseToken, state, expiry, true));
+                store, purchaseToken, "premium_yearly", "noop-order-" + purchaseToken, state, expiry, true));
     }
 
     @Override
-    public void acknowledge(Store store, String purchaseToken) {
-        log.info("[no-op billing] acknowledge store={} token={}", store, purchaseToken);
+    public void acknowledge(Store store, String productId, String purchaseToken) {
+        log.info("[no-op billing] acknowledge store={} productId={} token={}", store, productId, purchaseToken);
     }
 }

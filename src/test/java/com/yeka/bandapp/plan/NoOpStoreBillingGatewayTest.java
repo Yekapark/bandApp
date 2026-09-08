@@ -21,7 +21,7 @@ class NoOpStoreBillingGatewayTest {
 
     private final NoOpStoreBillingGateway gateway = new NoOpStoreBillingGateway(
             new PlanProperties(365, 30, "PREMIUM_YEARLY", "-", "Asia/Seoul"),
-            new StoreBillingProperties("noop", null));
+            new StoreBillingProperties("noop", null, null, null, null));
 
     @Test
     void plain_token_is_active_with_a_one_year_expiry() {
@@ -55,6 +55,6 @@ class NoOpStoreBillingGatewayTest {
 
     @Test
     void acknowledge_does_not_throw() {
-        gateway.acknowledge(Store.GOOGLE_PLAY, "tok42");
+        gateway.acknowledge(Store.GOOGLE_PLAY, "premium_yearly", "tok42");
     }
 }

@@ -25,18 +25,20 @@ public interface StoreBillingGateway {
 
     /**
      * 구매를 확인 처리(acknowledge)한다. Google Play 는 3일 안에 acknowledge 하지 않으면 자동 환불한다.
-     * 이미 확인된 구매에 다시 불러도 안전해야 한다(멱등).
+     * 이미 확인된 구매에 다시 불러도 안전해야 한다(멱등). {@code productId} 는 Google v1 acknowledge
+     * 엔드포인트가 요구하는 구독 상품 id — {@link StoreSubscription#productId()} 를 그대로 넘긴다.
      */
-    void acknowledge(Store store, String purchaseToken);
+    void acknowledge(Store store, String productId, String purchaseToken);
 
     /**
      * 스토어가 말하는 구독의 현재 모습.
      *
+     * @param productId     구독 상품 id(Play Console 의 상품 id, 예: {@code premium_yearly}). acknowledge 에 필요.
      * @param orderId       스토어 주문 식별자(Google 은 {@code GPA.xxxx-xxxx-xxxx-xxxxx}). 표시·추적용.
      * @param expiryTime    현재 결제 기간의 종료 시각. 이 값이 곧 {@code band_plans.expires_at}.
      * @param acknowledged  이미 확인 처리됐는지. false 면 호출자가 {@link #acknowledge} 를 불러야 한다.
      */
-    record StoreSubscription(Store store, String purchaseToken, String orderId,
+    record StoreSubscription(Store store, String purchaseToken, String productId, String orderId,
                              StoreSubscriptionState state, Instant expiryTime, boolean acknowledged) {
     }
 

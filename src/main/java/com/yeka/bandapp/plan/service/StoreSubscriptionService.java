@@ -10,6 +10,7 @@ import com.yeka.bandapp.plan.entity.ProcessedStoreEvent;
 import com.yeka.bandapp.plan.entity.Store;
 import com.yeka.bandapp.plan.gateway.StoreBillingGateway;
 import com.yeka.bandapp.plan.gateway.StoreBillingGateway.StoreSubscription;
+import com.yeka.bandapp.plan.gateway.StoreBillingUnavailableException;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import com.yeka.bandapp.plan.repository.ProcessedStoreEventRepository;
 import org.slf4j.Logger;
@@ -77,18 +78,24 @@ public class StoreSubscriptionService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        StoreSubscription sub = billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken)
-                .filter(s -> s.state().grantsPremium())
-                .orElseThrow(() -> new BusinessException(ErrorCode.PURCHASE_NOT_VERIFIED));
+        StoreSubscription sub;
+        try {
+            sub = billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken)
+                    .filter(s -> s.state().grantsPremium())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PURCHASE_NOT_VERIFIED));
+        } catch (StoreBillingUnavailableException transientFailure) {
+            // 스토어가 일시적으로 응답 못 함 — 402 로 "잠시 후 다시" 를 안내한다(클라가 재시도).
+            log.warn("Play 조회 일시 실패 bandId={}", bandId, transientFailure);
+            throw new BusinessException(ErrorCode.PURCHASE_NOT_VERIFIED);
+        }
 
         BandPlan updated = grantPremium(bandId, Instant.now(), sub);
 
         if (!sub.acknowledged()) {
             // 확인 처리 실패로 응답을 깨지 않는다 — 등급은 이미 올라갔다. 3일 안에 acknowledge 가
             // 안 되면 Play 가 자동 환불하고, 그때 REVOKED 웹훅이 와서 FREE 로 되돌린다(자기수정).
-            // ponytail: 슬라이스 2에서 실패분 재시도 잡을 붙인다.
             try {
-                billingGateway.acknowledge(Store.GOOGLE_PLAY, purchaseToken);
+                billingGateway.acknowledge(Store.GOOGLE_PLAY, sub.productId(), purchaseToken);
             } catch (RuntimeException e) {
                 log.error("구매 acknowledge 실패 bandId={} — Play 자동환불 위험", bandId, e);
             }
