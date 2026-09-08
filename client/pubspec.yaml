@@ -60,6 +60,10 @@ dependencies:
   # 겹쳐서 그 앱이 열렸다.
   app_links: ^7.2.1
 
+  # 인앱결제(밴드 PREMIUM 연 구독). Android 는 Play Billing 을 감싼다. 결제는 스토어에서
+  # 일어나고, 성공 시 구매 토큰을 서버(/plan/google/verify)로 보내 검증받는다.
+  in_app_purchase: ^3.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
