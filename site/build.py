@@ -101,18 +101,18 @@ INDEX = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>밴듈 · 밴드 합주 관리</title>
 <style>
-  :root {{ color-scheme: light dark; --bg:#fff; --fg:#1a1a1a; --dim:#5a5a5a; --accent:#e2622a; }}
-  @media (prefers-color-scheme: dark) {{
-    :root {{ --bg:#141216; --fg:#ece9ee; --dim:#a09aa6; --accent:#ff7a3d; }}
-  }}
-  body {{ margin:0; background:var(--bg); color:var(--fg); min-height:100vh;
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1a1a1a; --dim:#5a5a5a; --accent:#e2622a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141216; --fg:#ece9ee; --dim:#a09aa6; --accent:#ff7a3d; }
+  }
+  body { margin:0; background:var(--bg); color:var(--fg); min-height:100vh;
          display:flex; align-items:center; justify-content:center; text-align:center;
          font-family:-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic",
-                     "Noto Sans KR", sans-serif; word-break:keep-all; }}
-  .box {{ padding: 40px 24px; }}
-  h1 {{ font-size:34px; letter-spacing:4px; margin:0 0 10px; color:var(--accent); }}
-  p {{ color:var(--dim); font-size:15px; line-height:1.8; margin:0 0 28px; }}
-  a {{ color:var(--accent); font-size:14px; margin:0 10px; }}
+                     "Noto Sans KR", sans-serif; word-break:keep-all; }
+  .box { padding: 40px 24px; }
+  h1 { font-size:34px; letter-spacing:4px; margin:0 0 10px; color:var(--accent); }
+  p { color:var(--dim); font-size:15px; line-height:1.8; margin:0 0 28px; }
+  a { color:var(--accent); font-size:14px; margin:0 10px; }
 </style>
 </head>
 <body>

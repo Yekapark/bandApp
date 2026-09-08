@@ -4,7 +4,7 @@
 > 오늘까지의 작업 내용은 [2026-09-05-brand-notifications-settlement-video.md](2026-09-05-brand-notifications-settlement-video.md)
 > , [2026-09-05-plan-lifecycle-and-media-fix.md](2026-09-05-plan-lifecycle-and-media-fix.md),
 > [2026-09-05-band-delete.md](2026-09-05-band-delete.md), [phase-11-deploy.md](phase-11-deploy.md).
-> 마지막 갱신: **2026-09-06**
+> 마지막 갱신: **2026-09-08**
 
 ---
 
@@ -62,7 +62,8 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 | 테스터 배포 | [docs/TESTING.md](../TESTING.md) — 서버가 살았으니 APK 만 만들면 된다 |
 | 출시까지 순서 | [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) |
 | **다른 PC 에서 이어서** | **[docs/NEW_PC_SETUP.md](../NEW_PC_SETUP.md)** — git 에 없는 파일 목록과 확인 절차 |
-| 남은 것 | 릴리스 서명 키 · 약관/개인정보처리방침 · 카카오 콘솔 패키지명 · 운영 Firebase 분리 · 스토어 계정 |
+| 남은 것 | 운영 Firebase 분리 · 스토어 심사 제출 · (Phase 12) 인앱결제 — 요금 정책 확정되면 |
+| 끝난 것 | 릴리스 서명 키 · 약관·개인정보 URL(`bandule.com/privacy`,`/terms`) · 카카오 콘솔 패키지명 · 개발자 등록 · 비밀값 로테이션(2026-09-08) |
 
 **로컬 개발**은 그대로다 — `docker compose up -d` + `adb reverse tcp:8080 tcp:8080`.
 실기기 빌드에 **`--dart-define-from-file=dart_defines.json` 을 빠뜨리면 카카오 로그인이 막힌다.**
@@ -88,123 +89,68 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --flavor dev --dart-define
 
 ## 1. 못 끝낸 것
 
-### 1-A. 🔴 비밀값 전부 교체 (2026-09-08 유출) — 가장 급함
+### 1-A. 비밀값 전부 교체 (2026-09-08 유출) — ✅ 완료 (2026-09-08)
 
-**무슨 일** — 서버 `.env.prod` 를 로컬 것과 비교하려고 `env.prod.server` 로 내려받았는데,
-`git add -A` 에 휩쓸려 **공개 저장소에 커밋·푸시됐다.** 몇 분 뒤 커밋에서 빼고 강제 푸시해
-현재 `main` 에는 없지만, **GitHub 은 지워진 객체를 한동안 보관하고 공개 저장소 이벤트를 긁는
-봇이 있다.** 노출된 값은 살아 있다고 봐야 한다.
+**무슨 일이었나** — 서버 `.env.prod` 를 로컬과 비교하려고 `env.prod.server` 로 내려받았는데
+`git add -A` 에 휩쓸려 공개 저장소에 커밋·푸시됐다. 강제 푸시로 `main` 에서 뺐지만 노출된
+값은 살아 있다고 보고 전부 교체했다.
 
-**교체할 것 — 이 순서로** (아래로 갈수록 영향이 작다)
+- 서버 `.env.prod` 에서 `JWT_SECRET` · `DB_PASSWORD` · `REDIS_PASSWORD` ·
+  `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` · `KAKAO_ADMIN_KEY`/`KAKAO_REST_API_KEY` ·
+  `MAIL_SMTP_PASSWORD` 교체 완료. 교체 전 스냅샷은 서버 `/opt/bandapp/.env.prod.pre-rotate`.
+- 로컬 `.env.prod` 도 서버 값으로 동기화 완료 (2026-09-08).
+- 재발 방지: `.githooks/pre-commit` 이 `.env*`·`*.jks`·`google-services.json` 이름을 막는다.
+  새 PC 에서 `git config core.hooksPath .githooks` 한 번. `CLAUDE.md` 에 "`git add -A` 금지" 규칙.
 
-| | 키 | 어디서 | 주의 |
-|---|---|---|---|
-| 1 | `JWT_SECRET` | 아무 랜덤 문자열(32자 이상) | **바꾸면 모든 사용자가 로그아웃된다.** 그래도 1순위다 — 이게 있으면 남의 토큰을 위조할 수 있다 |
-| 2 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Cloudflare 대시보드 > R2 > API 토큰 재발급 | 옛 토큰을 **삭제**까지 해야 한다 |
-| 3 | `DB_PASSWORD` | Postgres 사용자 비밀번호 변경 + `.env.prod` | 아래 순서 참고 |
-| 4 | `REDIS_PASSWORD` | `.env.prod` 만 바꾸고 redis 재시작 | 리프레시 토큰이 날아가 재로그인이 필요할 수 있다 |
-| 5 | `KAKAO_ADMIN_KEY` / `KAKAO_REST_API_KEY` | 카카오 개발자 콘솔에서 재발급 | 앱 키(네이티브)는 안 바꿔도 된다 |
-
-`DB_PASSWORD` 는 컨테이너와 설정을 함께 바꿔야 한다:
-
-```bash
-ssh -i ~/.ssh/bandule_deploy root@64.176.231.126
-cd /opt/bandapp
-cp .env.prod .env.prod.bak-$(date +%Y%m%d-%H%M)
-
-# 1) DB 안에서 비밀번호 변경
-docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres   psql -U bandapp -d bandapp -c "ALTER USER bandapp WITH PASSWORD '새비밀번호';"
-
-# 2) 설정 갱신 (한 줄만)
-sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=새비밀번호|' .env.prod
-
-# 3) 앱만 재시작 (postgres 는 건드리지 않는다)
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d app
-sleep 10 && curl -s https://api.bandule.com/actuator/health
-```
-
-**로컬 `.env.prod` 도 같은 값으로 맞춘다.** 두 파일이 갈라지면 다음에 또 사고가 난다.
-
-> **재발 방지는 이미 넣어 뒀다** — `.githooks/pre-commit` 이 `.env*`·`*.jks`·
-> `google-services.json` 같은 이름을 커밋에서 막는다. 새 PC 에서 한 번 켠다:
-> `git config core.hooksPath .githooks` (docs/NEW_PC_SETUP.md §2-B).
-> `CLAUDE.md` 에도 "`git add -A` 를 쓰지 않는다" 를 규칙으로 박아 뒀다.
+> ⚠️ **다시는 `scp 로컬 .env.prod → 서버` 를 무심코 돌리지 말 것.** 서버가 로테이션 정본이다.
+> 올릴 일이 생기면 §0 의 diff 를 먼저 본다.
 
 ---
 
-### 1-Z. 지금 손에 잡혀 있던 것 (2026-09-08 새벽에 멈춤) ★ 여기부터
+### 1-Z. 신고 접수 메일 — ✅ 해결 (2026-09-08)
 
-**신고 접수 메일이 안 온다 — 아직 안 고침.**
+신고 접수를 푸시 + **메일** 두 경로로 보낸다(`ReportMail`, `REPORT_NOTIFY_EMAILS`, 배포 `f57d304`).
+"메일이 안 온다" 로 한참 헤맸는데 두 개가 겹쳐 있었다:
 
-오늘 신고 접수를 푸시 + **메일** 두 경로로 보내게 만들었고(`ReportMail`, `REPORT_NOTIFY_EMAILS`)
-서버까지 배포했다(`f57d304`). 그런데 실제로 신고해 보니 메일이 오지 않는다.
+1. **`docker-compose.prod.yml` 이 `MAIL_*`·`REPORT_NOTIFY_*` 를 컨테이너에 안 넘겼다** (PR #68).
+   서버 `.env.prod` 엔 3줄이 있는데(`grep -c '^MAIL_' .env.prod` = 3) 컨테이너 안
+   `printenv | grep '^MAIL_'` 은 0줄이었다 — compose 는 `environment:` 에 적힌 키만 주입한다.
+   `app` 서비스 `environment:` 에 그 5개를 추가해 고쳤고 자동 배포로 반영됐다. `MAIL_FROM` 이
+   비면 `EmailSender.isConfigured()` 가 false 라 **신고뿐 아니라 비밀번호 재설정·이메일 인증
+   메일도 그동안 안 나갔다.** (`MAIL_SMTP_PASSWORD` 는 2026-09-08 재발급분, §1-A.)
+2. 그 뒤에도 "안 온다" 던 것의 실제 원인 — **중복 신고였다.** 테스트 계정 두 개(user 4·5)가
+   이미 그 대상을 OPEN 으로 신고해놔서 `REPORT_ALREADY_SUBMITTED`(409)로 되돌아갔고,
+   트랜잭션이 `notifyOperatorsAfterCommit` **전에** 터져 행도 메일도 없었다. 앱엔 "이미 접수되어
+   처리 중인 신고입니다." 가 떴을 것. 기존 OPEN 을 RESOLVED 로 내리고 다시 신고 → 행 생김.
 
-**원인 찾음 (2026-09-08) — `docker-compose.prod.yml` 이 `MAIL_*` 를 컨테이너에 안 넘겼다.**
+**메일이 안 왔을 때 순서대로 볼 것**
 
-서버 `.env.prod` 에는 `MAIL_SMTP_USERNAME`·`MAIL_SMTP_PASSWORD`·`MAIL_FROM` 3줄이
-들어 있는데(`grep -c '^MAIL_' .env.prod` = 3), 앱 컨테이너 안에서 `printenv | grep '^MAIL_'`
-은 **0줄**이었다. compose 는 `.env.prod` 값을 파일에서 `${VAR}` 로 참조한 자리에만 넣는데
-`app` 서비스 `environment:` 블록에 `MAIL_*`·`REPORT_NOTIFY_*` 항목이 **아예 없었다.**
-→ `EmailSender.isConfigured()` 가 false → 신고·비밀번호 재설정·이메일 인증 메일 전부 no-op.
-
-**고친 것** — 그 5개(`MAIL_SMTP_USERNAME`, `MAIL_SMTP_PASSWORD`, `MAIL_FROM`,
-`REPORT_NOTIFY_USER_IDS`, `REPORT_NOTIFY_EMAILS`)를 `docker-compose.prod.yml` 의 `app`
-`environment:` 에 추가했다. `main` 머지 → 자동 배포로 서버 반영. (`REPORT_NOTIFY_EMAILS`
-중복 줄은 그 사이 정리돼 지금은 1줄.)
-
-**아직 남은 것**
-1. 앱 비밀번호(`MAIL_SMTP_PASSWORD=kimfzwkgxqoqyydm`)가 2026-09-07 노출됐다 →
-   **폐기·재발급 먼저** (§1-Y). 재발급 값을 서버·로컬 `.env.prod` 둘 다에 넣는다.
-2. 배포 뒤 `printenv | grep -c '^MAIL_'` = 3 확인 → 다른 계정 글 신고해서 메일 도착 확인.
-
-**확인 순서 (배포 후)**
-
-```bash
-# 1) 설정이 실제로 컨테이너에 실렸는지
-ssh -i ~/.ssh/bandule_deploy root@64.176.231.126   "cd /opt/bandapp && grep -c '^MAIL_' .env.prod && docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app printenv | grep -c '^MAIL_'"
-```
-
-둘 다 `3` 이어야 한다. `.env.prod` 는 3인데 `printenv` 가 0이면 **앱 컨테이너를 다시 안 띄운 것**이다
-(환경변수는 컨테이너가 시작할 때만 읽는다).
-
-```bash
-# 2) 로그에서 어디서 막혔는지
-ssh -i ~/.ssh/bandule_deploy root@64.176.231.126   "cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 200 app | grep -i mail"
-```
-
-| 로그 | 뜻 |
+| 증상 | 뜻 |
 |---|---|
-| `[email] 발신 계정 미설정` | `MAIL_FROM` 이 앱까지 안 갔다 → 컨테이너 재시작 |
-| `[email] 발송 실패` | SMTP 인증·주소 형식 문제 → 앱 비밀번호, `MAIL_FROM` 의 꺾쇠 확인 |
-| 아무것도 없음 | **신고 자체가 접수 안 됐다** → `SELECT * FROM reports ORDER BY id DESC LIMIT 5;` |
-
-```bash
-# 3) 신고가 DB 에 들어왔는지
-ssh -i ~/.ssh/bandule_deploy root@64.176.231.126   "cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres psql -U bandapp -d bandapp -c 'SELECT id, target_type, target_id, reporter_id, created_at FROM reports ORDER BY id DESC LIMIT 5;'"
-```
-
-> **주의** — 자기 글·자기 사진은 신고할 수 없고 앱에서 메뉴 자체가 안 뜬다.
-> 테스트하려면 **다른 계정의 글**을 신고해야 한다.
+| 로그에 `[email] 발신 계정 미설정` | `MAIL_FROM` 이 앱 컨테이너까지 안 갔다 → `up -d app` 로 재기동 (restart 아님) |
+| 로그에 `[email] 발송 실패` | SMTP 인증·주소 형식 → 앱 비밀번호, `MAIL_FROM` 의 꺾쇠 |
+| 로그에 mail 줄이 아예 없음 | **접수 자체가 안 됐다.** `SELECT id,status FROM reports ORDER BY id DESC LIMIT 5;` — 같은 신고자+대상에 OPEN 이 이미 있으면 409 라 새 행이 안 생긴다 |
 
 **참고**
 
-- `MAIL_FROM` 형식은 `밴듈 <주소@gmail.com>` 처럼 **꺾쇠가 필요하다.** 꺾쇠 없이 `밴듈 주소@gmail.com`
-  으로 두면 `AddressException: Local address contains control or whitespace` 로 발송이 실패한다
-  (실제로 파싱해 확인했다).
-- 앱 비밀번호가 2026-09-07 대화 중 노출됐다. **폐기하고 재발급이 필요하다.**
-- 메일 본문 형식과 조회 쿼리는 `ReportMail` 에 있고 `ReportMailTest` 가 지킨다.
+- `EmailSender.send()` 는 **성공 시 로그를 안 남긴다.** mail 줄이 없다고 실패한 게 아니다.
+- `MAIL_FROM` 은 `밴듈 <주소@gmail.com>` 처럼 **꺾쇠 필수.** 없으면 `AddressException`.
+- 앱 비밀번호는 2026-09-07 노출 → 2026-09-08 재발급·반영 완료(§1-A).
+- 메일 본문·조회 쿼리는 `ReportMail`, `ReportMailTest` 가 지킨다.
+- 운영자가 신고를 받고 할 수 있는 일은 [docs/MODERATION.md](../MODERATION.md) — 앱으로 할 수
+  있는 건 없고 밴드장 연락 또는 DB 직접.
 
 ---
 
-### 1-Y. 지금 당장 걸려 있는 것 (2026-09-06 저녁)
+### 1-Y. 지금 당장 걸려 있는 것 (2026-09-06 저녁, 2026-09-08 갱신)
 
 | | 누가 | 안 하면 |
 |---|---|---|
 | ~~카카오 콘솔에 새 키 해시 등록~~ | ✅ 완료 | |
 | ~~기존 앱 지우고 재설치~~ | ✅ 완료 | 서명이 바뀐 뒤로는 그냥 업데이트된다 |
-| **Cloudflare Pages 연결** | 지시자 | 약관 URL 이 없으면 스토어 등록을 못 한다. 페이지는 `site/` 에 만들어 뒀고 연결만 하면 된다 |
-| ~~ProGuard 켜기~~ | ✅ 완료(코드) | `isMinifyEnabled`/`isShrinkResources` 켰고 카카오·트랜스코더 keep 규칙도 넣었다. **실기기 릴리스 빌드로 지도·로그인·푸시 재확인은 아직 — 나** |
-| **Gmail 앱 비밀번호 발급** | 지시자 | 비밀번호 재설정·이메일 인증 메일이 안 나간다(가입·로그인 자체는 정상). 구글 계정 > 보안 > 2단계 인증 켜기 > 앱 비밀번호에서 발급 → `.env`/`.env.prod` 의 `MAIL_SMTP_USERNAME`(그 지메일 주소)·`MAIL_SMTP_PASSWORD`(발급된 16자리)·`MAIL_FROM`(예: `밴듈 <그주소@gmail.com>`) 채우기 |
+| ~~Cloudflare Pages 연결~~ | ✅ 완료 (2026-09-08) | `bandule.com` · `/privacy/` · `/terms/` 라이브(200). `site/` 폴더가 그대로 게시된다 |
+| ~~ProGuard 켜기~~ | ✅ 완료(코드) | `client/android/app/build.gradle.kts` 의 release 에 `isMinifyEnabled`/`isShrinkResources` = true, `proguard-rules.pro` 에 카카오 keep. **실기기 릴리스 빌드로 지도·로그인·푸시 재확인은 아직 — 스토어 제출 빌드 뽑을 때 같이** |
+| ~~Gmail 앱 비밀번호 발급~~ | ✅ 완료 (2026-09-08) | 재발급분이 서버·로컬 `.env.prod` 에 반영됨(§1-A). 신고·재설정·인증 메일 나간다 |
 
 **릴리스 서명 키가 생겼다 (2026-09-06).** `client/android/bandule-release.jks`, 인증서
 `CN=yeka, L=seoul`. `android/key.properties` 가 있으면 그 키로 서명하고 없으면 디버그 키로
@@ -256,59 +202,22 @@ curl -s https://api.bandule.com/invite/<코드> | grep -o "band[a-z]*://invite/"
 > **서버에 `DEEPLINK_SCHEME` 이 박혀 있으면 그것도 바꿔야 한다.** `.env.prod` 를 확인하고,
 > 있으면 `bandule` 로 고쳐 올린다(§0 의 scp 명령).
 
-### 1-A. "BOTTOM OVERFLOWED BY 63 PIXELS" — 원인 미확인 ❗
+### 1-A. "BOTTOM OVERFLOWED BY 63 PIXELS" — ✅ 닫음 (2026-09-08, 지시자 판단)
 
-제보만 받고 **끝내 재현하지 못했다.** 어느 화면인지 특정하지 못한 채 남아 있다.
-
-- 시도한 것: logcat 에서 `RenderFlex overflowed` 를 찾았으나 버퍼가 이미 지나갔고,
-  실시간 감시를 걸어 뒀지만 그 사이 재현되지 않아 타임아웃으로 끝났다.
-- 기능에는 영향이 없고 **디버그 빌드에서만** 노란 줄무늬로 보인다(릴리스에서는 안 보임).
-  다만 레이아웃이 잘리는 건 맞으니 고쳐야 한다.
-
-**다음에 할 것** — 앱을 켜 두고 아래를 돌린 뒤, 화면을 돌아다니다 줄무늬가 뜨면
-위젯·파일·줄번호가 그대로 찍힌다:
+끝내 재현하지 못했다. 어느 화면인지 특정 못 했고, 기능 영향 없음(디버그 빌드에서만 노란
+줄무늬, 릴리스에선 안 보임). 지시자가 "처리된 걸로" 판단해 닫는다. 다시 눈에 띄면 앱을 켜 두고:
 
 ```powershell
 & "$env:LOCALAPPDATA\Android\sdk\platform-tools\adb.exe" -s R3CX40J7QJE logcat -c
 & "$env:LOCALAPPDATA\Android\sdk\platform-tools\adb.exe" -s R3CX40J7QJE logcat | Select-String -Pattern "overflowed|RenderFlex"
 ```
 
-짐작 가는 후보(확인 안 함): 키보드가 올라올 때의 폼 화면, 바텀시트, 다이얼로그.
-어느 화면이었는지 기억나면 그것부터 열어 보는 게 빠르다.
+### 1-B. 실기기 end-to-end — ✅ 닫음 (2026-09-08, 지시자 판단)
 
-### 1-B. 실기기 end-to-end 미검증
-
-빌드·테스트는 통과했지만 **실제 기기에서 눈으로 확인한 것은 아니다.**
-
-> **2026-09-06 — 백엔드 쪽은 실행 중인 로컬 스택에 실제 요청을 넣어 21개 항목을 확인했다.**
-> 아래 목록에서 `[API]` 표시가 그것이다. 남은 것은 **화면으로만 확인 가능한 것들**이라
-> 폰을 USB 로 연결해야 한다(확인 시도 시 `adb devices` 가 비어 있었다).
-
-- [x] 앱 아이콘(런처에서 Stick Check), 스플래시·로그인의 브랜드 마크와 `BANDULE` 워드마크
-      · `[기기]` ✅ 스플래시의 체크마크 + `BANDULE`/밴듈, 로그인 헤더, 알림·최근앱의 앱 아이콘 확인
-- [ ] 정산 탭 — 납부 체크 후 **다른 화면 갔다 와도 유지되는지**(오늘 고친 버그)
-      · `[API]` ✅ 서버는 정상 — 체크 후 재조회해도 `paid=true` 유지, 타인 share 변경은 403,
-        3명이 10,000원 나눌 때 합계 일치. **남은 건 화면 캐시 무효화 확인뿐이다**
-- [ ] 알림 목록 — 홈 종 배지 숫자, 목록 열면 배지가 0 이 되는지
-      · `[API]` ✅ `GET /api/v1/notifications?bandId=` 200, `{notifications, nextCursor}` 반환
-      · `[기기]` ✅ 목록 화면(안 읽음 주황 점 포함), 배지 숫자, 열면 0 이 되는 것까지 확인.
-        **다만 푸시를 받아도 배지가 안 오르는 버그를 발견해 고쳤다** — 아래 1-D
-- [ ] 영상 첨부 — 5~6분 영상으로 압축 진행률(%)이 돌고, 등록 시 함께 올라가는지
-      (**이게 그동안 안 됐다** — DB 제약이 50MB 에 머물러 있어 압축한 영상도 500 이 났다.
-      `V12` 에서 200MB 로 올렸으니 이제 실제로 확인이 된다)
-      · `[API]` ✅ **150MB 영상 업로드 URL 발급 성공** — 막혀 있던 경로가 뚫렸다.
-        250MB 는 `MEDIA_SIZE_EXCEEDED` 로 거부, 20MB 사진도 거부(이미지 상한 10MB).
-        압축 진행률(%) 표시는 화면 확인 필요
-- [ ] 사진 첨부 — 고화질 사진을 올린 뒤 저장 크기가 1MB 아래인지(긴 변 2048px 로 축소한다)
-- [ ] 요금제 쿠폰 — 쿠폰을 SQL 로 넣고 앱에서 입력 → PREMIUM 전환·기간 가산
-      · `[API]` ✅ 쿠폰(30일) 넣고 사용 → `FREE → PREMIUM`, 만료일 +30일 확인.
-        앱 입력 화면만 확인하면 된다
-- [ ] 밴드 삭제 — 사진·영상·일정·정산이 있는 테스트 밴드를 지우고 R2 버킷과 각 테이블이 비는지
-      · `[API]` ✅ 멤버는 403, 이름 틀리면 `BAND_NAME_MISMATCH`, 밴드장이 정확한 이름으로 지우면 204.
-        삭제 후 **게시글·첨부·일정·정산·합주실·멤버·밴드 행 전부 0건** 확인(DB 직접 조회).
-        R2 객체 삭제는 실제 업로드를 거쳐야 해서 화면 확인 필요
-- [ ] 게시글 영상 재생 — 전체화면, 탭 play/pause, 진행바 스크러빙
-- [ ] 합주실 등록 폼 지도 — 검색 후보가 핀으로 뜨고 고른 좌표가 저장되는지
+백엔드 21개 항목은 로컬 스택에 실제 요청을 넣어 확인했다(`[API]` 표시). 화면으로만 확인
+가능한 나머지(압축 진행률 표시, 사진 축소 크기, 쿠폰 입력 화면, R2 객체 삭제, 영상 재생,
+합주실 폼 지도 핀)는 지시자가 "처리된 걸로" 판단해 닫는다. 스토어 제출 릴리스 빌드를
+실기기에서 돌릴 때 지도·로그인·푸시와 함께 눈으로 훑으면 된다.
 
 ### 1-D. 기기 푸시 — 살렸다 (2026-09-06)
 
@@ -415,9 +324,11 @@ autoDispose 가 아니라 캐시된 옛 값을 계속 그렸고, 앱을 완전�
 - ~~**릴리스 서명 설정 없음**~~ **완료 (2026-09-06)** — `client/android/bandule-release.jks`
   로 서명한다. `android/key.properties` 가 없으면 디버그 키로 넘어가므로 키 없는 PC 에서도
   빌드는 된다. 카카오 콘솔에 새 키 해시(`7zGOncUg+QW8Yt2dmsgmgmI5TPQ=`)도 등록했다.
-- **ProGuard 코드는 켜져 있다** — `client/android/app/build.gradle.kts:112` 에서
-  `isMinifyEnabled = true` / `isShrinkResources = true`. 카카오·트랜스코더 keep 규칙도 있다.
-  **남은 건 실기기 릴리스 빌드로 지도·로그인·푸시 재확인** (난독화가 SDK 를 깨는 일이 흔하다).
+- ~~**ProGuard 가 꺼져 있다**~~ **켜져 있다 (코드 확인 2026-09-08)** —
+  `client/android/app/build.gradle.kts` 의 `buildTypes.release` 에 `isMinifyEnabled = true`,
+  `isShrinkResources = true`, `proguardFiles(... "proguard-rules.pro")`. 카카오 keep 규칙도 있다.
+  **남은 것: 스토어 제출용 릴리스 빌드를 실기기에서 돌려 지도·로그인·푸시 확인**
+  (난독화가 SDK 리플렉션을 깨는 일이 흔하다). 이건 제출 빌드 뽑을 때 한 번.
 
 ---
 
