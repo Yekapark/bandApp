@@ -10,12 +10,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *                           (no-op 게이트웨이가 구독기간 종료를 계산할 때 쓴다)
  * @param downgradeGraceDays PREMIUM 해지·만료 시 기존 미디어에 부여하는 유예기간(일).
  *                           구독 주기가 아니라 보관 유예라 1년 구독과 무관하게 30일이다
- * @param planCode           게이트웨이에 넘기는 요금제 코드
  * @param expireCron         구독기간 지난 PREMIUM 을 FREE 로 되돌리는 배치 cron. {@code "-"} 면 비활성
  * @param zone               배치 cron 해석 기준 시간대
  */
 @ConfigurationProperties(prefix = "app.plan")
-public record PlanProperties(int premiumPeriodDays, int downgradeGraceDays, String planCode,
+public record PlanProperties(int premiumPeriodDays, int downgradeGraceDays,
                              String expireCron, String zone) {
 
     public PlanProperties {
@@ -24,9 +23,6 @@ public record PlanProperties(int premiumPeriodDays, int downgradeGraceDays, Stri
         }
         if (downgradeGraceDays <= 0) {
             downgradeGraceDays = 30;
-        }
-        if (planCode == null || planCode.isBlank()) {
-            planCode = "PREMIUM_YEARLY";
         }
         if (expireCron == null || expireCron.isBlank()) {
             expireCron = "0 45 4 * * *";

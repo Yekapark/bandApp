@@ -124,7 +124,6 @@ app:
     zone: Asia/Seoul                                     # 배치 cron 해석 기준 시간대
     premium-period-days: ${PLAN_PREMIUM_PERIOD_DAYS:365} # PREMIUM 한 구독기간의 일수. 밴드별 1년 단위 구독
     downgrade-grace-days: ${PLAN_DOWNGRADE_GRACE_DAYS:30} # 해지·만료 시 기존 미디어에 주는 유예기간(일). 보관 유예라 구독 주기와 무관
-    plan-code: PREMIUM_YEARLY                            # 결제 게이트웨이에 넘기는 요금제 코드
     expire-cron: ${PLAN_EXPIRE_CRON:0 45 4 * * *}        # 매일 04:45 KST 구독기간 지난 PREMIUM → FREE
     # 만료 예고. 강등보다 이른 시각에 돌아야 "오늘 끝난다"는 알림이 강등 전에 나간다.
     expiry-reminder-cron: ${PLAN_EXPIRY_REMINDER_CRON:0 30 4 * * *}   # 매일 04:30 KST 30·7·1일 전 예고
