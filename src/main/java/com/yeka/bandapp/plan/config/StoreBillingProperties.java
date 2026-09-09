@@ -10,17 +10,23 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *                              로 붙여 등록하고, 이 값과 다르면 웹훅을 거부한다. <b>비어 있으면 웹훅을 통째로
  *                              막는다</b>(fail-closed). 슬라이스 3에서 Pub/Sub OIDC 토큰 검증으로 보강한다.
  * @param googlePackageName     앱 패키지명(Play Developer API 호출 대상). 예: {@code com.yeka.bandule}
+ * @param googleProductId       우리가 파는 구독 상품 id(Play Console 의 제품 ID). 스토어가 돌려준 구매의
+ *                              상품이 이 값과 다르면 PREMIUM 을 주지 않는다 — 나중에 더 싼 상품을 하나라도
+ *                              추가하면, 그 토큰으로 PREMIUM 을 받는 길이 열리기 때문이다. 기본
+ *                              {@code premium_yearly}.
  * @param googleCredentialsPath Play Developer API 권한을 가진 서비스 계정 JSON 키 파일 경로.
  *                              {@code gateway=google} 인데 비어 있으면 기동에 실패한다(FCM 키와 같은 방식).
  * @param googleApplicationName    API 클라이언트 User-Agent 에 들어가는 이름. 아무 값이나 되며 기본 {@code bandule}.
  * @param googlePubsubAudience     RTDN push 구독의 OIDC 토큰 audience. 설정하면 웹훅이 Bearer 토큰을
  *                                 Google 공개키로 검증한다. 비면 {@code ?token=} 공유 시크릿으로만 인증.
- * @param googlePubsubServiceAccount OIDC 토큰의 {@code email} 이 이 값과 같아야 한다(선택). Pub/Sub
- *                                 구독에 지정한 인증 서비스 계정 주소.
+ * @param googlePubsubServiceAccount OIDC 토큰의 {@code email} 이 이 값과 같아야 한다. Pub/Sub 구독에
+ *                                 지정한 인증 서비스 계정 주소. <b>audience 와 함께 필수</b> — 이 값이
+ *                                 없으면 OIDC 경로를 아예 열지 않는다({@code WebhookAuthenticator}).
  */
 @ConfigurationProperties(prefix = "app.plan.billing")
 public record StoreBillingProperties(String gateway, String webhookSecret,
-                                     String googlePackageName, String googleCredentialsPath,
+                                     String googlePackageName, String googleProductId,
+                                     String googleCredentialsPath,
                                      String googleApplicationName, String googlePubsubAudience,
                                      String googlePubsubServiceAccount) {
 
@@ -33,6 +39,9 @@ public record StoreBillingProperties(String gateway, String webhookSecret,
         }
         if (googlePackageName != null && googlePackageName.isBlank()) {
             googlePackageName = null;
+        }
+        if (googleProductId == null || googleProductId.isBlank()) {
+            googleProductId = "premium_yearly";
         }
         if (googleCredentialsPath != null && googleCredentialsPath.isBlank()) {
             googleCredentialsPath = null;

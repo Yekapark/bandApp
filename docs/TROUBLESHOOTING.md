@@ -18,6 +18,40 @@
 
 ---
 
+## 2026-09-09 — 결제 검증이 "상태만" 보고 통과시키던 것 셋
+
+**증상** — 없다. 배포 전 결제 경로 점검에서 나온 것들이라 아직 아무도 안 당했다.
+Play 결제를 실제로 켜기 전에 막아 둔다.
+
+**원인과 해결**
+
+**(1) 우리 상품인지 안 봤다.** `purchases.subscriptionsv2.get` 은 **패키지 단위**라
+이 앱의 어떤 구독 토큰이든 조회된다. 그런데 응답의 `productId` 를 읽기만 하고
+(acknowledge 에 넘기려고) 대조하지는 않았다. 상품이 `premium_yearly` 하나뿐인 지금은
+무해하지만, **더 싼 상품을 하나라도 추가하는 순간 그 토큰으로 PREMIUM 을 받는 길이 열린다.**
+상품이 늘기 전에 막는 게 맞다 — 늘어난 뒤에는 "왜 이 사람만 싸게 샀지"를 정산에서 발견하게 된다.
+→ `app.plan.billing.google-product-id`(기본 `premium_yearly`)와 대조한다.
+
+**(2) 만료일이 없어도 통과시켰다.** 매퍼가 `lineItems` 에서 만료 시각을 못 찾으면
+`null` 을 돌려주고, 그게 그대로 `band_plans.expires_at` 에 NULL 로 저장된다. 만료 배치의
+조건이 `expires_at < now` 라 **NULL 은 영원히 걸리지 않는다** = 공짜 무기한 PREMIUM.
+정상 구독이면 항상 값이 오지만, 안 왔을 때 조용히 무기한을 주는 쪽으로 실패하고 있었다.
+→ `expiryTime == null` 이면 거부(402).
+
+(1)(2)는 `StoreSubscriptionService.grantable()` 한 곳에 모았다. 사용자 검증과 RTDN 웹훅이
+둘 다 이 판정을 지나므로, 한쪽만 고치고 다른 쪽이 남는 일이 없다.
+
+**(3) 웹훅 OIDC 가 "누가 보냈나"를 안 봤다.** `google-pubsub-service-account` 대조가
+**선택**이었다. audience 는 우리 웹훅 URL 이고, **그 값을 audience 로 하는 진짜 구글 OIDC
+토큰은 아무 GCP 계정이나 자기 서비스 계정으로 발급할 수 있다.** 서명·발급자·만료가 전부
+정상이라 검증기도 통과시킨다. 즉 audience 만 설정하면 **아무나 웹훅을 부를 수 있었고**,
+환불(REVOKED)·만료 이벤트를 임의로 밀어 넣어 남의 밴드를 FREE 로 떨어뜨릴 수 있었다.
+→ audience 가 있는데 서비스 계정이 없으면 OIDC 경로를 **아예 열지 않는다**(기동 로그에 에러).
+
+**확인법** — `PlanPurchaseValidationIntegrationTest`(다른 상품 402 · 만료일 없음 402 ·
+정상 구매는 200 대조군), `WebhookAuthenticatorTest.oidc_path_is_closed_when_the_service_account_is_not_configured`.
+운영에서는 `.env.prod` 에 `PLAN_BILLING_PUBSUB_AUDIENCE` 를 넣었다면
+`PLAN_BILLING_PUBSUB_SA` 도 반드시 함께 넣는다 — 안 넣으면 웹훅이 공유 시크릿으로만 인증된다.
 ## 2026-09-09 — 회색 구름인데 Cloudflare realip 을 켜 둬서 IP 레이트리밋이 뚫려 있었다
 
 **증상** — 눈에 보이는 증상이 없다. 배포 전 점검에서 nginx 접근 로그를 읽다 발견했다.

@@ -4,6 +4,7 @@ import com.yeka.bandapp.band.service.BandAccessGuard;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.plan.config.PlanProperties;
+import com.yeka.bandapp.plan.config.StoreBillingProperties;
 import com.yeka.bandapp.plan.dto.PlanResponse;
 import com.yeka.bandapp.plan.entity.BandPlan;
 import com.yeka.bandapp.plan.entity.ProcessedStoreEvent;
@@ -55,16 +56,54 @@ public class StoreSubscriptionService {
     private final StoreBillingGateway billingGateway;
     private final ProcessedStoreEventRepository processedEvents;
     private final PlanProperties planProperties;
+    private final StoreBillingProperties billingProperties;
 
     public StoreSubscriptionService(BandAccessGuard accessGuard, BandPlanRepository bandPlanRepository,
                                     PlanMutationService planMutationService, StoreBillingGateway billingGateway,
-                                    ProcessedStoreEventRepository processedEvents, PlanProperties planProperties) {
+                                    ProcessedStoreEventRepository processedEvents, PlanProperties planProperties,
+                                    StoreBillingProperties billingProperties) {
         this.accessGuard = accessGuard;
         this.bandPlanRepository = bandPlanRepository;
         this.planMutationService = planMutationService;
         this.billingGateway = billingGateway;
         this.processedEvents = processedEvents;
         this.planProperties = planProperties;
+        this.billingProperties = billingProperties;
+    }
+
+    /**
+     * 스토어가 돌려준 구독에 PREMIUM 을 줘도 되는지. 세 가지를 다 봐야 한다.
+     *
+     * <ol>
+     *   <li><b>상태</b> — ACTIVE/CANCELED/IN_GRACE 만 준다.
+     *   <li><b>상품</b> — 우리가 파는 그 상품이어야 한다({@code app.plan.billing.google-product-id}).
+     *       {@code subscriptionsv2.get} 은 패키지 단위라 <b>이 앱의 어떤 구독 토큰이든 통과한다</b> —
+     *       상품이 하나뿐인 지금은 무해하지만, 더 싼 상품을 하나라도 추가하는 순간 그 토큰으로
+     *       PREMIUM 을 받는 길이 열린다. 상품이 늘기 전에 막아 둔다.
+     *   <li><b>만료일</b> — {@code null} 이면 거부한다. 그대로 저장하면 {@code band_plans.expires_at}
+     *       이 NULL 이 되고, 만료 배치의 {@code expires_at < now} 에 <b>영원히 걸리지 않아</b>
+     *       공짜 무기한 PREMIUM 이 된다. 정상 구독이면 항상 값이 온다.
+     * </ol>
+     *
+     * <p>거부는 호출 경로에 따라 다르게 끝난다 — 사용자 검증은 402, 웹훅은 재전송 대기. 웹훅이
+     * 재시도하는 건 만료일 누락 같은 일시적 응답에는 맞고, 상품 불일치처럼 영영 안 바뀌는 건
+     * Pub/Sub 보존기간(기본 7일)이 지나면 스스로 포기한다.
+     */
+    private boolean grantable(StoreSubscription sub) {
+        if (!sub.state().grantsPremium()) {
+            return false;
+        }
+        if (!billingProperties.googleProductId().equals(sub.productId())) {
+            log.warn("구매 검증: 우리 상품이 아니다 productId={} (기대={})",
+                    sub.productId(), billingProperties.googleProductId());
+            return false;
+        }
+        if (sub.expiryTime() == null) {
+            log.warn("구매 검증: 만료일이 없다 productId={} — 무기한 PREMIUM 이 되지 않게 거부한다",
+                    sub.productId());
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -81,7 +120,7 @@ public class StoreSubscriptionService {
         StoreSubscription sub;
         try {
             sub = billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken)
-                    .filter(s -> s.state().grantsPremium())
+                    .filter(this::grantable)
                     .orElseThrow(() -> new BusinessException(ErrorCode.PURCHASE_NOT_VERIFIED));
         } catch (StoreBillingUnavailableException transientFailure) {
             // 스토어가 일시적으로 응답 못 함 — 402 로 "잠시 후 다시" 를 안내한다(클라가 재시도).
@@ -133,7 +172,7 @@ public class StoreSubscriptionService {
                 // 결제한 밴드의 만료일을 연장하는 경로 — 조회가 실패하면 삼키지 말고 재전송받는다.
                 // (만료일이 안 늘어나면 결제한 밴드가 만료 배치에 강등된다.)
                 StoreSubscription sub = billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken)
-                        .filter(s -> s.state().grantsPremium())
+                        .filter(this::grantable)
                         .orElseThrow(() -> new StoreWebhookRetryException(
                                 "type=" + notificationType + " 인데 스토어 조회 실패/무효 bandId=" + bandId));
                 grantPremium(bandId, now, sub);
