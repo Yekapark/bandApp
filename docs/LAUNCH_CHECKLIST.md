@@ -284,9 +284,10 @@ Dart 쪽(`PushService`)·매니페스트 권한(`POST_NOTIFICATIONS`)·`Firebase
 
 - [ ] **약관·개인정보처리방침 URL** — `bandule.com/privacy`, `bandule.com/terms`
       (Cloudflare Pages 연결만 하면 된다)
-- [ ] **데이터 안전 설문** — 스토어 등록 양식의 필수 항목이다. 답할 내용은
-      [legal/privacy-facts.md](legal/privacy-facts.md) 에 그대로 있다:
-      수집 항목, 국외 전송(있음), 암호화(있음), 계정 삭제 가능(있음)
+- [ ] **앱 콘텐츠 선언 전체** — 데이터 안전·콘텐츠 등급·타겟층·앱 액세스 권한·광고·금융 기능.
+      **콘솔 순서대로 답안을 적어 뒀다: [legal/play-app-content.md](legal/play-app-content.md).**
+      그 문서 §0 에 **제출 전에 먼저 고쳐야 할 세 가지**가 있다 — 방침에 결제 조항 없음,
+      안 쓰는 위치 권한, 계정 삭제 웹 URL 없음
 - [ ] **앱 아이콘·스크린샷·설명문** — 스토어 페이지에 들어갈 것. 아이콘은 이미 있고
       스크린샷은 실기기에서 찍으면 된다
 - [ ] **콘텐츠 등급 설문**
