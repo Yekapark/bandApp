@@ -63,11 +63,11 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 | 테스터 배포 | [docs/TESTING.md](../TESTING.md) — 서버가 살았으니 APK 만 만들면 된다 |
 | 출시까지 순서 | [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) |
 | **다른 PC 에서 이어서** | **[docs/NEW_PC_SETUP.md](../NEW_PC_SETUP.md)** — git 에 없는 파일 목록과 확인 절차 |
-| 남은 것 | 스토어 심사 제출 · **Phase 12** — 서버는 켜짐(2026-09-09), Play Console 설정 3개(사람) + 슬라이스 4 실기기 e2e |
+| 남은 것 | 스토어 심사 제출 · **Phase 12 슬라이스 4** 환불(REVOKED) 즉시 강등 검증 |
 | 끝난 것 | 릴리스 서명 키 · 약관·개인정보 URL(`bandule.com/privacy`,`/terms`) · 카카오 콘솔 패키지명 · 개발자 등록 · 비밀값 로테이션(2026-09-08) · 운영 Firebase 분리(서버 `bandule-b94d2`, 앱 `--flavor prod`) · **Phase 12 슬라이스 1~3 (인앱결제 코드)** |
 | 요금 정책 | **밴드당 연 구독 ₩19,000 / 년** 확정 (2026-09-08). `PREMIUM_YEARLY`, 365일. 유료 잠금은 미디어 만료 해제 하나 — 무료는 업로드 30일 뒤 삭제. 가격은 스토어 상품 설정값이라 코드 변경 없음 |
 
-### Phase 12 (인앱결제) — 서버는 켜졌다. Play Console 설정 3개 + 실기기 검증만 남음
+### Phase 12 (인앱결제) — 구매·해지·만료 실기기 검증 완료, 환불 검증만 남음
 
 슬라이스 1~3 머지 완료 (PR #69·#70·#71). 상세 기록: **[phase-12-iap.md](phase-12-iap.md)** (§5-5 에 오늘 실측 결과).
 
@@ -77,26 +77,23 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 - 기동 로그 `Google Play 결제 검증 활성화 package=com.yeka.bandule` ✅
 - SA 키가 컨테이너 안에 `app:app` 로 마운트됨 (`/run/secrets/play-developer-sa.json`) ✅
 - 웹훅이 바깥에서 살아 있음 — 맞는 `?token=` 200, 틀리거나 없으면 403 ✅
+- Play Developer API 권한 검사 = `400` (가짜 토큰이라 나는 정상 응답) ✅
+- 라이선스 테스터 `qkrwkddjs777@gmail.com` 등록 ✅
+- Pub/Sub push 구독 `play-rtdn-push` → Google 요청 `200` 확인 ✅
 
 > `.env.prod` 는 **서버 것과 로컬 것을 따로** 고쳤다. 서버의 `IMAGE_TAG` 가 로컬보다 앞서 있어
 > (`sha-e0279ef` vs `sha-bf790d0`) scp 로 덮으면 옛 이미지로 롤백된다. 블록만 `>>` 로 붙였다.
 
-**남은 것 (사람이 콘솔에서 — 이 순서로):**
+**2026-09-09 실기기 확인:**
 
-1. **Play Console > 사용자 및 권한 > 신규 사용자 초대** — ⚠️ **제일 중요. 아직 안 됨(실측 확인).**
-   - 이메일 `bandule-play-api@bandule.iam.gserviceaccount.com`
-   - 권한 "재무 데이터·주문·구독 보기" + "주문 및 구독 관리"
-   - 없으면 서버 구매검증이 **전부 401** 로 실패한다. 반영에 몇 분~하루 걸릴 수 있다.
-   - 됐는지 실측: `ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bash -s' < deploy/play-permission-check.sh`
-     → `401 insufficient permissions` 면 아직, `400`/`404` 면 완료(토큰이 가짜라 나는 정상 에러).
-2. **Play Console > 설정 > 라이선스 테스트** — `qkrwkddjs777@gmail.com` 추가
-   (실제 청구 없이 구매·갱신주기 단축).
-3. **GCP > Pub/Sub > `play-rtdn` > 구독 만들기** — ID `play-rtdn-push`, 유형 **푸시**,
-   엔드포인트 `https://api.bandule.com/api/v1/webhooks/google-play?token=<시크릿>`.
-   `<시크릿>` = 서버 `.env.prod` 의 `PLAN_BILLING_WEBHOOK_SECRET` **그대로** (git 에 없다):
-   `ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'grep PLAN_BILLING_WEBHOOK_SECRET /opt/bandapp/.env.prod'`
-4. **슬라이스 4 (실기기 e2e)** — 라이선스 테스터 기기로 구매 → PREMIUM 전환 → Play 에서 해지 →
-   웹훅 `canceled` → 만료 시각 뒤 FREE. 환불(REVOKED) 즉시 강등도 확인. 절차는 phase-12-iap.md §5-4.
+- 수정 AAB `0.1.0+27` 설치 후 구매 검증 API가 `200`을 반환하고 PREMIUM으로 즉시 전환됐다.
+- Play에서 구독을 해지한 뒤에도 30분 테스트 결제 주기가 끝날 때까지 PREMIUM이 유지됐다.
+- 만료 RTDN(type 13) 처리 뒤 FREE로 전환되고 DB의 구매 토큰이 제거됐다.
+
+**남은 것:**
+
+1. 새 테스트 구매로 PREMIUM 전환 → Play Console에서 환불·사용 권한 취소 →
+   REVOKED RTDN(type 12) 뒤 즉시 FREE 강등 확인. 절차는 phase-12-iap.md §5-4.
 
 **로컬 개발**은 그대로다 — `docker compose up -d` + `adb reverse tcp:8080 tcp:8080`.
 실기기 빌드에 **`--dart-define-from-file=dart_defines.json` 을 빠뜨리면 카카오 로그인이 막힌다.**

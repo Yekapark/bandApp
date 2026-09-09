@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 /// Play Billing(인앱결제)을 얇게 감싼다. 결제 자체는 스토어에서 일어나고, 성공하면 구매 토큰을
@@ -38,19 +36,9 @@ class IapService {
       _iap.completePurchase(purchase);
 
   /// Android 구매 토큰. 서버 검증에 이 값을 넘긴다. (iOS 는 별도 — 이번 릴리스는 Android 만.)
-  ///
-  /// Android 에서 [PurchaseVerificationData.serverVerificationData] 는 구매 JSON 문자열이라
-  /// 여기서 `purchaseToken` 필드만 꺼낸다 — `in_app_purchase_android` 를 직접 import 하지 않으려고.
+  /// `in_app_purchase_android` 는 serverVerificationData 에 토큰 자체를 넣는다.
   String? purchaseToken(PurchaseDetails purchase) {
-    try {
-      final decoded =
-          jsonDecode(purchase.verificationData.serverVerificationData);
-      if (decoded is Map && decoded['purchaseToken'] is String) {
-        return decoded['purchaseToken'] as String;
-      }
-    } on FormatException {
-      // JSON 이 아니면(iOS 영수증 등) 여기서 못 꺼낸다.
-    }
-    return null;
+    final token = purchase.verificationData.serverVerificationData;
+    return token.isEmpty ? null : token;
   }
 }
