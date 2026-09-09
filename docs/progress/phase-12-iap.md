@@ -1,8 +1,9 @@
 # Phase 12 — 인앱결제 연동 (Google Play)
 
-> **상태: 코드 완료(슬라이스 1~3), 스토어 설정·실기기 검증 미완(슬라이스 0·4).**
+> **상태: 코드 완료(슬라이스 1~3). 서버는 `gateway=google` 로 켜졌고(2026-09-09), Play Console
+> 설정 3가지와 실기기 검증이 남았다 — §5-5 참고.**
 > 이 문서는 다른 사람/AI 가 검토할 수 있게 "무엇을 왜 어떻게" 를 자세히 적는다.
-> 마지막 갱신: 2026-09-08.
+> 마지막 갱신: 2026-09-09.
 
 ---
 
@@ -248,6 +249,64 @@ ssh root@64.176.231.126 'cd /opt/bandapp && docker compose -f docker-compose.pro
 3. Play Console 에서 그 구독을 환불 → 몇 분 내 REVOKED 웹훅 → 요금제 화면이 FREE,
    미디어에 유예 없이 만료 시각이 붙음
 4. 서버 로그에 `RTDN` 처리 흔적, `processed_store_events` 에 messageId 행
+
+---
+
+### 5-5. 슬라이스 0 진행 상황 (2026-09-09)
+
+서버 쪽은 다 됐다. **남은 건 콘솔에서 사람이 하는 세 가지**다.
+
+| | 항목 | 상태 |
+|---|---|---|
+| ✅ | 구독 상품 `premium_yearly` — ₩19,000 / 1년, 자동갱신 | 완료 |
+| ✅ | GCP 프로젝트 `bandule`, 서비스 계정 `bandule-play-api@bandule.iam.gserviceaccount.com` | 완료 |
+| ✅ | SA JSON 키 → 서버 `/opt/bandapp/secrets/play-developer-sa.json` (`600`, uid 999) | 완료 |
+| ✅ | Pub/Sub 토픽 `play-rtdn` + Play Console RTDN 등록 · 테스트 알림 성공 | 완료 |
+| ✅ | AAB `0.1.0+25` 내부 테스트 트랙 업로드 | 완료 |
+| ✅ | 서버 `.env.prod` 의 `PLAN_BILLING_*` · `PLAY_SA_HOST_PATH`, `gateway=google` 로 재기동 | 완료 |
+| ❌ | **Play Console > 사용자 및 권한 → 서비스 계정 초대** | **안 됨 (아래 확인법으로 실측)** |
+| ❌ | Play Console > 설정 > 라이선스 테스트에 테스터 계정 등록 | 안 됨 |
+| ❌ | Pub/Sub `play-rtdn` → push 구독 `play-rtdn-push` 만들기 | 안 됨 |
+
+#### 서비스 계정에 Play Console 권한이 있는지 실측하는 법
+
+실제 구매 없이, 가짜 purchase token 을 조회해 보고 돌아온 에러로 판별한다:
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bash -s' < deploy/play-permission-check.sh
+```
+
+| 응답 | 뜻 |
+|---|---|
+| `401 ... insufficient permissions` | Play Console 에 **서비스 계정 초대가 안 됐다.** 이 상태로는 구매검증이 전부 실패 |
+| `403 ... API has not been used` | GCP 에서 Android Publisher API 가 꺼져 있다 |
+| `400`/`404` (Invalid / not found) | **권한 OK.** 토큰이 가짜라서 나는 정상 에러 |
+
+2026-09-09 실측 = `401 insufficient permissions`. 즉 아래를 아직 안 했다:
+
+> Play Console > 사용자 및 권한 > 신규 사용자 초대
+> - 이메일 `bandule-play-api@bandule.iam.gserviceaccount.com`
+> - 권한 "재무 데이터·주문·구독 보기" + "주문 및 구독 관리"
+>
+> 초대 반영에 몇 분~하루가 걸릴 수 있다. 위 스크립트가 400/404 를 줄 때까지 기다린다.
+
+#### 웹훅 엔드포인트가 바깥에서 살아 있는지 확인하는 법
+
+Pub/Sub push 구독을 만들기 **전에** 엔드포인트부터 확인한다. `<시크릿>` 은 서버
+`.env.prod` 의 `PLAN_BILLING_WEBHOOK_SECRET` 값이다 (git 에 없다):
+
+```bash
+DATA=$(printf '{"version":"1.0","packageName":"com.yeka.bandule","testNotification":{"version":"1.0"}}' | base64 -w0)
+BODY="{\"message\":{\"data\":\"$DATA\",\"messageId\":\"probe-1\"}}"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "https://api.bandule.com/api/v1/webhooks/google-play?token=<시크릿>" -H 'Content-Type: application/json' -d "$BODY"
+```
+
+`200` 이면 정상. 토큰을 틀리게 주면 `403` 이어야 한다 — 둘 다 확인해야 의미가 있다
+(200 만 보면 인증이 통째로 열려 있어도 똑같이 200 이다). 2026-09-09 실측: 맞는 토큰 200,
+틀린 토큰·토큰 없음 403.
+
+그다음 Pub/Sub 구독을 만든다 — GCP > Pub/Sub > `play-rtdn` > 구독 만들기,
+ID `play-rtdn-push`, 유형 **푸시**, 엔드포인트에 위 URL 을 `?token=` 까지 그대로.
 
 ---
 
