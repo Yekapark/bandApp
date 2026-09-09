@@ -63,13 +63,13 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 | 테스터 배포 | [docs/TESTING.md](../TESTING.md) — 서버가 살았으니 APK 만 만들면 된다 |
 | 출시까지 순서 | [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) |
 | **다른 PC 에서 이어서** | **[docs/NEW_PC_SETUP.md](../NEW_PC_SETUP.md)** — git 에 없는 파일 목록과 확인 절차 |
-| 남은 것 | 스토어 심사 제출 · **Phase 12 슬라이스 4** 환불(REVOKED) 즉시 강등 검증 |
-| 끝난 것 | 릴리스 서명 키 · 약관·개인정보 URL(`bandule.com/privacy`,`/terms`) · 카카오 콘솔 패키지명 · 개발자 등록 · 비밀값 로테이션(2026-09-08) · 운영 Firebase 분리(서버 `bandule-b94d2`, 앱 `--flavor prod`) · **Phase 12 슬라이스 1~3 (인앱결제 코드)** |
+| 남은 것 | **스토어 심사 제출** |
+| 끝난 것 | 릴리스 서명 키 · 약관·개인정보 URL(`bandule.com/privacy`,`/terms`) · 카카오 콘솔 패키지명 · 개발자 등록 · 비밀값 로테이션(2026-09-08) · 운영 Firebase 분리(서버 `bandule-b94d2`, 앱 `--flavor prod`) · **Phase 12 완료 (인앱결제 · 실기기 구매·해지·만료·환불 전부 확인, 2026-09-09)** |
 | 요금 정책 | **밴드당 연 구독 ₩19,000 / 년** 확정 (2026-09-08). `PREMIUM_YEARLY`, 365일. 유료 잠금은 미디어 만료 해제 하나 — 무료는 업로드 30일 뒤 삭제. 가격은 스토어 상품 설정값이라 코드 변경 없음 |
 
-### Phase 12 (인앱결제) — 구매·해지·만료 실기기 검증 완료, 환불 검증만 남음
+### Phase 12 (인앱결제) — ✅ 완료 (2026-09-09)
 
-슬라이스 1~3 머지 완료 (PR #69·#70·#71). 상세 기록: **[phase-12-iap.md](phase-12-iap.md)** (§5-5 에 오늘 실측 결과).
+슬라이스 0~4 전부 끝. PR #69·#70·#71·#83. 상세 기록: **[phase-12-iap.md](phase-12-iap.md)** (§5-4 실측표).
 
 **2026-09-09 에 한 것** — 서버 `.env.prod` 에 `PLAN_BILLING_*` 를 넣고 `up -d app` 했다.
 `gateway=google` 이 실제로 돌고 있다:
@@ -90,10 +90,16 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 - Play에서 구독을 해지한 뒤에도 30분 테스트 결제 주기가 끝날 때까지 PREMIUM이 유지됐다.
 - 만료 RTDN(type 13) 처리 뒤 FREE로 전환되고 DB의 구매 토큰이 제거됐다.
 
-**남은 것:**
+**2026-09-09 환불(REVOKED) 검증 — 마지막 항목, 통과:**
 
-1. 새 테스트 구매로 PREMIUM 전환 → Play Console에서 환불·사용 권한 취소 →
-   REVOKED RTDN(type 12) 뒤 즉시 FREE 강등 확인. 절차는 phase-12-iap.md §5-4.
+- 새 테스트 구매 → `RTDN 처리 완료 type=4 bandId=4` → PREMIUM.
+- Play Console 환불에서 **"사용 권한 취소" 를 안 누르면 `type=12` 가 오지 않는다.**
+  `deploy/play-revoke.sh` 로 Play Developer API 에 취소를 직접 쏴서 해결.
+- `14:34:07` `type=12` → 같은 순간 `band_plans` `tier=FREE`·토큰 제거,
+  밴드 READY 미디어 4건 `expires_at` = 강등 시각(유예 0).
+
+**남은 것: 스토어 심사 제출** (Phase 12 범위 밖 — `docs/LAUNCH_CHECKLIST.md`).
+후속 하드닝(선택): 웹훅 OIDC 켜기 — 지금은 공유 시크릿 인증만 걸려 있다.
 
 **로컬 개발**은 그대로다 — `docker compose up -d` + `adb reverse tcp:8080 tcp:8080`.
 실기기 빌드에 **`--dart-define-from-file=dart_defines.json` 을 빠뜨리면 카카오 로그인이 막힌다.**

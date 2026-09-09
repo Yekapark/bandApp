@@ -19,7 +19,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -49,6 +51,9 @@ public class StoreSubscriptionService {
     private static final int SUB_RESTARTED = 7;
     private static final int SUB_REVOKED = 12;
     private static final int SUB_EXPIRED = 13;
+
+    /** 밴드에 안 붙은 구매·갱신 알림을 재전송받아 볼 시간. 이보다 오래된 메시지는 포기한다. */
+    private static final Duration GRANT_RETRY_WINDOW = Duration.ofHours(1);
 
     private final BandAccessGuard accessGuard;
     private final BandPlanRepository bandPlanRepository;
@@ -146,7 +151,8 @@ public class StoreSubscriptionService {
      * RTDN 웹훅 한 건. 이미 처리한 {@code messageId} 면 조용히 무시(멱등). 항상 스토어에서 현재 상태를
      * 다시 읽어 반영하므로, 이벤트가 빠지거나 순서가 뒤바뀌어도 다음 이벤트가 자기수정한다.
      */
-    public void handleGoogleNotification(String messageId, int notificationType, String purchaseToken) {
+    public void handleGoogleNotification(String messageId, int notificationType, String purchaseToken,
+                                         String publishTime) {
         if (processedEvents.existsById(messageId)) {
             log.debug("RTDN: 이미 처리한 메시지 messageId={}", messageId);
             return;
@@ -155,7 +161,13 @@ public class StoreSubscriptionService {
         if (bandId == null) {
             // 갱신·구매 알림인데 아직 밴드에 토큰이 안 붙었다 = 클라이언트 verify 가 곧 온다(경합).
             // 재전송받아 두면, 그 사이 verify 가 토큰을 붙였을 때 다음 재시도가 밴드를 찾는다.
-            if (isGrantType(notificationType)) {
+            //
+            // 단 영원히 기다리진 않는다. verify 가 끝내 안 오면 토큰은 영영 안 붙고, 그 메시지는
+            // Pub/Sub 보존기간(기본 7일) 내내 초당 한 번꼴로 503 을 받아가며 재전송된다. 2026-09-09 에
+            // 실제로 이 폭풍이 났다(10분에 600건). 경합은 초 단위라 한 시간이면 넉넉하고, 그 뒤엔
+            // 포기해도 잃는 게 없다 — PREMIUM 부여는 클라이언트 verify 가 하고, 늦게라도 verify 가
+            // 오면 그쪽이 스토어에 직접 물어 등급을 올린다.
+            if (isGrantType(notificationType) && withinGrantRetryWindow(publishTime)) {
                 throw new StoreWebhookRetryException(
                         "type=" + notificationType + " 인데 아직 밴드에 안 붙은 토큰 — 재전송 대기");
             }
@@ -216,6 +228,25 @@ public class StoreSubscriptionService {
         }
         return planMutationService.applyStoreRenew(bandId, now, sub.expiryTime(),
                 sub.orderId(), sub.store(), sub.purchaseToken());
+    }
+
+    /**
+     * 밴드에 안 붙은 grant 이벤트를 아직 재전송받을 만한가. {@code publishTime} 은 Pub/Sub 이 찍은
+     * 최초 발행 시각이라 재전송돼도 그대로다 — 그래서 메시지의 나이가 된다.
+     *
+     * <p>없거나 못 읽으면 {@code true}(예전처럼 재전송 요청). 시각을 모르는 것 때문에 정상 경합을
+     * 놓치는 쪽이 더 나쁘다.
+     */
+    private static boolean withinGrantRetryWindow(String publishTime) {
+        if (publishTime == null || publishTime.isBlank()) {
+            return true;
+        }
+        try {
+            return Instant.parse(publishTime).isAfter(Instant.now().minus(GRANT_RETRY_WINDOW));
+        } catch (DateTimeParseException unreadable) {
+            log.warn("RTDN: publishTime 을 못 읽었다 ({}) — 재전송 요청으로 둔다", publishTime);
+            return true;
+        }
     }
 
     /** PREMIUM 을 부여·연장하는 알림인지(스토어 재조회가 필요한 쪽). */

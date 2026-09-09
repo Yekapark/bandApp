@@ -113,6 +113,16 @@ class GooglePlayWebhookIntegrationTest extends PlanApiSupport {
     }
 
     @Test
+    void a_stale_grant_event_is_given_up_on_instead_of_retried_forever() {
+        // 한 시간이 지나도록 밴드에 안 붙은 구매 토큰 = 클라이언트 verify 가 영영 안 온다.
+        // 계속 503 을 주면 Pub/Sub 가 보존기간(7일) 내내 재전송해 서버를 때린다 — 2026-09-09 에
+        // 실제로 10분에 600건이 들어왔다. 포기하고 200 으로 받아 끝낸다.
+        assertThat(googlePlayWebhook(RTDN_RENEWED, "tok-stale-forever", "msg-stale",
+                webhookSecret(), Instant.now().minus(2, ChronoUnit.HOURS))
+                .getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
     void wrong_secret_is_rejected_without_touching_state() {
         String leader = signup("wh-sec@band.app", "리더");
         long bandId = createBand(leader, "시크릿밴드");

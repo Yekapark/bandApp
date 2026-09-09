@@ -89,7 +89,7 @@ public class GooglePlayWebhookController {
         }
         SubscriptionNotification sub = notification.subscriptionNotification();
         storeSubscriptionService.handleGoogleNotification(
-                message.messageId(), sub.notificationType(), sub.purchaseToken());
+                message.messageId(), sub.notificationType(), sub.purchaseToken(), message.publishTime());
     }
 
     private DeveloperNotification readNotification(byte[] json) {

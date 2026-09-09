@@ -18,6 +18,147 @@
 
 ---
 
+## 2026-09-09 — 밴드에 안 붙은 구매 알림이 7일 동안 초당 한 번씩 서버를 때렸다
+
+**증상** — Nginx 접근 로그에 RTDN 푸시가 **10분에 600건**, 전부 `503`.
+앱 로그는 `Google Play 웹훅: 재시도 요청 — type=4 인데 아직 밴드에 안 붙은 토큰 — 재전송 대기`
+한 줄로 도배됐다.
+
+**원인** — 구매·갱신 알림인데 그 구매 토큰이 아직 어느 밴드에도 안 붙어 있으면, 서버가
+"클라이언트 `verify` 가 곧 올 테니 다시 보내 달라" 는 뜻으로 `503` 을 준다(경합 대비). 그런데
+**끝내 안 오는 경우를 안 봤다.** 실제로 그런 일이 있었다 — 클라이언트 토큰 추출 버그(`0.1.0+26`)로
+`verify` 가 아예 호출되지 않은 구매가 있었고, 그 토큰은 영영 밴드에 안 붙는다. 그러면 조건이
+바뀔 리 없는데도 Pub/Sub 는 메시지 보존기간(기본 7일) 내내 재전송한다. 기다림에 **끝을 안 정한**
+재시도는 조건이 영영 안 바뀌는 순간 그대로 무한 루프가 된다.
+
+**해결** — 재전송 요청에 시간 제한을 뒀다
+(`plan/service/StoreSubscriptionService.java`, `GRANT_RETRY_WINDOW = 1시간`).
+Pub/Sub 봉투의 `publishTime` 은 **최초 발행 시각이라 재전송돼도 그대로**여서 메시지의 나이가 된다.
+한 시간이 지난 grant 이벤트는 포기하고 `200` + 처리완료 기록으로 끝낸다. 포기해도 잃는 게 없다 —
+PREMIUM 부여는 클라이언트 `verify` 가 하고, 늦게라도 `verify` 가 오면 그쪽이 스토어에 직접 물어
+등급을 올린다. 시각을 못 읽으면 예전처럼 재전송을 요청한다(모른다고 정상 경합을 버리지 않는다).
+
+**확인법** — 통합 테스트 `a_stale_grant_event_is_given_up_on_instead_of_retried_forever`
+(두 시간 전 `publishTime` → `200`). 운영에서는:
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 "docker logs --since 10m bandapp-nginx-1 2>&1 | grep -c 'webhooks/google-play'"
+```
+
+배포 뒤 밀린 메시지들이 한 번씩 `200` 을 받고 사라지면서 건수가 0 에 수렴해야 한다.
+
+---
+
+## 2026-09-09 — 환불만 하고 "사용 권한 취소" 를 안 하면 REVOKED 알림이 오지 않는다
+
+**증상** — Phase 12 마지막 검증(환불 → 즉시 FREE)에서, Play Console 로 테스트 구독을
+환불했는데 서버에 `type=12`(REVOKED) 웹훅이 몇 분이 지나도 오지 않았다. 앱은 계속 PREMIUM.
+
+**원인** — Play Console 의 환불 대화상자에서 **"사용 권한 취소"** 를 따로 체크해야 한다.
+체크를 안 하면 Google 은 **돈만 돌려주고 구독은 그대로 살려 둔다.** 사용자는 여전히 구독자라
+Google 이 보낼 알림 자체가 없다. 환불과 권한 취소가 한 동작이라고 생각하기 쉬운데 별개다.
+
+**해결** — Play Developer API 로 사용 권한 취소를 직접 쏜다. `deploy/play-revoke.sh` 를 만들었다.
+`band_plans` 에서 그 밴드의 구매 토큰을 읽어 `subscriptionsv2 …:revoke` 를 호출한다.
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bash -s 4' < deploy/play-revoke.sh
+# 이미 환불된 주문이라 fullRefund 가 거부되면:
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'REFUND_TYPE=proratedRefund bash -s 4' < deploy/play-revoke.sh
+```
+
+**확인법** — 취소 후 몇 분 안에 서버 로그에 `RTDN 처리 완료 type=12 bandId=…` 가 뜬다.
+2026-09-09 실측: 14:34:07 에 `type=12`, 같은 순간(`14:34:07.958262`)에 `band_plans` 가
+`tier=FREE`·`store`/`purchase_token` NULL 로 바뀌고 그 밴드 READY 미디어 4건의 `expires_at`
+도 같은 값으로 붙었다(유예 0). 2초 뒤 온 `type=13` 은 **"모르는 구매 토큰 (밴드 없음)"** 으로
+무시됐는데, 이게 오히려 강등이 토큰을 실제로 떼어냈다는 증거다.
+
+> **DB 를 손으로 고쳐 대신하지 말 것.** 확인하려는 건 "웹훅이 강등을 만드는가" 이므로,
+> `band_plans` 를 직접 UPDATE 하면 결과만 흉내내고 그 경로를 한 번도 안 탄다.
+
+---
+
+## 2026-09-09 — RTDN 을 정상 처리해도 서버 로그에 아무것도 안 남았다
+
+**증상** — 운영에서 웹훅이 실제로 반영됐는지 로그로 확인할 방법이 없었다.
+`phase-12-iap.md` §5-4 의 확인 항목 "서버 로그에 RTDN 처리 흔적" 이 애초에 불가능했다.
+
+**원인** — `StoreSubscriptionService.handleGoogleNotification` 이 **실패 경로만** 로그를 찍고
+있었다(인증 실패·재전송 요청·예외). 성공은 조용히 지나가서 **"조용하면 정상"** 과
+**"조용하면 아무 일도 안 일어남"** 이 구분되지 않았다. 개발 중엔 통합 테스트가 결과를
+직접 보니까 로그가 아쉽지 않았고, 그대로 운영에 나갔다.
+
+**해결** — 처리 완료 지점에 INFO 한 줄
+(`src/main/java/com/yeka/bandapp/plan/service/StoreSubscriptionService.java`):
+
+```
+RTDN 처리 완료 type={} bandId={} messageId={}
+```
+
+**확인법**
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 "docker logs --since 30m bandapp-app-1 2>&1 | grep 'RTDN 처리 완료'"
+```
+
+구매하면 `type=4`, 환불·권한취소하면 `type=12`, 만료면 `type=13` 이 밴드 id 와 함께 찍힌다.
+
+---
+
+## 2026-09-09 — 서버 스크립트에서 `.env.prod` 를 `source` 하면 깨진다
+
+**증상** — `deploy/play-revoke.sh` 첫 실행이
+`/opt/bandapp/.env.prod: line 68: syntax error near unexpected token 'newline'` 로 죽었다.
+
+**원인** — `.env.prod` 는 **docker compose 가 읽는 형식이지 셸 스크립트가 아니다.**
+compose 는 `KEY=값` 을 문자 그대로 읽지만, 셸의 `.`(source)은 그 줄을 **셸 코드로 실행**한다.
+그래서 값에 `#`·`<`·`>`·따옴표 같은 게 들어 있으면 문법 에러가 난다. 비밀번호·키를
+`openssl rand -base64` 로 만들면 특수문자가 섞이므로 사실상 언제든 터질 수 있다.
+
+**해결** — 파일 전체를 읽지 말고 **필요한 값만 뽑는다.**
+
+```bash
+envget() { grep -m1 "^$1=" "$COMPOSE_DIR/.env.prod" | cut -d= -f2- | sed "s/[[:space:]]*#.*$//; s/[[:space:]]*$//"; }
+DB_USERNAME=$(envget DB_USERNAME); DB_NAME=$(envget DB_NAME)
+```
+
+**확인법** — `bash -n deploy/play-revoke.sh` 로 문법을 보고, 실제로 돌려서
+`band=4 token=…(…자)` 가 찍히면 값이 제대로 읽힌 것이다.
+
+---
+
+## 2026-09-09 — 운영 웹훅이 공유 시크릿으로만 인증되고 있었다
+
+**증상** — 앱 기동 로그에
+`Pub/Sub OIDC 검증 비활성 (google-pubsub-audience 미설정) — 웹훅은 공유 시크릿으로만 인증`.
+웹훅 URL 의 `?token=` 하나가 유일한 방어선이었고, 그 값은 **Nginx 접근 로그에 쿼리스트링으로
+평문으로 남는다.**
+
+**원인** — 슬라이스 0 문서에서 `PLAN_BILLING_PUBSUB_AUDIENCE`·`_SA` 가 "(권장)" 으로 적혀 있어
+필수처럼 보이지 않았다. 시크릿만으로도 웹훅이 동작하니 넘어갔고, 그대로 운영에 나갔다.
+
+**해결** — 코드는 이미 다 있었다(`docker-compose.prod.yml` 92·93줄, `application.yml` 140·141줄).
+설정만 하면 된다. `WebhookAuthenticator` 는 OIDC 와 시크릿을 **OR** 로 받으므로 순서가 중요하다 —
+**OIDC 를 켜는 것만으로는 아무것도 안 단단해진다.** `?token=` 이 계속 통하기 때문이다.
+
+1. GCP Pub/Sub 구독 `play-rtdn-push` → 인증 사용 설정, 서비스 계정
+   `bandule-play-api@bandule.iam.gserviceaccount.com`. **audience 를 비워두지 말 것** —
+   비우면 GCP 가 푸시 URL 을 그대로 쓰는데 거기 `?token=` 이 붙어 서버 설정값과 어긋난다.
+   `https://api.bandule.com/api/v1/webhooks/google-play` 로 명시한다.
+2. 서버 `.env.prod` 에 두 줄 **추가**(덮어쓰지 않는다 — `IMAGE_TAG` 가 밀리면 옛 이미지로 롤백된다):
+   `PLAN_BILLING_PUBSUB_AUDIENCE`, `PLAN_BILLING_PUBSUB_SA`. 재기동.
+3. **OIDC 가 진짜 인증하는지 증명한다** — 푸시 URL 에서 `?token=` 을 뗀다. 시크릿이 안 실린
+   요청이 `403` 이 아니면 통과시킨 건 OIDC 뿐이다.
+4. 증명된 뒤에야 `.env.prod` 의 `PLAN_BILLING_WEBHOOK_SECRET` 을 비워 OIDC 전용으로 닫는다.
+
+**확인법** — 기동 로그에 `Pub/Sub OIDC 검증 활성 audience=…`, 컨테이너 안에서
+`echo ${#PLAN_BILLING_WEBHOOK_SECRET}` 가 `0`, 그리고 Nginx 로그에서 `?token=` 없는 푸시의
+상태코드가 `403` 이 아닐 것. 2026-09-09 실측: 토큰 없는 요청 `503` 만, `403` 0건.
+
+> 옛 시크릿은 Nginx 로그에 평문으로 남아 있다. 되돌릴 일이 생겨도 **재사용하지 말고 새로 만든다.**
+
+---
+
 ## 2026-09-09 — 카카오 로그인이 옛 앱(bandapp)으로 붙고, 고쳐도 브라우저만 맴돌았다
 
 **증상** — 두 단계로 나타났다.
