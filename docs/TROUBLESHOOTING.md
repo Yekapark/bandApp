@@ -18,6 +18,37 @@
 
 ---
 
+## 2026-09-09 — 밴드에 안 붙은 구매 알림이 7일 동안 초당 한 번씩 서버를 때렸다
+
+**증상** — Nginx 접근 로그에 RTDN 푸시가 **10분에 600건**, 전부 `503`.
+앱 로그는 `Google Play 웹훅: 재시도 요청 — type=4 인데 아직 밴드에 안 붙은 토큰 — 재전송 대기`
+한 줄로 도배됐다.
+
+**원인** — 구매·갱신 알림인데 그 구매 토큰이 아직 어느 밴드에도 안 붙어 있으면, 서버가
+"클라이언트 `verify` 가 곧 올 테니 다시 보내 달라" 는 뜻으로 `503` 을 준다(경합 대비). 그런데
+**끝내 안 오는 경우를 안 봤다.** 실제로 그런 일이 있었다 — 클라이언트 토큰 추출 버그(`0.1.0+26`)로
+`verify` 가 아예 호출되지 않은 구매가 있었고, 그 토큰은 영영 밴드에 안 붙는다. 그러면 조건이
+바뀔 리 없는데도 Pub/Sub 는 메시지 보존기간(기본 7일) 내내 재전송한다. 기다림에 **끝을 안 정한**
+재시도는 조건이 영영 안 바뀌는 순간 그대로 무한 루프가 된다.
+
+**해결** — 재전송 요청에 시간 제한을 뒀다
+(`plan/service/StoreSubscriptionService.java`, `GRANT_RETRY_WINDOW = 1시간`).
+Pub/Sub 봉투의 `publishTime` 은 **최초 발행 시각이라 재전송돼도 그대로**여서 메시지의 나이가 된다.
+한 시간이 지난 grant 이벤트는 포기하고 `200` + 처리완료 기록으로 끝낸다. 포기해도 잃는 게 없다 —
+PREMIUM 부여는 클라이언트 `verify` 가 하고, 늦게라도 `verify` 가 오면 그쪽이 스토어에 직접 물어
+등급을 올린다. 시각을 못 읽으면 예전처럼 재전송을 요청한다(모른다고 정상 경합을 버리지 않는다).
+
+**확인법** — 통합 테스트 `a_stale_grant_event_is_given_up_on_instead_of_retried_forever`
+(두 시간 전 `publishTime` → `200`). 운영에서는:
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 "docker logs --since 10m bandapp-nginx-1 2>&1 | grep -c 'webhooks/google-play'"
+```
+
+배포 뒤 밀린 메시지들이 한 번씩 `200` 을 받고 사라지면서 건수가 0 에 수렴해야 한다.
+
+---
+
 ## 2026-09-09 — 환불만 하고 "사용 권한 취소" 를 안 하면 REVOKED 알림이 오지 않는다
 
 **증상** — Phase 12 마지막 검증(환불 → 즉시 FREE)에서, Play Console 로 테스트 구독을
@@ -96,23 +127,35 @@ DB_USERNAME=$(envget DB_USERNAME); DB_NAME=$(envget DB_NAME)
 
 ---
 
-## 2026-09-09 — (아직 안 고침) 운영 웹훅이 공유 시크릿으로만 인증된다
+## 2026-09-09 — 운영 웹훅이 공유 시크릿으로만 인증되고 있었다
 
 **증상** — 앱 기동 로그에
 `Pub/Sub OIDC 검증 비활성 (google-pubsub-audience 미설정) — 웹훅은 공유 시크릿으로만 인증`.
+웹훅 URL 의 `?token=` 하나가 유일한 방어선이었고, 그 값은 **Nginx 접근 로그에 쿼리스트링으로
+평문으로 남는다.**
 
-**원인** — `.env.prod` 에 `PLAN_BILLING_PUBSUB_AUDIENCE`·`PLAN_BILLING_PUBSUB_SA` 를 안 넣었다.
-슬라이스 0 문서에서 이 둘이 "(권장)" 으로 적혀 있어 필수 항목처럼 보이지 않았고, 시크릿만으로도
-동작해서 넘어갔다.
+**원인** — 슬라이스 0 문서에서 `PLAN_BILLING_PUBSUB_AUDIENCE`·`_SA` 가 "(권장)" 으로 적혀 있어
+필수처럼 보이지 않았다. 시크릿만으로도 웹훅이 동작하니 넘어갔고, 그대로 운영에 나갔다.
 
-**영향** — 웹훅 URL 의 `?token=` 하나가 유일한 방어선이다. 이 값이 새면 남이 임의의 RTDN 을
-밀어 넣을 수 있다(다만 서버가 알림을 그대로 믿지 않고 **항상 Play 에 현재 상태를 다시 물어보므로**
-등급을 위조로 올리진 못한다. 취소·만료 계열은 조회 없이 반영하므로 남의 밴드를 FREE 로
-떨어뜨리는 건 가능하다).
+**해결** — 코드는 이미 다 있었다(`docker-compose.prod.yml` 92·93줄, `application.yml` 140·141줄).
+설정만 하면 된다. `WebhookAuthenticator` 는 OIDC 와 시크릿을 **OR** 로 받으므로 순서가 중요하다 —
+**OIDC 를 켜는 것만으로는 아무것도 안 단단해진다.** `?token=` 이 계속 통하기 때문이다.
 
-**해결(예정)** — Pub/Sub push 구독의 인증 서비스 계정·audience 를 `.env.prod` 와
-`docker-compose.prod.yml` 의 `app.environment` 양쪽에 넣고 재기동. 로그에서 위 문구가
-사라지는지로 확인한다.
+1. GCP Pub/Sub 구독 `play-rtdn-push` → 인증 사용 설정, 서비스 계정
+   `bandule-play-api@bandule.iam.gserviceaccount.com`. **audience 를 비워두지 말 것** —
+   비우면 GCP 가 푸시 URL 을 그대로 쓰는데 거기 `?token=` 이 붙어 서버 설정값과 어긋난다.
+   `https://api.bandule.com/api/v1/webhooks/google-play` 로 명시한다.
+2. 서버 `.env.prod` 에 두 줄 **추가**(덮어쓰지 않는다 — `IMAGE_TAG` 가 밀리면 옛 이미지로 롤백된다):
+   `PLAN_BILLING_PUBSUB_AUDIENCE`, `PLAN_BILLING_PUBSUB_SA`. 재기동.
+3. **OIDC 가 진짜 인증하는지 증명한다** — 푸시 URL 에서 `?token=` 을 뗀다. 시크릿이 안 실린
+   요청이 `403` 이 아니면 통과시킨 건 OIDC 뿐이다.
+4. 증명된 뒤에야 `.env.prod` 의 `PLAN_BILLING_WEBHOOK_SECRET` 을 비워 OIDC 전용으로 닫는다.
+
+**확인법** — 기동 로그에 `Pub/Sub OIDC 검증 활성 audience=…`, 컨테이너 안에서
+`echo ${#PLAN_BILLING_WEBHOOK_SECRET}` 가 `0`, 그리고 Nginx 로그에서 `?token=` 없는 푸시의
+상태코드가 `403` 이 아닐 것. 2026-09-09 실측: 토큰 없는 요청 `503` 만, `403` 0건.
+
+> 옛 시크릿은 Nginx 로그에 평문으로 남아 있다. 되돌릴 일이 생겨도 **재사용하지 말고 새로 만든다.**
 
 ---
 

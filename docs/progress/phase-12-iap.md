@@ -375,18 +375,19 @@ CI 로만 검증.**
 - **iOS 없음.** 클라 iOS 타깃 부재. `Store.APP_STORE`·StoreKit 어댑터는 iOS 빌드가 생길 때.
 - **`obfuscatedAccountId` 대조 없음.** 지금은 "한 토큰 = 한 밴드" 만으로 재사용을 막는다. Play Billing
   구매 시 `obfuscatedAccountId` 에 밴드 id 를 실어 보내고 서버가 대조하면 더 강하다 — 슬라이스 후속.
-- **운영 웹훅이 지금 공유 시크릿으로만 인증된다.** `PLAN_BILLING_PUBSUB_AUDIENCE`·`_SA` 미설정.
-  기동 로그에 `Pub/Sub OIDC 검증 비활성` 이 뜬다. 시크릿이 새면 남이 취소·만료 알림을 밀어 넣어
-  남의 밴드를 FREE 로 떨어뜨릴 수 있다(등급 위조는 서버가 항상 Play 에 재조회하므로 불가).
+- ~~**운영 웹훅이 공유 시크릿으로만 인증된다.**~~ **해결(2026-09-09).** Pub/Sub push 구독에 인증
+  서비스 계정을 지정하고 `PLAN_BILLING_PUBSUB_AUDIENCE`·`_SA` 를 채운 뒤, 푸시 URL 에서 `?token=` 을
+  떼어 OIDC 만으로 통과하는 것을 확인하고 `PLAN_BILLING_WEBHOOK_SECRET` 을 비웠다. 지금은 **OIDC
+  전용(fail-closed)**. 절차와 함정은 `docs/TROUBLESHOOTING.md`.
 - **웹훅 OIDC 는 실 토큰으로 통합 테스트 불가.** `WebhookAuthenticatorTest` 가 가짜 verifier 로
   판정 로직만 검증. 공유 시크릿 경로는 통합 테스트로 커버.
 - **acknowledge 실패 재시도 잡 없음.** 실패 시 로그만. Play 자동환불 → REVOKED 웹훅으로
   자기수정되지만, 사용자는 3일간 "PREMIUM 인데 곧 환불" 상태일 수 있다.
 - **쿠폰 → 실결제 전환 시 만료일이 스토어 값으로 덮인다.** 쿠폰이 준 잔여기간과 결제 기간을
   합산하지 않는다(엣지 케이스, BUILD_PLAN 요구사항 아님).
-- **grant 이벤트 무한 재시도 가능성.** 아직 밴드에 안 붙은 토큰의 RENEWED 는 계속 503 을 준다.
-  Pub/Sub 가 (기본 7일) 재시도하다 포기하므로 영구 루프는 아니지만, 클라 verify 가 영영 안 오면
-  로그 노이즈가 생긴다.
+- ~~**grant 이벤트 무한 재시도 가능성.**~~ **해결(2026-09-09).** "가능성" 이 아니라 실제로 났다 —
+  깨진 첫 구매의 토큰이 밴드에 영영 안 붙어 **10분에 600건**의 `503` 이 들어왔다. 재전송 요청에
+  1시간 제한을 뒀다(`GRANT_RETRY_WINDOW`, Pub/Sub `publishTime` 으로 메시지 나이를 잰다).
 - **`NoOpStoreBillingGateway` 는 운영에서 절대 쓰면 안 된다.** 아무 토큰이나 ACTIVE 로 통과시킨다.
   2026-09-09 부터 `prod` 프로파일에서는 이 게이트웨이가 **모든 검증을 거부**하도록 막아 뒀지만
   (`fetch` 가 항상 빈 값 → 402 `PURCHASE_NOT_VERIFIED`), 그건 설정 사고에 대비한 최후 방어선이고

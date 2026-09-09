@@ -5,6 +5,7 @@ import com.yeka.bandapp.support.FakeStorageClient;
 import org.springframework.http.ResponseEntity;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -65,13 +66,20 @@ public abstract class PlanApiSupport extends BoardApiSupport {
 
     protected ResponseEntity<String> googlePlayWebhook(int notificationType, String purchaseToken,
                                                        String messageId, String secret) {
+        return googlePlayWebhook(notificationType, purchaseToken, messageId, secret, Instant.now());
+    }
+
+    /** {@code publishTime} 을 직접 정한다 — 오래 재전송된 메시지를 흉내낼 때. */
+    protected ResponseEntity<String> googlePlayWebhook(int notificationType, String purchaseToken,
+                                                       String messageId, String secret,
+                                                       Instant publishTime) {
         String notification = "{\"version\":\"1.0\",\"packageName\":\"com.yeka.bandule\","
                 + "\"eventTimeMillis\":\"1700000000000\",\"subscriptionNotification\":{"
                 + "\"version\":\"1.0\",\"notificationType\":" + notificationType + ","
                 + "\"purchaseToken\":\"" + purchaseToken + "\",\"subscriptionId\":\"premium_yearly\"}}";
         String data = Base64.getEncoder().encodeToString(notification.getBytes(StandardCharsets.UTF_8));
         String envelope = "{\"message\":{\"data\":\"" + data + "\",\"messageId\":\"" + messageId
-                + "\",\"publishTime\":\"2026-01-01T00:00:00Z\"},"
+                + "\",\"publishTime\":\"" + publishTime + "\"},"
                 + "\"subscription\":\"projects/test/subscriptions/rtdn\"}";
         String url = "/api/v1/webhooks/google-play" + (secret == null ? "" : "?token=" + secret);
         return post(url, envelope, null);
