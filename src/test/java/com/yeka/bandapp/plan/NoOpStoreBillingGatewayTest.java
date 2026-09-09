@@ -25,7 +25,7 @@ class NoOpStoreBillingGatewayTest {
 
     private static NoOpStoreBillingGateway gatewayFor(MockEnvironment environment) {
         return new NoOpStoreBillingGateway(
-                new PlanProperties(365, 30, "PREMIUM_YEARLY", "-", "Asia/Seoul"),
+                new PlanProperties(365, 30, "-", "Asia/Seoul"),
                 new StoreBillingProperties("noop", null, null, null, null, null, null, null),
                 environment);
     }
