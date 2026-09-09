@@ -6,6 +6,9 @@
     # PowerShell
     $env:BANDULE_DEMO_PW = "고를비밀번호8자이상"; python tools/seed_demo_data.py
 
+    # 정기 일정(PREMIUM 전용)까지 채우려면 쿠폰 코드도 함께
+    BANDULE_DEMO_PW='...' BANDULE_DEMO_COUPON='DEMO2026' python tools/seed_demo_data.py
+
     # 로컬 서버를 대상으로 하려면 주소를 인자로
     BANDULE_DEMO_PW='...' python tools/seed_demo_data.py http://localhost:8080
 
@@ -31,6 +34,10 @@ BASE = (sys.argv[1] if len(sys.argv) > 1 else "https://api.bandule.com").rstrip(
 PW = os.environ.get("BANDULE_DEMO_PW")
 if not PW or len(PW) < 8:
     sys.exit("!! 환경변수 BANDULE_DEMO_PW 에 8자 이상 비밀번호를 넣고 실행한다.")
+
+# 정기 일정은 PREMIUM 전용이다(403 PLAN_REQUIRED). 쿠폰 코드를 주면 먼저 프리미엄으로 올린다.
+# 쿠폰 만드는 SQL 은 docs/OPERATIONS.md "쿠폰 만들기". 없으면 정기 일정만 건너뛴다.
+COUPON = os.environ.get("BANDULE_DEMO_COUPON")
 
 KST = timezone(timedelta(hours=9))
 NOW = datetime.now(KST)
@@ -211,14 +218,26 @@ def main():
                 a["token"], {"paid": True}), "%s 납부" % a["name"])
     print("   45,000원 · 참석자 균등 · 2명 납부 완료")
 
-    print("8) 정기 일정")
-    ok(call("POST", "/api/v1/bands/%s/recurring-rules" % bid, lead["token"],
-            {"roomId": rids[0], "frequency": "WEEKLY", "dayOfWeek": "SATURDAY",
-             "startTime": "15:00", "endTime": "18:00",
-             "startDate": (NOW + timedelta(days=1)).date().isoformat(),
-             "endDate": (NOW + timedelta(days=90)).date().isoformat(),
-             "cost": 36000, "memo": "정기 합주 · 예약자 박정우"}), "정기 일정")
-    print("   매주 토요일 15:00~18:00")
+    print("8) 정기 일정 (PREMIUM 전용)")
+    if COUPON:
+        code, body = call("POST", "/api/v1/bands/%s/plan/coupons/redeem" % bid, lead["token"],
+                          {"code": COUPON})
+        if code >= 300:
+            print("   !! 쿠폰 사용 실패 %s: %s" % (code, body))
+        else:
+            print("   쿠폰 %s 사용 → PREMIUM" % COUPON)
+    code, body = call("POST", "/api/v1/bands/%s/recurring-rules" % bid, lead["token"],
+                      {"roomId": rids[0], "frequency": "WEEKLY", "dayOfWeek": "SATURDAY",
+                       "startTime": "15:00", "endTime": "18:00",
+                       "startDate": (NOW + timedelta(days=1)).date().isoformat(),
+                       "endDate": (NOW + timedelta(days=90)).date().isoformat(),
+                       "cost": 36000, "memo": "정기 합주 · 예약자 박정우"})
+    if code >= 300:
+        # 여기서 죽이지 않는다 — 뒤의 게시글·사진(스크린샷 6번)이 통째로 날아간다.
+        print("   건너뜀 %s: %s" % (code, body))
+        print("   → 프리미엄 쿠폰을 만들어 BANDULE_DEMO_COUPON 에 넣고 다시 돌리면 채워진다")
+    else:
+        print("   매주 토요일 15:00~18:00")
 
     print("9) 게시글 3개")
     tints = [((0x3A, 0x1E, 0x2E), (0x12, 0x10, 0x18)),
