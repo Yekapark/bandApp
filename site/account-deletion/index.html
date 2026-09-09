@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>계정 삭제 안내 · 밴듈</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #1a1a1a; --dim: #5a5a5a;
+    --line: #e2e2e2; --accent: #e2622a; --card: #fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141216; --fg: #ece9ee; --dim: #a09aa6;
+      --line: #2e2a32; --accent: #ff7a3d; --card: #1c191f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+                 "Malgun Gothic", "Noto Sans KR", sans-serif;
+    font-size: 16px; line-height: 1.85;
+    word-break: keep-all; overflow-wrap: break-word;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 80px; }
+  header { padding-bottom: 20px; border-bottom: 1px solid var(--line); margin-bottom: 32px; }
+  header a { font-weight: 800; font-size: 15px; color: var(--accent); text-decoration: none; letter-spacing: .5px; }
+  h1 { font-size: 26px; line-height: 1.4; margin: 0 0 24px; }
+  h2 { font-size: 18px; margin: 44px 0 12px; padding-top: 8px; }
+  h3 { font-size: 15px; margin: 28px 0 8px; color: var(--dim); }
+  p, li { font-size: 15px; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 6px 0; }
+  strong { font-weight: 700; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+  blockquote {
+    margin: 20px 0; padding: 14px 18px;
+    background: var(--card); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0;
+  }
+  blockquote > :first-child { margin-top: 0; }
+  blockquote > :last-child { margin-bottom: 0; }
+  blockquote h2, blockquote h3 { margin-top: 4px; font-size: 16px; }
+  /* 표는 좁은 화면에서 가로로만 스크롤되게 한다 — 본문이 옆으로 밀리면 못 읽는다. */
+  .table-wrap { overflow-x: auto; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; min-width: 380px; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--card); font-weight: 700; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line);
+            color: var(--dim); font-size: 13px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><a href="/">밴듈 BANDULE</a></header>
+  <h1>밴듈 계정 삭제 안내</h1>
+<p>밴듈(BANDULE) 계정은 앱에서 직접 삭제하거나 이메일로 삭제를 요청할 수 있습니다.</p>
+<h2>앱에서 바로 삭제하기</h2>
+<ol>
+<li>밴듈 앱에 로그인합니다.</li>
+<li><strong>설정 &gt; 계정 &gt; 회원 탈퇴</strong>로 이동합니다.</li>
+<li>이메일 계정은 현재 비밀번호를 입력합니다. 카카오 계정은 비밀번호 입력이 필요하지 않습니다.</li>
+<li>안내를 확인한 뒤 <strong>탈퇴</strong>를 누릅니다.</li>
+</ol>
+<p>탈퇴가 완료되면 즉시 로그아웃되며 해당 계정으로 다시 로그인할 수 없습니다.</p>
+<h2>앱을 이용할 수 없을 때</h2>
+<p><a href="mailto:qkrwkddjs777@naver.com">qkrwkddjs777@naver.com으로 계정 삭제를 요청해 주세요.</a></p>
+<p>메일 제목에 <strong>밴듈 계정 삭제 요청</strong>이라고 적고, 본인 확인을 위해 아래 내용을 보내 주세요.</p>
+<ul>
+<li>가입한 이메일 주소 또는 카카오 로그인 여부</li>
+<li>앱에서 사용한 이름(닉네임)</li>
+</ul>
+<p>비밀번호나 카드번호는 보내지 마세요. 본인 확인 후 앱에서 탈퇴할 때와 같은 방식으로 처리하고
+결과를 회신합니다.</p>
+<h2>삭제되는 정보와 남는 정보</h2>
+<p>계정 삭제가 완료되면 즉시 다음과 같이 처리됩니다.</p>
+<ul>
+<li>모든 로그인 세션과 알림용 기기 토큰을 삭제합니다.</li>
+<li>소속 밴드에서 탈퇴 처리합니다. 밴드장이었다면 가장 먼저 가입한 멤버에게 밴드장 권한이
+  넘어갑니다.</li>
+<li>카카오 계정으로 가입했다면 카카오와의 연결 해제를 요청합니다.</li>
+<li>계정은 비활성화되어 로그인하거나 서비스를 이용할 수 없습니다.</li>
+</ul>
+<p>이메일 주소, 이름, 비밀번호 해시, 카카오 식별자 등 계정 식별정보는 문의 대응과 부정 이용 방지를
+위해 탈퇴 후 <strong>90일간 접근이 차단된 상태로 보관</strong>한 뒤 삭제하거나 익명 처리합니다. 데이터베이스의
+내부 기록 번호와 탈퇴 시각은 다른 회원과 함께 만든 기록의 연결 관계를 유지하기 위해 남을 수
+있지만, 계정을 식별하는 정보는 포함하지 않습니다.</p>
+<p>다른 밴드원과 함께 만든 일정·정산·게시물과 그 첨부파일은 다른 회원의 기록이기도 하므로 계정을
+삭제해도 남을 수 있습니다. 보관 기간이 끝난 계정의 이름은 <strong>탈퇴한 사용자</strong>로 익명 처리됩니다.
+밴드장이 밴드 자체를 삭제하면 해당 밴드의 기록과 첨부파일도 삭제됩니다.</p>
+<p>자세한 내용은 <a href="/privacy/">개인정보처리방침</a>에서 확인할 수 있습니다.</p>
+<h2>Google Play 구독 확인</h2>
+<p>밴듈 계정 삭제만으로 Google Play의 자동갱신 구독이 취소되지는 않습니다. 유료 구독이 있다면
+계정을 삭제하기 전에 <a href="https://play.google.com/store/account/subscriptions">Google Play 구독 관리</a>에서
+별도로 해지해 주세요.</p>
+<p>문의: qkrwkddjs777@naver.com</p>
+  <footer>
+    <a href="/privacy/">개인정보처리방침</a> · <a href="/terms/">이용약관</a> · <a href="/account-deletion/">계정 삭제</a>
+  </footer>
+</div>
+</body>
+</html>

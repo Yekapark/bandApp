@@ -18,6 +18,25 @@
 
 ---
 
+## 2026-09-10 — 계정 삭제 URL이 홈페이지를 보여 줘 Play 등록에 쓸 수 없었다
+
+**증상** — `https://bandule.com/account-deletion/` 이 `200`을 반환하지만 계정 삭제 안내가 아니라
+홈페이지를 보여 줬다. Play Console의 계정 삭제 URL에 넣어도 사용자가 웹에서 삭제를 요청할 수
+없었다.
+
+**원인** — Cloudflare Pages가 게시하는 `site/`에 `account-deletion/index.html`이 없었다. 없는
+경로가 홈페이지로 대체되어 상태코드만 보면 정상처럼 보였다.
+
+**해결** — 법률 문서의 원본인 `docs/legal/account-deletion-ko.md`를 만들고 `site/build.py`가
+`site/account-deletion/index.html`을 생성하도록 추가했다. 앱 안 탈퇴 경로, 이메일 요청 링크,
+90일 보관 범위, 공동 밴드 기록, Google Play 구독 별도 해지를 한 페이지에 명시했다.
+
+**확인법** — `python site/build.py` 실행 후 `site/account-deletion/index.html`에
+`밴듈 계정 삭제 안내`와 `mailto:qkrwkddjs777@naver.com`이 있는지 확인한다. 배포 후에는
+`https://bandule.com/account-deletion/`의 제목과 본문을 직접 열어 홈페이지가 아닌지 확인한다.
+
+---
+
 ## 2026-09-09 — 밴드에 안 붙은 구매 알림이 7일 동안 초당 한 번씩 서버를 때렸다
 
 **증상** — Nginx 접근 로그에 RTDN 푸시가 **10분에 600건**, 전부 `503`.
