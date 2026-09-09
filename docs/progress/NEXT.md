@@ -4,7 +4,7 @@
 > 오늘까지의 작업 내용은 [2026-09-05-brand-notifications-settlement-video.md](2026-09-05-brand-notifications-settlement-video.md)
 > , [2026-09-05-plan-lifecycle-and-media-fix.md](2026-09-05-plan-lifecycle-and-media-fix.md),
 > [2026-09-05-band-delete.md](2026-09-05-band-delete.md), [phase-11-deploy.md](phase-11-deploy.md).
-> 마지막 갱신: **2026-09-08**
+> 마지막 갱신: **2026-09-09**
 
 ---
 
@@ -63,35 +63,40 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 | 테스터 배포 | [docs/TESTING.md](../TESTING.md) — 서버가 살았으니 APK 만 만들면 된다 |
 | 출시까지 순서 | [docs/LAUNCH_CHECKLIST.md](../LAUNCH_CHECKLIST.md) |
 | **다른 PC 에서 이어서** | **[docs/NEW_PC_SETUP.md](../NEW_PC_SETUP.md)** — git 에 없는 파일 목록과 확인 절차 |
-| 남은 것 | 스토어 심사 제출 · **Phase 12 슬라이스 0**(Play Console 설정, 사람) + **슬라이스 4**(샌드박스 e2e) |
+| 남은 것 | 스토어 심사 제출 · **Phase 12** — 서버는 켜짐(2026-09-09), Play Console 설정 3개(사람) + 슬라이스 4 실기기 e2e |
 | 끝난 것 | 릴리스 서명 키 · 약관·개인정보 URL(`bandule.com/privacy`,`/terms`) · 카카오 콘솔 패키지명 · 개발자 등록 · 비밀값 로테이션(2026-09-08) · 운영 Firebase 분리(서버 `bandule-b94d2`, 앱 `--flavor prod`) · **Phase 12 슬라이스 1~3 (인앱결제 코드)** |
 | 요금 정책 | **밴드당 연 구독 ₩19,000 / 년** 확정 (2026-09-08). `PREMIUM_YEARLY`, 365일. 유료 잠금은 미디어 만료 해제 하나 — 무료는 업로드 30일 뒤 삭제. 가격은 스토어 상품 설정값이라 코드 변경 없음 |
 
-### Phase 12 (인앱결제) — 코드는 됐고 스토어 설정만 남음
+### Phase 12 (인앱결제) — 서버는 켜졌다. Play Console 설정 3개 + 실기기 검증만 남음
 
-슬라이스 1~3 머지 완료 (PR #69·#70·#71). 상세 기록: **[phase-12-iap.md](phase-12-iap.md)**.
-`app.plan.billing.gateway=noop` 이 기본이라 **지금 운영 동작은 안 바뀐다.** 켜려면:
+슬라이스 1~3 머지 완료 (PR #69·#70·#71). 상세 기록: **[phase-12-iap.md](phase-12-iap.md)** (§5-5 에 오늘 실측 결과).
 
-1. **슬라이스 0 (사람)** — Play Console 에서
-   - ~~축소 서비스 수수료 15% 프로그램 등록~~ ✅ 완료 (2026-09-08)
-   - 결제 프로필 은행계좌 확인 — Google 소액 테스트 입금(영업일 2~3일) → 금액 입력. **진행 중**
-   - 구독 상품 `premium_yearly`, 기본 요금제 ₩19,000 / 1년
-   - Google Cloud 서비스 계정 → Play Console 에서 "재무 데이터 보기" 권한 부여, JSON 키 발급
-   - RTDN 용 Pub/Sub 토픽 생성 → Play Console > 수익 창출 설정에 등록, **push 구독**을
-     `https://api.bandule.com/api/v1/webhooks/google-play?token=<시크릿>` 로 (인증 서비스 계정 지정 시 OIDC 도 동작)
-   - 라이선스 테스터에 본인·테스터 계정 등록
-   - 서명된 AAB 를 내부 테스트 트랙에 올림 (검증 API 는 트랙에 올라간 앱에만 동작)
-2. **서버 `.env.prod` 에 추가** 후 앱 재기동:
-   ```
-   PLAN_BILLING_GATEWAY=google
-   PLAN_BILLING_GOOGLE_PACKAGE=com.yeka.bandule
-   PLAN_BILLING_GOOGLE_CREDENTIALS_PATH=/run/secrets/play-developer-sa.json   # 키 파일 마운트도 함께
-   PLAN_BILLING_WEBHOOK_SECRET=<위 ?token= 과 같은 값>
-   # (선택) PLAN_BILLING_PUBSUB_AUDIENCE=<push 구독 audience> / PLAN_BILLING_PUBSUB_SA=<서비스계정 이메일>
-   ```
-   > 서비스 계정 키 파일 없이 `gateway=google` 로 켜면 **기동에 실패한다**(FCM 키와 같은 fail-fast).
-3. **슬라이스 4** — 라이선스 테스터 기기로 실제 구매 → PREMIUM 전환 → Play 스토어에서 해지 →
-   웹훅으로 `canceled` → 만료 시각 지나면 FREE. 환불(REVOKED)로 즉시 강등도 확인.
+**2026-09-09 에 한 것** — 서버 `.env.prod` 에 `PLAN_BILLING_*` 를 넣고 `up -d app` 했다.
+`gateway=google` 이 실제로 돌고 있다:
+
+- 기동 로그 `Google Play 결제 검증 활성화 package=com.yeka.bandule` ✅
+- SA 키가 컨테이너 안에 `app:app` 로 마운트됨 (`/run/secrets/play-developer-sa.json`) ✅
+- 웹훅이 바깥에서 살아 있음 — 맞는 `?token=` 200, 틀리거나 없으면 403 ✅
+
+> `.env.prod` 는 **서버 것과 로컬 것을 따로** 고쳤다. 서버의 `IMAGE_TAG` 가 로컬보다 앞서 있어
+> (`sha-e0279ef` vs `sha-bf790d0`) scp 로 덮으면 옛 이미지로 롤백된다. 블록만 `>>` 로 붙였다.
+
+**남은 것 (사람이 콘솔에서 — 이 순서로):**
+
+1. **Play Console > 사용자 및 권한 > 신규 사용자 초대** — ⚠️ **제일 중요. 아직 안 됨(실측 확인).**
+   - 이메일 `bandule-play-api@bandule.iam.gserviceaccount.com`
+   - 권한 "재무 데이터·주문·구독 보기" + "주문 및 구독 관리"
+   - 없으면 서버 구매검증이 **전부 401** 로 실패한다. 반영에 몇 분~하루 걸릴 수 있다.
+   - 됐는지 실측: `ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bash -s' < deploy/play-permission-check.sh`
+     → `401 insufficient permissions` 면 아직, `400`/`404` 면 완료(토큰이 가짜라 나는 정상 에러).
+2. **Play Console > 설정 > 라이선스 테스트** — `qkrwkddjs777@gmail.com` 추가
+   (실제 청구 없이 구매·갱신주기 단축).
+3. **GCP > Pub/Sub > `play-rtdn` > 구독 만들기** — ID `play-rtdn-push`, 유형 **푸시**,
+   엔드포인트 `https://api.bandule.com/api/v1/webhooks/google-play?token=<시크릿>`.
+   `<시크릿>` = 서버 `.env.prod` 의 `PLAN_BILLING_WEBHOOK_SECRET` **그대로** (git 에 없다):
+   `ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'grep PLAN_BILLING_WEBHOOK_SECRET /opt/bandapp/.env.prod'`
+4. **슬라이스 4 (실기기 e2e)** — 라이선스 테스터 기기로 구매 → PREMIUM 전환 → Play 에서 해지 →
+   웹훅 `canceled` → 만료 시각 뒤 FREE. 환불(REVOKED) 즉시 강등도 확인. 절차는 phase-12-iap.md §5-4.
 
 **로컬 개발**은 그대로다 — `docker compose up -d` + `adb reverse tcp:8080 tcp:8080`.
 실기기 빌드에 **`--dart-define-from-file=dart_defines.json` 을 빠뜨리면 카카오 로그인이 막힌다.**
