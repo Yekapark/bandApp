@@ -170,3 +170,7 @@ app:
     report-per-user-per-min: ${RL_REPORT_USER:10}               # 신고 접수 계정당 분당 상한
     device-token-per-user-per-min: ${RL_DEVICE_TOKEN_USER:30}   # 디바이스 토큰 등록 계정당 분당 상한
     email-verification-per-user-per-min: ${RL_EMAIL_VERIFICATION_USER:3}   # 인증 메일 재발송 계정당 분당 상한
+    # 받는 주소 하나에 분당 몇 통까지. 가입 인증·재발송·비밀번호 재설정·신고 알림이 모두
+    # EmailSender 를 지나므로 여기 하나로 네 경로가 다 덮인다. 초과분은 예외 없이 조용히 버린다
+    # (429 를 돌려주면 비밀번호 재설정이 계정 존재 여부를 흘린다).
+    email-per-address-per-min: ${RL_EMAIL_ADDRESS:3}

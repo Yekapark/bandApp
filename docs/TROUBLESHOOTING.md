@@ -18,6 +18,64 @@
 
 ---
 
+## 2026-09-09 — 모르는 주소로 가입이 들어와 인증 메일이 반송됐다
+
+**증상** — 10:08(KST) 운영 발신 계정으로 반송 메일이 왔다.
+
+```
+주소를 찾을 수 없음 — example.com 도메인을 찾지 못하여
+testuser12345@example.com 주소로 메일을 전송하지 못했습니다.
+```
+
+DB 를 보니 실제로 계정이 있었다. `users.id = 9`, `testuser12345@example.com`,
+이름 `Test User`, `social_provider` 는 NULL(= 이메일 가입), 생성 `2026-09-09 01:08:29+00`.
+**운영자도 테스터도 만든 적이 없는 계정이다.**
+
+**원인** — 두 가지가 겹쳤다.
+
+1. `POST /api/v1/auth/signup` 은 무인증 공개 엔드포인트이고, 도메인이 실재하는지 보지 않고
+   **형식만 맞으면 계정을 만들고 곧바로 인증 메일을 쏜다.** `example.com` 은 RFC 2606 이
+   문서·예제용으로 못 박은 예약 도메인이라 MX 레코드가 존재할 수 없다 — 보내면 100% 반송이다.
+2. 도메인은 Let's Encrypt 인증서를 받는 순간 **인증서 투명성(CT) 로그에 공개된다.** 새 도메인은
+   몇 시간 안에 자동 스캐너가 훑고, 흔한 API 경로에 `testuser12345@example.com` / `Test User`
+   같은 전형적인 값을 넣어 본다. 계정 생성 시각이 정확히 반송 시각과 같은 것도 그 그림에 맞는다.
+   (다만 **어느 IP 에서 왔는지 확인하기 전까지는 단정하지 않는다** — 확인법은 아래.)
+
+이게 왜 위험한가: 발송이 Gmail SMTP 한 계정에 얹혀 있다. 반송이 쌓이면 발신 평판이 깎이고
+Google 이 발송을 정지시킨다. 그러면 인증 메일만 죽는 게 아니라 **비밀번호 재설정과 신고 접수
+알림까지 같이 죽는다.** 게다가 비밀번호 재설정 요청은 IP 당 분당 20회 제한뿐이라, 남의 주소로
+**분당 20통**을 대신 쏘는 중계기로도 쓸 수 있었다(계정이 있는 주소에 한해).
+
+**해결** — 두 겹으로 막았다.
+
+1. **예약 도메인 가입 거부** — `EmailPolicy.requireDeliverable` 이 `example.com/.net/.org` 와
+   `.test`·`.example`·`.invalid`·`.localhost`·`.local` 로 끝나는 도메인을 400
+   `EMAIL_DOMAIN_NOT_ALLOWED` 로 돌려보낸다. 계정 자체가 안 만들어진다. 일회용 메일 도메인
+   차단은 하지 않는다 — 목록을 계속 따라다녀야 하고 오탐이 곧 가입 거부라 값에 비해 비싸다.
+2. **받는 주소당 분당 상한**(기본 3통, `app.ratelimit.email-per-address-per-min`) — 메일을
+   보내는 경로가 넷(가입 인증·재발송·비밀번호 재설정·신고 알림)인데 전부 `EmailSender.send()`
+   를 지나므로 거기 한 곳에 걸었다. 초과분은 **예외를 던지지 않고 조용히 버린다** — 429 를
+   돌려주면 `PasswordResetService.request` 가 "이 주소는 가입돼 있다"를 알려 주는 꼴이 되고,
+   그 메서드가 계정 존재 여부를 숨기려고 일부러 조용히 끝나는 설계가 무너진다.
+
+**확인법** — 단위 테스트 `EmailPolicyTest`(예약 도메인 거부, 대소문자·공백 우회 불가,
+`example.com.co.kr` 같은 진짜 주소는 통과). 운영에서는 가입 API 에 `a@example.com` 을 넣어
+400 `EMAIL_DOMAIN_NOT_ALLOWED` 가 나오면 된다.
+
+**아직 안 한 것** — 그 계정(`users.id = 9`)이 어디서 왔는지 확정하지 못했다. 아래로 확인한다.
+
+```bash
+# 그 시각 signup 요청의 출처 IP·User-Agent
+ssh root@64.176.231.126   'cd /opt/bandapp && docker compose -f docker-compose.prod.yml logs nginx | grep "auth/signup"'
+# 다른 정크 가입이 더 있는지
+ssh root@64.176.231.126 'docker exec $(docker ps -qf name=postgres) psql -U bandapp -d bandapp   -c "SELECT id, email, created_at FROM users ORDER BY created_at DESC LIMIT 20;"'
+```
+
+한 번뿐이면 스캐너 한 방으로 보고 그 계정만 지우면 된다. 계속 들어오면 가입에 별도
+레이트리밋(지금은 `/api/v1/auth/**` 공통 IP 당 20/분)을 더 좁혀야 한다.
+
+---
+
 ## 2026-09-09 — 쿠폰 한 장을 한 사람이 통째로 태울 수 있었다
 
 **증상** — 배포 전 점검 중 "쿠폰 ABC 를 팀장이 한 번, 팀원이 한 번 넣으면?" 을 따라가다 발견.
