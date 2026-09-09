@@ -31,7 +31,8 @@
 - **이중 처리 방지** — 같은 구매/이벤트가 중복 전달돼도 한 번만 반영(웹훅은 재전송된다).
 
 **완료 기준**: 샌드박스 결제로 FREE → PREMIUM 전환이 실제로 되고, 갱신·해지·환불이 웹훅으로
-반영되는 통합 테스트가 통과한다. → **통합 테스트는 통과(아래 §6). 실기기 샌드박스는 슬라이스 4.**
+반영되는 통합 테스트가 통과한다. → **통합 테스트와 구매·해지·만료 실기기 검증 통과(아래 §5-4, §6).
+환불(REVOKED) 실기기 검증만 남았다.**
 
 ---
 
@@ -250,11 +251,21 @@ ssh root@64.176.231.126 'cd /opt/bandapp && docker compose -f docker-compose.pro
    미디어에 유예 없이 만료 시각이 붙음
 4. 서버 로그에 `RTDN` 처리 흔적, `processed_store_events` 에 messageId 행
 
+**실측 결과 (2026-09-09):**
+
+| 시나리오 | 서버 근거 | 결과 |
+|---|---|---|
+| 구매 직후 PREMIUM | `POST /api/v1/bands/4/plan/google/verify` 200, RTDN type 4 | ✅ |
+| Play에서 해지 후 기간 끝까지 PREMIUM | RTDN type 3 처리, 30분 테스트 주기 동안 PREMIUM 유지 | ✅ |
+| 기간 만료 후 FREE | RTDN type 13 처리, DB `tier=FREE`, 구매 토큰 제거 | ✅ |
+| 환불·사용 권한 취소 후 즉시 FREE | 새 활성 구독에서 RTDN type 12 확인 필요 | ⏳ |
+
 ---
 
 ### 5-5. 슬라이스 0 진행 상황 (2026-09-09)
 
-서버 쪽은 다 됐다. **남은 건 콘솔에서 사람이 하는 세 가지**다.
+슬라이스 0의 스토어·서버 설정은 모두 끝났다. 구매·해지·만료 실기기 e2e도 통과했고,
+**슬라이스 4에서 환불(REVOKED) 즉시 강등 확인만 남았다.**
 
 | | 항목 | 상태 |
 |---|---|---|
@@ -264,9 +275,9 @@ ssh root@64.176.231.126 'cd /opt/bandapp && docker compose -f docker-compose.pro
 | ✅ | Pub/Sub 토픽 `play-rtdn` + Play Console RTDN 등록 · 테스트 알림 성공 | 완료 |
 | ✅ | AAB `0.1.0+25` 내부 테스트 트랙 업로드 | 완료 |
 | ✅ | 서버 `.env.prod` 의 `PLAN_BILLING_*` · `PLAY_SA_HOST_PATH`, `gateway=google` 로 재기동 | 완료 |
-| ❌ | **Play Console > 사용자 및 권한 → 서비스 계정 초대** | **안 됨 (아래 확인법으로 실측)** |
-| ❌ | Play Console > 설정 > 라이선스 테스트에 테스터 계정 등록 | 안 됨 |
-| ❌ | Pub/Sub `play-rtdn` → push 구독 `play-rtdn-push` 만들기 | 안 됨 |
+| ✅ | Play Console > 사용자 및 권한 → 서비스 계정 초대·결제 권한 | `400` 응답으로 권한 확인 |
+| ✅ | Play Console > 설정 > 라이선스 테스트에 테스터 계정 등록 | 완료 |
+| ✅ | Pub/Sub `play-rtdn` → push 구독 `play-rtdn-push` | Google push 요청 `200` 확인 |
 
 #### 서비스 계정에 Play Console 권한이 있는지 실측하는 법
 
@@ -282,13 +293,8 @@ ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bash -s' < deploy/play-permiss
 | `403 ... API has not been used` | GCP 에서 Android Publisher API 가 꺼져 있다 |
 | `400`/`404` (Invalid / not found) | **권한 OK.** 토큰이 가짜라서 나는 정상 에러 |
 
-2026-09-09 실측 = `401 insufficient permissions`. 즉 아래를 아직 안 했다:
-
-> Play Console > 사용자 및 권한 > 신규 사용자 초대
-> - 이메일 `bandule-play-api@bandule.iam.gserviceaccount.com`
-> - 권한 "재무 데이터·주문·구독 보기" + "주문 및 구독 관리"
->
-> 초대 반영에 몇 분~하루가 걸릴 수 있다. 위 스크립트가 400/404 를 줄 때까지 기다린다.
+2026-09-09 최초 실측은 `401 insufficient permissions`였지만, 권한을 다시 확인한 뒤 재실측한 결과
+`400`이 돌아왔다. 서비스 계정의 Play Developer API 구매 조회 권한은 정상이다.
 
 #### 웹훅 엔드포인트가 바깥에서 살아 있는지 확인하는 법
 
@@ -305,8 +311,9 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST "https://api.bandule.com/api/v1
 (200 만 보면 인증이 통째로 열려 있어도 똑같이 200 이다). 2026-09-09 실측: 맞는 토큰 200,
 틀린 토큰·토큰 없음 403.
 
-그다음 Pub/Sub 구독을 만든다 — GCP > Pub/Sub > `play-rtdn` > 구독 만들기,
-ID `play-rtdn-push`, 유형 **푸시**, 엔드포인트에 위 URL 을 `?token=` 까지 그대로.
+Pub/Sub 구독은 ID `play-rtdn-push`, 유형 **푸시**로 만들었다. 처음 저장된 엔드포인트에는
+서버와 다른 토큰이 들어가 Google 요청이 `403`으로 거부됐지만, 서버 `.env.prod`의 값으로
+고친 뒤 같은 Google push 요청이 `200`을 받은 것을 Nginx 접근 로그에서 확인했다.
 
 ---
 
@@ -325,12 +332,19 @@ merge 커밋(main): `49e949d`(#69) · `ddccca3`(#70) · `d211cae`(#71) · `84f60
 성공, `flutter analyze`(에러 0) · `flutter test`(56개) 통과. **Docker 없는 PC 라 통합 테스트는
 CI 로만 검증.**
 
-아직 안 한 것: **실제 Play 결제·웹훅 e2e**(슬라이스 0·4), 앱 스토어 심사 제출.
+실제 Play 결제 e2e에서 첫 구매의 클라이언트 토큰 추출 버그를 발견해 수정했다(아래).
+수정 AAB `0.1.0+27`로 구매 즉시 PREMIUM, 해지 후 기간 끝까지 유지, 만료 뒤 FREE 전환을 확인했다.
+환불(REVOKED) 즉시 강등과 앱 스토어 심사 제출이 남았다.
 
 ---
 
 ## 7. 알려진 이슈 / 제약
 
+- **첫 실결제에서 구매 토큰을 서버로 보내지 못함 — `0.1.0+27`에서 해결·실기기 확인 완료.**
+  `in_app_purchase_android 0.5.3`의 `serverVerificationData`는 구매 JSON이 아니라 토큰 문자열 자체인데,
+  클라이언트가 JSON으로 파싱하다 `null`을 반환했다. 그래서 Play 결제와 RTDN type=4는 성공했지만
+  `/bands/4/plan/google/verify`가 호출되지 않았다. 토큰을 그대로 반환하도록 수정하고 회귀 테스트 통과,
+  `0.1.0+27` 서명 AAB를 내부 테스트에 올렸다. 실기기에서 검증 API 200과 PREMIUM 전환을 확인했다.
 - **iOS 없음.** 클라 iOS 타깃 부재. `Store.APP_STORE`·StoreKit 어댑터는 iOS 빌드가 생길 때.
 - **`obfuscatedAccountId` 대조 없음.** 지금은 "한 토큰 = 한 밴드" 만으로 재사용을 막는다. Play Billing
   구매 시 `obfuscatedAccountId` 에 밴드 id 를 실어 보내고 서버가 대조하면 더 강하다 — 슬라이스 후속.
@@ -361,8 +375,8 @@ CI 로만 검증.**
 
 ## 9. 다음 — NEXT.md "Phase 12" 절
 
-1. **슬라이스 0** (사람): Play Console 결제 프로필 계좌 확인(진행 중) + 축소 수수료 15% 프로그램
-   등록(완료) + 구독상품·서비스계정·Pub/Sub·라이선스 테스터·내부테스트 AAB.
-2. `.env.prod` 에 `PLAN_BILLING_*` 넣고 앱 재기동 → 로그로 활성화 확인.
-3. **슬라이스 4**: 라이선스 테스터 실기기로 구매→PREMIUM→해지→만료, 환불→즉시강등 확인.
-4. 그 뒤 스토어 심사 제출.
+1. ~~**슬라이스 0**: 구독상품·서비스계정·Pub/Sub·라이선스 테스터·내부테스트 AAB 설정.~~ 완료
+2. ~~`.env.prod`에 `PLAN_BILLING_*` 설정 후 앱 재기동·로그 확인.~~ 완료
+3. ~~라이선스 테스터 실기기로 구매→PREMIUM→해지→만료→FREE 확인.~~ 완료
+4. **슬라이스 4 남은 항목**: 활성 구독 환불·사용 권한 취소 → REVOKED 즉시 강등 확인.
+5. 그 뒤 스토어 심사 제출.
