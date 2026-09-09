@@ -185,6 +185,7 @@ public class StoreSubscriptionService {
 
         // 처리가 끝난 뒤 기록한다 — 처리와 기록 사이에서 죽으면 재전송돼 한 번 더 처리되지만,
         // 모든 반영이 멱등이라(applyUpgrade→이미 PREMIUM이면 store-renew, …IfPremium/Revoke는 no-op) 무해하다.
+        log.info("RTDN 처리 완료 type={} bandId={} messageId={}", notificationType, bandId, messageId);
         markProcessed(messageId, notificationType, purchaseToken);
     }
 
