@@ -21,6 +21,7 @@
 | [privacy-facts.md](privacy-facts.md) | 위 방침의 근거 — 코드에서 확인한 수집 항목·보관 기간·제3자 |
 | [generated-policy-review.md](generated-policy-review.md) | 생성기 결과물을 왜 그대로 쓰지 않았는지. 다른 생성기를 쓸 때 먼저 볼 것 |
 | **[terms-ko.md](terms-ko.md)** | **이용약관 한글 초안 — 게시할 본문.** `⟨⟩` 만 채우면 된다 |
+| **[account-deletion-ko.md](account-deletion-ko.md)** | **계정 삭제 안내 게시 원본.** 앱 안 삭제 경로·이메일 요청·보관 범위 |
 | [terms-draft.md](terms-draft.md) | 위 약관의 근거 — 조항을 왜 그렇게 골랐는지, 쓰면 안 되는 문구는 무엇인지 |
 
 ## 채워야 하는 것
@@ -31,7 +32,7 @@
 - 문의받을 이메일 주소
 - 개인정보 보호책임자 이름·연락처
 - 사업자등록번호 (사업자로 운영한다면)
-- 게시 예정 주소 — `bandule.com/privacy`, `bandule.com/terms`
+- 게시 예정 주소 — `bandule.com/privacy`, `bandule.com/terms`, `bandule.com/account-deletion`
 
 ## 문서를 고치면 버전도 올린다
 

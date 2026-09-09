@@ -26,6 +26,8 @@ OUT = ROOT / "site"
 PAGES = [
     ("privacy", "개인정보처리방침", LEGAL / "privacy-policy-ko.md"),
     ("terms", "이용약관", LEGAL / "terms-ko.md"),
+    # Google Play 는 계정 삭제 안내를 웹에서도 볼 수 있게 요구한다 (앱 내 경로만으로는 부족).
+    ("account-deletion", "계정 삭제 안내", LEGAL / "account-deletion-ko.md"),
 ]
 
 TEMPLATE = """<!doctype html>
@@ -87,7 +89,7 @@ TEMPLATE = """<!doctype html>
   <header><a href="/">밴듈 BANDULE</a></header>
   {body}
   <footer>
-    <a href="/privacy/">개인정보처리방침</a> · <a href="/terms/">이용약관</a>
+    <a href="/privacy/">개인정보처리방침</a> · <a href="/terms/">이용약관</a> · <a href="/account-deletion/">계정 삭제</a>
   </footer>
 </div>
 </body>
@@ -119,7 +121,7 @@ INDEX = """<!doctype html>
   <div class="box">
     <h1>BANDULE</h1>
     <p>우리 밴드 합주, 한 곳에서 정리하자</p>
-    <a href="/privacy/">개인정보처리방침</a><a href="/terms/">이용약관</a>
+    <a href="/privacy/">개인정보처리방침</a><a href="/terms/">이용약관</a><a href="/account-deletion/">계정 삭제</a>
   </div>
 </body>
 </html>

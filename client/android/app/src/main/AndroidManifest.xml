@@ -1,8 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 카카오맵 SDK 요건. 위치 권한은 지도가 "내 위치"를 쓸 때만 실제로 요청된다. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- 위치 권한(ACCESS_FINE/COARSE_LOCATION)은 2026-09-09 에 지웠다. 지도를 쓰지만 기기 위치는
+         한 번도 읽지 않는다 — 위치 플러그인 의존성이 없고, 지도의 hasLocation 은 합주실 좌표다.
+         쓰지 않는 권한은 스토어 심사에서 용도를 묻고 데이터 안전 신고와도 어긋나 보인다.
+         "내 위치" 기능을 넣을 때 함께 되살린다. (docs/legal/play-app-content.md §0-2) -->
 
     <!-- Auto Backup 을 끈다. flutter_secure_storage 는 토큰을 SharedPreferences 에 암호화해 넣고
          복호화 키는 Android KeyStore 에 두는데, KeyStore 는 백업 대상이 아니다. 백업이 켜져 있으면
