@@ -86,9 +86,20 @@ check() {
     esac
 }
 
+# 템플릿의 realip include 가 켜져 있는지 읽어 ①의 기대값을 정한다. 설정과 기대를 손으로
+# 따로 관리하면 또 어긋난다 — 한쪽만 보고 판단하게 만든다.
+if grep -qE '^[[:space:]]*include[[:space:]]+/etc/nginx/cloudflare-realip\.conf;' \
+        "$NGINX_DIR/templates/app.conf.template"; then
+    CF_EXPECT="9.9.9.9"
+    CF_LABEL="① CF 대역의 CF-Connecting-IP 인정 (realip 켜짐 = 주황 구름 전제)"
+else
+    CF_EXPECT="104.16.99.*"
+    CF_LABEL="① CF 대역에서 위조해도 무시 (realip 꺼짐 = 회색 구름 전제)"
+fi
+
 echo "== 검증"
-check "① CF 대역에서 CF-Connecting-IP 를 보냄 (인정)" \
-      "9.9.9.9"      "$(hit "$CF_NET"  "$CF_IP"  -H 'CF-Connecting-IP: 9.9.9.9')"
+check "$CF_LABEL" \
+      "$CF_EXPECT"   "$(hit "$CF_NET"  "$CF_IP"  -H 'CF-Connecting-IP: 9.9.9.9')"
 check "② 외부에서 CF-Connecting-IP 위조 (무시)" \
       "203.0.113.*"  "$(hit "$EXT_NET" "$EXT_IP" -H 'CF-Connecting-IP: 9.9.9.9')"
 check "③ 외부에서 X-Forwarded-For 위조 (무시)" \
