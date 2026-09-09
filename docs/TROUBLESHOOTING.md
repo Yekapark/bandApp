@@ -18,6 +18,104 @@
 
 ---
 
+## 2026-09-09 — 환불만 하고 "사용 권한 취소" 를 안 하면 REVOKED 알림이 오지 않는다
+
+**증상** — Phase 12 마지막 검증(환불 → 즉시 FREE)에서, Play Console 로 테스트 구독을
+환불했는데 서버에 `type=12`(REVOKED) 웹훅이 몇 분이 지나도 오지 않았다. 앱은 계속 PREMIUM.
+
+**원인** — Play Console 의 환불 대화상자에서 **"사용 권한 취소"** 를 따로 체크해야 한다.
+체크를 안 하면 Google 은 **돈만 돌려주고 구독은 그대로 살려 둔다.** 사용자는 여전히 구독자라
+Google 이 보낼 알림 자체가 없다. 환불과 권한 취소가 한 동작이라고 생각하기 쉬운데 별개다.
+
+**해결** — Play Developer API 로 사용 권한 취소를 직접 쏜다. `deploy/play-revoke.sh` 를 만들었다.
+`band_plans` 에서 그 밴드의 구매 토큰을 읽어 `subscriptionsv2 …:revoke` 를 호출한다.
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bash -s 4' < deploy/play-revoke.sh
+# 이미 환불된 주문이라 fullRefund 가 거부되면:
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'REFUND_TYPE=proratedRefund bash -s 4' < deploy/play-revoke.sh
+```
+
+**확인법** — 취소 후 몇 분 안에 서버 로그에 `RTDN 처리 완료 type=12 bandId=…` 가 뜬다.
+2026-09-09 실측: 14:34:07 에 `type=12`, 같은 순간(`14:34:07.958262`)에 `band_plans` 가
+`tier=FREE`·`store`/`purchase_token` NULL 로 바뀌고 그 밴드 READY 미디어 4건의 `expires_at`
+도 같은 값으로 붙었다(유예 0). 2초 뒤 온 `type=13` 은 **"모르는 구매 토큰 (밴드 없음)"** 으로
+무시됐는데, 이게 오히려 강등이 토큰을 실제로 떼어냈다는 증거다.
+
+> **DB 를 손으로 고쳐 대신하지 말 것.** 확인하려는 건 "웹훅이 강등을 만드는가" 이므로,
+> `band_plans` 를 직접 UPDATE 하면 결과만 흉내내고 그 경로를 한 번도 안 탄다.
+
+---
+
+## 2026-09-09 — RTDN 을 정상 처리해도 서버 로그에 아무것도 안 남았다
+
+**증상** — 운영에서 웹훅이 실제로 반영됐는지 로그로 확인할 방법이 없었다.
+`phase-12-iap.md` §5-4 의 확인 항목 "서버 로그에 RTDN 처리 흔적" 이 애초에 불가능했다.
+
+**원인** — `StoreSubscriptionService.handleGoogleNotification` 이 **실패 경로만** 로그를 찍고
+있었다(인증 실패·재전송 요청·예외). 성공은 조용히 지나가서 **"조용하면 정상"** 과
+**"조용하면 아무 일도 안 일어남"** 이 구분되지 않았다. 개발 중엔 통합 테스트가 결과를
+직접 보니까 로그가 아쉽지 않았고, 그대로 운영에 나갔다.
+
+**해결** — 처리 완료 지점에 INFO 한 줄
+(`src/main/java/com/yeka/bandapp/plan/service/StoreSubscriptionService.java`):
+
+```
+RTDN 처리 완료 type={} bandId={} messageId={}
+```
+
+**확인법**
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 "docker logs --since 30m bandapp-app-1 2>&1 | grep 'RTDN 처리 완료'"
+```
+
+구매하면 `type=4`, 환불·권한취소하면 `type=12`, 만료면 `type=13` 이 밴드 id 와 함께 찍힌다.
+
+---
+
+## 2026-09-09 — 서버 스크립트에서 `.env.prod` 를 `source` 하면 깨진다
+
+**증상** — `deploy/play-revoke.sh` 첫 실행이
+`/opt/bandapp/.env.prod: line 68: syntax error near unexpected token 'newline'` 로 죽었다.
+
+**원인** — `.env.prod` 는 **docker compose 가 읽는 형식이지 셸 스크립트가 아니다.**
+compose 는 `KEY=값` 을 문자 그대로 읽지만, 셸의 `.`(source)은 그 줄을 **셸 코드로 실행**한다.
+그래서 값에 `#`·`<`·`>`·따옴표 같은 게 들어 있으면 문법 에러가 난다. 비밀번호·키를
+`openssl rand -base64` 로 만들면 특수문자가 섞이므로 사실상 언제든 터질 수 있다.
+
+**해결** — 파일 전체를 읽지 말고 **필요한 값만 뽑는다.**
+
+```bash
+envget() { grep -m1 "^$1=" "$COMPOSE_DIR/.env.prod" | cut -d= -f2- | sed "s/[[:space:]]*#.*$//; s/[[:space:]]*$//"; }
+DB_USERNAME=$(envget DB_USERNAME); DB_NAME=$(envget DB_NAME)
+```
+
+**확인법** — `bash -n deploy/play-revoke.sh` 로 문법을 보고, 실제로 돌려서
+`band=4 token=…(…자)` 가 찍히면 값이 제대로 읽힌 것이다.
+
+---
+
+## 2026-09-09 — (아직 안 고침) 운영 웹훅이 공유 시크릿으로만 인증된다
+
+**증상** — 앱 기동 로그에
+`Pub/Sub OIDC 검증 비활성 (google-pubsub-audience 미설정) — 웹훅은 공유 시크릿으로만 인증`.
+
+**원인** — `.env.prod` 에 `PLAN_BILLING_PUBSUB_AUDIENCE`·`PLAN_BILLING_PUBSUB_SA` 를 안 넣었다.
+슬라이스 0 문서에서 이 둘이 "(권장)" 으로 적혀 있어 필수 항목처럼 보이지 않았고, 시크릿만으로도
+동작해서 넘어갔다.
+
+**영향** — 웹훅 URL 의 `?token=` 하나가 유일한 방어선이다. 이 값이 새면 남이 임의의 RTDN 을
+밀어 넣을 수 있다(다만 서버가 알림을 그대로 믿지 않고 **항상 Play 에 현재 상태를 다시 물어보므로**
+등급을 위조로 올리진 못한다. 취소·만료 계열은 조회 없이 반영하므로 남의 밴드를 FREE 로
+떨어뜨리는 건 가능하다).
+
+**해결(예정)** — Pub/Sub push 구독의 인증 서비스 계정·audience 를 `.env.prod` 와
+`docker-compose.prod.yml` 의 `app.environment` 양쪽에 넣고 재기동. 로그에서 위 문구가
+사라지는지로 확인한다.
+
+---
+
 ## 2026-09-09 — 카카오 로그인이 옛 앱(bandapp)으로 붙고, 고쳐도 브라우저만 맴돌았다
 
 **증상** — 두 단계로 나타났다.
