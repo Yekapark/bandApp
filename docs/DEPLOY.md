@@ -67,7 +67,22 @@ HTTPS 로 돌려보내고, Cloudflare 가 다시 평문으로 오는 **무한 �
 (로그인 브루트포스·초대코드 대입 방지)이 **정상 사용자끼리 서로를 막는다.**
 `deploy/nginx/cloudflare-realip.conf` 가 "Cloudflare 대역에서 온 요청에 한해"
 `CF-Connecting-IP` 헤더를 진짜 사용자 IP 로 인정하게 해서 이걸 푼다.
-회색 구름으로 되돌려도 같은 설정이 그대로 맞다(헤더가 없으면 소켓 주소를 쓴다).
+
+> 🔴 **이 설정은 주황 구름일 때만 켠다. DNS 프록시 상태와 반드시 짝을 맞춘다.**
+> (예전 이 문서에는 "회색 구름으로 되돌려도 같은 설정이 그대로 맞다" 고 적혀 있었다. **틀렸다.**)
+>
+> 회색 구름이면 오리진이 인터넷에 직접 열려 있다. 그 상태에서 켜 두면 "Cloudflare 대역에서
+> 왔다"는 전제가 깨진다 — Cloudflare 대역에서 요청을 보내는 건 누구나 공짜로 할 수 있고
+> (무료 Worker 의 아웃바운드, 또는 자기 도메인을 주황 구름으로 걸어 이 오리진 IP 로 향하게
+> 하기), 그러면 `CF-Connecting-IP` 를 마음대로 적어 `$remote_addr` 을 위조할 수 있다.
+> 그 값이 `proxy-headers.conf` → 톰캣 `RemoteIpValve` → `ClientIp` 로 흘러
+> **IP 기준 레이트리밋이 전부 뚫린다.**
+>
+> - **주황 구름** → `app.conf.template` 의 `include /etc/nginx/cloudflare-realip.conf;` 를 켠다
+> - **회색 구름** → 끈다 (지금 상태. 켜 봐야 이득이 0 이고 위조 경로만 생긴다)
+>
+> 어느 쪽으로 바꾸든 `sh deploy/nginx/test-realip.sh` 로 확인한다 — 그 스크립트는 템플릿의
+> include 상태를 읽어 기대값을 자동으로 맞춘다.
 
 Cloudflare 가 대역을 추가하는 일이 가끔 있다. 분기에 한 번:
 

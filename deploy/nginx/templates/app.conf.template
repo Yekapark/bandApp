@@ -1,14 +1,31 @@
 # ${DOMAIN} 리버스 프록시. nginx 공식 이미지가 기동 때 이 템플릿의 ${DOMAIN} 을 치환해
 # /etc/nginx/conf.d/app.conf 로 쓴다(NGINX_ENVSUBST_FILTER 로 DOMAIN 만 치환 대상).
 
-# Cloudflare 프록시(주황 구름)를 켜면 모든 요청의 소켓 주소가 Cloudflare 엣지가 된다.
-# 그대로 두면 전 사용자가 한 IP 로 뭉쳐 레이트리밋이 정상 사용자끼리 서로를 막는다.
-# 아래 목록은 "Cloudflare 대역에서 온 요청에 한해" CF-Connecting-IP 를 실제 클라이언트 IP 로
-# 인정하게 한다. 그 결과 $remote_addr 이 진짜 사용자 IP 가 되고, proxy-headers.conf 가
-# 그 값을 앱에 넘긴다. 회색 구름(DNS only)이면 헤더가 없어 소켓 주소가 그대로 쓰인다 —
-# 두 경우 모두 이 설정 하나로 맞다.
-# 목록 갱신: sh deploy/nginx/update-cloudflare-ips.sh
-include /etc/nginx/cloudflare-realip.conf;
+# ┌─ Cloudflare realip: 주황 구름일 때만 켠다. DNS 프록시 상태와 반드시 짝을 맞춘다. ─┐
+#
+# 무엇을 하는 설정인가 — 주황 구름(Proxied)을 켜면 모든 요청의 소켓 주소가 Cloudflare
+# 엣지가 되어, 그대로 두면 전 사용자가 한 IP 로 뭉쳐 레이트리밋이 정상 사용자끼리 서로를
+# 막는다. cloudflare-realip.conf 는 "Cloudflare 대역에서 온 요청에 한해" CF-Connecting-IP 를
+# 실제 클라이언트 IP 로 인정하게 해서 이걸 푼다.
+#
+# 왜 지금 꺼져 있는가 — api.<도메인> 이 **회색 구름(DNS only)** 이라 오리진이 인터넷에
+# 직접 열려 있다. 그 상태에서 이 설정을 켜 두면 "Cloudflare 대역에서 왔다" 는 전제가
+# 깨진다. Cloudflare 대역에서 요청을 보내는 건 누구나 공짜로 할 수 있고(무료 Worker 의
+# 아웃바운드, 또는 자기 도메인을 주황 구름으로 걸어 이 오리진 IP 로 향하게 하기),
+# 그러면 CF-Connecting-IP 를 마음대로 적어 $remote_addr 을 위조할 수 있다.
+# 그 값이 proxy-headers.conf → 톰캣 RemoteIpValve → ClientIp 로 흘러
+# **IP 기준 레이트리밋(로그인 브루트포스·초대코드 대입·가입 스팸)이 전부 뚫린다.**
+# 회색 구름에서는 이 include 가 주는 이득이 0 이다(정상적인 CF-Connecting-IP 가 올 일이
+# 없다) — 그래서 끈다.
+#
+# ⚠️ 주황 구름으로 바꾸면 이 줄을 **반드시 다시 살린다.** 안 살리면 반대 방향으로 깨진다:
+#    전 사용자가 Cloudflare IP 몇 개로 뭉쳐 서로의 레이트리밋을 소진시킨다.
+#    바꾼 뒤 `sh deploy/nginx/test-realip.sh` 로 확인한다(그 스크립트도 두 모드를 다 본다).
+#
+# 목록 갱신(주황일 때만 의미 있다): sh deploy/nginx/update-cloudflare-ips.sh
+#
+# include /etc/nginx/cloudflare-realip.conf;   ← 주황 구름이면 주석 해제
+# └──────────────────────────────────────────────────────────────────────────────┘
 
 server {
     listen 80;
