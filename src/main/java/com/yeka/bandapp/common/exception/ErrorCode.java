@@ -127,7 +127,7 @@ public enum ErrorCode {
     COUPON_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 쿠폰 코드입니다."),
     COUPON_EXPIRED(HttpStatus.GONE, "사용 기한이 지난 쿠폰입니다."),
     COUPON_EXHAUSTED(HttpStatus.CONFLICT, "모두 사용된 쿠폰입니다."),
-    COUPON_ALREADY_USED(HttpStatus.CONFLICT, "이 밴드에서 이미 사용한 쿠폰입니다.");
+    COUPON_ALREADY_USED(HttpStatus.CONFLICT, "이미 사용한 쿠폰입니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;

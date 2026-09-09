@@ -18,6 +18,40 @@
 
 ---
 
+## 2026-09-09 — 쿠폰 한 장을 한 사람이 통째로 태울 수 있었다
+
+**증상** — 배포 전 점검 중 "쿠폰 ABC 를 팀장이 한 번, 팀원이 한 번 넣으면?" 을 따라가다 발견.
+팀원은 애초에 못 넣고(밴드장만 가능, 403), 같은 밴드에서 두 번도 막힌다(409). 그런데
+**밴드장이 밴드를 새로 만들어 같은 코드를 다시 넣으면 그냥 된다.** `max_uses` 가 100 이면
+한 사람이 밴드 100개를 만들어 100장을 혼자 다 쓸 수 있었다.
+
+**원인** — `plan_coupon_redemptions` 의 유니크가 `(coupon_id, band_id)` 하나뿐이었다(V12).
+"같은 밴드에서 두 번" 만 생각하고 "같은 사람이 밴드를 갈아 가며" 를 안 봤다. 밴드 생성은
+개수 제한도 레이트리밋도 없어서(`BandService.create`, 레이트리밋은 `/api/v1/auth/**` 에만
+걸려 있다) 계정 하나로 밴드를 얼마든지 만들 수 있다. 횟수 상한 자체는 지켜지므로 손해가
+무한하진 않지만, "여러 밴드에 맛보기를 뿌린다"는 쿠폰의 목적이 무너진다 — 코드가 커뮤니티에
+한 번 새면 먼저 본 한 명이 전부 가져간다.
+
+**해결** — `(coupon_id, redeemed_by)` 유니크를 하나 더 걸었다(V18). 한 계정은 한 쿠폰을
+한 번만 쓴다. 애플리케이션 코드는 안 고쳐도 됐다 — `PlanCouponService` 의
+`DataIntegrityViolationException` catch 가 이 위반도 그대로 `COUPON_ALREADY_USED`(409) 로
+옮긴다. 사용 기록 INSERT 가 횟수 차감(`consume()`)보다 **먼저** 일어나는 순서라, 거부된
+시도가 남의 횟수를 깎지도 않는다.
+
+> 배포 전에 기존 데이터에 중복이 없는지 확인한다. 있으면 마이그레이션이 실패해 앱이 안 뜬다.
+> ```sql
+> SELECT coupon_id, redeemed_by, count(*) FROM plan_coupon_redemptions
+>  GROUP BY coupon_id, redeemed_by HAVING count(*) > 1;
+> ```
+
+**확인법** — `PlanCouponIntegrationTest.one_account_cannot_spend_the_same_coupon_on_a_second_band`
+(한 계정이 밴드 둘에 같은 코드 → 두 번째 409, 둘째 밴드는 FREE, `used_count` 는 1). 운영에서는
+```sql
+\d plan_coupon_redemptions   -- ux_plan_coupon_redemptions_user 가 보여야 한다
+```
+
+---
+
 ## 2026-09-09 — 운영에서 아무 문자열이나 넣으면 PREMIUM 1년이 공짜로 붙었다
 
 **증상** — 배포 전 점검에서 발견. 운영에 올라간 서버에 밴드장 계정으로
