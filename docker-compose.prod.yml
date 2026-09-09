@@ -81,6 +81,16 @@ services:
       MAIL_FROM: ${MAIL_FROM:-}
       REPORT_NOTIFY_USER_IDS: ${REPORT_NOTIFY_USER_IDS:-}
       REPORT_NOTIFY_EMAILS: ${REPORT_NOTIFY_EMAILS:-}
+      # 인앱결제(Play Billing). 여기 없으면 .env.prod 에 값이 있어도 컨테이너에 안 실려
+      # app.plan.billing.gateway 가 기본값 noop 으로 뜬다 — NoOpStoreBillingGateway 는
+      # 아무 구매 토큰이나 ACTIVE 로 통과시키므로 밴드장이 결제 없이 PREMIUM 을 얻는다.
+      # (MAIL_* 가 안 넘어가 메일이 전부 no-op 이던 것과 같은 함정이다.)
+      PLAN_BILLING_GATEWAY: ${PLAN_BILLING_GATEWAY:-noop}
+      PLAN_BILLING_WEBHOOK_SECRET: ${PLAN_BILLING_WEBHOOK_SECRET:-}
+      PLAN_BILLING_GOOGLE_PACKAGE: ${PLAN_BILLING_GOOGLE_PACKAGE:-}
+      PLAN_BILLING_GOOGLE_CREDENTIALS_PATH: ${PLAN_BILLING_GOOGLE_CREDENTIALS_PATH:-}
+      PLAN_BILLING_PUBSUB_AUDIENCE: ${PLAN_BILLING_PUBSUB_AUDIENCE:-}
+      PLAN_BILLING_PUBSUB_SA: ${PLAN_BILLING_PUBSUB_SA:-}
       DEEPLINK_BASE_URL: https://${DOMAIN}
       DEEPLINK_SCHEME: ${DEEPLINK_SCHEME:-bandapp}
       IOS_APP_ID: ${IOS_APP_ID:-}
@@ -90,6 +100,10 @@ services:
       ANDROID_SHA256_CERT_FINGERPRINTS: ${ANDROID_SHA256_CERT_FINGERPRINTS:-}
     volumes:
       - ${FCM_CREDENTIALS_HOST_PATH:-/dev/null}:/run/secrets/fcm-credentials.json:ro
+      # Play Developer API 서비스 계정 키. FCM 키와 같은 방식으로 호스트 파일을 읽기전용 마운트한다.
+      # 이 줄이 없으면 PLAN_BILLING_GOOGLE_CREDENTIALS_PATH 를 채워도 컨테이너 안에 파일이 없어
+      # gateway=google 이 기동에 실패한다.
+      - ${PLAY_SA_HOST_PATH:-/dev/null}:/run/secrets/play-developer-sa.json:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
       interval: 10s

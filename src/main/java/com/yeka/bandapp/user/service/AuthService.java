@@ -65,6 +65,9 @@ public class AuthService {
     @Transactional
     public AuthResponse signup(SignupRequest request) {
         String email = normalizeEmail(request.email());
+        // 반송이 확정된 예약 도메인(example.com, .test …)은 계정을 만들지 않는다 — 인증 메일이
+        // 100% 반송돼 Gmail 발신 평판만 깎는다(EmailPolicy 주석).
+        EmailPolicy.requireDeliverable(email);
         if (userRepository.existsByEmailAndSocialProviderIsNullAndDeletedAtIsNull(email)) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }

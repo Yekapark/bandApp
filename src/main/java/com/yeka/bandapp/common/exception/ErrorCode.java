@@ -20,6 +20,7 @@ public enum ErrorCode {
 
     // 계정 (Phase 1)
     EMAIL_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
+    EMAIL_DOMAIN_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "메일을 받을 수 없는 주소입니다."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     ACCOUNT_WITHDRAWN(HttpStatus.UNAUTHORIZED, "탈퇴한 계정입니다."),
@@ -127,7 +128,7 @@ public enum ErrorCode {
     COUPON_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 쿠폰 코드입니다."),
     COUPON_EXPIRED(HttpStatus.GONE, "사용 기한이 지난 쿠폰입니다."),
     COUPON_EXHAUSTED(HttpStatus.CONFLICT, "모두 사용된 쿠폰입니다."),
-    COUPON_ALREADY_USED(HttpStatus.CONFLICT, "이 밴드에서 이미 사용한 쿠폰입니다.");
+    COUPON_ALREADY_USED(HttpStatus.CONFLICT, "이미 사용한 쿠폰입니다.");
 
     private final HttpStatus status;
     private final String defaultMessage;
