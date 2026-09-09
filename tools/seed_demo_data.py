@@ -1,9 +1,13 @@
 """스토어 스크린샷용 데모 데이터를 만든다.
 
+    # Git Bash (MINGW64)
+    BANDULE_DEMO_PW='고를비밀번호8자이상' python tools/seed_demo_data.py
+
     # PowerShell
-    $env:BANDULE_DEMO_PW = "고를비밀번호8자이상"
-    python tools/seed_demo_data.py                  # 운영(api.bandule.com)
-    python tools/seed_demo_data.py http://localhost:8080
+    $env:BANDULE_DEMO_PW = "고를비밀번호8자이상"; python tools/seed_demo_data.py
+
+    # 로컬 서버를 대상으로 하려면 주소를 인자로
+    BANDULE_DEMO_PW='...' python tools/seed_demo_data.py http://localhost:8080
 
 데모 계정 4개(밴드장 1 + 멤버 3)를 만들고 밴드 하나를 채운다. 합주실 3곳(지도 마커),
 지난·다가올 합주 7건, 참석 현황, 셋리스트, 정산(일부 납부), 정기 일정, 사진 붙은 게시글까지.
@@ -31,11 +35,13 @@ if not PW or len(PW) < 8:
 KST = timezone(timedelta(hours=9))
 NOW = datetime.now(KST)
 
+# 주소는 우리 도메인으로 잡는다. 가입하면 서버가 인증 메일을 보내므로, 남의 것일 수도 있는
+# gmail 주소를 쓰면 모르는 사람에게 메일이 간다. 받은편지함은 없어도 가입·로그인은 된다.
 MEMBERS = [
-    ("bandule.demo.leader@gmail.com", "박정우"),
-    ("bandule.demo.gt@gmail.com", "이서현"),
-    ("bandule.demo.bs@gmail.com", "김도윤"),
-    ("bandule.demo.dr@gmail.com", "최유진"),
+    ("demo.leader@bandule.com", "박정우"),
+    ("demo.guitar@bandule.com", "이서현"),
+    ("demo.bass@bandule.com", "김도윤"),
+    ("demo.drum@bandule.com", "최유진"),
 ]
 BAND = "노을밴드"
 ROOMS = [
