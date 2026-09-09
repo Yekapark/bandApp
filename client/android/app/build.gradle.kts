@@ -7,12 +7,48 @@ plugins {
 }
 
 // 카카오 네이티브 앱 키. 로그인 리다이렉트 스킴(kakao{키}://oauth)이 매니페스트에 박혀야 해서
-// 빌드 시점에 필요하다 — 저장소에 키를 커밋하지 않도록 local.properties 에서만 읽는다.
-// android/local.properties 에 `kakao.appKey=...` 한 줄. 없으면 빈 값이라 카카오계정 로그인만 안 된다.
-val kakaoAppKey: String = Properties().apply {
-    val f = rootProject.file("local.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
-}.getProperty("kakao.appKey") ?: ""
+// 빌드 시점에도 필요하다. 값의 출처는 **client/dart_defines.json 하나뿐**이다 —
+// 다트 쪽(KakaoSdk.init)이 쓰는 그 파일을 그대로 읽는다.
+//
+// 예전에는 android/local.properties 의 `kakao.appKey` 를 따로 읽었는데, 같은 키가 두 파일에
+// 나뉘어 있어서 한쪽만 바꾸면 조용히 어긋났다. 그러면 로그인 창은 새 앱으로 뜨는데 인가 코드는
+// 옛 스킴으로 돌아와 받을 데가 없고, 브라우저가 "카카오계정으로 로그인"만 반복한다
+// (2026-09-09 에 실제로 겪었다). 이제 한 파일만 고치면 양쪽이 같이 따라간다.
+//
+// 두 파일 모두 저장소에 커밋하지 않는다(각각의 .gitignore). 없으면 빈 값이고, 그때는
+// 카카오 로그인만 조용히 꺼진다 — 키 없는 PC 에서도 빌드는 그대로 된다.
+val kakaoAppKey: String = run {
+    val defines = rootProject.file("../dart_defines.json")
+    val fromDefines = if (defines.exists()) {
+        @Suppress("UNCHECKED_CAST")
+        val parsed = groovy.json.JsonSlurper().parse(defines) as Map<String, Any?>
+        parsed["KAKAO_NATIVE_APP_KEY"] as? String
+    } else {
+        null
+    }
+
+    // 이전 방식으로 넣어 둔 값이 남아 있으면 알려 준다 — 이제 무시되므로, 그걸 고치고
+    // "왜 안 바뀌지" 로 또 시간을 쓰지 않게.
+    val legacy = Properties().apply {
+        val f = rootProject.file("local.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }.getProperty("kakao.appKey")
+    if (legacy != null && legacy != fromDefines) {
+        logger.warn(
+            "[bandule] android/local.properties 의 kakao.appKey 는 더 이상 쓰이지 않는다 " +
+                "— client/dart_defines.json 의 KAKAO_NATIVE_APP_KEY 만 본다. 그 줄은 지워도 된다.",
+        )
+    }
+
+    if (fromDefines.isNullOrBlank()) {
+        logger.lifecycle(
+            "[bandule] dart_defines.json 에 KAKAO_NATIVE_APP_KEY 가 없다 — 카카오 로그인 없이 빌드한다.",
+        )
+        ""
+    } else {
+        fromDefines
+    }
+}
 
 // 릴리스 서명 키 정보. 없으면 null 이고, 그때는 디버그 키로 서명한다(아래 signingConfigs).
 // 이 파일과 .jks 는 저장소에 절대 넣지 않는다 — 잃어버리면 그 앱은 영원히 업데이트할 수 없고,

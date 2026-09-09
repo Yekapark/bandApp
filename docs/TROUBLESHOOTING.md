@@ -18,6 +18,55 @@
 
 ---
 
+## 2026-09-09 — 카카오 로그인이 옛 앱(bandapp)으로 붙고, 고쳐도 브라우저만 맴돌았다
+
+**증상** — 두 단계로 나타났다.
+
+1. 카카오 동의 화면에 **`bandapp`** 이 떴다. 써야 할 앱은 `Bandule` 이다.
+2. 앱 키를 바꾼 뒤에는 동의 화면이 `Bandule` 로 바뀌었지만, **계속하기를 누르면**
+   상단이 `웹페이지 불러오는 중` ↔ `카카오계정으로 로그인` 만 반복하고 앱으로 안 돌아왔다.
+
+**원인** — **같은 카카오 앱 키가 두 파일에 나뉘어 있었다.**
+
+| 파일 | 쓰이는 곳 |
+|---|---|
+| `client/dart_defines.json` 의 `KAKAO_NATIVE_APP_KEY` | 다트 `KakaoSdk.init` — **로그인을 어느 앱으로 요청할지** |
+| `client/android/local.properties` 의 `kakao.appKey` | `build.gradle.kts` → 매니페스트의 `kakao{키}://oauth` 스킴 — **로그인 끝나고 앱으로 돌아올 주소** |
+
+둘 다 `.gitignore` 대상이라 PC 마다 손으로 넣는 파일이고, 이름도 위치도 달라서
+**한쪽만 고치면 아무 경고 없이 어긋난다.**
+
+- 처음엔 둘 다 `bandapp` 이었다 → 동의 화면에 `bandapp`.
+- `dart_defines.json` 만 `Bandule` 로 바꿨다 → 카카오는 `Bandule` 로 로그인시키고 인가 코드를
+  `kakao{Bandule키}://oauth` 로 돌려보내는데, 앱은 `kakao{bandapp키}://oauth` 만 받게
+  선언돼 있으니 **받을 액티비티가 없다.** 브라우저가 돌아갈 곳을 못 찾아 그 자리에서 맴돈다.
+
+증상이 "실패" 가 아니라 "무한 로딩" 이라 원인을 짐작하기 어려웠다. 서버 로그에도 안 남는다 —
+인가 코드가 앱까지 못 와서 서버 호출 자체가 일어나지 않기 때문이다.
+
+**해결** — **출처를 `dart_defines.json` 하나로 합쳤다.**
+`build.gradle.kts` 가 `local.properties` 대신 `../dart_defines.json` 을 직접 읽는다
+(`groovy.json.JsonSlurper`, 의존성 추가 없음). 이제 그 파일 한 줄만 고치면 다트와 매니페스트가
+같이 따라간다. `local.properties` 에 옛 `kakao.appKey` 가 남아 있으면 빌드 로그에
+"더 이상 쓰이지 않는다" 경고를 찍는다 — 그걸 고치고 왜 안 바뀌냐고 또 헤매지 않게.
+
+**확인법** — 앱에서 카카오 로그인 → 동의 화면에 **Bandule** 이 뜨고, 계속하기 후 **앱으로
+돌아오면** 정상이다. 빌드된 매니페스트의 스킴이 실제로 바뀌었는지는:
+
+```bash
+grep -rho 'android:scheme="kakao[^"]*"' client/build/app/intermediates/merged_manifests/prodRelease/
+```
+
+> 같은 뿌리의 함정이 하나 더 있다. **키 해시는 서명 키마다 다르다.** Play 앱 서명을 쓰면
+> 사용자가 받는 앱은 구글 키로 재서명되므로 **Play Console → 앱 서명 → 앱 서명 키 인증서**의
+> SHA-1 을 base64 로 바꿔 등록해야 한다(업로드 키 인증서가 아니다). USB 로 디버그 빌드를
+> 깔아 테스트하려면 디버그 키의 해시를 **추가로** 등록해야 한다 — 여러 개 등록된다.
+> ```bash
+> echo "<SHA-1>" | tr -d ':' | xxd -r -p | openssl base64
+> ```
+
+---
+
 ## 2026-09-08 — 신고·인증 메일이 한 통도 안 나갔다 (`.env.prod` 는 채웠는데)
 
 **증상** — 신고 접수를 메일로도 보내게 만들고(`f57d304`) 서버 `.env.prod` 에
