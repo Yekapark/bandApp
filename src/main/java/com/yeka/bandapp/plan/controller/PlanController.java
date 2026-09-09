@@ -72,7 +72,8 @@ public class PlanController {
             description = "운영자가 발급한 쿠폰 코드로 PREMIUM 기간을 얻는다. 밴드장만"
                     + "(그 외 403 NOT_BAND_LEADER). 이미 PREMIUM 이면 남은 기간에 더한다. "
                     + "없는 코드 404 COUPON_NOT_FOUND, 기한 지남 410 COUPON_EXPIRED, "
-                    + "모두 사용됨 409 COUPON_EXHAUSTED, 이 밴드가 이미 쓴 쿠폰 409 COUPON_ALREADY_USED.")
+                    + "모두 사용됨 409 COUPON_EXHAUSTED, 이 밴드 또는 이 계정이 이미 쓴 쿠폰 409 "
+                    + "COUPON_ALREADY_USED(한 계정은 한 쿠폰을 한 번만 — 밴드를 여러 개 만들어도 같다).")
     @PostMapping("/coupons/redeem")
     public ApiResponse<PlanResponse> redeemCoupon(@AuthenticationPrincipal AuthPrincipal principal,
                                                   @PathVariable long bandId,

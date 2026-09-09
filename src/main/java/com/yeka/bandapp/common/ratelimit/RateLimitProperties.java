@@ -14,7 +14,8 @@ public record RateLimitProperties(
         int mediaUploadPerUserPerMin,
         int reportPerUserPerMin,
         int deviceTokenPerUserPerMin,
-        int emailVerificationPerUserPerMin
+        int emailVerificationPerUserPerMin,
+        int emailPerAddressPerMin
 ) {
     public RateLimitProperties {
         if (inviteJoinPerUserPerMin <= 0) {
@@ -40,6 +41,9 @@ public record RateLimitProperties(
         }
         if (emailVerificationPerUserPerMin <= 0) {
             emailVerificationPerUserPerMin = 3;
+        }
+        if (emailPerAddressPerMin <= 0) {
+            emailPerAddressPerMin = 3;
         }
     }
 }

@@ -26,9 +26,12 @@ import java.util.Locale;
  * 일이 없다. 오히려 <b>묶어야 한다</b> — 사용 기록·횟수 차감·티어 변경 셋이 따로 커밋되면 중간에
  * 실패했을 때 "쓴 걸로 기록됐는데 기간은 안 늘어난" 상태가 남는다.
  *
- * <p>중복 사용 방어는 두 겹이다: ① 밴드별 사용 기록의 유니크 제약({@code ux_plan_coupon_redemptions})
- * 이 같은 밴드의 재사용을 막고, ② 남은 횟수 검사를 WHERE 에 넣은 조건부 UPDATE 가 여러 밴드의
- * 마지막 한 장 경합을 막는다. 유니크 위반은 {@code COUPON_ALREADY_USED} 로 옮긴다(CLAUDE.md 규칙).
+ * <p>중복 사용 방어는 세 겹이다: ① 밴드별 유니크({@code ux_plan_coupon_redemptions})가 같은 밴드의
+ * 재사용을 막고, ② 계정별 유니크({@code ux_plan_coupon_redemptions_user}, V18)가 한 사람이 밴드를
+ * 여러 개 만들어 같은 코드를 반복 사용하는 것을 막고 — 밴드 생성에 개수 제한이 없어서 이게 없으면
+ * 코드 한 장이 새는 순간 한 사람이 {@code max_uses} 를 혼자 다 태울 수 있다 —, ③ 남은 횟수 검사를
+ * WHERE 에 넣은 조건부 UPDATE 가 여러 밴드의 마지막 한 장 경합을 막는다.
+ * ①②의 유니크 위반은 모두 {@code COUPON_ALREADY_USED} 로 옮긴다(CLAUDE.md 규칙).
  */
 @Service
 public class PlanCouponService {
@@ -76,7 +79,7 @@ public class PlanCouponService {
             throw new BusinessException(ErrorCode.COUPON_EXHAUSTED);
         }
 
-        // 이 밴드가 이미 썼는지 먼저 본다 — 소진되지도 않았는데 남의 횟수를 깎지 않도록.
+        // 이 밴드·이 계정이 이미 썼는지 먼저 본다 — 소진되지도 않았는데 남의 횟수를 깎지 않도록.
         recordRedemption(coupon.getId(), bandId, userId, now);
 
         if (couponRepository.consume(coupon.getId()) == 0) {

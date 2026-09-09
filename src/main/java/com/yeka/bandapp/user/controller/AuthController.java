@@ -44,7 +44,8 @@ public class AuthController {
     @Operation(summary = "이메일 회원가입",
             description = "새 이메일 계정을 만들고 바로 로그인 상태로 토큰을 발급한다(201). "
                     + "이메일은 대소문자·공백을 정규화해 저장한다. 이미 있으면 409 EMAIL_ALREADY_REGISTERED, "
-                    + "비밀번호 8자 미만 등은 400 INVALID_INPUT.")
+                    + "비밀번호 8자 미만 등은 400 INVALID_INPUT. 메일을 받을 수 없는 예약 도메인"
+                    + "(example.com, .test, .invalid, .localhost, .local)은 400 EMAIL_DOMAIN_NOT_ALLOWED.")
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<AuthResponse> signup(@Valid @RequestBody SignupRequest request) {
