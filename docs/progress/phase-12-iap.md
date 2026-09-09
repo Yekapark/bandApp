@@ -204,19 +204,39 @@ flutter test                 # 56개 통과
 4. 라이선스 테스터에 본인·테스터 계정 등록
 5. 서명된 AAB 를 **내부 테스트 트랙**에 올림 (검증 API 는 트랙에 올라간 앱에만 동작)
 
-**서버 `.env.prod` 추가 후 앱만 재기동:**
+**서버에 서비스 계정 키를 올리고 `.env.prod` 를 채운 뒤 앱만 재기동:**
+
+```bash
+# 1) Play Developer API 서비스 계정 키 (앱이 uid 999 로 돈다)
+scp play-sa.json root@64.176.231.126:/opt/bandapp/secrets/play-sa.json
+ssh root@64.176.231.126 'chown 999:999 /opt/bandapp/secrets/play-sa.json && chmod 600 $_'
 ```
+
+```
+# 2) .env.prod
 PLAN_BILLING_GATEWAY=google
 PLAN_BILLING_GOOGLE_PACKAGE=com.yeka.bandule
+PLAY_SA_HOST_PATH=./secrets/play-sa.json                        # 호스트 파일 (컨테이너에 마운트된다)
 PLAN_BILLING_GOOGLE_CREDENTIALS_PATH=/run/secrets/play-developer-sa.json
 PLAN_BILLING_WEBHOOK_SECRET=<위 ?token= 과 같은 값>
-# (선택, OIDC) PLAN_BILLING_PUBSUB_AUDIENCE=<push 구독 audience>
-# (선택, OIDC) PLAN_BILLING_PUBSUB_SA=<Pub/Sub 인증 서비스 계정 이메일>
+# (권장, OIDC) PLAN_BILLING_PUBSUB_AUDIENCE=<push 구독 audience>
+# (권장, OIDC) PLAN_BILLING_PUBSUB_SA=<Pub/Sub 인증 서비스 계정 이메일>
 ```
+
+> 경고 — `.env.prod` 에 넣는 것만으로는 부족하다. **`docker-compose.prod.yml` 의
+> `app.environment` 에도 그 이름이 있어야** 컨테이너에 실린다. 2026-09-09 에 이게 빠져 있어
+> 운영이 `gateway=noop` 으로 돌 뻔했고, 그 상태면 아무 토큰이나 PREMIUM 1년을 받는다
+> (`docs/TROUBLESHOOTING.md` 맨 위 항목). 지금은 들어가 있다.
+
 ```bash
-ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 \
-  'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d app'
-# 로그에 "Google Play 결제 검증 활성화 package=com.yeka.bandule" 가 떠야 한다
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126   'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d app'
+# 로그에 "Google Play 결제 검증 활성화 package=com.yeka.bandule" 가 떠야 한다.
+# "[no-op billing]" 이나 "운영인데 결제 게이트웨이가 noop 이다" 가 보이면 설정이 안 실린 것.
+```
+
+```bash
+# 컨테이너 안에 실제로 실렸는지 확인 (.env.prod 가 아니라 컨테이너를 본다 — 2026-09-09 사고의 핵심)
+ssh root@64.176.231.126 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml   --env-file .env.prod exec app env | grep PLAN_BILLING'
 ```
 
 ### 5-4. 실기기 e2e (슬라이스 4)
@@ -265,7 +285,9 @@ CI 로만 검증.**
   Pub/Sub 가 (기본 7일) 재시도하다 포기하므로 영구 루프는 아니지만, 클라 verify 가 영영 안 오면
   로그 노이즈가 생긴다.
 - **`NoOpStoreBillingGateway` 는 운영에서 절대 쓰면 안 된다.** 아무 토큰이나 ACTIVE 로 통과시킨다.
-  `PLAN_BILLING_GATEWAY` 를 명시적으로 `google` 로 두는 것이 유일한 방어 — 운영 `.env.prod` 확인 필수.
+  2026-09-09 부터 `prod` 프로파일에서는 이 게이트웨이가 **모든 검증을 거부**하도록 막아 뒀지만
+  (`fetch` 가 항상 빈 값 → 402 `PURCHASE_NOT_VERIFIED`), 그건 설정 사고에 대비한 최후 방어선이고
+  정상 상태가 아니다. `PLAN_BILLING_GATEWAY=google` 을 넣고 **컨테이너 안에 실제로 실렸는지**까지 확인한다.
 
 ---
 

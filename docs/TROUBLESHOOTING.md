@@ -18,6 +18,97 @@
 
 ---
 
+## 2026-09-09 — 운영에서 아무 문자열이나 넣으면 PREMIUM 1년이 공짜로 붙었다
+
+**증상** — 배포 전 점검에서 발견. 운영에 올라간 서버에 밴드장 계정으로
+
+```
+POST /api/v1/bands/{밴드}/plan/google/verify   {"purchaseToken":"x"}
+```
+
+를 보내면 결제 없이 PREMIUM 1년이 붙는다. 반대로 Google Play 의 갱신·해지·환불 알림(RTDN)은
+서버가 **전부 403 으로 거부**해서 하나도 반영되지 않는다.
+
+**원인** — `docker-compose.prod.yml` 의 `app.environment` 에 `PLAN_BILLING_*` 가 한 줄도 없었다.
+서버 `.env.prod` 에 값을 채워도 compose 가 컨테이너에 안 실어서, 앱 안에서는
+`app.plan.billing.gateway` 가 **기본값 `noop`** 이 된다. 그러면 `NoOpStoreBillingGateway` 가
+뜨는데(`matchIfMissing = true`), 이 구현은 개발·CI 편의용이라 토큰 접두사가
+`invalid-`/`revoked-`/`expired-`/`hold-` 가 아니면 **무조건 "정상 구독 · 만료 1년 뒤"** 를
+돌려준다. 결제 검증이 사실상 없는 상태로 돈 받는 기능이 열려 있었던 것이다.
+웹훅 쪽은 같은 이유로 `PLAN_BILLING_WEBHOOK_SECRET` 도 안 실려 인증 수단이 하나도 없었고,
+`WebhookAuthenticator` 가 fail-closed 라 전부 거부했다.
+
+**2026-09-08 에 메일이 전부 no-op 이던 것과 똑같은 원인이다** — `.env.prod` 에 값을 넣는 것과
+그 값이 컨테이너에 실리는 것은 별개인데, compose 의 `environment:` 목록을 같이 고치는 걸
+잊었다. 그때는 메일이 안 나가는 정도였지만 이번엔 돈이 샜다.
+`docs/progress/phase-12-iap.md` 의 배포 절차도 "`.env.prod` 에 넣고 재기동" 이라고만 적혀 있어
+그대로 따라 해도 안 되는 상태였다.
+
+**해결** — 세 가지를 함께 했다.
+
+1. `docker-compose.prod.yml` 에 `PLAN_BILLING_GATEWAY`·`_WEBHOOK_SECRET`·`_GOOGLE_PACKAGE`·
+   `_GOOGLE_CREDENTIALS_PATH`·`_PUBSUB_AUDIENCE`·`_PUBSUB_SA` 를 넘기게 추가하고,
+   Play 서비스 계정 키를 `${PLAY_SA_HOST_PATH}` → `/run/secrets/play-developer-sa.json` 로
+   읽기전용 마운트한다(FCM 키와 같은 방식).
+2. `.env.prod.example` 에 이 변수들을 설명과 함께 넣었다. 운영은 `PLAN_BILLING_GATEWAY=google`.
+3. **최후 방어선** — `NoOpStoreBillingGateway` 가 `prod` 프로파일에서는 어떤 토큰도 통과시키지
+   않는다(`fetch` 가 항상 빈 값 → 402 `PURCHASE_NOT_VERIFIED`). 설정이 또 빠져도 공짜
+   PREMIUM 은 안 나간다. 기동 로그에 에러도 남긴다. 앱 기동 자체를 막지는 않는다 — 결제와
+   무관한 기능까지 멈추면 손해가 더 크고, 쿠폰 PREMIUM 은 이 게이트웨이를 안 탄다.
+
+**확인법** — 배포 후 앱 로그에
+
+```
+Google Play 결제 검증 활성화 package=com.yeka.bandule
+```
+
+가 떠야 한다. `[no-op billing]` 이나 `운영인데 결제 게이트웨이가 noop 이다` 가 보이면 아직
+설정이 안 실린 것이다. 컨테이너에 실제로 들어갔는지는
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec app env | grep PLAN_BILLING
+```
+
+로 확인한다(`.env.prod` 를 보는 게 아니라 **컨테이너 안**을 봐야 한다 — 이번 사고의 핵심).
+가짜 토큰으로 `/plan/google/verify` 를 때렸을 때 402 가 나오면 정상.
+단위 테스트는 `NoOpStoreBillingGatewayTest.prod_profile_refuses_every_token`.
+
+---
+
+## 2026-09-09 — `flutter build appbundle` 이 Kotlin "different roots" 로 죽는다
+
+**증상** — 릴리스 AAB 빌드 시 여러 플러그인(`video_compress`, `image_picker_android`,
+`kakao_flutter_sdk_common`, `kakao_map_sdk`, `shared_preferences_android` …)의
+`compileReleaseKotlin` 이 줄줄이 실패한다:
+```
+java.lang.IllegalArgumentException: this and base files have different roots:
+  C:\Users\USER\AppData\Local\Pub\Cache\hosted\pub.dev\<plugin>\...\X.kt  and  E:\project\band\client\android
+```
+
+**원인** — **프로젝트는 `E:` 에, pub 캐시는 `C:\Users\USER\AppData\Local\Pub\Cache` 에**
+있다. Kotlin 증분 컴파일러의 `RelocatableFileToPathConverter` 가 소스 파일 경로를 프로젝트
+기준 **상대경로**로 저장하려 하는데, `C:` 와 `E:` 사이에는 상대경로가 존재하지 않아
+`File.relativeTo` 가 예외를 던진다. `android/gradle.properties` 에 `kotlin.incremental=false`
+를 넣어도 **새 Kotlin Build Tools API(BTAPI) 경로는 이 플래그를 무시**하고 증분 캐시
+디렉터리를 만들다 같은 지점에서 터진다.
+
+**해결** — pub 캐시를 프로젝트와 **같은 드라이브**로 옮긴다.
+```bash
+setx PUB_CACHE "E:\pub-cache"          # 영구(새 셸부터)
+export PUB_CACHE=/e/pub-cache          # 현재 셸에도
+cd /e/project/band/client && flutter clean && (cd android && ./gradlew --stop)
+flutter pub get                        # 패키지를 E:\pub-cache 로 새로 받음
+flutter build appbundle --release --flavor prod \
+  --dart-define-from-file=dart_defines.json --dart-define=API_BASE_URL=https://api.bandule.com
+```
+`kotlin.incremental=false` 는 그대로 둔다(무해, 다른 상황 대비).
+
+**확인법** — `flutter build appbundle` 이 `app-prod-release.aab` 를 만들면 끝.
+`echo $PUB_CACHE` 가 `E:` 경로를 가리키고, `ls "$PUB_CACHE/hosted/pub.dev"` 에 패키지가
+들어와 있어야 한다. 빌드 로그에 더 이상 `different roots` 가 없다.
+
+---
+
 ## 2026-09-08 — 신고·인증 메일이 한 통도 안 나갔다 (`.env.prod` 는 채웠는데)
 
 **증상** — 신고 접수를 메일로도 보내게 만들고(`f57d304`) 서버 `.env.prod` 에
