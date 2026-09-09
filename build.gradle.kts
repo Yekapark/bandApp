@@ -54,7 +54,7 @@ dependencies {
     // FCM 푸시 발송(Phase 9). BUILD_PLAN Phase 9 "FCM 연동" + DESIGN.md 스택(Firebase Cloud Messaging)에
     // 근거가 있는 의존성이다. 서비스 계정 키가 없으면 FcmPushSender 가 조용히 비활성으로 뜨고
     // (R2StorageClient 선례), 알림은 부가 기능이라 미설정이 일정 등록·정산을 깨지 않는다.
-    implementation("com.google.firebase:firebase-admin:9.4.3")
+    implementation("com.google.firebase:firebase-admin:9.10.0")
 
     // Google Play Developer API — 인앱결제 구독 검증(Phase 12). purchases.subscriptionsv2.get 로 구매
     // 토큰의 현재 상태를 읽고, purchases.subscriptions.acknowledge 로 확인 처리한다. google-api-client·
