@@ -80,6 +80,28 @@ class PlanCouponIntegrationTest extends PlanApiSupport {
         assertThat(errorCode(again)).isEqualTo("COUPON_ALREADY_USED");
     }
 
+    /**
+     * 밴드를 새로 파도 같은 쿠폰을 또 쓸 수 없다({@code ux_plan_coupon_redemptions_user}, V18).
+     * 밴드 생성에 개수 제한이 없어서, 계정별 유니크가 없으면 코드 한 장이 새는 순간
+     * 한 사람이 {@code max_uses} 를 혼자 다 태울 수 있다.
+     */
+    @Test
+    void one_account_cannot_spend_the_same_coupon_on_a_second_band() {
+        String leader = signup("cp-multi@band.app", "리더");
+        long bandOne = createBand(leader, "첫밴드");
+        long bandTwo = createBand(leader, "둘째밴드");
+        insertCoupon("ONEPERS1", 30, 5, null);
+
+        assertThat(redeemCoupon(leader, bandOne, "ONEPERS1").getStatusCode().value()).isEqualTo(200);
+
+        ResponseEntity<String> second = redeemCoupon(leader, bandTwo, "ONEPERS1");
+        assertThat(second.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(second)).isEqualTo("COUPON_ALREADY_USED");
+        assertThat(tierOf(bandTwo)).isEqualTo(PlanTier.FREE);
+        // 거부된 시도가 남의 횟수를 깎지 않았는지 — 5장 중 1장만 나갔어야 한다.
+        assertThat(usedCount("ONEPERS1")).isEqualTo(1);
+    }
+
     @Test
     void exhausted_coupon_is_rejected() {
         String first = signup("cp-e1@band.app", "리더1");

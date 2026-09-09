@@ -64,6 +64,279 @@ grep -rho 'android:scheme="kakao[^"]*"' client/build/app/intermediates/merged_ma
 > ```bash
 > echo "<SHA-1>" | tr -d ':' | xxd -r -p | openssl base64
 > ```
+## 2026-09-09 — 결제 검증이 "상태만" 보고 통과시키던 것 셋
+
+**증상** — 없다. 배포 전 결제 경로 점검에서 나온 것들이라 아직 아무도 안 당했다.
+Play 결제를 실제로 켜기 전에 막아 둔다.
+
+**원인과 해결**
+
+**(1) 우리 상품인지 안 봤다.** `purchases.subscriptionsv2.get` 은 **패키지 단위**라
+이 앱의 어떤 구독 토큰이든 조회된다. 그런데 응답의 `productId` 를 읽기만 하고
+(acknowledge 에 넘기려고) 대조하지는 않았다. 상품이 `premium_yearly` 하나뿐인 지금은
+무해하지만, **더 싼 상품을 하나라도 추가하는 순간 그 토큰으로 PREMIUM 을 받는 길이 열린다.**
+상품이 늘기 전에 막는 게 맞다 — 늘어난 뒤에는 "왜 이 사람만 싸게 샀지"를 정산에서 발견하게 된다.
+→ `app.plan.billing.google-product-id`(기본 `premium_yearly`)와 대조한다.
+
+**(2) 만료일이 없어도 통과시켰다.** 매퍼가 `lineItems` 에서 만료 시각을 못 찾으면
+`null` 을 돌려주고, 그게 그대로 `band_plans.expires_at` 에 NULL 로 저장된다. 만료 배치의
+조건이 `expires_at < now` 라 **NULL 은 영원히 걸리지 않는다** = 공짜 무기한 PREMIUM.
+정상 구독이면 항상 값이 오지만, 안 왔을 때 조용히 무기한을 주는 쪽으로 실패하고 있었다.
+→ `expiryTime == null` 이면 거부(402).
+
+(1)(2)는 `StoreSubscriptionService.grantable()` 한 곳에 모았다. 사용자 검증과 RTDN 웹훅이
+둘 다 이 판정을 지나므로, 한쪽만 고치고 다른 쪽이 남는 일이 없다.
+
+**(3) 웹훅 OIDC 가 "누가 보냈나"를 안 봤다.** `google-pubsub-service-account` 대조가
+**선택**이었다. audience 는 우리 웹훅 URL 이고, **그 값을 audience 로 하는 진짜 구글 OIDC
+토큰은 아무 GCP 계정이나 자기 서비스 계정으로 발급할 수 있다.** 서명·발급자·만료가 전부
+정상이라 검증기도 통과시킨다. 즉 audience 만 설정하면 **아무나 웹훅을 부를 수 있었고**,
+환불(REVOKED)·만료 이벤트를 임의로 밀어 넣어 남의 밴드를 FREE 로 떨어뜨릴 수 있었다.
+→ audience 가 있는데 서비스 계정이 없으면 OIDC 경로를 **아예 열지 않는다**(기동 로그에 에러).
+
+**확인법** — `PlanPurchaseValidationIntegrationTest`(다른 상품 402 · 만료일 없음 402 ·
+정상 구매는 200 대조군), `WebhookAuthenticatorTest.oidc_path_is_closed_when_the_service_account_is_not_configured`.
+운영에서는 `.env.prod` 에 `PLAN_BILLING_PUBSUB_AUDIENCE` 를 넣었다면
+`PLAN_BILLING_PUBSUB_SA` 도 반드시 함께 넣는다 — 안 넣으면 웹훅이 공유 시크릿으로만 인증된다.
+## 2026-09-09 — 회색 구름인데 Cloudflare realip 을 켜 둬서 IP 레이트리밋이 뚫려 있었다
+
+**증상** — 눈에 보이는 증상이 없다. 배포 전 점검에서 nginx 접근 로그를 읽다 발견했다.
+로그인 무차별 대입·초대코드 대입·가입 스팸을 막는 **IP 기준 상한이 전부 우회 가능한 상태**였다.
+
+**원인** — 설정과 DNS 상태가 어긋나 있었다.
+
+`app.conf.template` 이 `cloudflare-realip.conf` 를 include 하고 있었고, 그 파일은
+"Cloudflare 대역에서 온 요청이면 `CF-Connecting-IP` 헤더를 진짜 클라이언트 IP 로 믿어라"
+라고 말한다. **주황 구름(Proxied)일 때는 맞는 설정이다** — 오리진에 Cloudflare 만 닿으니까.
+
+그런데 `api.<도메인>` 이 **회색 구름(DNS only)** 으로 되돌아가 있었다. 회색이면 오리진이
+인터넷에 직접 열려 있고, "Cloudflare 대역에서 왔다"는 전제가 깨진다. Cloudflare 대역에서
+요청을 보내는 건 누구나 공짜로 할 수 있다 — 무료 Worker 의 아웃바운드가 CF 대역에서 나가고,
+자기 도메인을 주황 구름으로 걸어 이 오리진 IP 로 향하게 해도 된다. 그러면:
+
+```
+공격자 → (CF 대역에서) POST https://<오리진 IP>/api/v1/auth/login
+          Host: api.<도메인>
+          CF-Connecting-IP: 1.2.3.4      ← 매 요청 아무 값
+  → nginx: 피어가 set_real_ip_from 안 → 헤더 신뢰 → $remote_addr = 1.2.3.4
+  → proxy-headers.conf: X-Forwarded-For $remote_addr (위조값)
+  → 톰캣 RemoteIpValve → getRemoteAddr() → ClientIp.of() = 1.2.3.4
+```
+
+헤더만 바꿔 가며 무제한이다. 역설적이게도 **직접 XFF 를 위조하는 경로는 잘 막혀 있다**
+(`ClientIp` 가 헤더를 안 읽고, nginx 가 XFF 를 이어붙이지 않고 덮어쓴다). 앞문만 열려 있었다.
+
+왜 이렇게 됐나 — 2026-09-06 에 주황 구름을 켰고(LAUNCH_CHECKLIST 5단계 "완료"),
+그 뒤 회색으로 되돌렸는데 **되돌린 기록이 없다.** 그리고 `DEPLOY.md` 에
+"회색 구름으로 되돌려도 같은 설정이 그대로 맞다" 고 **틀린 설명**이 적혀 있어서, 되돌릴 때
+nginx 설정을 함께 볼 이유가 없었다. 설정 하나가 두 상태에 다 맞다고 믿은 것이 원인이다.
+
+**해결** — 세 가지.
+
+1. `app.conf.template` 의 realip include 를 **주석 처리**했다(회색 구름 기준). 켜고 끄는
+   조건과 "주황으로 바꾸면 반드시 되살릴 것"을 그 자리에 크게 적었다 — 안 되살리면 반대로
+   깨진다(전 사용자가 CF IP 몇 개로 뭉쳐 서로의 레이트리밋을 소진).
+2. `DEPLOY.md` 의 틀린 문장을 고치고, 어느 쪽으로 바꾸든 확인 절차를 넣었다.
+3. `test-realip.sh` 가 **템플릿의 include 상태를 읽어 ①의 기대값을 자동으로 맞추게** 했다.
+   예전에는 ①이 "CF 대역의 CF-Connecting-IP 인정"을 무조건 기대해서, 회색 구름에서도
+   초록불이 떴다 — 취약한 상태를 정상이라고 확인해 주고 있었다. 이제 설정과 기대가
+   한 곳(템플릿)에서 나온다.
+
+**확인법**
+
+```bash
+nslookup api.<도메인>     # 오리진 IP 그대로 = 회색, Cloudflare 대역 = 주황
+MSYS_NO_PATHCONV=1 sh deploy/nginx/test-realip.sh   # 다섯 케이스 전부 통과해야 한다
+```
+
+`test-realip.sh` 는 도커로 Cloudflare 대역·바깥 두 네트워크를 만들어 위조가 통하는지 본다.
+윈도우에서는 **리포가 `C:\...\Temp` 같은 경로 아래 있으면 안 된다** — Git Bash 의 `/tmp` 를
+Docker Desktop 이 마운트하지 못해 인증서 생성 단계에서 조용히 죽는다.
+
+**아직 안 한 것** — 왜 주황에서 회색으로 되돌렸는지 모른다. Cloudflare 대시보드 →
+계정 관리 → **감사 로그**에서 DNS 레코드 변경 이력을 확인해야 한다. 이유를 모른 채
+주황으로 다시 켜면 그때 겪었던 문제가 그대로 재발한다(무료 플랜 Bot Fight Mode 가 앱의
+`Dart/3.13 (dart:io)` 요청을 봇으로 보고 막는 유형이 흔하다).
+## 2026-09-09 — 모르는 주소로 가입이 들어와 인증 메일이 반송됐다
+
+**증상** — 10:08(KST) 운영 발신 계정으로 반송 메일이 왔다.
+
+```
+주소를 찾을 수 없음 — example.com 도메인을 찾지 못하여
+testuser12345@example.com 주소로 메일을 전송하지 못했습니다.
+```
+
+DB 를 보니 실제로 계정이 있었다. `users.id = 9`, `testuser12345@example.com`,
+이름 `Test User`, `social_provider` 는 NULL(= 이메일 가입), 생성 `2026-09-09 01:08:29+00`.
+**운영자도 테스터도 만든 적이 없는 계정이다.**
+
+**원인** — 두 가지가 겹쳤다.
+
+1. `POST /api/v1/auth/signup` 은 무인증 공개 엔드포인트이고, 도메인이 실재하는지 보지 않고
+   **형식만 맞으면 계정을 만들고 곧바로 인증 메일을 쏜다.** `example.com` 은 RFC 2606 이
+   문서·예제용으로 못 박은 예약 도메인이라 MX 레코드가 존재할 수 없다 — 보내면 100% 반송이다.
+2. 도메인은 Let's Encrypt 인증서를 받는 순간 **인증서 투명성(CT) 로그에 공개된다.** 새 도메인은
+   몇 시간 안에 자동 스캐너가 훑고, 흔한 API 경로에 `testuser12345@example.com` / `Test User`
+   같은 전형적인 값을 넣어 본다. 계정 생성 시각이 정확히 반송 시각과 같은 것도 그 그림에 맞는다.
+   (다만 **어느 IP 에서 왔는지 확인하기 전까지는 단정하지 않는다** — 확인법은 아래.)
+
+이게 왜 위험한가: 발송이 Gmail SMTP 한 계정에 얹혀 있다. 반송이 쌓이면 발신 평판이 깎이고
+Google 이 발송을 정지시킨다. 그러면 인증 메일만 죽는 게 아니라 **비밀번호 재설정과 신고 접수
+알림까지 같이 죽는다.** 게다가 비밀번호 재설정 요청은 IP 당 분당 20회 제한뿐이라, 남의 주소로
+**분당 20통**을 대신 쏘는 중계기로도 쓸 수 있었다(계정이 있는 주소에 한해).
+
+**해결** — 두 겹으로 막았다.
+
+1. **예약 도메인 가입 거부** — `EmailPolicy.requireDeliverable` 이 `example.com/.net/.org` 와
+   `.test`·`.example`·`.invalid`·`.localhost`·`.local` 로 끝나는 도메인을 400
+   `EMAIL_DOMAIN_NOT_ALLOWED` 로 돌려보낸다. 계정 자체가 안 만들어진다. 일회용 메일 도메인
+   차단은 하지 않는다 — 목록을 계속 따라다녀야 하고 오탐이 곧 가입 거부라 값에 비해 비싸다.
+2. **받는 주소당 분당 상한**(기본 3통, `app.ratelimit.email-per-address-per-min`) — 메일을
+   보내는 경로가 넷(가입 인증·재발송·비밀번호 재설정·신고 알림)인데 전부 `EmailSender.send()`
+   를 지나므로 거기 한 곳에 걸었다. 초과분은 **예외를 던지지 않고 조용히 버린다** — 429 를
+   돌려주면 `PasswordResetService.request` 가 "이 주소는 가입돼 있다"를 알려 주는 꼴이 되고,
+   그 메서드가 계정 존재 여부를 숨기려고 일부러 조용히 끝나는 설계가 무너진다.
+
+**확인법** — 단위 테스트 `EmailPolicyTest`(예약 도메인 거부, 대소문자·공백 우회 불가,
+`example.com.co.kr` 같은 진짜 주소는 통과). 운영에서는 가입 API 에 `a@example.com` 을 넣어
+400 `EMAIL_DOMAIN_NOT_ALLOWED` 가 나오면 된다.
+
+**아직 안 한 것** — 그 계정(`users.id = 9`)이 어디서 왔는지 확정하지 못했다. 아래로 확인한다.
+
+```bash
+# 그 시각 signup 요청의 출처 IP·User-Agent
+ssh root@64.176.231.126   'cd /opt/bandapp && docker compose -f docker-compose.prod.yml logs nginx | grep "auth/signup"'
+# 다른 정크 가입이 더 있는지
+ssh root@64.176.231.126 'docker exec $(docker ps -qf name=postgres) psql -U bandapp -d bandapp   -c "SELECT id, email, created_at FROM users ORDER BY created_at DESC LIMIT 20;"'
+```
+
+한 번뿐이면 스캐너 한 방으로 보고 그 계정만 지우면 된다. 계속 들어오면 가입에 별도
+레이트리밋(지금은 `/api/v1/auth/**` 공통 IP 당 20/분)을 더 좁혀야 한다.
+
+---
+
+## 2026-09-09 — 쿠폰 한 장을 한 사람이 통째로 태울 수 있었다
+
+**증상** — 배포 전 점검 중 "쿠폰 ABC 를 팀장이 한 번, 팀원이 한 번 넣으면?" 을 따라가다 발견.
+팀원은 애초에 못 넣고(밴드장만 가능, 403), 같은 밴드에서 두 번도 막힌다(409). 그런데
+**밴드장이 밴드를 새로 만들어 같은 코드를 다시 넣으면 그냥 된다.** `max_uses` 가 100 이면
+한 사람이 밴드 100개를 만들어 100장을 혼자 다 쓸 수 있었다.
+
+**원인** — `plan_coupon_redemptions` 의 유니크가 `(coupon_id, band_id)` 하나뿐이었다(V12).
+"같은 밴드에서 두 번" 만 생각하고 "같은 사람이 밴드를 갈아 가며" 를 안 봤다. 밴드 생성은
+개수 제한도 레이트리밋도 없어서(`BandService.create`, 레이트리밋은 `/api/v1/auth/**` 에만
+걸려 있다) 계정 하나로 밴드를 얼마든지 만들 수 있다. 횟수 상한 자체는 지켜지므로 손해가
+무한하진 않지만, "여러 밴드에 맛보기를 뿌린다"는 쿠폰의 목적이 무너진다 — 코드가 커뮤니티에
+한 번 새면 먼저 본 한 명이 전부 가져간다.
+
+**해결** — `(coupon_id, redeemed_by)` 유니크를 하나 더 걸었다(V18). 한 계정은 한 쿠폰을
+한 번만 쓴다. 애플리케이션 코드는 안 고쳐도 됐다 — `PlanCouponService` 의
+`DataIntegrityViolationException` catch 가 이 위반도 그대로 `COUPON_ALREADY_USED`(409) 로
+옮긴다. 사용 기록 INSERT 가 횟수 차감(`consume()`)보다 **먼저** 일어나는 순서라, 거부된
+시도가 남의 횟수를 깎지도 않는다.
+
+> 배포 전에 기존 데이터에 중복이 없는지 확인한다. 있으면 마이그레이션이 실패해 앱이 안 뜬다.
+> ```sql
+> SELECT coupon_id, redeemed_by, count(*) FROM plan_coupon_redemptions
+>  GROUP BY coupon_id, redeemed_by HAVING count(*) > 1;
+> ```
+
+**확인법** — `PlanCouponIntegrationTest.one_account_cannot_spend_the_same_coupon_on_a_second_band`
+(한 계정이 밴드 둘에 같은 코드 → 두 번째 409, 둘째 밴드는 FREE, `used_count` 는 1). 운영에서는
+```sql
+\d plan_coupon_redemptions   -- ux_plan_coupon_redemptions_user 가 보여야 한다
+```
+
+---
+
+## 2026-09-09 — 운영에서 아무 문자열이나 넣으면 PREMIUM 1년이 공짜로 붙었다
+
+**증상** — 배포 전 점검에서 발견. 운영에 올라간 서버에 밴드장 계정으로
+
+```
+POST /api/v1/bands/{밴드}/plan/google/verify   {"purchaseToken":"x"}
+```
+
+를 보내면 결제 없이 PREMIUM 1년이 붙는다. 반대로 Google Play 의 갱신·해지·환불 알림(RTDN)은
+서버가 **전부 403 으로 거부**해서 하나도 반영되지 않는다.
+
+**원인** — `docker-compose.prod.yml` 의 `app.environment` 에 `PLAN_BILLING_*` 가 한 줄도 없었다.
+서버 `.env.prod` 에 값을 채워도 compose 가 컨테이너에 안 실어서, 앱 안에서는
+`app.plan.billing.gateway` 가 **기본값 `noop`** 이 된다. 그러면 `NoOpStoreBillingGateway` 가
+뜨는데(`matchIfMissing = true`), 이 구현은 개발·CI 편의용이라 토큰 접두사가
+`invalid-`/`revoked-`/`expired-`/`hold-` 가 아니면 **무조건 "정상 구독 · 만료 1년 뒤"** 를
+돌려준다. 결제 검증이 사실상 없는 상태로 돈 받는 기능이 열려 있었던 것이다.
+웹훅 쪽은 같은 이유로 `PLAN_BILLING_WEBHOOK_SECRET` 도 안 실려 인증 수단이 하나도 없었고,
+`WebhookAuthenticator` 가 fail-closed 라 전부 거부했다.
+
+**2026-09-08 에 메일이 전부 no-op 이던 것과 똑같은 원인이다** — `.env.prod` 에 값을 넣는 것과
+그 값이 컨테이너에 실리는 것은 별개인데, compose 의 `environment:` 목록을 같이 고치는 걸
+잊었다. 그때는 메일이 안 나가는 정도였지만 이번엔 돈이 샜다.
+`docs/progress/phase-12-iap.md` 의 배포 절차도 "`.env.prod` 에 넣고 재기동" 이라고만 적혀 있어
+그대로 따라 해도 안 되는 상태였다.
+
+**해결** — 세 가지를 함께 했다.
+
+1. `docker-compose.prod.yml` 에 `PLAN_BILLING_GATEWAY`·`_WEBHOOK_SECRET`·`_GOOGLE_PACKAGE`·
+   `_GOOGLE_CREDENTIALS_PATH`·`_PUBSUB_AUDIENCE`·`_PUBSUB_SA` 를 넘기게 추가하고,
+   Play 서비스 계정 키를 `${PLAY_SA_HOST_PATH}` → `/run/secrets/play-developer-sa.json` 로
+   읽기전용 마운트한다(FCM 키와 같은 방식).
+2. `.env.prod.example` 에 이 변수들을 설명과 함께 넣었다. 운영은 `PLAN_BILLING_GATEWAY=google`.
+3. **최후 방어선** — `NoOpStoreBillingGateway` 가 `prod` 프로파일에서는 어떤 토큰도 통과시키지
+   않는다(`fetch` 가 항상 빈 값 → 402 `PURCHASE_NOT_VERIFIED`). 설정이 또 빠져도 공짜
+   PREMIUM 은 안 나간다. 기동 로그에 에러도 남긴다. 앱 기동 자체를 막지는 않는다 — 결제와
+   무관한 기능까지 멈추면 손해가 더 크고, 쿠폰 PREMIUM 은 이 게이트웨이를 안 탄다.
+
+**확인법** — 배포 후 앱 로그에
+
+```
+Google Play 결제 검증 활성화 package=com.yeka.bandule
+```
+
+가 떠야 한다. `[no-op billing]` 이나 `운영인데 결제 게이트웨이가 noop 이다` 가 보이면 아직
+설정이 안 실린 것이다. 컨테이너에 실제로 들어갔는지는
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec app env | grep PLAN_BILLING
+```
+
+로 확인한다(`.env.prod` 를 보는 게 아니라 **컨테이너 안**을 봐야 한다 — 이번 사고의 핵심).
+가짜 토큰으로 `/plan/google/verify` 를 때렸을 때 402 가 나오면 정상.
+단위 테스트는 `NoOpStoreBillingGatewayTest.prod_profile_refuses_every_token`.
+
+---
+
+## 2026-09-09 — `flutter build appbundle` 이 Kotlin "different roots" 로 죽는다
+
+**증상** — 릴리스 AAB 빌드 시 여러 플러그인(`video_compress`, `image_picker_android`,
+`kakao_flutter_sdk_common`, `kakao_map_sdk`, `shared_preferences_android` …)의
+`compileReleaseKotlin` 이 줄줄이 실패한다:
+```
+java.lang.IllegalArgumentException: this and base files have different roots:
+  C:\Users\USER\AppData\Local\Pub\Cache\hosted\pub.dev\<plugin>\...\X.kt  and  E:\project\band\client\android
+```
+
+**원인** — **프로젝트는 `E:` 에, pub 캐시는 `C:\Users\USER\AppData\Local\Pub\Cache` 에**
+있다. Kotlin 증분 컴파일러의 `RelocatableFileToPathConverter` 가 소스 파일 경로를 프로젝트
+기준 **상대경로**로 저장하려 하는데, `C:` 와 `E:` 사이에는 상대경로가 존재하지 않아
+`File.relativeTo` 가 예외를 던진다. `android/gradle.properties` 에 `kotlin.incremental=false`
+를 넣어도 **새 Kotlin Build Tools API(BTAPI) 경로는 이 플래그를 무시**하고 증분 캐시
+디렉터리를 만들다 같은 지점에서 터진다.
+
+**해결** — pub 캐시를 프로젝트와 **같은 드라이브**로 옮긴다.
+```bash
+setx PUB_CACHE "E:\pub-cache"          # 영구(새 셸부터)
+export PUB_CACHE=/e/pub-cache          # 현재 셸에도
+cd /e/project/band/client && flutter clean && (cd android && ./gradlew --stop)
+flutter pub get                        # 패키지를 E:\pub-cache 로 새로 받음
+flutter build appbundle --release --flavor prod \
+  --dart-define-from-file=dart_defines.json --dart-define=API_BASE_URL=https://api.bandule.com
+```
+`kotlin.incremental=false` 는 그대로 둔다(무해, 다른 상황 대비).
+
+**확인법** — `flutter build appbundle` 이 `app-prod-release.aab` 를 만들면 끝.
+`echo $PUB_CACHE` 가 `E:` 경로를 가리키고, `ls "$PUB_CACHE/hosted/pub.dev"` 에 패키지가
+들어와 있어야 한다. 빌드 로그에 더 이상 `different roots` 가 없다.
 
 ---
 

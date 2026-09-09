@@ -15,8 +15,13 @@ import java.util.Optional;
  *
  * <ol>
  *   <li><b>OIDC Bearer 토큰</b> — Pub/Sub 구독에 인증 서비스 계정을 지정하면 Google 이 넣어 준다.
- *       {@code google-pubsub-audience} 가 설정돼 있을 때 검사하고, {@code google-pubsub-service-account}
- *       까지 설정돼 있으면 토큰의 {@code email} 이 그 값과 같아야 한다.
+ *       {@code google-pubsub-audience} 와 {@code google-pubsub-service-account} 가 <b>둘 다</b>
+ *       설정돼 있어야 이 경로가 열리고, 토큰의 {@code email} 이 그 서비스 계정과 같아야 한다.
+ *       <p>서비스 계정 대조가 <b>선택이 아닌 이유</b>: audience 는 우리 웹훅 URL 이고, 그 값을
+ *       audience 로 하는 OIDC 토큰은 <b>아무 GCP 계정이나 자기 서비스 계정으로 발급할 수 있다.</b>
+ *       서명·발급자·만료가 다 맞는 진짜 구글 토큰이라 {@link PubSubOidcVerifier} 도 통과시킨다.
+ *       "누가 보냈나"를 보지 않으면 audience 검사만으로는 아무나 웹훅을 부를 수 있다 —
+ *       환불·해지를 임의로 만들어 남의 밴드를 FREE 로 떨어뜨릴 수 있다는 뜻이다.
  *   <li><b>{@code ?token=} 공유 시크릿</b> — {@code webhook-secret} 과 상수시간 비교.
  * </ol>
  *
@@ -56,12 +61,18 @@ public class WebhookAuthenticator {
         if (properties.googlePubsubAudience() == null || bearerToken == null) {
             return false;
         }
+        String expectedSa = properties.googlePubsubServiceAccount();
+        if (expectedSa == null) {
+            // audience 만으로는 아무 GCP 계정이 만든 토큰도 통과한다(위 주석). 반쪽 설정은 거부한다.
+            log.error("웹훅 OIDC: audience 는 있는데 google-pubsub-service-account 가 없다 "
+                    + "— OIDC 경로를 열지 않는다. 두 값을 함께 설정할 것");
+            return false;
+        }
         Optional<String> email = oidcVerifier.verifiedEmail(bearerToken);
         if (email.isEmpty()) {
             return false;
         }
-        String expectedSa = properties.googlePubsubServiceAccount();
-        if (expectedSa != null && !expectedSa.equalsIgnoreCase(email.get())) {
+        if (!expectedSa.equalsIgnoreCase(email.get())) {
             log.warn("웹훅 OIDC: 서비스 계정 불일치 (기대={}, 실제={})", expectedSa, email.get());
             return false;
         }

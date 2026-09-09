@@ -132,10 +132,14 @@ app:
       gateway: ${PLAN_BILLING_GATEWAY:noop}            # noop(로컬·CI) | google(실제 Play 검증)
       webhook-secret: ${PLAN_BILLING_WEBHOOK_SECRET:}  # RTDN Pub/Sub push 공유 시크릿. 비면 웹훅 차단(fail-closed)
       google-package-name: ${PLAN_BILLING_GOOGLE_PACKAGE:com.yeka.bandule}
+      # 스토어가 돌려준 구매의 상품 id 가 이 값과 다르면 PREMIUM 을 주지 않는다.
+      # 상품이 하나뿐인 지금은 무해하지만, 더 싼 상품을 하나라도 추가하는 순간
+      # 그 토큰으로 PREMIUM 을 받는 길이 열린다.
+      google-product-id: ${PLAN_BILLING_GOOGLE_PRODUCT_ID:premium_yearly}
       google-credentials-path: ${PLAN_BILLING_GOOGLE_CREDENTIALS_PATH:}  # 서비스 계정 JSON. gateway=google 이면 필수
       google-application-name: ${PLAN_BILLING_GOOGLE_APP_NAME:bandule}
       google-pubsub-audience: ${PLAN_BILLING_PUBSUB_AUDIENCE:}           # RTDN push OIDC audience. 설정 시 Bearer 토큰 검증
-      google-pubsub-service-account: ${PLAN_BILLING_PUBSUB_SA:}          # OIDC email 클레임이 이 값과 같아야 함(선택)
+      google-pubsub-service-account: ${PLAN_BILLING_PUBSUB_SA:}          # OIDC email 클레임이 이 값과 같아야 함. audience 와 함께 필수 — 없으면 OIDC 경로를 안 연다
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*}
   deeplink:
@@ -170,3 +174,7 @@ app:
     report-per-user-per-min: ${RL_REPORT_USER:10}               # 신고 접수 계정당 분당 상한
     device-token-per-user-per-min: ${RL_DEVICE_TOKEN_USER:30}   # 디바이스 토큰 등록 계정당 분당 상한
     email-verification-per-user-per-min: ${RL_EMAIL_VERIFICATION_USER:3}   # 인증 메일 재발송 계정당 분당 상한
+    # 받는 주소 하나에 분당 몇 통까지. 가입 인증·재발송·비밀번호 재설정·신고 알림이 모두
+    # EmailSender 를 지나므로 여기 하나로 네 경로가 다 덮인다. 초과분은 예외 없이 조용히 버린다
+    # (429 를 돌려주면 비밀번호 재설정이 계정 존재 여부를 흘린다).
+    email-per-address-per-min: ${RL_EMAIL_ADDRESS:3}
