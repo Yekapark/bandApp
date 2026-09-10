@@ -31,12 +31,15 @@ class EmailVerificationIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
-    void email_signup_starts_unverified() {
+    void email_signup_starts_unverified_and_sends_no_code() {
         String access = body(post("/api/v1/auth/signup",
                 "{\"email\":\"verify@band.app\",\"password\":\"pw12345678\",\"name\":\"인증\"}"))
                 .at("/data/tokens/accessToken").asText();
+        long userId = body(get("/api/v1/users/me", access)).at("/data/id").asLong();
 
         assertThat(body(get("/api/v1/users/me", access)).at("/data/emailVerified").asBoolean()).isFalse();
+        // 가입만으로는 인증번호를 발송하지 않는다 — 입력할 화면이 없어 반송만 쌓였다.
+        assertThat(redis.opsForValue().get("auth:emailverify:code:" + userId)).isNull();
     }
 
     @Test
@@ -56,6 +59,9 @@ class EmailVerificationIntegrationTest extends ApiIntegrationTest {
                 .at("/data/tokens/accessToken").asText();
         long userId = body(get("/api/v1/users/me", access)).at("/data/id").asLong();
 
+        // 가입은 코드를 발송하지 않으므로 사용자가 직접 재발송을 눌러 받는다.
+        assertThat(post("/api/v1/users/me/email-verification/resend", "{}", access)
+                .getStatusCode().value()).isEqualTo(204);
         String code = redis.opsForValue().get("auth:emailverify:code:" + userId);
         assertThat(code).isNotNull();
 
@@ -77,6 +83,7 @@ class EmailVerificationIntegrationTest extends ApiIntegrationTest {
                 "{\"email\":\"verify3@band.app\",\"password\":\"pw12345678\",\"name\":\"인증\"}"))
                 .at("/data/tokens/accessToken").asText();
         long userId = body(get("/api/v1/users/me", access)).at("/data/id").asLong();
+        post("/api/v1/users/me/email-verification/resend", "{}", access);
         String code = redis.opsForValue().get("auth:emailverify:code:" + userId);
         String wrong = "000000".equals(code) ? "111111" : "000000";
 

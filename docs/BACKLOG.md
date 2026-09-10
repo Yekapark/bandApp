@@ -105,11 +105,12 @@ Phase 1 머지 후 보안·인프라 리뷰에서 나온 항목. `.env.example` 
   인증번호를 보낸다(`POST /api/v1/auth/password-reset/request`·`/confirm`). 계정 존재 여부는
   응답으로 드러내지 않고, 성공 시 그 계정의 모든 세션을 로그아웃한다. `MAIL_FROM`이 비어 있으면
   발송만 no-op(카카오·FCM과 같은 방식).
-- ~~**이메일 인증(가입 확인 메일)**~~ **완료 (2026-09-06)** — 이메일 가입 시 자동 발송, 소셜
-  (카카오) 가입자는 항상 인증된 것으로 취급. **강제하지 않는다** — 미인증이어도 모든 기능을
-  그대로 쓸 수 있고 클라이언트가 배너로만 안내하는 것으로 정책 확정(`users.email_verified`,
-  `GET /users/me` 응답에 포함). 재발송 `POST /api/v1/users/me/email-verification/resend`,
-  확인 `.../confirm`.
+- ~~**이메일 인증(가입 확인 메일)**~~ **완료 (2026-09-06) → 가입 시 발송은 제거 (2026-09-10)** —
+  소셜(카카오) 가입자는 항상 인증된 것으로 취급. **강제하지 않는다** — 미인증이어도 모든
+  기능을 그대로 쓸 수 있다(`users.email_verified`, `GET /users/me` 응답에 포함).
+  **가입 시 자동 발송은 뺐다** — 인증을 강제하지 않는 데다 코드를 입력할 클라이언트 화면이
+  없어(배너도 없었다) 반송만 쌓였다. `POST /api/v1/users/me/email-verification/resend` ·
+  `.../confirm` 은 남겨 뒀다 — 앱에 입력 화면을 붙이면 그때 되살린다. (TROUBLESHOOTING 2026-09-10)
 - **애플 로그인** — `users.social_provider` CHECK가 `KAKAO`만 허용. iOS 심사에서 애플 로그인이
   요구될 수 있으니 확인. 추가 시 마이그레이션 필요.
 

@@ -21,8 +21,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -45,12 +43,11 @@ public class AuthService {
     private final KakaoProperties kakaoProperties;
     /** 가입 시점에 동의 사실을 남긴다 — 앱의 동의 화면을 두 가입 경로가 모두 거친다. */
     private final TermsAgreementService termsAgreements;
-    private final EmailVerificationService emailVerificationService;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                        JwtTokenProvider tokenProvider, RefreshTokenStore refreshTokenStore,
                        JwtProperties jwtProperties, KakaoClient kakaoClient, KakaoProperties kakaoProperties,
-                       TermsAgreementService termsAgreements, EmailVerificationService emailVerificationService) {
+                       TermsAgreementService termsAgreements) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
@@ -59,14 +56,13 @@ public class AuthService {
         this.kakaoClient = kakaoClient;
         this.kakaoProperties = kakaoProperties;
         this.termsAgreements = termsAgreements;
-        this.emailVerificationService = emailVerificationService;
     }
 
     @Transactional
     public AuthResponse signup(SignupRequest request) {
         String email = normalizeEmail(request.email());
-        // 반송이 확정된 예약 도메인(example.com, .test …)은 계정을 만들지 않는다 — 인증 메일이
-        // 100% 반송돼 Gmail 발신 평판만 깎는다(EmailPolicy 주석).
+        // 반송이 확정된 예약 도메인(example.com, .test …)은 계정을 만들지 않는다 — 받을 수 없는
+        // 주소는 비밀번호 재설정도 못 받아 사실상 잠긴 계정이 된다(EmailPolicy 주석).
         EmailPolicy.requireDeliverable(email);
         if (userRepository.existsByEmailAndSocialProviderIsNullAndDeletedAtIsNull(email)) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
@@ -81,27 +77,10 @@ public class AuthService {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_REGISTERED);
         }
         termsAgreements.record(user.getId(), Instant.now());
-        sendVerificationEmailAfterCommit(user.getId());
+        // 가입 시 인증 메일을 보내지 않는다. 인증을 강제하지도 않고, 코드를 입력할 화면도
+        // 없어서 쓸 데가 없었다(반송만 쌓였다). "이메일 인증" 자체는 UserController 의
+        // resend/confirm 에 남겨 뒀다 — 앱에서 필요해지면 그때 화면과 함께 되살린다.
         return AuthResponse.of(user, issue(user.getId()), true);
-    }
-
-    /**
-     * 인증 메일 발송(SMTP, 외부 I/O)은 커밋 뒤로 미룬다 — {@link UserAccountService}의 카카오
-     * unlink 처리와 같은 이유로, 트랜잭션 중에 외부 호출을 걸어 DB 커넥션을 붙잡지 않는다.
-     * 발송 실패는 가입을 막지 않는다({@link EmailVerificationService#sendVerification}이 이미
-     * 실패를 삼킨다).
-     */
-    private void sendVerificationEmailAfterCommit(long userId) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            emailVerificationService.sendVerification(userId);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                emailVerificationService.sendVerification(userId);
-            }
-        });
     }
 
     @Transactional(readOnly = true)
