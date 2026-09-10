@@ -25,18 +25,20 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}          # 운영은 requirepass 필수. 로컬은 비워 둔다
   mail:
-    # Gmail SMTP. app.mail.from 이 비어 있으면 EmailSender 가 아예 시도하지 않으므로,
+    # SMTP 제공자 설정. app.mail.from 이 비어 있으면 EmailSender 가 아예 시도하지 않으므로,
     # 계정 정보가 없는 로컬 개발에서도 안전하다.
     host: ${MAIL_SMTP_HOST:smtp.gmail.com}
     port: ${MAIL_SMTP_PORT:587}
     username: ${MAIL_SMTP_USERNAME:}
-    password: ${MAIL_SMTP_PASSWORD:}        # 구글 계정 비밀번호가 아니라 앱 비밀번호
+    password: ${MAIL_SMTP_PASSWORD:}
     properties:
       mail:
         smtp:
           auth: true
           starttls:
-            enable: true
+            enable: ${MAIL_SMTP_STARTTLS:true}
+          ssl:
+            enable: ${MAIL_SMTP_SSL:false}
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000
@@ -52,7 +54,7 @@ management:
         enabled: true
   health:
     mail:
-      # spring-boot-starter-mail 추가로 자동 등록된 헬스 인디케이터. SMTP 서버(Gmail)에
+      # spring-boot-starter-mail 추가로 자동 등록된 헬스 인디케이터. SMTP 서버에
       # 실제로 접속해 보고 실패하면 전체 /actuator/health 를 DOWN(503)으로 끌어내린다.
       # 메일 발송은 카카오·FCM·R2 처럼 실패해도 무해한 부가 기능이라 앱 헬스와 분리한다.
       enabled: false
@@ -163,7 +165,7 @@ app:
     # 비우면 메일이 안 나간다(MAIL_FROM 이 비어 있어도 마찬가지). 접수 자체는 그대로 된다.
     notify-emails: ${REPORT_NOTIFY_EMAILS:}
   mail:
-    from: ${MAIL_FROM:}                                         # 예: "밴듈 <내계정@gmail.com>". 비우면 발송 전체 no-op
+    from: ${MAIL_FROM:}                                         # 예: "밴듈 <notice@bandule.com>". 비우면 발송 전체 no-op
   ratelimit:
     invite-join-per-user-per-min: ${RL_INVITE_JOIN_USER:10}
     invite-join-per-ip-per-min: ${RL_INVITE_JOIN_IP:20}

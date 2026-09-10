@@ -74,8 +74,12 @@ services:
       FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
       FCM_CREDENTIALS_PATH: ${FCM_CREDENTIALS_PATH:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
-      # 메일(Gmail SMTP)·신고 알림. 여기 없으면 .env.prod 에 값이 있어도 컨테이너에 안 실려
+      # 메일(SMTP)·신고 알림. 여기 없으면 .env.prod 에 값이 있어도 컨테이너에 안 실려
       # EmailSender.isConfigured() 가 false → 신고·비밀번호 재설정·이메일 인증 메일이 전부 no-op.
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-smtp.gmail.com}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
+      MAIL_SMTP_STARTTLS: ${MAIL_SMTP_STARTTLS:-true}
+      MAIL_SMTP_SSL: ${MAIL_SMTP_SSL:-false}
       MAIL_SMTP_USERNAME: ${MAIL_SMTP_USERNAME:-}
       MAIL_SMTP_PASSWORD: ${MAIL_SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}

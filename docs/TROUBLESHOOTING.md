@@ -607,7 +607,7 @@ git restore --staged .env.prod
 
 **알아 둘 것**
 
-- `MAIL_FROM` 은 `밴듈 <주소@gmail.com>` 처럼 **꺾쇠가 필요하다.** 없으면
+- `MAIL_FROM` 은 `밴듈 <notice@bandule.com>` 처럼 **꺾쇠가 필요하다.** 없으면
   `AddressException: Local address contains control or whitespace` 로 실패한다(실제로 파싱해 확인).
 - **자기 글·자기 사진은 신고할 수 없다.** 앱에서 메뉴 자체가 안 뜬다 —
   테스트하려면 다른 계정의 글을 신고해야 한다.

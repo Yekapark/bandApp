@@ -9,6 +9,7 @@
 |---|---|
 | `docker-compose.prod.yml` | 운영 스택 (postgres · redis · app · nginx · certbot) |
 | `.env.prod.example` | 운영 환경변수 견본. VM 에서 `.env.prod` 로 복사해 채운다 |
+| `docs/EMAIL.md` | `notice@bandule.com` 수신(Cloudflare)·발신(Resend) 설정과 전환 절차 |
 | `deploy/nginx/templates/app.conf.template` | Nginx 리버스 프록시 설정 (`${DOMAIN}` 치환) |
 | `deploy/nginx/proxy-headers.conf` | 프록시 헤더. **X-Forwarded-For 를 실제 접속자로 덮어쓴다** |
 | `deploy/nginx/cloudflare-realip.conf` | Cloudflare 엣지 대역 목록 + `CF-Connecting-IP` 신뢰 설정 (자동 생성물) |

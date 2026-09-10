@@ -30,7 +30,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.boot:spring-boot-starter-security")
-    // 비밀번호 재설정·이메일 인증 코드 발송(Gmail SMTP). 발신 계정(app.mail.from)이 비어 있으면
+    // 비밀번호 재설정·이메일 인증 코드 발송(SMTP). 발신 계정(app.mail.from)이 비어 있으면
     // EmailSender 가 발송을 건너뛰고 로그만 남긴다(카카오·FCM·R2 와 같은 방식) — 로컬 개발은 그대로 된다.
     implementation("org.springframework.boot:spring-boot-starter-mail")
     implementation("org.flywaydb:flyway-core")
