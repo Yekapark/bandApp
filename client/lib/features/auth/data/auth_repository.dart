@@ -61,6 +61,36 @@ class AuthRepository {
     }
   }
 
+  /// 비밀번호 재설정 인증번호 발송. 없는 이메일·소셜 계정이어도 성공(204)으로 온다 —
+  /// 계정 존재 여부를 드러내지 않는다.
+  Future<void> requestPasswordReset({required String email}) async {
+    try {
+      await _dio.post<dynamic>(
+        '/auth/password-reset/request',
+        data: {'email': email},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 인증번호와 새 비밀번호로 재설정. 번호가 틀리거나 만료면
+  /// 400 `PASSWORD_RESET_CODE_INVALID`. 성공하면 그 계정의 모든 기기 세션이 로그아웃된다.
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    try {
+      await _dio.post<dynamic>(
+        '/auth/password-reset/confirm',
+        data: {'email': email, 'code': code, 'newPassword': newPassword},
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   Future<void> logout({required String refreshToken}) async {
     try {
       await _dio

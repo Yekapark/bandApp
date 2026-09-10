@@ -201,6 +201,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                   ),
+                  Center(
+                    child: TextButton(
+                      onPressed: _loading
+                          ? null
+                          : () => context.push(Routes.passwordReset),
+                      child: const Text(
+                        '비밀번호를 잊으셨어요?',
+                        style: TextStyle(color: AppColors.textDim, fontSize: 13),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   const _OrDivider(),
                   const SizedBox(height: 16),

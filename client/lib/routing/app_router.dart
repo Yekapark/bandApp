@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/password_reset_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/terms_screen.dart';
@@ -41,6 +42,7 @@ class Routes {
   const Routes._();
   static const splash = '/';
   static const login = '/login';
+  static const passwordReset = '/password-reset';
   static const terms = '/terms';
   static const signup = '/signup';
   static const bandGate = '/band-gate';
@@ -128,7 +130,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc == Routes.splash ? null : Routes.splash;
       }
 
-      const publicRoutes = {Routes.login, Routes.terms, Routes.signup};
+      const publicRoutes = {
+        Routes.login,
+        Routes.passwordReset,
+        Routes.terms,
+        Routes.signup,
+      };
       final onPublic = publicRoutes.contains(loc);
 
       if (status == AuthStatus.unauthenticated) {
@@ -147,6 +154,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: Routes.splash, builder: (_, __) => const SplashScreen()),
       GoRoute(path: Routes.login, builder: (_, __) => const LoginScreen()),
+      GoRoute(
+        path: Routes.passwordReset,
+        builder: (_, __) => const PasswordResetScreen(),
+      ),
       // extra 로 "동의 후 할 일" 을 받는다 — 카카오 가입이 이 길로 온다.
       GoRoute(
         path: Routes.terms,
