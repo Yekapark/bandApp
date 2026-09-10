@@ -20,7 +20,7 @@
 
 ## 앱을 이용할 수 없을 때
 
-[qkrwkddjs777@naver.com으로 계정 삭제를 요청해 주세요.](mailto:qkrwkddjs777@naver.com)
+[notice@bandule.com으로 계정 삭제를 요청해 주세요.](mailto:notice@bandule.com)
 
 메일 제목에 **밴듈 계정 삭제 요청**이라고 적고, 본인 확인을 위해 아래 내용을 보내 주세요.
 
@@ -57,4 +57,4 @@
 계정을 삭제하기 전에 [Google Play 구독 관리](https://play.google.com/store/account/subscriptions)에서
 별도로 해지해 주세요.
 
-문의: qkrwkddjs777@naver.com
+문의: notice@bandule.com

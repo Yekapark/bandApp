@@ -78,7 +78,7 @@ cd C:\band\bandApp && scp -i ~/.ssh/bandule_deploy .env.prod root@64.176.231.126
 - SA 키가 컨테이너 안에 `app:app` 로 마운트됨 (`/run/secrets/play-developer-sa.json`) ✅
 - 웹훅이 바깥에서 살아 있음 — 맞는 `?token=` 200, 틀리거나 없으면 403 ✅
 - Play Developer API 권한 검사 = `400` (가짜 토큰이라 나는 정상 응답) ✅
-- 라이선스 테스터 `qkrwkddjs777@gmail.com` 등록 ✅
+- 라이선스 테스터 `notice@bandule.com` 등록 ✅
 - Pub/Sub push 구독 `play-rtdn-push` → Google 요청 `200` 확인 ✅
 
 > `.env.prod` 는 **서버 것과 로컬 것을 따로** 고쳤다. 서버의 `IMAGE_TAG` 가 로컬보다 앞서 있어

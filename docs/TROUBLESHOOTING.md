@@ -32,7 +32,7 @@
 90일 보관 범위, 공동 밴드 기록, Google Play 구독 별도 해지를 한 페이지에 명시했다.
 
 **확인법** — `python site/build.py` 실행 후 `site/account-deletion/index.html`에
-`밴듈 계정 삭제 안내`와 `mailto:qkrwkddjs777@naver.com`이 있는지 확인한다. 배포 후에는
+`밴듈 계정 삭제 안내`와 `mailto:notice@bandule.com`이 있는지 확인한다. 배포 후에는
 `https://bandule.com/account-deletion/`의 제목과 본문을 직접 열어 홈페이지가 아닌지 확인한다.
 
 ---
