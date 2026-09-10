@@ -18,6 +18,38 @@
 
 ---
 
+## 2026-09-10 — 발신 지메일에 "주소를 찾을 수 없음" 반송이 계속 쌓였다
+
+**증상** — SMTP 발신 계정 받은편지함에 `Mail Delivery Subsystem` 반송이 반복해서
+도착했다. 대상은 `demo.leader@bandule.com`, `demo.bass@bandule.com` 등
+`550 5.1.1 Address does not exist`.
+
+**원인** — 두 가지가 겹쳤다.
+
+1. 데모 밴드("노을밴드")를 만들려고 **실존하지 않는 `demo.*@bandule.com` 주소로 이메일
+   가입**을 4건 돌렸다(운영 DB에). `bandule.com` 은 실도메인이라 `EmailPolicy` 예약 도메인
+   필터를 통과했지만 그 사서함들은 없다.
+2. 가입 때마다 `AuthService.signup` 이 **인증번호 메일을 자동 발송**했다. 없는 주소 →
+   Gmail 이 몇 시간 재시도 후 반송 통지(NDR)를 발신 계정으로 보냄. 4건이 시차 두고 도착해
+   "자꾸 오는" 것처럼 보였다. 크론·재발송 루프는 아니다.
+
+**해결** — 가입 시 인증번호 자동 발송을 **제거**했다(`AuthService.signup`).
+- 이메일 인증은 애초에 강제하지 않았고, **코드를 입력할 클라이언트 화면이 없어서**
+  (배너조차 없었다) 발송해도 쓸 데가 없었다. 반송만 남았다.
+- 비밀번호 재설정은 자체적으로 그 시점에 코드를 보내므로(`/auth/password-reset/request`)
+  가입 시점 인증에 의존하지 않는다. 가짜 주소면 재설정이 그냥 실패할 뿐이다.
+- `POST /users/me/email-verification/resend` · `/confirm` 과 `users.email_verified` 는
+  남겨 뒀다 — 앱에 입력 화면을 붙이면 그때 되살린다.
+- 이미 만든 데모 계정(운영 `users` id 12~15, 밴드 "노을밴드")은 그대로 뒀다. 인증 안
+  해도 기능은 다 된다. 앞으로 데모 계정은 받을 수 있는 주소(`...+leader@gmail.com` 식
+  플러스 주소)로, 가능하면 로컬 스택에서 만든다.
+
+**확인법** — 이메일 가입 뒤 Redis 에 `auth:emailverify:code:<userId>` 키가 **없어야**
+한다(`EmailVerificationIntegrationTest.email_signup_starts_unverified_and_sends_no_code`).
+`/users/me/email-verification/resend` 를 눌러야만 코드가 생긴다.
+
+---
+
 ## 2026-09-10 — 계정 삭제 URL이 홈페이지를 보여 줘 Play 등록에 쓸 수 없었다
 
 **증상** — `https://bandule.com/account-deletion/` 이 `200`을 반환하지만 계정 삭제 안내가 아니라
