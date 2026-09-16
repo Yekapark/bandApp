@@ -322,3 +322,36 @@ FROM notification_dispatches WHERE user_id = 4 ORDER BY id DESC LIMIT 20;
 ```bash
 cd /opt/bandapp && ./deploy/backup/pg-restore.sh --dry-run   # 먼저 훈련 모드로
 ```
+
+---
+
+## 8. 매일 자동 점검
+
+배포 직후 헬스체크 말고는 감시가 없었다. 그래서 구매 알림이 **7일 동안 초당 한 번씩**
+서버를 때리는 동안 아무도 몰랐다 ([TROUBLESHOOTING.md](TROUBLESHOOTING.md) 2026-09-09).
+
+이제 매일 07:00 KST 에 GitHub Actions 가 서버를 본다
+([`.github/workflows/prod-check.yml`](../.github/workflows/prod-check.yml)).
+걸리면 **`prod-check` 라벨이 붙은 이슈**가 열리고, 이미 열려 있으면 거기 댓글이 달린다.
+
+| 보는 것 | 걸리는 기준 |
+|---|---|
+| 밖에서 HTTPS | `https://api.bandule.com/actuator/health` 가 200 이 아님 |
+| 인증서 | 만료까지 14일 미만 (Let's Encrypt 갱신이 멈춘 것) |
+| 앱 · 컨테이너 | health 가 UP 이 아님, 컨테이너가 덜 떠 있음 |
+| 디스크 | 85% 이상 |
+| 백업 | 마지막 덤프가 36시간보다 오래됨 |
+| 에러 | 24시간 에러·예외 로그 200줄 초과 |
+| 요청 | 1시간 요청 2000건 초과 (초당 1회 = 3600건) |
+
+임계값은 [`deploy/prod-check.sh`](../deploy/prod-check.sh) 맨 위 변수로 몰아 뒀다.
+오탐이 잦으면 거기만 고친다.
+
+**직접 돌려 볼 때** — Actions 로그는 공개라 자동 점검은 숫자만 남긴다(`QUIET=1`).
+어떤 경로가 얼마나 맞고 있는지, 어떤 에러가 많은지까지 보려면 직접 돌린다:
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh
+```
+
+워크플로를 손으로 한 번 돌리려면 GitHub → Actions → **운영 점검** → Run workflow.
