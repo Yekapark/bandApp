@@ -14,8 +14,19 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 KEEP="${BACKUP_KEEP:-7}"
 
-# shellcheck disable=SC1090
-[ -f "$ENV_FILE" ] && . "./$ENV_FILE"
+# .env.prod 는 **docker compose 가 읽는 형식이지 셸 스크립트가 아니다.** `.`(source)은 각 줄을
+# 셸 코드로 **실행**하므로 값에 #·<·>·따옴표가 섞이면 문법 에러로 죽는다. 비밀값을
+# `openssl rand -base64` 로 만들면 특수문자가 섞이므로 **교체할 때마다 터질 수 있다.**
+# 실제로 2026-09-08 유출 사고로 값을 전부 교체한 뒤 백업이 8일 동안 멈춰 있었고,
+# 크론으로만 도는 스크립트라 아무도 몰랐다. 필요한 값만 뽑는다 (deploy/play-revoke.sh 와 같은 방식).
+#
+# 한계: 값 안에 공백 없이 붙은 `#` 는 주석으로 잘린다. compose 도 같게 동작하고,
+# 여기서 읽는 값들(DB 이름·사용자·R2 키·도메인)에는 `#` 가 들어가지 않는다.
+envget() { grep -m1 "^$1=" "$ENV_FILE" | cut -d= -f2- | sed "s/[[:space:]]*#.*$//; s/[[:space:]]*$//"; }
+[ -f "$ENV_FILE" ] || { echo "!! $ENV_FILE 이 없다"; exit 1; }
+DB_NAME=$(envget DB_NAME); DB_USERNAME=$(envget DB_USERNAME)
+R2_BUCKET=$(envget R2_BUCKET); R2_ENDPOINT=$(envget R2_ENDPOINT); R2_ACCOUNT_ID=$(envget R2_ACCOUNT_ID)
+R2_ACCESS_KEY_ID=$(envget R2_ACCESS_KEY_ID); R2_SECRET_ACCESS_KEY=$(envget R2_SECRET_ACCESS_KEY)
 : "${DB_NAME:?}" "${DB_USERNAME:?}"
 
 COMPOSE="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
