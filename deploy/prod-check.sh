@@ -34,12 +34,15 @@ echo "== 운영 점검 $(date -u +%Y-%m-%dT%H:%MZ) ($(hostname))"
 # 볼 수 없는 상태와 이상 없는 상태를 구분한다.
 docker info >/dev/null 2>&1 || { echo "!! docker 에 접근할 수 없다 (데몬? 권한?)"; exit 1; }
 
-# 1. 앱이 살아 있나
-h=$(curl -s --max-time 10 localhost:8080/actuator/health)
-case "$h" in
-    *'"status":"UP"'*) echo "health   UP" ;;
-    *)                 bad "health   응답이 UP 이 아니다: ${h:-응답없음}" ;;
-esac
+# 1. 앱이 살아 있나. 앱 포트는 서버에 안 열려 있어서(80·443 은 Nginx 만) `curl localhost:8080`
+#    은 늘 실패한다 — 처음에 그렇게 짰다가 멀쩡한 서버를 매일 "응답없음" 으로 걸었다.
+#    deploy.sh 와 같이 compose 헬스체크 결과를 본다. 바깥 응답은 워크플로가 따로 본다.
+h=$(docker inspect -f '{{.State.Health.Status}}' $($C ps -q app) 2>/dev/null)
+if [ "$h" = healthy ]; then
+    echo "health   healthy"
+else
+    bad "health   앱 컨테이너 상태가 healthy 가 아니다: ${h:-확인불가}"
+fi
 
 # 2. 컨테이너가 다 떠 있나
 want=$($C config --services 2>/dev/null | wc -l)
