@@ -175,6 +175,10 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
             else if (plan.isPremium)
               const _ManageNotice()
             else ...[
+              // 구독 조건은 구매 버튼을 누르기 **전에** 보여야 한다(Play 구독 정책 — 가격·주기·자동 갱신·
+              // 해지 방법). 예전에는 구매 뒤 화면(_ManageNotice)에만 있었다. LAUNCH_REVIEW P4.
+              _SubscriptionTerms(price: _product?.price),
+              const SizedBox(height: 12),
               _ActionButton(
                 label: _product == null
                     ? 'PREMIUM 시작'
@@ -400,9 +404,62 @@ class _CompareTable extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, color: AppColors.borderFaint),
+          // 영상 업로드는 서버가 PREMIUM 에만 허용한다(MediaAttachmentService → PLAN_REQUIRED).
+          // 이 행이 없으면 무료도 영상을 올릴 수 있는 것처럼 읽혔다. LAUNCH_REVIEW P4.
+          row('영상 업로드', '—', '가능'),
+          const Divider(height: 1, color: AppColors.borderFaint),
           row('사진·영상 보관', '30일', '무제한'),
           const Divider(height: 1, color: AppColors.borderFaint),
           row('정기 합주 자동 등록', '—', '무제한'),
+        ],
+      ),
+    );
+  }
+}
+
+/// 구매 전 고지. 가격은 스토어가 준 현지화 문자열(예: ₩19,000)을 쓰고, 아직 못 받았으면 빼고 쓴다.
+class _SubscriptionTerms extends StatelessWidget {
+  const _SubscriptionTerms({required this.price});
+
+  final String? price;
+
+  @override
+  Widget build(BuildContext context) {
+    final priceLine =
+        price == null ? '밴드당 연 구독' : '밴드당 연 $price (Google Play 결제)';
+    Widget line(String text) => Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('· ',
+                  style: TextStyle(fontSize: 12, color: AppColors.textDim)),
+              Expanded(
+                child: Text(text,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textDim, height: 1.5)),
+              ),
+            ],
+          ),
+        );
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderFaint),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(priceLine,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700)),
+          line('1년마다 자동으로 갱신되고, 갱신 때 Google Play 계정으로 청구돼요.'),
+          line('Play 스토어 › 프로필 › 결제 및 구독 › 구독에서 언제든 해지할 수 있어요.'),
+          line('해지해도 결제한 기간이 끝날 때까지는 프리미엄이 유지돼요.'),
+          line('구독은 이 밴드 전체에 적용되고, 한 Google 계정은 한 번에 한 밴드만 구독할 수 있어요.'),
+          line('이용약관·개인정보처리방침: bandule.com/terms · bandule.com/privacy'),
         ],
       ),
     );
