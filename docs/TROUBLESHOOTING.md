@@ -1,5 +1,28 @@
 # 문제 기록
 
+## 2026-09-28 — CI 가 "1 failed" 만 보여 주고, Claude 세션에서는 어느 테스트인지 알 수 없었다
+
+**증상** — B2·B3 PR 에서 백엔드 `build` 와 앱 `analyze-test` 가 실패했는데, 체크 결과에는 "Process completed with
+exit code 1", "68 tests passed, 1 failed" 뿐이었다. Claude 세션은 Actions 원시 로그와 테스트 리포트 아티팩트를
+내려받지 못한다(아티팩트·로그 저장소 `*.blob.core.windows.net` 접속이 막혀 있다). 로컬에서도 Gradle 배포판·Maven
+저장소·pub.dev 가 막혀 테스트를 돌릴 수 없다.
+
+**원인** — 실패 내용이 로그·아티팩트에만 있고, 세션이 읽을 수 있는 GitHub API(체크 주석 annotation)에는 없었다.
+실제 원인 둘: ① 매퍼 테스트가 `SubscriptionPurchaseV2.clone()` 을 썼는데 Google 모델의 clone 은 안의 `List.of(...)`
+(불변 리스트)를 리플렉션으로 새로 만들려다 `IllegalArgumentException` 을 낸다. ② `IapService` 생성자가
+`InAppPurchase.instance` 를 바로 만들었고, 이 인스턴스는 만들자마자 Play 결제 서비스에 연결을 시도한다 —
+테스트의 가짜 IapService 도 부모 생성자에서 진짜 연결을 열어 "test failed after it had already completed" 가 났다.
+
+**해결** — `ci.yml`·`client-ci.yml` 에 실패 시 요약 단계를 넣어 컴파일 오류와 실패한 테스트 이름·메시지를
+`::error` 주석으로 남긴다(`flutter test --file-reporter json:build/test-report.json` 을 파싱). 주석은
+`GET /repos/{owner}/{repo}/check-runs/{id}/annotations` 로 읽힌다. 테스트는 clone 대신 새로 만들게, `IapService` 는
+`InAppPurchase.instance` 를 처음 쓸 때 만들게(getter) 고쳤다.
+
+**확인법** — 실패한 체크의 annotations 에 `title=클래스.테스트명` 과 예외 메시지가 나온다. 앱에서는 요금제 화면을
+열거나 로그인할 때 처음으로 Play 연결이 만들어진다.
+
+---
+
 ## 2026-09-28 — 결제 직후 앱이 꺼지면 구매가 검증되지 않고, 나중에 검증되면 다른 밴드에 붙을 수 있었다
 
 **증상** — (코드 검토로 발견, 출시 전) Play 결제는 끝났는데 서버 검증 전에 앱이 꺼지거나 네트워크가 끊기면,
