@@ -21,9 +21,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 public abstract class PlanApiSupport extends BoardApiSupport {
 
     // Google RTDN notificationType
+    protected static final int RTDN_RECOVERED = 1;
     protected static final int RTDN_RENEWED = 2;
     protected static final int RTDN_CANCELED = 3;
     protected static final int RTDN_PURCHASED = 4;
+    protected static final int RTDN_ON_HOLD = 5;
+    protected static final int RTDN_RESTARTED = 7;
     protected static final int RTDN_REVOKED = 12;
     protected static final int RTDN_EXPIRED = 13;
 

@@ -43,8 +43,8 @@
 | 4 | P5 | 차단 | targetSdk 36 | ✅ 2026-09-27 AAB 0.1.0+30 에서 36 확인 |
 | 5 | P6 | 차단 | 16KB 페이지 크기 | ✅ 2026-09-27 AAB 0.1.0+30 의 64비트 .so 9개 전부 16KB 정렬 |
 | 6 | G1 | 높음 | 로컬 미커밋 수정 커밋·배포, main 과 합치기 | ✅ 2026-09-27 PR #98 squash 머지(`10e5adc`), CI·배포 성공, 운영 health UP |
-| 7 | P4 | 높음 | 구독 화면 사전 고지·비교표 | 🟡 2026-09-27 고지·비교표(#99)·구독 관리 버튼(#100) 머지 · 0.1.0+31 빌드(lock 포함) · 실기기 확인 남음 |
-| 8 | B1 | 높음 | 계정 보류·만료 뒤 복구돼도 PREMIUM 안 돌아옴 | ⬜ |
+| 7 | P4 | 높음 | 구독 화면 사전 고지·비교표 | ✅ 2026-09-28 실기기(0.1.0+31)에서 요금제 화면 고지·비교표 확인. "구독 관리" 버튼은 PREMIUM 일 때만 보여 §6 구매 테스트 때 함께 본다 |
+| 8 | B1 | 높음 | 계정 보류·만료 뒤 복구돼도 PREMIUM 안 돌아옴 | 🟡 2026-09-28 코드·테스트 수정(PR 대기). 실결제 시나리오(§6 보류→복구)는 사람 확인 |
 | 9 | B2 | 높음 | 앱 시작 시 미완료 구매 조회 | ⬜ |
 | 10 | B3 | 높음 | 구매를 밴드에 묶기 (obfuscatedAccountId) | ⬜ |
 | 11 | B5 | 높음 | 밴드 삭제·탈퇴 시 구독 경고·차단 | ⬜ |
@@ -53,7 +53,7 @@
 | 14 | L1 | 높음 | 개인정보처리방침 위탁·국외이전 보완 | ⬜ |
 | 15 | U3 | 중간 | 스토어 빌드 스크립트 | ✅ 2026-09-27 `release_store.py` 첫 실행 통과 |
 | 16 | B6 | 중간 | 자동 갱신 구독자에게 만료 경고 | ⬜ |
-| 17 | B8 | 중간 | 만료 배치가 스토어 재조회 없이 강등 | ⬜ |
+| 17 | B8 | 중간 | 만료 배치가 스토어 재조회 없이 강등 | ⬜ (B1 로 "토큰이 지워져 복구 불가" 부분은 해소 — 늦게 온 RENEWED 가 밴드를 다시 올린다. 재조회는 남음) |
 | 18 | B7 | 중간 | 쿠폰·결제 기간 섞임 | ⬜ |
 | 19 | U2 | 중간 | 미디어 URL 10분 만료 + 상세 캐시 | ⬜ |
 | 20 | P7·P8 | 중간 | UGC 운영 수단·스토어 카테고리 | 🔧 P8: 카테고리 "도구" 선택(소셜 아님, 2026-09-27). P7 남음 |
@@ -86,7 +86,7 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | P1 | 차단 | 2023-11 이후 만든 **개인** 개발자 계정은 비공개 테스트에 12명 이상이 14일 연속 참여해야 프로덕션을 신청할 수 있다. 기록상 내부 테스트 트랙만 썼고 테스터는 2명(naver·hanmail 계정) | Play Console › 설정 › 개발자 계정에서 유형 확인(조직이면 해당 없음). 개인이면 비공개 테스트 트랙 생성, **Gmail 계정** 테스터 12명 이상 등록, AAB 업로드, 참여 링크 배포. 14일 뒤 프로덕션 액세스 신청 | 🔧 2026-09-27 진행 중 (사람 작업) |
 | P2 | 차단 | Play 앱 서명을 쓰면 스토어 설치본은 구글 키로 재서명된다. 카카오 로그인·카카오맵은 키 해시로 앱을 확인하는데, 등록된 것은 디버그 키와 업로드 키(`7zGOnc…`)뿐. `ANDROID_SHA256_CERT_FINGERPRINTS` 에 적힌 `C2:6B:…` 도 업로드 키 값 | Play Console › 앱 무결성 › 앱 서명 › **앱 서명 키 인증서**의 SHA-1 → `python -c "import base64,sys;print(base64.b64encode(bytes.fromhex(sys.argv[1].replace(':',''))).decode())" <SHA-1>` → 카카오 콘솔 Android 키 해시에 **추가**. SHA-256 은 **서버** `.env.prod` 에 직접. 내부 테스트 설치본으로 로그인·지도 확인 | 🟡 2026-09-27 Play Console › 앱 서명("Google Play로 보호됨" 안으로 옮겨짐)에서 **기존 키**와 **이전 앱 서명 키**(2026-09-09) SHA-1 을 키 해시로 바꿔 카카오 콘솔에 추가. **남은 것: 내부 테스트 트랙으로 설치한 앱에서 카카오 로그인·지도 확인.** SHA-256 은 App Links 를 켤 때 서버에 |
 | P3 | 차단 | 스토어 설명이 "모든 기능을 무료로", "영상은 앱 안에서 바로 재생", "정기 합주 자동 등록"을 조건 없이 적었다. 영상 업로드·정기 규칙은 서버가 `PLAN_REQUIRED` 로 막는 유료 기능 → 메타데이터 정책(오해의 소지) | 설명문에 "(프리미엄)" 표시, "■ 무료와 프리미엄" 으로 무료 범위·혜택 3가지·자동 갱신·해지 명시 | 🟡 2026-09-27 `docs/store-listing.md` 수정 완료. 2026-09-27 Play Console 기본 스토어 등록정보 "자세한 설명" 교체·저장(1150→1435자, Claude in Chrome). 2026-09-27 게시 개요에서 검토 제출 완료 |
-| P4 | 높음 | 구독 제안 화면이 가격·주기만 보여 준다. 자동 갱신·해지 방법은 구매 후 화면에만 있다. 비교표에 "영상 업로드" 행이 없어 무료도 영상을 올릴 수 있는 것처럼 읽힌다 (`plan_screen.dart` `_ActionButton`·`_CompareTable`) | 구매 버튼 위 고지("밴드당 연 ₩19,000 · 매년 자동 갱신 · Play 스토어에서 언제든 해지 · 해지해도 기간 끝까지 이용") + 약관·방침 링크, 비교표에 "영상 업로드" 행, PREMIUM 이면 `https://play.google.com/store/account/subscriptions?sku=premium_yearly&package=com.yeka.bandule` 로 가는 "구독 관리" 버튼 | 🟡 2026-09-27 `plan_screen.dart`: 구매 버튼 위 고지(`_SubscriptionTerms` — 가격·연 자동 갱신·해지 경로·기간 끝까지 유지·밴드 단위/계정당 한 밴드·약관 주소), 비교표에 "영상 업로드 — / 가능" 행. 2026-09-27 `url_launcher` 추가 승인 → PREMIUM·해지 예약 안내에 "Google Play 에서 구독 관리" 버튼(`IapService.manageSubscriptionUrl`, 매니페스트 `<queries>` https VIEW). **남은 것: 다음 스토어 빌드에서 실기기로 고지 문구·버튼 확인, 그 빌드 커밋에 `pubspec.lock` 포함** |
+| P4 | 높음 | 구독 제안 화면이 가격·주기만 보여 준다. 자동 갱신·해지 방법은 구매 후 화면에만 있다. 비교표에 "영상 업로드" 행이 없어 무료도 영상을 올릴 수 있는 것처럼 읽힌다 (`plan_screen.dart` `_ActionButton`·`_CompareTable`) | 구매 버튼 위 고지("밴드당 연 ₩19,000 · 매년 자동 갱신 · Play 스토어에서 언제든 해지 · 해지해도 기간 끝까지 이용") + 약관·방침 링크, 비교표에 "영상 업로드" 행, PREMIUM 이면 `https://play.google.com/store/account/subscriptions?sku=premium_yearly&package=com.yeka.bandule` 로 가는 "구독 관리" 버튼 | 🟡 2026-09-27 `plan_screen.dart`: 구매 버튼 위 고지(`_SubscriptionTerms` — 가격·연 자동 갱신·해지 경로·기간 끝까지 유지·밴드 단위/계정당 한 밴드·약관 주소), 비교표에 "영상 업로드 — / 가능" 행. 2026-09-27 `url_launcher` 추가 승인 → PREMIUM·해지 예약 안내에 "Google Play 에서 구독 관리" 버튼(`IapService.manageSubscriptionUrl`, 매니페스트 `<queries>` https VIEW). 0.1.0+31(`pubspec.lock` 포함, #101). ✅ 2026-09-28 사용자가 실기기 요금제 화면에서 고지·비교표 확인. "구독 관리" 버튼은 PREMIUM 상태에서만 나오므로 §6 구매 테스트에서 확인 |
 | P5 | 차단 | 2026-08-31 부터 신규 앱·업데이트는 targetSdk 36 필수. `targetSdk = flutter.targetSdkVersion` 이라 빌드한 PC 의 Flutter 에 따라 값이 달라진다 | `build.gradle.kts` 에 `playMinTargetSdk = 36`, `compileSdk`·`targetSdk` = `maxOf(Flutter 기본값, 36)`. Android 16 은 큰 화면에서 방향 고정을 무시하니 태블릿 에뮬레이터로 레이아웃 한 번 확인 | ✅ 2026-09-27 `build.gradle.kts` 수정, `release_store.py` 로 AAB 0.1.0+30 의 targetSdk 36 확인(병합 매니페스트). 태블릿 레이아웃은 P11 로 분리 |
 | P6 | 차단 | targetSdk 35 이상은 64비트 `.so` 가 16KB 페이지 정렬이어야 한다. 카카오맵 SDK(`kakao_map_sdk` 1.3.0)가 네이티브 라이브러리를 싣는다 | `client/tools/release_store.py` 가 AAB 안 64비트 `.so` 의 ELF LOAD 정렬(≥ 0x4000)을 검사. 걸리면 해당 SDK 를 16KB 지원 버전으로 | ✅ 2026-09-27 AAB 0.1.0+30 검사 — 64비트 .so 9개 모두 LOAD 정렬 ≥ 16KB. 카카오맵 SDK 교체 불필요 |
 | P7 | 중간 | 13~15세를 대상에 넣었고 UGC(글·사진·영상)가 있는데, 운영자 조치가 DB 직접 수정뿐이고 계정 정지 기능이 없다 (`MODERATION.md` §2) | `users.suspended_at` + 로그인·JWT 필터 차단, 글 숨김·미디어 삭제·정지를 한 번에 하는 운영 스크립트, 약관 제14조에 정지 근거 | ⬜ |
@@ -104,14 +104,14 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 
 | ID | 심각도 | 사용자에게 생기는 일 | 원인 | 해결방안 | 상태 |
 |---|---|---|---|---|---|
-| B1 | 높음 | 카드 결제 실패로 계정 보류 → 결제 수단을 고치면 Google 은 다시 청구하는데 밴드는 FREE 그대로. 30일 뒤 사진·영상 삭제 | `BandPlan.downgradeToFree()` 가 `purchaseToken`·`store` 를 비운다. 이후 같은 토큰의 RECOVERED(1)·RESTARTED(7)·RENEWED(2) RTDN 이 밴드를 못 찾고 1시간 뒤 버려진다 | 강등해도 토큰을 남긴다 — `downgradeToFree()` 에서 `store`·`purchaseToken` 을 지우지 않는다(V17 CHECK 는 둘이 짝이기만 하면 된다). REVOKED 만 버린다. 회귀 테스트: ON_HOLD → RECOVERED 시 PREMIUM 복귀 | ⬜ |
+| B1 | 높음 | 카드 결제 실패로 계정 보류 → 결제 수단을 고치면 Google 은 다시 청구하는데 밴드는 FREE 그대로. 30일 뒤 사진·영상 삭제 | `BandPlan.downgradeToFree()` 가 `purchaseToken`·`store` 를 비운다. 이후 같은 토큰의 RECOVERED(1)·RESTARTED(7)·RENEWED(2) RTDN 이 밴드를 못 찾고 1시간 뒤 버려진다 | 강등해도 토큰을 남긴다 — `downgradeToFree()` 에서 `store`·`purchaseToken` 을 지우지 않는다(V17 CHECK 는 둘이 짝이기만 하면 된다). REVOKED 만 버린다. 회귀 테스트: ON_HOLD → RECOVERED 시 PREMIUM 복귀 | 🟡 2026-09-28 — `downgradeToFree` 가 토큰을 남기고 REVOKED 는 새 `revokeToFree` 로 비운다(`PlanMutationService.applyRevoke`). 테스트: `BandPlanTest`, `GooglePlayWebhookIntegrationTest` 의 보류→RECOVERED·만료→RESTARTED·REVOKED 3건. 개인정보처리방침 보관 문구 정정(시행일 2026-09-28). 남은 것: 테스트 카드로 보류→복구 실확인(§6) |
 | B2 | 높음 | 결제 직후 검증 전에 앱이 꺼지거나 네트워크가 끊기면 요금제 화면을 다시 열 때까지 검증이 안 되고, 3일 뒤 Google 이 자동 환불. Play 스토어에서 재구독한 것도 앱이 모른다 | `purchaseStream` 구독이 `PlanScreen.initState` 에만 있고 `restorePurchases()` 호출이 없다 | 로그인 직후 앱 전역(`app.dart`)에서 스트림 구독 + `restorePurchases()`, 앱 복귀 때도 한 번 | ⬜ |
 | B3 | 높음 | 검증이 "결제한 밴드"가 아니라 "지금 선택된 밴드"로 간다. B2 상황에서 다른 밴드로 붙을 수 있다 | `_verifyPurchase` 가 `currentBandProvider` 사용, `applicationUserName` 없음, 서버 obfuscatedAccountId 대조 미구현 | 구매 시 `applicationUserName = "b{bandId}-u{userId 해시}"`, 서버는 `externalAccountIdentifiers.obfuscatedExternalAccountId` 의 bandId 로 결정, 다르면 409 | ⬜ |
 | B4 | 높음 | 한 Google 계정은 같은 구독 상품을 동시에 하나만 가진다. 밴드 2개의 밴드장은 두 번째 밴드를 결제할 수 없고 "이미 보유" 오류만 본다 | 상품 `premium_yearly` 하나, 구독은 밴드 단위 | 단기: 오류 코드를 잡아 안내 + 요금제 화면·약관에 제약 명시. 장기: 상품 구조 재검토 | ⬜ |
 | B5 | 높음 | PREMIUM 밴드를 삭제하거나 결제한 밴드장이 탈퇴·위임해도 Google 결제는 계속된다. 삭제된 밴드는 갱신 RTDN 이 버려져 없는 밴드에 매년 청구 | 삭제(`band_settings_screen.dart`)·탈퇴(`account_screen.dart`) 창에 구독 언급 없음, `BandPurgeService` 는 요금제 행만 지움 | 서버: 스토어 구독이 살아 있는(해지 예약 아닌) 밴드 삭제를 409 로 막고 "먼저 Play 에서 해지" 안내. 앱: 탈퇴·위임 창에 구독 경고 + 구독 관리 링크, 위임받은 밴드장에게 "결제한 사람의 Google 계정에서 관리" | ⬜ |
 | B6 | 중간 | 자동 갱신 구독자에게도 30·7·1일 전 "프리미엄이 N일 남았어요… 사진·영상이 사라져요" 푸시, 홈에는 모든 멤버에게 끝난다는 배너 | `PlanExpiryReminderService`·`plan_expiry_banner.dart` 가 `canceled`·`store` 를 안 본다 | 응답에 `autoRenewing` 추가, 예고는 해지 예약·쿠폰 밴드에만 | ⬜ |
 | B7 | 중간 | 결제 중인 밴드에 쿠폰 → 다음 갱신 때 스토어 만료일로 덮임. 쿠폰 기간 중 결제 → 쿠폰 잔여일 소멸. 구독 만료 시 쿠폰 일수도 사라짐 | `applyStoreRenew` 가 `expiresAt` 을 덮어씀, EXPIRED 즉시 강등 | 스토어 구독 밴드는 쿠폰 409, 쿠폰 PREMIUM 에서 구매 시 "남은 쿠폰 기간은 사라집니다" 안내 | ⬜ |
-| B8 | 중간 | 갱신 알림 지연·유실·유예기간이면 야간 배치가 결제한 밴드를 강등하고, 토큰이 지워져 B1 로 이어진다 | `PlanService.expireOverdue` 가 DB 만료일만 본다 | 스토어 밴드는 강등 전 `subscriptionsv2.get` 재조회, ACTIVE·IN_GRACE 면 만료일만 갱신 | ⬜ |
+| B8 | 중간 | 갱신 알림 지연·유실·유예기간이면 야간 배치가 결제한 밴드를 강등하고, 토큰이 지워져 B1 로 이어진다 (2026-09-28 B1 수정으로 토큰은 남는다 — 늦은 RENEWED 가 오면 복구된다. 그 사이 FREE 로 보이는 것은 그대로) | `PlanService.expireOverdue` 가 DB 만료일만 본다 | 스토어 밴드는 강등 전 `subscriptionsv2.get` 재조회, ACTIVE·IN_GRACE 면 만료일만 갱신 | ⬜ |
 | B9 | 낮음 | 밴드장 한 명의 환불로 다른 멤버의 오래된 사진·영상까지 즉시 만료 | `applyRevoke` 유예 0일(약관 제12조 7항에 명시) | 약관상 위반은 아님. 7일 유예 검토 | ⬜ |
 | B10 | 낮음 | 웹훅 시크릿이 URL(`?token=`)이라 Nginx 접근 로그에 남음 | `WebhookAuthenticator` | 이미 구현된 OIDC 켜기(`PLAN_BILLING_PUBSUB_AUDIENCE`·`_SA`), 공유 시크릿 끄기 | ⬜ |
 | B11 | 낮음 | 한 달만 구독해 정기 규칙을 만들고 해지해도 규칙은 계속 회차를 만든다 | `RecurringRuleService` 는 생성만 막음 | 의도면 ➖, 아니면 강등 시 규칙 일시정지 | ⬜ |

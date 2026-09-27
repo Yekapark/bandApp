@@ -65,6 +65,51 @@ class GooglePlayWebhookIntegrationTest extends PlanApiSupport {
     }
 
     @Test
+    void recovered_after_account_hold_restores_premium() {
+        // 카드 결제 실패 → 계정 보류(ON_HOLD) 로 FREE → 결제 수단을 고쳐 RECOVERED. 같은 토큰으로 온다.
+        // 예전에는 보류 때 토큰을 지워 RECOVERED 가 밴드를 못 찾고 버려졌다(LAUNCH_REVIEW B1).
+        String leader = signup("wh-hold@band.app", "리더");
+        long bandId = createBand(leader, "보류밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(googlePlayWebhook(RTDN_ON_HOLD, tokenFor(bandId)).getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("FREE");
+        assertThat(storedToken(bandId)).isEqualTo(tokenFor(bandId));
+
+        assertThat(googlePlayWebhook(RTDN_RECOVERED, tokenFor(bandId)).getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("PREMIUM");
+        assertThat(expiresAt(bandId)).isAfter(Instant.now().plus(300, ChronoUnit.DAYS));
+    }
+
+    @Test
+    void restarted_after_expiry_restores_premium() {
+        String leader = signup("wh-restart@band.app", "리더");
+        long bandId = createBand(leader, "재구독밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(googlePlayWebhook(RTDN_EXPIRED, tokenFor(bandId)).getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("FREE");
+
+        assertThat(googlePlayWebhook(RTDN_RESTARTED, tokenFor(bandId)).getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("PREMIUM");
+    }
+
+    @Test
+    void revoked_forgets_the_token() {
+        String leader = signup("wh-revoke-token@band.app", "리더");
+        long bandId = createBand(leader, "환불토큰밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(googlePlayWebhook(RTDN_REVOKED, tokenFor(bandId)).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(storedToken(bandId)).isNull();
+    }
+
+    private String storedToken(long bandId) {
+        return jdbc.queryForObject("select purchase_token from band_plans where band_id = ?", String.class, bandId);
+    }
+
+    @Test
     void duplicate_message_id_is_applied_once() {
         String leader = signup("wh-dup@band.app", "리더");
         long bandId = createBand(leader, "중복밴드");

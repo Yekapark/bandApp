@@ -56,7 +56,10 @@ public class BandPlan extends BaseTimeEntity {
     @Column(name = "store", length = 20)
     private Store store;
 
-    /** Google Play 구독 구매 토큰 — 서버가 구독 상태를 재조회하는 키. PREMIUM 동안만 채워진다. */
+    /**
+     * Google Play 구독 구매 토큰 — 서버가 구독 상태를 재조회하고 웹훅이 밴드를 찾는 키. 스토어 결제로 PREMIUM 이
+     * 된 뒤로는 FREE 로 내려와도 남는다(보류·만료 후 복구를 받기 위해). 환불·쿠폰 전환·밴드 삭제 때만 비워진다.
+     */
     @Column(name = "purchase_token")
     private String purchaseToken;
 
@@ -102,16 +105,31 @@ public class BandPlan extends BaseTimeEntity {
         this.updatedAt = now;
     }
 
-    /** PREMIUM → FREE. 보관기한 30일로 복귀, 구독기간·식별자·스토어 정보를 비운다. */
+    /**
+     * PREMIUM → FREE (만료·계정 보류·해지 후 기간 종료). 보관기한 30일로 복귀, 구독기간·식별자를 비운다.
+     *
+     * <p><b>스토어 구매 토큰은 남긴다.</b> Google Play 구독은 FREE 로 내려온 뒤에도 같은 토큰으로 되살아난다 —
+     * 계정 보류(ON_HOLD) 뒤 결제 수단을 고치면 RECOVERED, 만료 뒤 재구독하면 RESTARTED, 갱신 알림이 늦으면
+     * RENEWED 가 그 토큰으로 온다. 예전에는 여기서 토큰을 지워 웹훅이 밴드를 찾지 못했고, 사용자는 돈을 내고도
+     * FREE 로 남아 30일 뒤 사진·영상을 잃었다(LAUNCH_REVIEW B1). 토큰을 버리는 것은 환불({@link #revokeToFree}) 뿐이다.
+     */
     public void downgradeToFree(Instant now) {
         this.tier = PlanTier.FREE;
         this.mediaRetentionDays = FREE_RETENTION_DAYS;
         this.subscriptionRef = null;
-        this.store = null;
-        this.purchaseToken = null;
         this.startedAt = now;
         this.expiresAt = null;
         this.updatedAt = now;
+    }
+
+    /**
+     * 환불·강제 취소(REVOKED)로 FREE. {@link #downgradeToFree} 와 같고 스토어 정보까지 지운다 —
+     * 취소된 구매는 되살아나지 않으므로 그 토큰으로 이 밴드를 다시 찾을 이유가 없다.
+     */
+    public void revokeToFree(Instant now) {
+        downgradeToFree(now);
+        this.store = null;
+        this.purchaseToken = null;
     }
 
     /**

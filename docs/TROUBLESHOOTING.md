@@ -1,5 +1,32 @@
 # 문제 기록
 
+## 2026-09-28 — 계정 보류·만료 뒤 구독이 살아나도 밴드가 FREE 로 남았다
+
+**증상** — (코드 검토로 발견, 출시 전이라 실제 피해 없음) 카드 결제가 실패해 Play 가 구독을 **계정 보류**로
+돌리면 밴드는 FREE 로 내려간다. 사용자가 결제 수단을 고쳐 Google 이 다시 돈을 받아도 밴드는 FREE 그대로였고,
+30일 뒤 사진·영상이 정리됐을 것이다. 만료 뒤 Play 스토어에서 같은 구독을 다시 시작해도 마찬가지.
+
+**원인** — `BandPlan.downgradeToFree()` 가 FREE 로 내리면서 `store`·`purchaseToken` 까지 비웠다.
+RTDN 웹훅은 알림에 담긴 **구매 토큰으로 밴드를 찾는데**(`findBandIdByPurchaseToken`), Google Play 구독은
+보류 복구(RECOVERED=1)·재시작(RESTARTED=7)·늦은 갱신(RENEWED=2) 모두 **같은 토큰**으로 알림이 온다.
+토큰이 지워진 밴드는 못 찾으니 "아직 verify 가 안 온 새 구매" 로 보고 1시간 재전송받다 버렸다.
+"무료가 되면 토큰은 필요 없다" 는 가정은 구독이 한 번 끝나면 되살아나지 않는 경우에만 맞는다 — Play 구독은
+보류·일시중지·만료 뒤에도 같은 토큰으로 돌아온다.
+
+**해결** — `downgradeToFree()` 는 티어·보관기한·기간만 되돌리고 **토큰과 스토어는 남긴다**. 환불·강제 취소
+(REVOKED=12)만 새 메서드 `revokeToFree()` 로 토큰까지 비운다(`PlanMutationService.applyRevoke`).
+V17 의 CHECK(`store` 와 `purchase_token` 은 둘 다 있거나 둘 다 없음)는 그대로 만족한다. 한 토큰이 두 밴드에
+붙는 것은 `grantPremium` 의 `PURCHASE_ALREADY_LINKED` 가 계속 막는다. 개인정보처리방침의 보관 기간 문구
+("무료로 전환되면 구매 토큰 즉시 삭제")도 사실과 달라져 고쳤다(시행일 2026-09-28, `site/` 재생성).
+
+**확인법** — `./gradlew test --tests '*GooglePlayWebhookIntegrationTest'` 의
+`recovered_after_account_hold_restores_premium`(ON_HOLD → FREE·토큰 유지 → RECOVERED → PREMIUM),
+`restarted_after_expiry_restores_premium`, `revoked_forgets_the_token`. 실기기는 라이선스 테스터 계정으로
+테스트 카드 "항상 거절" → 계정 보류 → 카드 변경 → 앱에서 PREMIUM 복귀(LAUNCH_REVIEW §6).
+DB 로는 `select tier, store, purchase_token is not null from band_plans where band_id = ?` — 보류 중에도
+`GOOGLE_PLAY / true` 여야 한다.
+
+---
 ## 2026-09-27 — 새 플러그인을 넣자 Windows 에서 빌드가 "symlink support" 로 멈췄다
 
 **증상** — `url_launcher` 를 추가한 뒤 `python tools/release_store.py` 가 `Building with plugins requires

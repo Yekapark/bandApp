@@ -48,7 +48,7 @@ class BandPlanTest {
     }
 
     @Test
-    void downgrade_to_free_restores_retention_and_clears_period_and_ref() {
+    void downgrade_to_free_restores_retention_clears_period_and_keeps_store_token() {
         BandPlan plan = BandPlan.freePlan(1L, NOW);
         plan.upgradeToPremium(NOW, NOW.plus(30, ChronoUnit.DAYS), "GPA.1", Store.GOOGLE_PLAY, "purchase-tok-1");
 
@@ -59,9 +59,24 @@ class BandPlanTest {
         assertThat(plan.retentionDaysOrNull()).isEqualTo(BandPlan.FREE_RETENTION_DAYS);
         assertThat(plan.getExpiresAt()).isNull();
         assertThat(plan.getSubscriptionRef()).isNull();
+        // 스토어 토큰은 남는다 — 보류·만료 뒤 같은 토큰으로 복구 알림이 온다(LAUNCH_REVIEW B1).
+        assertThat(plan.getStore()).isEqualTo(Store.GOOGLE_PLAY);
+        assertThat(plan.getPurchaseToken()).isEqualTo("purchase-tok-1");
+        assertThat(plan.getStartedAt()).isEqualTo(later);
+    }
+
+    @Test
+    void revoke_to_free_also_clears_store_and_token() {
+        BandPlan plan = BandPlan.freePlan(1L, NOW);
+        plan.upgradeToPremium(NOW, NOW.plus(30, ChronoUnit.DAYS), "GPA.1", Store.GOOGLE_PLAY, "purchase-tok-1");
+
+        plan.revokeToFree(NOW.plus(1, ChronoUnit.DAYS));
+
+        assertThat(plan.isFree()).isTrue();
+        assertThat(plan.retentionDaysOrNull()).isEqualTo(BandPlan.FREE_RETENTION_DAYS);
+        assertThat(plan.getExpiresAt()).isNull();
         assertThat(plan.getStore()).isNull();
         assertThat(plan.getPurchaseToken()).isNull();
-        assertThat(plan.getStartedAt()).isEqualTo(later);
     }
 
     @Test
