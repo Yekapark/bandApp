@@ -9,6 +9,7 @@ import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/application/auth_controller.dart';
 import 'features/notification/data/push_service.dart';
+import 'features/plan/application/purchase_sync.dart';
 import 'routing/app_router.dart';
 
 class BandApp extends ConsumerWidget {
@@ -22,13 +23,17 @@ class BandApp extends ConsumerWidget {
     // 앱으로 돌아왔을 때 밴드 데이터를 다시 불러온다(마지막 갱신 후 일정 시간 지났을 때만).
     ref.watch(foregroundRefreshProvider);
 
-    // 로그인 상태에 따라 FCM 디바이스 토큰 등록/해제 (설정 없으면 조용히 no-op).
+    // 로그인 상태에 따라 FCM 디바이스 토큰 등록/해제 (설정 없으면 조용히 no-op), 결제 스트림 열기/닫기.
     ref.listen(authControllerProvider.select((s) => s.status), (_, status) {
       final push = ref.read(pushServiceProvider);
+      // 결제 스트림도 로그인한 동안만 듣는다 — 검증 못 끝낸 구매를 서버에 보내려면 로그인이 필요하다.
+      final purchases = ref.read(purchaseSyncProvider);
       if (status == AuthStatus.authenticated) {
         push.start();
+        purchases.start();
       } else if (status == AuthStatus.unauthenticated) {
         push.stop();
+        purchases.stop();
       }
     });
 

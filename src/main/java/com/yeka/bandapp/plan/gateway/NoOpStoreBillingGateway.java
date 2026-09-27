@@ -21,6 +21,7 @@ import java.util.Optional;
  * <p>토큰 접두사로 상태를 고른다(테스트 편의): {@code revoked-…}→REVOKED, {@code expired-…}→EXPIRED,
  * {@code canceled-…}→CANCELED, {@code hold-…}→ON_HOLD, {@code invalid-…}→조회 실패(empty),
  * 그 밖에는 ACTIVE. 만료 시각은 {@code now + premiumPeriodDays}(1년).
+ * 토큰 끝에 {@code @band-7} 처럼 붙이면 그 값이 구매의 밴드 표시(obfuscatedAccountId)가 된다.
  *
  * <p><b>운영({@code prod} 프로파일)에서는 아무것도 통과시키지 않는다.</b> 이 빈이 운영에 떴다는 건
  * {@code PLAN_BILLING_GATEWAY=google} 이 컨테이너에 안 실렸다는 뜻이고, 그대로 두면 밴드장이
@@ -72,8 +73,11 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
             return Optional.empty();
         }
         Instant expiry = Instant.now().plus(planProperties.premiumPeriodDays(), ChronoUnit.DAYS);
+        int at = purchaseToken.lastIndexOf('@');
+        String accountTag = at >= 0 ? purchaseToken.substring(at + 1) : null;
         return Optional.of(new StoreSubscription(
-                store, purchaseToken, "premium_yearly", "noop-order-" + purchaseToken, state, expiry, true));
+                store, purchaseToken, "premium_yearly", "noop-order-" + purchaseToken, state, expiry, true,
+                accountTag));
     }
 
     @Override

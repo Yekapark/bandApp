@@ -40,6 +40,10 @@ public final class GooglePlaySubscriptionMapper {
         boolean acknowledged = "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED"
                 .equals(purchase.getAcknowledgementState());
 
+        // 앱이 구매할 때 BillingFlowParams.setObfuscatedAccountId 로 붙인 밴드 표시(PurchaseBandTag).
+        String obfuscatedAccountId = purchase.getExternalAccountIdentifiers() == null
+                ? null : purchase.getExternalAccountIdentifiers().getObfuscatedExternalAccountId();
+
         return new StoreSubscription(
                 Store.GOOGLE_PLAY,
                 purchaseToken,
@@ -47,7 +51,8 @@ public final class GooglePlaySubscriptionMapper {
                 purchase.getLatestOrderId(),
                 mapState(purchase.getSubscriptionState()),
                 expiry,
-                acknowledged);
+                acknowledged,
+                obfuscatedAccountId);
     }
 
     /** Play 문자열 상태 → 우리 enum. 모르는 값은 EXPIRED 로 취급한다(PREMIUM 을 주지 않는 쪽이 안전). */

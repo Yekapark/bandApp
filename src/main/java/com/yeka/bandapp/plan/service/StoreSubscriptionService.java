@@ -6,6 +6,7 @@ import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.plan.config.PlanProperties;
 import com.yeka.bandapp.plan.config.StoreBillingProperties;
 import com.yeka.bandapp.plan.dto.PlanResponse;
+import com.yeka.bandapp.plan.dto.RestoredPurchaseResponse;
 import com.yeka.bandapp.plan.entity.BandPlan;
 import com.yeka.bandapp.plan.entity.ProcessedStoreEvent;
 import com.yeka.bandapp.plan.entity.Store;
@@ -23,12 +24,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
+import java.util.OptionalLong;
 
 /**
- * 스토어 인앱결제 반영. 구매는 클라이언트에서 끝나고(Play Billing) 서버는 두 가지만 한다:
+ * 스토어 인앱결제 반영. 구매는 클라이언트에서 끝나고(Play Billing) 서버는 이것만 한다:
  *
  * <ol>
  *   <li>{@link #verifyGooglePurchase} — 클라이언트가 결제 직후 보낸 구매 토큰을 스토어에 확인하고 PREMIUM 부여
+ *   <li>{@link #restoreGooglePurchase} — 검증을 못 끝낸 구매를 앱이 나중에 보내면, 구매에 적힌 밴드에 반영
  *   <li>{@link #handleGoogleNotification} — RTDN(Pub/Sub) 웹훅으로 갱신·해지·환불을 반영
  * </ol>
  *
@@ -114,32 +117,68 @@ public class StoreSubscriptionService {
     /**
      * 클라이언트가 Play 결제를 끝내고 보낸 구매 토큰을 검증하고 PREMIUM 으로 올린다. 밴드장만.
      * 토큰이 스토어에 없거나 구독이 유효 상태가 아니면 {@code PURCHASE_NOT_VERIFIED}(402).
+     * 구매에 다른 밴드가 적혀 있으면({@link PurchaseBandTag}) {@code PURCHASE_BAND_MISMATCH}(409).
      * 이미 PREMIUM 이면 조회된 만료일로 연장한다(앱 재시작·재전송에 안전).
      */
     public PlanResponse verifyGooglePurchase(long bandId, long userId, String purchaseToken) {
         accessGuard.requireLeader(bandId, userId);
+        requireToken(purchaseToken);
+
+        StoreSubscription sub = fetchGrantable(purchaseToken);
+        OptionalLong taggedBand = PurchaseBandTag.parse(sub.obfuscatedAccountId());
+        if (taggedBand.isPresent() && taggedBand.getAsLong() != bandId) {
+            log.warn("구매 검증: 다른 밴드의 구매 bandId={} tagged={}", bandId, taggedBand.getAsLong());
+            throw new BusinessException(ErrorCode.PURCHASE_BAND_MISMATCH);
+        }
+        return grantAndAcknowledge(bandId, sub);
+    }
+
+    /**
+     * 밴드를 모르는 채로 받은 미완료 구매를 반영한다 — 결제 직후 검증 전에 앱이 꺼졌거나 네트워크가
+     * 끊겼을 때, 앱이 다음에 켜지면서 보낸다(LAUNCH_REVIEW B2). <b>밴드는 구매에 적힌 값으로 정한다</b>
+     * ({@link PurchaseBandTag}) — "지금 선택된 밴드" 를 믿으면 다른 밴드가 PREMIUM 이 된다(B3).
+     *
+     * <p>적힌 밴드가 없으면(옛 구매·스토어 밖 구매) {@code PURCHASE_BAND_UNKNOWN}(422) — 앱은 그 구매를
+     * 완료 처리하지 않고 남겨 두고, 사용자가 요금제 화면에서 결제한 밴드로 검증하게 한다. 적힌 밴드의
+     * 밴드장이 아니면 {@code NOT_BAND_LEADER}(403).
+     */
+    public RestoredPurchaseResponse restoreGooglePurchase(long userId, String purchaseToken) {
+        requireToken(purchaseToken);
+
+        StoreSubscription sub = fetchGrantable(purchaseToken);
+        long bandId = PurchaseBandTag.parse(sub.obfuscatedAccountId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.PURCHASE_BAND_UNKNOWN));
+        accessGuard.requireLeader(bandId, userId);
+        return RestoredPurchaseResponse.of(bandId, grantAndAcknowledge(bandId, sub));
+    }
+
+    private static void requireToken(String purchaseToken) {
         if (purchaseToken == null || purchaseToken.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
+    }
 
-        StoreSubscription sub;
+    /** 스토어에 조회해 PREMIUM 을 줄 수 있는 구독만 돌려준다. 아니면 {@code PURCHASE_NOT_VERIFIED}(402). */
+    private StoreSubscription fetchGrantable(String purchaseToken) {
         try {
-            sub = billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken)
+            return billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken)
                     .filter(this::grantable)
                     .orElseThrow(() -> new BusinessException(ErrorCode.PURCHASE_NOT_VERIFIED));
         } catch (StoreBillingUnavailableException transientFailure) {
             // 스토어가 일시적으로 응답 못 함 — 402 로 "잠시 후 다시" 를 안내한다(클라가 재시도).
-            log.warn("Play 조회 일시 실패 bandId={}", bandId, transientFailure);
+            log.warn("Play 조회 일시 실패", transientFailure);
             throw new BusinessException(ErrorCode.PURCHASE_NOT_VERIFIED);
         }
+    }
 
+    private PlanResponse grantAndAcknowledge(long bandId, StoreSubscription sub) {
         BandPlan updated = grantPremium(bandId, Instant.now(), sub);
 
         if (!sub.acknowledged()) {
             // 확인 처리 실패로 응답을 깨지 않는다 — 등급은 이미 올라갔다. 3일 안에 acknowledge 가
             // 안 되면 Play 가 자동 환불하고, 그때 REVOKED 웹훅이 와서 FREE 로 되돌린다(자기수정).
             try {
-                billingGateway.acknowledge(Store.GOOGLE_PLAY, sub.productId(), purchaseToken);
+                billingGateway.acknowledge(Store.GOOGLE_PLAY, sub.productId(), sub.purchaseToken());
             } catch (RuntimeException e) {
                 log.error("구매 acknowledge 실패 bandId={} — Play 자동환불 위험", bandId, e);
             }

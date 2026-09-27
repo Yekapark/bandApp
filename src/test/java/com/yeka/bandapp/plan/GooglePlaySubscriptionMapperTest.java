@@ -1,5 +1,6 @@
 package com.yeka.bandapp.plan;
 
+import com.google.api.services.androidpublisher.model.ExternalAccountIdentifiers;
 import com.google.api.services.androidpublisher.model.SubscriptionPurchaseLineItem;
 import com.google.api.services.androidpublisher.model.SubscriptionPurchaseV2;
 import com.yeka.bandapp.plan.gateway.StoreBillingGateway.StoreSubscription;
@@ -36,6 +37,23 @@ class GooglePlaySubscriptionMapperTest {
         assertThat(s.state().grantsPremium()).isTrue();
         assertThat(s.acknowledged()).isFalse();
         assertThat(s.expiryTime()).isEqualTo(Instant.parse("2027-01-15T09:30:00Z"));
+    }
+
+    @Test
+    void band_tag_comes_from_obfuscated_external_account_id() {
+        SubscriptionPurchaseV2 tagged = new SubscriptionPurchaseV2()
+                .setSubscriptionState("SUBSCRIPTION_STATE_ACTIVE")
+                .setExternalAccountIdentifiers(new ExternalAccountIdentifiers()
+                        .setObfuscatedExternalAccountId("band-7"))
+                .setLineItems(List.of(new SubscriptionPurchaseLineItem()
+                        .setProductId("premium_yearly")
+                        .setExpiryTime("2027-01-15T09:30:00Z")));
+        SubscriptionPurchaseV2 untagged = tagged.clone().setExternalAccountIdentifiers(null);
+
+        assertThat(GooglePlaySubscriptionMapper.toStoreSubscription("t", tagged).obfuscatedAccountId())
+                .isEqualTo("band-7");
+        assertThat(GooglePlaySubscriptionMapper.toStoreSubscription("t", untagged).obfuscatedAccountId())
+                .isNull();
     }
 
     @Test

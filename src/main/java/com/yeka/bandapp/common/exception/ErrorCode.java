@@ -122,6 +122,8 @@ public enum ErrorCode {
     PAYMENT_FAILED(HttpStatus.PAYMENT_REQUIRED, "결제 처리에 실패했습니다."),
     PURCHASE_NOT_VERIFIED(HttpStatus.PAYMENT_REQUIRED, "구매를 확인하지 못했습니다. 결제가 끝난 뒤 잠시 후 다시 시도해 주세요."),
     PURCHASE_ALREADY_LINKED(HttpStatus.CONFLICT, "이 구매는 다른 밴드에 이미 연결되어 있습니다."),
+    PURCHASE_BAND_MISMATCH(HttpStatus.CONFLICT, "이 구매는 다른 밴드의 요금제로 결제되었습니다."),
+    PURCHASE_BAND_UNKNOWN(HttpStatus.UNPROCESSABLE_ENTITY, "어느 밴드의 구매인지 알 수 없습니다. 결제한 밴드의 요금제 화면에서 다시 시도해 주세요."),
     PLAN_REQUIRED(HttpStatus.FORBIDDEN, "프리미엄에서만 쓸 수 있는 기능이에요."),
 
     // 요금제 쿠폰

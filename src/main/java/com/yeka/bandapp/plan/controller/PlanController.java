@@ -58,7 +58,7 @@ public class PlanController {
     @Operation(summary = "Google Play 결제 검증",
             description = "클라이언트가 Play Billing 으로 결제하고 받은 구매 토큰을 검증해 PREMIUM 으로 올린다. "
                     + "밴드장만(그 외 403 NOT_BAND_LEADER). 토큰이 스토어에 없거나 구독이 유효 상태가 아니면 "
-                    + "402 PURCHASE_NOT_VERIFIED. 이미 PREMIUM 이면 조회된 만료일로 연장한다(재전송에 안전). "
+                    + "402 PURCHASE_NOT_VERIFIED. 구매에 다른 밴드가 적혀 있으면 409 PURCHASE_BAND_MISMATCH. 이미 PREMIUM 이면 조회된 만료일로 연장한다(재전송에 안전). "
                     + "성공 시 밴드의 기존 READY 미디어 보관기한이 무제한으로 바뀐다.")
     @PostMapping("/google/verify")
     public ApiResponse<PlanResponse> verifyGoogle(@AuthenticationPrincipal AuthPrincipal principal,

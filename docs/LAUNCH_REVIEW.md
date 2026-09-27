@@ -45,8 +45,8 @@
 | 6 | G1 | 높음 | 로컬 미커밋 수정 커밋·배포, main 과 합치기 | ✅ 2026-09-27 PR #98 squash 머지(`10e5adc`), CI·배포 성공, 운영 health UP |
 | 7 | P4 | 높음 | 구독 화면 사전 고지·비교표 | ✅ 2026-09-28 실기기(0.1.0+31)에서 요금제 화면 고지·비교표 확인. "구독 관리" 버튼은 PREMIUM 일 때만 보여 §6 구매 테스트 때 함께 본다 |
 | 8 | B1 | 높음 | 계정 보류·만료 뒤 복구돼도 PREMIUM 안 돌아옴 | 🟡 2026-09-28 PR #102 머지(`3ae1590`), CI·배포 성공, 운영 health UP. 실결제 시나리오(§6 보류→복구)는 사람 확인 |
-| 9 | B2 | 높음 | 앱 시작 시 미완료 구매 조회 | ⬜ |
-| 10 | B3 | 높음 | 구매를 밴드에 묶기 (obfuscatedAccountId) | ⬜ |
+| 9 | B2 | 높음 | 앱 시작 시 미완료 구매 조회 | 🟡 2026-09-28 B3 와 한 PR. 앱 전역 복구 + 복구 API. 다음 스토어 빌드에서 실확인 남음 |
+| 10 | B3 | 높음 | 구매를 밴드에 묶기 (obfuscatedAccountId) | 🟡 2026-09-28 B2 와 한 PR. `band-{id}` 표시 + 서버 대조. 실결제 확인 남음 |
 | 11 | B5 | 높음 | 밴드 삭제·탈퇴 시 구독 경고·차단 | ⬜ |
 | 12 | B4 | 높음 | 한 계정 한 구독 제약 안내 | ⬜ |
 | 13 | U1 | 높음 | 로그아웃 후에도 푸시가 옴 | ⬜ |
@@ -61,7 +61,7 @@
 | 22 | U7 | 중간 | 카카오 SDK·video_compress 가 KGP 를 써서 향후 Flutter 에서 빌드 실패 예고 | ⬜ |
 | 23 | P11 | 낮음 | Android 16 큰 화면(태블릿·폴더블) 레이아웃 확인 | ⬜ |
 | 24 | G2 | 낮음 | main 에 안 합쳐진 옛 원격 브랜치 11개 정리, dependabot(AWS SDK BOM) PR 처리 | ⬜ |
-| 25 | 나머지 | 낮음 | P9·P10, B9~B11, U4~U6, L4·L5 | ⬜ |
+| 25 | 나머지 | 낮음 | P9·P10, B9~B12, U4~U6, L4·L5 | ⬜ |
 
 P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코드 항목(G1~U1)을 고쳐 같은 트랙에 올린다.
 
@@ -105,8 +105,8 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | ID | 심각도 | 사용자에게 생기는 일 | 원인 | 해결방안 | 상태 |
 |---|---|---|---|---|---|
 | B1 | 높음 | 카드 결제 실패로 계정 보류 → 결제 수단을 고치면 Google 은 다시 청구하는데 밴드는 FREE 그대로. 30일 뒤 사진·영상 삭제 | `BandPlan.downgradeToFree()` 가 `purchaseToken`·`store` 를 비운다. 이후 같은 토큰의 RECOVERED(1)·RESTARTED(7)·RENEWED(2) RTDN 이 밴드를 못 찾고 1시간 뒤 버려진다 | 강등해도 토큰을 남긴다 — `downgradeToFree()` 에서 `store`·`purchaseToken` 을 지우지 않는다(V17 CHECK 는 둘이 짝이기만 하면 된다). REVOKED 만 버린다. 회귀 테스트: ON_HOLD → RECOVERED 시 PREMIUM 복귀 | 🟡 2026-09-28 — `downgradeToFree` 가 토큰을 남기고 REVOKED 는 새 `revokeToFree` 로 비운다(`PlanMutationService.applyRevoke`). 테스트: `BandPlanTest`, `GooglePlayWebhookIntegrationTest` 의 보류→RECOVERED·만료→RESTARTED·REVOKED 3건. 개인정보처리방침 보관 문구 정정(시행일 2026-09-28). PR #102 머지·배포. 남은 것: 테스트 카드로 보류→복구 실확인(§6) |
-| B2 | 높음 | 결제 직후 검증 전에 앱이 꺼지거나 네트워크가 끊기면 요금제 화면을 다시 열 때까지 검증이 안 되고, 3일 뒤 Google 이 자동 환불. Play 스토어에서 재구독한 것도 앱이 모른다 | `purchaseStream` 구독이 `PlanScreen.initState` 에만 있고 `restorePurchases()` 호출이 없다 | 로그인 직후 앱 전역(`app.dart`)에서 스트림 구독 + `restorePurchases()`, 앱 복귀 때도 한 번 | ⬜ |
-| B3 | 높음 | 검증이 "결제한 밴드"가 아니라 "지금 선택된 밴드"로 간다. B2 상황에서 다른 밴드로 붙을 수 있다 | `_verifyPurchase` 가 `currentBandProvider` 사용, `applicationUserName` 없음, 서버 obfuscatedAccountId 대조 미구현 | 구매 시 `applicationUserName = "b{bandId}-u{userId 해시}"`, 서버는 `externalAccountIdentifiers.obfuscatedExternalAccountId` 의 bandId 로 결정, 다르면 409 | ⬜ |
+| B2 | 높음 | 결제 직후 검증 전에 앱이 꺼지거나 네트워크가 끊기면 요금제 화면을 다시 열 때까지 검증이 안 되고, 3일 뒤 Google 이 자동 환불. Play 스토어에서 재구독한 것도 앱이 모른다 | `purchaseStream` 구독이 `PlanScreen.initState` 에만 있고 `restorePurchases()` 호출이 없다 | 로그인 직후 앱 전역(`app.dart`)에서 스트림 구독 + `restorePurchases()`, 앱 복귀 때도 한 번 | 🟡 2026-09-28 — 결제 스트림을 앱 전역 `PurchaseSync`(`purchase_sync.dart`)로 옮겼다. 로그인하면 스트림을 열고 `restorePurchases()`, 앱 복귀 때도(30초 간격) 다시 묻는다. 확인 안 된 구매만 새 API `POST /api/v1/plan/google/restore` 로 보내고, 성공해야 스토어에 완료를 알린다. 이미 확인된 구매는 서버를 부르지 않는다. 테스트: `test/purchase_sync_test.dart`, `PlanPurchaseRestoreIntegrationTest`. 남은 것: 다음 스토어 빌드(0.1.0+32)에서 결제 직후 앱 강제 종료 → 재실행 시 PREMIUM 확인. 결제 후 3일 동안 앱을 한 번도 안 열면 여전히 환불된다(웹훅 쪽에서 밴드 표시로 반영하는 것은 B12) |
+| B3 | 높음 | 검증이 "결제한 밴드"가 아니라 "지금 선택된 밴드"로 간다. B2 상황에서 다른 밴드로 붙을 수 있다 | `_verifyPurchase` 가 `currentBandProvider` 사용, `applicationUserName` 없음, 서버 obfuscatedAccountId 대조 미구현 | 구매 시 `applicationUserName = "b{bandId}-u{userId 해시}"`, 서버는 `externalAccountIdentifiers.obfuscatedExternalAccountId` 의 bandId 로 결정, 다르면 409 | 🟡 2026-09-28 — 구매할 때 `applicationUserName = band-{bandId}`(`IapService.bandTag`), 서버는 `externalAccountIdentifiers.obfuscatedExternalAccountId` 를 `PurchaseBandTag` 로 읽는다. 복구 API 는 그 밴드로 반영(밴드장만), 기존 검증 API 는 적힌 밴드와 다르면 409 `PURCHASE_BAND_MISMATCH`. 표시 없는 옛 구매는 422 `PURCHASE_BAND_UNKNOWN` — 앱은 방금 결제를 시작한 밴드가 있을 때만 그 밴드로 검증한다. 설계 변경: 표시에 사용자 해시는 넣지 않았다(밴드 id 만, 개인정보 아님). 남은 것: 실결제로 Play 응답에 표시가 실리는지 확인 |
 | B4 | 높음 | 한 Google 계정은 같은 구독 상품을 동시에 하나만 가진다. 밴드 2개의 밴드장은 두 번째 밴드를 결제할 수 없고 "이미 보유" 오류만 본다 | 상품 `premium_yearly` 하나, 구독은 밴드 단위 | 단기: 오류 코드를 잡아 안내 + 요금제 화면·약관에 제약 명시. 장기: 상품 구조 재검토 | ⬜ |
 | B5 | 높음 | PREMIUM 밴드를 삭제하거나 결제한 밴드장이 탈퇴·위임해도 Google 결제는 계속된다. 삭제된 밴드는 갱신 RTDN 이 버려져 없는 밴드에 매년 청구 | 삭제(`band_settings_screen.dart`)·탈퇴(`account_screen.dart`) 창에 구독 언급 없음, `BandPurgeService` 는 요금제 행만 지움 | 서버: 스토어 구독이 살아 있는(해지 예약 아닌) 밴드 삭제를 409 로 막고 "먼저 Play 에서 해지" 안내. 앱: 탈퇴·위임 창에 구독 경고 + 구독 관리 링크, 위임받은 밴드장에게 "결제한 사람의 Google 계정에서 관리" | ⬜ |
 | B6 | 중간 | 자동 갱신 구독자에게도 30·7·1일 전 "프리미엄이 N일 남았어요… 사진·영상이 사라져요" 푸시, 홈에는 모든 멤버에게 끝난다는 배너 | `PlanExpiryReminderService`·`plan_expiry_banner.dart` 가 `canceled`·`store` 를 안 본다 | 응답에 `autoRenewing` 추가, 예고는 해지 예약·쿠폰 밴드에만 | ⬜ |
@@ -115,6 +115,7 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | B9 | 낮음 | 밴드장 한 명의 환불로 다른 멤버의 오래된 사진·영상까지 즉시 만료 | `applyRevoke` 유예 0일(약관 제12조 7항에 명시) | 약관상 위반은 아님. 7일 유예 검토 | ⬜ |
 | B10 | 낮음 | 웹훅 시크릿이 URL(`?token=`)이라 Nginx 접근 로그에 남음 | `WebhookAuthenticator` | 이미 구현된 OIDC 켜기(`PLAN_BILLING_PUBSUB_AUDIENCE`·`_SA`), 공유 시크릿 끄기 | ⬜ |
 | B11 | 낮음 | 한 달만 구독해 정기 규칙을 만들고 해지해도 규칙은 계속 회차를 만든다 | `RecurringRuleService` 는 생성만 막음 | 의도면 ➖, 아니면 강등 시 규칙 일시정지 | ⬜ |
+| B12 | 낮음 | 결제 후 앱을 3일 동안 한 번도 열지 않으면 검증·확인 처리가 안 돼 Google 이 자동 환불한다 (B2 로 "앱을 다시 열면 복구" 까지는 됨) | 웹훅 PURCHASED 는 토큰으로만 밴드를 찾고, 못 찾으면 1시간 뒤 버린다 | 웹훅에서 밴드를 못 찾으면 스토어 조회 → `PurchaseBandTag` 로 밴드 결정 → PREMIUM + acknowledge (2026-09-28 B2 작업 중 발견) | ⬜ |
 
 ---
 
