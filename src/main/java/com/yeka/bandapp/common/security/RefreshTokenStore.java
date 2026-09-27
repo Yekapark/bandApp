@@ -1,10 +1,12 @@
 package com.yeka.bandapp.common.security;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -32,6 +34,24 @@ public class RefreshTokenStore {
      */
     static final Duration ROTATION_REPLAY_GRACE = Duration.ofSeconds(60);
 
+    // 확인·회전·재시도 응답 공개·재사용 차단을 한 명령으로 처리한다. 중간 상태를 다른 요청이
+    // 보면 정상 재시도를 탈취로 오인하거나, 로그아웃으로 지운 세션을 다시 만들 수 있다.
+    private static final DefaultRedisScript<String> ROTATE = new DefaultRedisScript<>("""
+            if redis.call('HEXISTS', KEYS[1], ARGV[1]) == 1 then
+                redis.call('HDEL', KEYS[1], ARGV[1])
+                redis.call('HSET', KEYS[1], ARGV[2], ARGV[3])
+                redis.call('PEXPIRE', KEYS[1], ARGV[4])
+                redis.call('SET', KEYS[2], ARGV[5], 'PX', ARGV[6])
+                return ARGV[5]
+            end
+            local replay = redis.call('GET', KEYS[2])
+            if replay and redis.call('EXISTS', KEYS[1]) == 1 then
+                return replay
+            end
+            redis.call('DEL', KEYS[1])
+            return nil
+            """, String.class);
+
     private final StringRedisTemplate redis;
 
     public RefreshTokenStore(StringRedisTemplate redis) {
@@ -48,12 +68,14 @@ public class RefreshTokenStore {
         return redis.opsForHash().hasKey(key(userId), jti);
     }
 
-    /** 이전 jti를 지우고 새 jti를 저장한다. 키 TTL도 갱신(슬라이딩). */
-    public void rotate(long userId, String oldJti, String newJti, Duration ttl) {
-        String key = key(userId);
-        redis.opsForHash().delete(key, oldJti);
-        redis.opsForHash().put(key, newJti, Long.toString(Instant.now().toEpochMilli()));
-        redis.expire(key, ttl);
+    /**
+     * 새 회전 또는 60초 내 재시도 응답을 반환한다. 무효한 토큰의 재사용은 전 세션을 지우고 empty.
+     * 기존 세션·재시도 캐시 형식은 유지해 배포 전 발급된 토큰도 계속 갱신할 수 있다.
+     */
+    public Optional<String> rotate(long userId, String oldJti, String newJti, Duration ttl, String payload) {
+        return Optional.ofNullable(redis.execute(ROTATE, List.of(key(userId), replayKey(userId, oldJti)),
+                oldJti, newJti, Long.toString(Instant.now().toEpochMilli()), Long.toString(ttl.toMillis()),
+                payload, Long.toString(ROTATION_REPLAY_GRACE.toMillis())));
     }
 
     /** 단일 세션(기기) 로그아웃. 이미 없으면 무시된다. */
@@ -64,19 +86,6 @@ public class RefreshTokenStore {
     /** 전 기기 무효화 (탈퇴 / refresh 재사용 탐지). */
     public void removeAll(long userId) {
         redis.delete(key(userId));
-    }
-
-    /**
-     * 방금 회전에 성공한 토큰(jti)에 대해 그 회전 결과({@code payload})를 {@link #ROTATION_REPLAY_GRACE} 동안 보관.
-     * 같은 옛 토큰이 그 창 안에 다시 오면 {@link #recallRotation}로 같은 응답을 돌려줄 수 있다.
-     */
-    public void rememberRotation(long userId, String consumedJti, String payload) {
-        redis.opsForValue().set(replayKey(userId, consumedJti), payload, ROTATION_REPLAY_GRACE);
-    }
-
-    /** {@link #rememberRotation}로 저장해 둔 회전 결과. 창이 지났거나 없으면 empty. */
-    public Optional<String> recallRotation(long userId, String consumedJti) {
-        return Optional.ofNullable(redis.opsForValue().get(replayKey(userId, consumedJti)));
     }
 
     private String key(long userId) {

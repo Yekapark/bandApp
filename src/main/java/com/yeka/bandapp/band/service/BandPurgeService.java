@@ -96,6 +96,12 @@ public class BandPurgeService {
 
     @Transactional
     public void purge(long bandId) {
+        // 규칙 → 일정 → 하위 행. 밴드 잠금도 규칙 연장의 FK 확인과 서로 기다리지 않도록 뒤에 얻는다.
+        recurringRuleRepository.findByBandIdForUpdate(bandId);
+        reservationRepository.findByBandIdForUpdate(bandId);
+        if (bandRepository.findByIdForUpdate(bandId).isEmpty()) {
+            return;
+        }
         settlementRepository.deleteByBandId(bandId);   // settlement_shares 는 cascade 로 따라온다
         attendanceRepository.deleteByBandId(bandId);
         setlistItemRepository.deleteByBandId(bandId);

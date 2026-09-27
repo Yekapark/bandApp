@@ -77,6 +77,31 @@ class PasswordResetIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    void oversized_password_keeps_code_and_old_password_then_72_byte_password_succeeds() {
+        post("/api/v1/auth/signup", SIGNUP);
+        post("/api/v1/auth/password-reset/request", "{\"email\":\"reset@band.app\"}");
+        String code = storedCode();
+        String request = "{\"email\":\"reset@band.app\",\"code\":\"" + code
+                + "\",\"newPassword\":\"%s\"}";
+
+        var rejected = post("/api/v1/auth/password-reset/confirm", request.formatted("가".repeat(25)));
+        assertThat(rejected.getStatusCode().value()).isEqualTo(400);
+        assertThat(errorCode(rejected)).isEqualTo("INVALID_INPUT");
+        assertThat(body(rejected).at("/error/fieldErrors/0/field").asText()).isEqualTo("newPassword");
+        assertThat(storedCode()).isEqualTo(code);
+        assertThat(post("/api/v1/auth/login",
+                "{\"email\":\"reset@band.app\",\"password\":\"pw12345678\"}")
+                .getStatusCode().value()).isEqualTo(200);
+
+        String acceptedPassword = "가".repeat(24);
+        assertThat(post("/api/v1/auth/password-reset/confirm", request.formatted(acceptedPassword))
+                .getStatusCode().value()).isEqualTo(204);
+        assertThat(post("/api/v1/auth/login",
+                "{\"email\":\"reset@band.app\",\"password\":\"" + acceptedPassword + "\"}")
+                .getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
     void five_wrong_attempts_invalidate_the_code() {
         post("/api/v1/auth/signup", SIGNUP);
         post("/api/v1/auth/password-reset/request", "{\"email\":\"reset@band.app\"}");

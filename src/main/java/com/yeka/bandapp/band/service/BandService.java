@@ -12,6 +12,7 @@ import com.yeka.bandapp.band.repository.BandRepository;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.plan.service.PlanProvisioningService;
+import com.yeka.bandapp.user.service.UserDirectoryService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,18 +32,22 @@ public class BandService {
     private final BandMemberRepository bandMemberRepository;
     private final BandAccessGuard accessGuard;
     private final PlanProvisioningService planProvisioningService;
+    private final UserDirectoryService userDirectory;
 
     public BandService(BandRepository bandRepository, BandMemberRepository bandMemberRepository,
-                       BandAccessGuard accessGuard, PlanProvisioningService planProvisioningService) {
+                       BandAccessGuard accessGuard, PlanProvisioningService planProvisioningService,
+                       UserDirectoryService userDirectory) {
         this.bandRepository = bandRepository;
         this.bandMemberRepository = bandMemberRepository;
         this.accessGuard = accessGuard;
         this.planProvisioningService = planProvisioningService;
+        this.userDirectory = userDirectory;
     }
 
     /** 밴드 생성. 생성자가 곧바로 활성 LEADER 멤버가 된다. */
     @Transactional
     public BandResponse create(long userId, CreateBandRequest request) {
+        userDirectory.lockActiveUser(userId);
         Instant now = Instant.now();
         Band band = bandRepository.save(Band.create(request.name().trim(), userId));
         bandMemberRepository.save(BandMember.asLeader(band.getId(), userId, now));
@@ -77,8 +82,8 @@ public class BandService {
     /** 일정 등록 권한 모드 변경. 밴드장만 가능(그 외 403). */
     @Transactional
     public BandResponse updateSettings(long bandId, long userId, UpdateBandSettingsRequest request) {
+        Band band = accessGuard.lockBand(bandId);
         accessGuard.requireLeader(bandId, userId);
-        Band band = band(bandId);
         band.changeReservationPermission(request.reservationPermission());
         return BandResponse.from(band);
     }

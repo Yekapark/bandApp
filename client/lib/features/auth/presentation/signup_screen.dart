@@ -8,6 +8,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/auth_controller.dart';
+import 'password_validation.dart';
 
 /// 회원가입 STEP 2 — 계정 정보. POST /auth/signup.
 class SignupScreen extends ConsumerStatefulWidget {
@@ -132,12 +133,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     hintText: '8자 이상',
                     errorText: _fieldErrors['password'],
                   ),
-                  validator: (v) {
-                    final s = v ?? '';
-                    if (s.length < 8) return '비밀번호는 8자 이상이어야 해요.';
-                    if (s.length > 64) return '비밀번호는 64자까지 쓸 수 있어요.';
-                    return null;
-                  },
+                  validator: validateNewPassword,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 14),

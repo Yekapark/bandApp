@@ -13,12 +13,16 @@ public interface BandInviteRepository extends JpaRepository<BandInvite, Long> {
 
     Optional<BandInvite> findByCode(String code);
 
+    /** 밴드를 잠근 뒤 초대 상태를 새로 읽기 위해 id 만 조회한다. */
+    @Query("select i.bandId from BandInvite i where i.code = :code")
+    Optional<Long> findBandIdByCode(@Param("code") String code);
+
     boolean existsByCode(String code);
 
     Optional<BandInvite> findFirstByBandIdAndRevokedFalseOrderByCreatedAtDesc(Long bandId);
 
     /** 재발급/무효화 시 해당 밴드의 모든 활성 코드를 revoked 로 만든다. */
-    @Modifying(clearAutomatically = true)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update BandInvite i set i.revoked = true where i.bandId = :bandId and i.revoked = false")
     int revokeActiveByBandId(@Param("bandId") Long bandId);
 

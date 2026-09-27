@@ -1,15 +1,18 @@
 package com.yeka.bandapp.user.service;
 
+import com.yeka.bandapp.common.exception.BusinessException;
+import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.user.entity.User;
 import com.yeka.bandapp.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.List;
 
 /**
- * 다른 도메인(밴드 등)이 사용자 정보를 볼 때 쓰는 읽기 전용 창구.
+ * 다른 도메인(밴드 등)의 사용자 조회·활성 계정 검증 창구.
  * 도메인 간 참조는 저장소가 아니라 이 서비스를 통한다(코딩 컨벤션).
  */
 @Service
@@ -19,6 +22,13 @@ public class UserDirectoryService {
 
     public UserDirectoryService(UserRepository userRepository) {
         this.userRepository = userRepository;
+    }
+
+    /** 계정 삭제와 겹쳐 멤버십이 새로 생기지 않도록 사용자 → 밴드 순서로 잠근다. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void lockActiveUser(long userId) {
+        userRepository.findActiveByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
     @Transactional(readOnly = true)

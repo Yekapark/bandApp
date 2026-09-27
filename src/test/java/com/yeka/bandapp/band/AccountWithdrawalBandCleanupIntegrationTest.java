@@ -1,11 +1,18 @@
 package com.yeka.bandapp.band;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.yeka.bandapp.band.entity.BandInvite;
 import com.yeka.bandapp.band.entity.BandMemberRole;
+import com.yeka.bandapp.band.repository.BandInviteRepository;
 import com.yeka.bandapp.band.repository.BandMemberRepository;
+import com.yeka.bandapp.band.repository.BandRepository;
+import com.yeka.bandapp.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+
+import java.time.Duration;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -19,6 +26,9 @@ class AccountWithdrawalBandCleanupIntegrationTest extends BandApiSupport {
 
     @Autowired
     BandMemberRepository bandMemberRepository;
+    @Autowired BandInviteRepository invites;
+    @Autowired BandRepository bands;
+    @Autowired UserRepository users;
 
     @Test
     void member_withdrawal_removes_them_from_the_band() {
@@ -69,11 +79,63 @@ class AccountWithdrawalBandCleanupIntegrationTest extends BandApiSupport {
     @Test
     void sole_leader_withdrawal_leaves_the_band_memberless() {
         String leader = signup("wd-solo@band.app", "혼자");
+        String outsider = signup("wd-outsider@band.app", "외부인");
         long bandId = createBand(leader, "새소년");
+        String code = issueInvite(leader, bandId, null);
 
         withdraw(leader);
 
         assertThat(bandMemberRepository.countByBandIdAndLeftAtIsNull(bandId)).isZero();
+        assertThat(invites.findByCode(code).orElseThrow().isRevoked()).isTrue();
+        ResponseEntity<String> rejected = join(outsider, code);
+        assertThat(rejected.getStatusCode().value()).isEqualTo(410);
+        assertThat(errorCode(rejected)).isEqualTo("INVITE_REVOKED");
+        assertThat(get("/api/v1/bands/" + bandId, outsider).getStatusCode().value()).isEqualTo(403);
+        assertThat(bandMemberRepository.countByBandIdAndLeftAtIsNull(bandId)).isZero();
+    }
+
+    @Test
+    void legacy_active_invite_cannot_reopen_a_band_without_a_leader() {
+        String leader = signup("wd-legacy@band.app", "혼자");
+        String outsider = signup("wd-outsider@band.app", "외부인");
+        long leaderId = myUserId(leader);
+        long bandId = createBand(leader, "기존 빈 밴드");
+        withdraw(leader);
+        // 수정 전에 남아 있을 수 있는 유효 코드를 재현한다. 운영 데이터를 변경하는 마이그레이션은 없다.
+        invites.save(BandInvite.issue(bandId, "LEGACY01", leaderId, Instant.now(), Duration.ofDays(7), null));
+
+        ResponseEntity<String> rejected = join(outsider, "LEGACY01");
+
+        assertThat(rejected.getStatusCode().value()).isEqualTo(410);
+        assertThat(errorCode(rejected)).isEqualTo("INVITE_REVOKED");
+        assertThat(bandMemberRepository.countByBandIdAndLeftAtIsNull(bandId)).isZero();
+        assertThat(invites.findByCode("LEGACY01").orElseThrow().getUsedCount()).isZero();
+    }
+
+    @Test
+    void revoking_empty_bands_does_not_discard_other_withdrawal_changes() {
+        String leader = signup("wd-many@band.app", "여러밴드");
+        String mate = signup("wd-mate@band.app", "후임");
+        long leaderId = myUserId(leader);
+        long mateId = myUserId(mate);
+        long emptyFirst = createBand(leader, "먼저 비는 밴드");
+        long shared = createBand(leader, "승계 밴드");
+        long emptyLast = createBand(leader, "나중에 비는 밴드");
+        String firstCode = issueInvite(leader, emptyFirst, null);
+        String lastCode = issueInvite(leader, emptyLast, null);
+        String sharedCode = issueInvite(leader, shared, null);
+        assertThat(join(mate, sharedCode).getStatusCode().value()).isEqualTo(200);
+
+        withdraw(leader);
+
+        assertThat(users.findByIdAndDeletedAtIsNull(leaderId)).isEmpty();
+        assertThat(bandMemberRepository.findActiveBandIdsForWithdrawal(leaderId)).isEmpty();
+        assertThat(invites.findByCode(firstCode).orElseThrow().isRevoked()).isTrue();
+        assertThat(invites.findByCode(lastCode).orElseThrow().isRevoked()).isTrue();
+        assertThat(invites.findByCode(sharedCode).orElseThrow().isRevoked()).isFalse();
+        assertThat(bands.findById(shared).orElseThrow().getLeaderId()).isEqualTo(mateId);
+        assertThat(bandMemberRepository.findByBandIdAndUserIdAndLeftAtIsNull(shared, mateId)
+                .orElseThrow().isLeader()).isTrue();
     }
 
     @Test

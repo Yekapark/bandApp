@@ -70,7 +70,8 @@ public class UserAccountService {
      */
     @Transactional
     public void withdraw(long userId, String rawPassword) {
-        User user = activeUser(userId);
+        User user = userRepository.findActiveByIdForUpdate(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         if (user.isEmailAccount()
                 && (rawPassword == null || !passwordEncoder.matches(rawPassword, user.getPasswordHash()))) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);

@@ -63,7 +63,7 @@ public class SetlistService {
     public SetlistItemResponse add(long bandId, long reservationId, long userId,
                                    CreateSetlistItemRequest request) {
         accessGuard.requireActiveMember(bandId, userId);
-        requireReservation(bandId, reservationId);
+        lockReservation(bandId, reservationId);
         if (setlistRepository.countByReservationId(reservationId) >= MAX_ITEMS_PER_RESERVATION) {
             throw new BusinessException(ErrorCode.SETLIST_LIMIT_EXCEEDED);
         }
@@ -78,7 +78,7 @@ public class SetlistService {
     public SetlistItemResponse update(long bandId, long reservationId, long itemId, long userId,
                                       UpdateSetlistItemRequest request) {
         accessGuard.requireActiveMember(bandId, userId);
-        requireReservation(bandId, reservationId);
+        lockReservation(bandId, reservationId);
         SetlistItem item = requireItem(reservationId, itemId);
         item.edit(request.title().trim(), trimToNull(request.artist()), trimToNull(request.referenceUrl()));
         return SetlistItemResponse.from(item);
@@ -87,7 +87,7 @@ public class SetlistService {
     @Transactional
     public void delete(long bandId, long reservationId, long itemId, long userId) {
         accessGuard.requireActiveMember(bandId, userId);
-        requireReservation(bandId, reservationId);
+        lockReservation(bandId, reservationId);
         setlistRepository.delete(requireItem(reservationId, itemId));
     }
 
@@ -98,7 +98,7 @@ public class SetlistService {
     @Transactional
     public SetlistResponse reorder(long bandId, long reservationId, long userId, ReorderSetlistRequest request) {
         accessGuard.requireActiveMember(bandId, userId);
-        requireReservation(bandId, reservationId);
+        lockReservation(bandId, reservationId);
 
         List<SetlistItem> current = setlistRepository.findByReservationIdOrderByOrderNoAscIdAsc(reservationId);
         Map<Long, SetlistItem> byId = current.stream()
@@ -115,6 +115,12 @@ public class SetlistService {
     }
 
     // --- 내부 헬퍼 -----------------------------------------------------------
+
+    /** 곡을 읽기 전에 일정 단위로 변경을 직렬화해 제목·순서·항목 수의 동시 갱신을 보존한다. */
+    private void lockReservation(long bandId, long reservationId) {
+        reservationRepository.findByIdAndBandIdForUpdate(reservationId, bandId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
+    }
 
     /** 타 밴드의 일정은 존재를 알리지 않고 {@code RESERVATION_NOT_FOUND}. */
     private void requireReservation(long bandId, long reservationId) {

@@ -155,6 +155,31 @@ class BandMemberIntegrationTest extends BandApiSupport {
     }
 
     @Test
+    void another_bands_leader_cannot_use_membership_or_admin_endpoints() {
+        String owner = signup("owner@band.app", "밴드장");
+        String outsider = signup("other-owner@band.app", "다른밴드장");
+        long bandId = createBand(owner, "private band");
+        createBand(outsider, "other band");
+        long ownerId = myUserId(owner);
+        String base = "/api/v1/bands/" + bandId;
+        assertThat(get(base, outsider).getStatusCode().value()).isEqualTo(403);
+        assertThat(get(base + "/members", outsider).getStatusCode().value()).isEqualTo(403);
+        assertThat(get(base + "/invites/current", outsider).getStatusCode().value()).isEqualTo(403);
+        assertThat(post(base + "/invites", null, outsider).getStatusCode().value()).isEqualTo(403);
+        assertThat(delete(base + "/invites/current", outsider).getStatusCode().value()).isEqualTo(403);
+        assertThat(put(base + "/settings", "{\"reservationPermission\":\"ANYONE\"}", outsider)
+                .getStatusCode().value()).isEqualTo(403);
+        assertThat(post(base + "/leader", "{\"newLeaderUserId\":" + ownerId + "}", outsider)
+                .getStatusCode().value()).isEqualTo(403);
+        assertThat(post(base + "/members/leave", null, outsider).getStatusCode().value()).isEqualTo(403);
+        assertThat(delete(base + "/members/" + ownerId, outsider).getStatusCode().value()).isEqualTo(403);
+        assertThat(post(base + "/delete", "{\"confirmName\":\"private band\"}", outsider)
+                .getStatusCode().value()).isEqualTo(403);
+        // 잠금 추가로 존재하지 않는 밴드의 응답이 404 등으로 달라지지 않는다.
+        assertThat(post("/api/v1/bands/999999/invites", null, outsider).getStatusCode().value()).isEqualTo(403);
+    }
+
+    @Test
     void member_list_shows_roles_and_join_order() {
         String leader = signup("leader10@band.app", "리더");
         String member = signup("member10@band.app", "둘째");
