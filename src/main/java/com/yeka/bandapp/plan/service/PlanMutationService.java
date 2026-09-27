@@ -150,7 +150,7 @@ public class PlanMutationService {
         if (plan == null || !plan.isPremium()) {
             return;
         }
-        plan.downgradeToFree(now);
+        plan.revokeToFree(now);
         mediaDirectory.applyGracePeriodForBand(bandId, now);
     }
 
