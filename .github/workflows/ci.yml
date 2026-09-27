@@ -31,6 +31,21 @@ jobs:
       # 테스트가 깨졌을 때 로그만으로는 "1 failed" 밖에 안 보여서 어느 테스트인지 찾느라
       # 원시 로그를 뒤져야 했다. 리포트를 올려 두면 클릭 한 번으로 실패한 테스트와
       # 스택트레이스가 나온다.
+      # 리포트·원시 로그를 열 수 없는 곳(Claude 세션은 Actions 로그·아티팩트 저장소에 접속이 막혀 있다)에서도
+      # 무엇이 깨졌는지 PR 체크의 주석(annotation)으로 바로 보이게 한다. 컴파일 오류와 실패한 테스트 이름·메시지.
+      - name: 실패 요약을 주석으로
+        if: failure()
+        run: |
+          ./gradlew compileJava compileTestJava --no-daemon -q 2>&1 | grep -E '\.java:[0-9]+: error:' | head -10 | sed 's/^/::error::/' || true
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for f in glob.glob('build/test-results/test/*.xml'):
+              for tc in ET.parse(f).getroot().iter('testcase'):
+                  for bad in tc.findall('failure') + tc.findall('error'):
+                      msg = (bad.get('message') or bad.text or '').strip().replace('\n', ' ')[:800]
+                      print(f"::error title={tc.get('classname')}.{tc.get('name')}::{msg}")
+          PY
+
       - name: 실패 시 테스트 리포트 업로드
         if: failure()
         uses: actions/upload-artifact@v7
