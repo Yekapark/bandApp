@@ -13,8 +13,11 @@
 **해결** — `plan_screen.dart` 에 구매 버튼 바로 위 고지(`_SubscriptionTerms`)를 넣었다: 스토어 가격 문자열,
 1년 자동 갱신과 청구, Play 스토어 구독 메뉴에서 해지, 해지해도 기간 끝까지 유지, 밴드 단위·한 Google 계정은
 한 번에 한 밴드, 약관·방침 주소. 비교표에 "영상 업로드 — / 가능" 행을 추가했다.
-**아직 안 고침**: Play 구독 관리 화면으로 바로 가는 버튼은 URL 을 여는 `url_launcher` 가 필요해 라이브러리
-추가 승인을 기다린다(LAUNCH_REVIEW P4).
+같은 날 `url_launcher` 추가 승인을 받아 PREMIUM·해지 예약 안내에 "Google Play 에서 구독 관리" 버튼을 붙였다
+(`https://play.google.com/store/account/subscriptions?sku=premium_yearly&package=com.yeka.bandule`, 외부 앱으로 연다).
+Android 11+ 패키지 가시성 때문에 매니페스트 `<queries>` 에 https VIEW 인텐트를 넣었다.
+`pubspec.lock` 은 이 환경에서 pub.dev 에 접속하지 못해 갱신하지 못했다 — 다음 `flutter pub get`(스토어 빌드)
+때 바뀌므로 그 커밋에 함께 담는다.
 
 **확인법** — 무료 밴드의 밴드장 계정으로 설정 › 요금제를 열면 구매 버튼 위에 다섯 줄 고지와, 비교표 첫 줄
 "영상 업로드" 가 보여야 한다. `flutter test test/copy_tone_test.dart` 로 문구 말투 검사도 통과해야 한다.

@@ -271,7 +271,7 @@ def main():
         f"   올릴 파일: {AAB}\n"
         f"   Play Console › 테스트 및 출시 › (비공개 테스트 또는 프로덕션) › 새 버전 만들기 에 올린다.\n"
         f"   빌드 번호가 바뀌었으니 커밋해 둔다:\n"
-        f"     git add client/pubspec.yaml && git commit -m \"chore(client): 스토어 빌드 {name}+{build}\""
+        f"     git add client/pubspec.yaml client/pubspec.lock && git commit -m \"chore(client): 스토어 빌드 {name}+{build}\""
     )
 
 
