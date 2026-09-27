@@ -74,7 +74,7 @@
 | **카카오** | 검색어, 주소 | 합주실 지도·장소 검색·주소→좌표 변환 |
 | **Cloudflare** | 올린 사진·영상, 접속 요청 | 파일 보관(R2), 트래픽 중계 |
 | **Google** (Firebase) | 기기 푸시 토큰, 알림 내용 | 푸시 알림 발송 |
-| **Google** (Play) | 구매 토큰 | 구독 결제 검증·상태 조회 (Play Developer API). 결제 자체도 Google 이 처리한다 |
+| **Google** (Play) | 구매 토큰, 결제한 밴드 표시(`band-{밴드 id}`, 구매할 때 obfuscatedAccountId 로 넣음 — 개인을 식별하지 않는다) | 구독 결제 검증·상태 조회 (Play Developer API). 결제 자체도 Google 이 처리한다 |
 
 **광고·마케팅 목적으로 개인정보를 제3자에게 제공하거나 판매하지 않는다.**
 

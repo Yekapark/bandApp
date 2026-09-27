@@ -332,7 +332,7 @@ CI에서 빌드·테스트가 통과한다.
 > **진행 (2026-09-08)** — **Android 만.** 클라이언트에 iOS 빌드 타깃이 없어 StoreKit 은 뒤로 미룬다.
 > - 슬라이스 1 (PR #69): `StoreBillingGateway` 재설계(`fetch`/`acknowledge` + 웹훅 핸들러),
 >   `band_plans.store`·`purchase_token`(V17), `processed_store_events`(멱등), no-op 게이트웨이,
->   `POST /bands/{id}/plan/google/verify`, `POST /api/v1/webhooks/google-play`
+>   `POST /bands/{id}/plan/google/verify`, `POST /plan/google/restore`(검증 못 끝낸 구매 — 구매에 적힌 밴드로, 2026-09-28 B2·B3), `POST /api/v1/webhooks/google-play`
 > - 슬라이스 2 (PR #70): `GooglePlayBillingGateway`(`purchases.subscriptionsv2.get`/`acknowledge`),
 >   `google-api-services-androidpublisher` 의존성. `app.plan.billing.gateway=google` 로 켠다
 > - 슬라이스 3 (PR #71): 웹훅 Pub/Sub OIDC 검증, Flutter `in_app_purchase` 결제 UI

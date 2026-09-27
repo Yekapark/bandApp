@@ -1,5 +1,60 @@
 # 문제 기록
 
+## 2026-09-28 — CI 가 "1 failed" 만 보여 주고, Claude 세션에서는 어느 테스트인지 알 수 없었다
+
+**증상** — B2·B3 PR 에서 백엔드 `build` 와 앱 `analyze-test` 가 실패했는데, 체크 결과에는 "Process completed with
+exit code 1", "68 tests passed, 1 failed" 뿐이었다. Claude 세션은 Actions 원시 로그와 테스트 리포트 아티팩트를
+내려받지 못한다(아티팩트·로그 저장소 `*.blob.core.windows.net` 접속이 막혀 있다). 로컬에서도 Gradle 배포판·Maven
+저장소·pub.dev 가 막혀 테스트를 돌릴 수 없다.
+
+**원인** — 실패 내용이 로그·아티팩트에만 있고, 세션이 읽을 수 있는 GitHub API(체크 주석 annotation)에는 없었다.
+실제 원인 둘: ① 매퍼 테스트가 `SubscriptionPurchaseV2.clone()` 을 썼는데 Google 모델의 clone 은 안의 `List.of(...)`
+(불변 리스트)를 리플렉션으로 새로 만들려다 `IllegalArgumentException` 을 낸다. ② `IapService` 생성자가
+`InAppPurchase.instance` 를 바로 만들었고, 이 인스턴스는 만들자마자 Play 결제 서비스에 연결을 시도한다 —
+테스트의 가짜 IapService 도 부모 생성자에서 진짜 연결을 열어 "test failed after it had already completed" 가 났다.
+
+**해결** — `ci.yml`·`client-ci.yml` 에 실패 시 요약 단계를 넣어 컴파일 오류와 실패한 테스트 이름·메시지를
+`::error` 주석으로 남긴다(`flutter test --file-reporter json:build/test-report.json` 을 파싱). 주석은
+`GET /repos/{owner}/{repo}/check-runs/{id}/annotations` 로 읽힌다. 테스트는 clone 대신 새로 만들게, `IapService` 는
+`InAppPurchase.instance` 를 처음 쓸 때 만들게(getter) 고쳤다.
+
+**확인법** — 실패한 체크의 annotations 에 `title=클래스.테스트명` 과 예외 메시지가 나온다. 앱에서는 요금제 화면을
+열거나 로그인할 때 처음으로 Play 연결이 만들어진다.
+
+---
+
+## 2026-09-28 — 결제 직후 앱이 꺼지면 구매가 검증되지 않고, 나중에 검증되면 다른 밴드에 붙을 수 있었다
+
+**증상** — (코드 검토로 발견, 출시 전) Play 결제는 끝났는데 서버 검증 전에 앱이 꺼지거나 네트워크가 끊기면,
+요금제 화면을 다시 열 때까지 밴드는 FREE 였다. 3일 안에 확인 처리(acknowledge)가 안 되면 Google 이 자동
+환불한다. 또 요금제 화면을 다시 열었을 때 검증은 **그때 선택된 밴드**로 갔다 — 밴드를 두 개 가진 밴드장이
+A 를 결제하고 B 를 보다가 열면 B 가 PREMIUM 이 됐다(LAUNCH_REVIEW B2·B3).
+
+**원인** — `in_app_purchase` 의 결과는 `purchaseStream` 으로 비동기로 오는데, 그 스트림을 `PlanScreen.initState`
+에서만 듣고 있었다. Android 는 앱을 새로 켰다고 미완료 구매를 스트림에 알아서 넣어 주지 않는다 —
+`restorePurchases()` 를 불러야 스토어에 다시 묻는다. 그리고 구매 기록에 "어느 밴드" 를 남기지 않아
+(`applicationUserName` 미사용) 나중에 온 구매를 어느 밴드에 줄지 앱의 현재 화면 말고는 알 방법이 없었다.
+
+**해결**
+- 앱: 스트림을 앱 전역 `PurchaseSync`(`lib/features/plan/application/purchase_sync.dart`)로 옮겼다. 로그인하면
+  (`app.dart` 의 인증 리스너) 스트림을 열고 `restorePurchases()`, 앱 복귀 때도 30초 간격으로 다시 묻는다.
+  확인 안 된 구매(`pendingCompletePurchase`)만 서버로 보내고, 서버가 반영해야 `completePurchase` 한다.
+  요금제 화면은 버튼 잠금만 따라간다. 안내 문구는 전역 스낵바로 띄운다.
+- 구매할 때 `applicationUserName = band-{bandId}`(Play 의 obfuscatedAccountId). 형식은 서버 `PurchaseBandTag` 와 같다.
+- 서버: `POST /api/v1/plan/google/restore` — 스토어에 조회해 `externalAccountIdentifiers.obfuscatedExternalAccountId`
+  의 밴드에 반영(그 밴드의 밴드장만). 표시가 없으면 422 `PURCHASE_BAND_UNKNOWN`. 기존 `/bands/{id}/plan/google/verify`
+  는 표시가 다른 밴드면 409 `PURCHASE_BAND_MISMATCH`.
+- 표시 없는 옛 구매(이 수정 전 빌드의 테스트 결제)는 앱에서 방금 결제를 시작한 밴드가 있을 때만 그 밴드로
+  검증한다. 그 밖에는 남겨 두므로, 옛 빌드로 한 테스트 결제는 3일 뒤 환불될 수 있다(테스트 카드라 무해).
+
+**아직 안 고침** — 결제 후 앱을 3일 동안 한 번도 안 열면 여전히 환불된다. 웹훅(PURCHASED)이 밴드를 못 찾으면
+스토어 조회 → 표시로 밴드를 정해 반영하는 것은 LAUNCH_REVIEW B12.
+
+**확인법** — `./gradlew test --tests '*PlanPurchaseRestoreIntegrationTest'`, `flutter test test/purchase_sync_test.dart`.
+실기기(라이선스 테스터): 결제 버튼 → 결제 완료 직후 앱 강제 종료 → 다시 켜면 "결제가 확인돼 프리미엄이 시작됐어요" 와
+PREMIUM. 밴드 두 개로: A 결제 중 비행기 모드 → B 로 전환 → 네트워크 켜고 앱 복귀 → A 만 PREMIUM.
+
+---
 ## 2026-09-28 — 계정 보류·만료 뒤 구독이 살아나도 밴드가 FREE 로 남았다
 
 **증상** — (코드 검토로 발견, 출시 전이라 실제 피해 없음) 카드 결제가 실패해 Play 가 구독을 **계정 보류**로

@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../band/application/band_providers.dart';
 import '../application/plan_providers.dart';
+import '../application/purchase_sync.dart';
 import '../data/iap_service.dart';
 import '../data/plan_models.dart';
 import '../data/plan_repository.dart';
@@ -25,8 +26,8 @@ class PlanScreen extends ConsumerStatefulWidget {
 }
 
 class _PlanScreenState extends ConsumerState<PlanScreen> {
-  final IapService _iap = IapService();
-  StreamSubscription<List<PurchaseDetails>>? _iapSub;
+  late final IapService _iap = ref.read(iapServiceProvider);
+  StreamSubscription<PurchaseEvent>? _eventSub;
   ProductDetails? _product;
   bool _storeReady = true;
   bool _busy = false;
@@ -34,17 +35,18 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   @override
   void initState() {
     super.initState();
-    // 스트림을 먼저 연다 — 지난번에 결제는 됐는데 서버 검증을 못 끝낸 구매가 여기로 다시 들어온다.
-    _iapSub = _iap.purchaseStream.listen(
-      _onPurchaseUpdates,
-      onError: (_) {},
-    );
+    // 결제 결과는 앱 전역 PurchaseSync 가 받아 서버에 반영하고 안내도 띄운다(LAUNCH_REVIEW B2).
+    // 이 화면은 버튼 잠금만 따라간다.
+    _eventSub = ref.read(purchaseSyncProvider).events.listen((e) {
+      if (!mounted) return;
+      setState(() => _busy = e.kind == PurchaseEventKind.pending);
+    });
     _initStore();
   }
 
   @override
   void dispose() {
-    _iapSub?.cancel();
+    _eventSub?.cancel();
     super.dispose();
   }
 
@@ -56,51 +58,6 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       _storeReady = available && product != null;
       _product = product;
     });
-  }
-
-  Future<void> _onPurchaseUpdates(List<PurchaseDetails> purchases) async {
-    for (final p in purchases) {
-      if (p.productID != IapService.productId) continue;
-      switch (p.status) {
-        case PurchaseStatus.pending:
-          if (mounted) setState(() => _busy = true);
-        case PurchaseStatus.canceled:
-          if (mounted) setState(() => _busy = false);
-          if (p.pendingCompletePurchase) await _iap.complete(p);
-        case PurchaseStatus.error:
-          if (mounted) setState(() => _busy = false);
-          _toast(p.error?.message ?? '결제에 실패했어요.');
-          if (p.pendingCompletePurchase) await _iap.complete(p);
-        case PurchaseStatus.purchased:
-        case PurchaseStatus.restored:
-          await _verifyPurchase(p);
-      }
-    }
-  }
-
-  /// 결제된 구매를 서버에 검증받고, 성공했을 때만 스토어에 완료를 알린다.
-  /// 검증이 일시적으로 실패하면 완료하지 않는다 — 다음에 앱을 켜면 스트림으로 다시 들어와 재시도된다.
-  Future<void> _verifyPurchase(PurchaseDetails p) async {
-    final band = ref.read(currentBandProvider);
-    final token = _iap.purchaseToken(p);
-    if (band == null || token == null) {
-      if (mounted) setState(() => _busy = false);
-      return;
-    }
-    try {
-      await ref
-          .read(planRepositoryProvider)
-          .verifyGooglePurchase(band.id, token);
-      ref.invalidate(bandPlanProvider(band.id));
-      _toast('프리미엄이 시작됐어요.');
-      await _iap.complete(p);
-    } on ApiException catch (e) {
-      _toast(e.message);
-    } catch (_) {
-      _toast('구매를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   /// Play 스토어의 이 앱 구독 관리 화면을 연다. 해지·결제 수단 변경·환불 요청이 모두 거기 있다.
@@ -119,9 +76,11 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       _toast('지금은 결제를 시작할 수 없어요. 잠시 후 다시 시도해 주세요.');
       return;
     }
+    final band = ref.read(currentBandProvider);
+    if (band == null) return;
     setState(() => _busy = true);
     try {
-      await _iap.buy(product);
+      await ref.read(purchaseSyncProvider).buy(product, bandId: band.id);
     } catch (_) {
       if (mounted) setState(() => _busy = false);
       _toast('결제를 시작하지 못했어요.');

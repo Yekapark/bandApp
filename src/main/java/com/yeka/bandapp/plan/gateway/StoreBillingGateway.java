@@ -37,9 +37,18 @@ public interface StoreBillingGateway {
      * @param orderId       스토어 주문 식별자(Google 은 {@code GPA.xxxx-xxxx-xxxx-xxxxx}). 표시·추적용.
      * @param expiryTime    현재 결제 기간의 종료 시각. 이 값이 곧 {@code band_plans.expires_at}.
      * @param acknowledged  이미 확인 처리됐는지. false 면 호출자가 {@link #acknowledge} 를 불러야 한다.
+     * @param obfuscatedAccountId 구매할 때 앱이 붙인 표시(Play {@code obfuscatedExternalAccountId}).
+     *                      이 앱은 결제한 밴드를 적는다 — {@code PurchaseBandTag}. 옛 구매·스토어 밖 구매는 null.
      */
     record StoreSubscription(Store store, String purchaseToken, String productId, String orderId,
-                             StoreSubscriptionState state, Instant expiryTime, boolean acknowledged) {
+                             StoreSubscriptionState state, Instant expiryTime, boolean acknowledged,
+                             String obfuscatedAccountId) {
+
+        /** 밴드 표시 없는 구독(옛 구매·테스트용). */
+        public StoreSubscription(Store store, String purchaseToken, String productId, String orderId,
+                                 StoreSubscriptionState state, Instant expiryTime, boolean acknowledged) {
+            this(store, purchaseToken, productId, orderId, state, expiryTime, acknowledged, null);
+        }
     }
 
     /**

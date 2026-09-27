@@ -26,6 +26,25 @@ class PlanRepository {
       _post('/bands/$bandId/plan/google/verify',
           body: {'purchaseToken': purchaseToken});
 
+  /// 검증을 못 끝낸 구매를 서버에 보낸다. 서버가 구매에 적힌 밴드(`IapService.bandTag`)에 반영하고
+  /// 그 밴드 id 를 돌려준다. 적힌 밴드가 없는 옛 구매면 `PURCHASE_BAND_UNKNOWN`(422).
+  Future<({int bandId, BandPlan plan})> restoreGooglePurchase(
+      String purchaseToken) async {
+    try {
+      final res = await _dio.post<dynamic>('/plan/google/restore',
+          data: {'purchaseToken': purchaseToken});
+      return unwrap(res, (d) {
+        final json = d! as Map<String, dynamic>;
+        return (
+          bandId: (json['bandId'] as num).toInt(),
+          plan: BandPlan.fromJson(json['plan'] as Map<String, dynamic>),
+        );
+      });
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   /// 맛보기 쿠폰 사용. 이미 PREMIUM 이면 남은 기간에 더해진다.
   /// 발급은 운영자가 직접 하고 앱에는 사용 화면만 있다.
   Future<BandPlan> redeemCoupon(int bandId, String code) =>
