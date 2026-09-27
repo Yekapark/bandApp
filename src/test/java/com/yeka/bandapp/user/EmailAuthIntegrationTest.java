@@ -3,6 +3,8 @@ package com.yeka.bandapp.user;
 import com.yeka.bandapp.support.ApiIntegrationTest;
 import com.yeka.bandapp.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 
@@ -112,6 +114,28 @@ class EmailAuthIntegrationTest extends ApiIntegrationTest {
         // 저장된 값은 소문자.
         assertThat(userRepository.findByEmailAndSocialProviderIsNullAndDeletedAtIsNull("mixed.case@band.app"))
                 .isPresent();
+    }
+
+    @Test
+    void password_over_72_utf8_bytes_is_a_field_error_and_does_not_create_an_account() {
+        var response = post("/api/v1/auth/signup", SIGNUP.replace("pw12345678", "가".repeat(25)));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        assertThat(errorCode(response)).isEqualTo("INVALID_INPUT");
+        assertThat(body(response).at("/error/fieldErrors/0/field").asText()).isEqualTo("password");
+        assertThat(userRepository.existsByEmailAndSocialProviderIsNullAndDeletedAtIsNull("a@band.app"))
+                .isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"가", "a"})
+    void password_at_the_byte_or_character_limit_can_signup_and_login(String character) {
+        String password = character.repeat(character.equals("가") ? 24 : 64);
+        assertThat(post("/api/v1/auth/signup", SIGNUP.replace("pw12345678", password))
+                .getStatusCode().value()).isEqualTo(201);
+        assertThat(post("/api/v1/auth/login",
+                "{\"email\":\"a@band.app\",\"password\":\"" + password + "\"}")
+                .getStatusCode().value()).isEqualTo(200);
     }
 
     @Test

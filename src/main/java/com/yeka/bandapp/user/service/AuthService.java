@@ -129,23 +129,11 @@ public class AuthService {
         long userId = parsed.userId();
         String jti = parsed.jti();
 
-        if (!refreshTokenStore.exists(userId, jti)) {
-            // 방금 이 토큰으로 갱신한 결과가 아직 캐시돼 있으면 재시도·더블탭·탭 중복으로 보고
-            // 같은 응답을 다시 돌려준다(멱등). 세션은 건드리지 않는다.
-            Optional<TokenResponse> replay = refreshTokenStore.recallRotation(userId, jti)
-                    .map(this::decodeReplay);
-            if (replay.isPresent()) {
-                return replay.get();
-            }
-            // 활성도 아니고 방금 회전된 것도 아니다 = 이미 회전된 토큰의 재사용(탈취 정황) / 로그아웃 / 탈퇴.
-            // OAuth 2.0 BCP 권고대로 해당 사용자의 모든 세션을 끊는다.
-            refreshTokenStore.removeAll(userId);
-            throw new BusinessException(ErrorCode.REFRESH_TOKEN_INVALID);
-        }
         TokenPair pair = tokenProvider.issue(userId);
-        refreshTokenStore.rotate(userId, jti, pair.refreshJti(), jwtProperties.refreshTokenTtl());
-        refreshTokenStore.rememberRotation(userId, jti, encodeReplay(pair));
-        return TokenResponse.from(pair);
+        return refreshTokenStore.rotate(userId, jti, pair.refreshJti(), jwtProperties.refreshTokenTtl(),
+                        encodeReplay(pair))
+                .map(this::decodeReplay)
+                .orElseThrow(() -> new BusinessException(ErrorCode.REFRESH_TOKEN_INVALID));
     }
 
     public void logout(String refreshToken) {

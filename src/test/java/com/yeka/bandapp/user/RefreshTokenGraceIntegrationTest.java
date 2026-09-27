@@ -9,6 +9,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -52,6 +57,48 @@ class RefreshTokenGraceIntegrationTest extends ApiIntegrationTest {
                 .getStatusCode().value()).isEqualTo(200);
         // 로그인 때 받은 access 도 계속 유효.
         assertThat(get("/api/v1/users/me", access).getStatusCode().value()).isEqualTo(200);
+    }
+
+    @Test
+    void concurrent_refresh_returns_one_token_pair_and_keeps_the_other_device() throws Exception {
+        String otherRefresh = body(post("/api/v1/auth/signup", SIGNUP))
+                .at("/data/tokens/refreshToken").asText();
+        String refresh = body(post("/api/v1/auth/login",
+                "{\"email\":\"grace@band.app\",\"password\":\"pw12345678\"}"))
+                .at("/data/tokens/refreshToken").asText();
+        String request = "{\"refreshToken\":\"" + refresh + "\"}";
+        int count = 8;
+        var ready = new CountDownLatch(count);
+        var start = new CountDownLatch(1);
+        var pool = Executors.newFixedThreadPool(count);
+        var results = new ArrayList<Future<ResponseEntity<String>>>();
+        try {
+            for (int i = 0; i < count; i++) {
+                results.add(pool.submit(() -> {
+                    ready.countDown();
+                    assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
+                    return post("/api/v1/auth/refresh", request);
+                }));
+            }
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            var first = results.getFirst().get(20, TimeUnit.SECONDS);
+            assertThat(first.getStatusCode().value()).isEqualTo(200);
+            var tokens = body(first).at("/data");
+            for (var result : results) {
+                var response = result.get(20, TimeUnit.SECONDS);
+                assertThat(response.getStatusCode().value()).isEqualTo(200);
+                assertThat(body(response).at("/data")).isEqualTo(tokens);
+            }
+            assertThat(post("/api/v1/auth/refresh",
+                    "{\"refreshToken\":\"" + tokens.at("/refreshToken").asText() + "\"}")
+                    .getStatusCode().value()).isEqualTo(200);
+            assertThat(post("/api/v1/auth/refresh", "{\"refreshToken\":\"" + otherRefresh + "\"}")
+                    .getStatusCode().value()).isEqualTo(200);
+        } finally {
+            start.countDown();
+            pool.shutdownNow();
+        }
     }
 
     @Test

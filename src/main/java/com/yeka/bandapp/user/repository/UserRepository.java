@@ -15,6 +15,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByIdAndDeletedAtIsNull(Long id);
 
+    /**
+     * 밴드 생성·가입과 계정 삭제를 직렬화한다. NO KEY UPDATE 는 FK 검증의 KEY SHARE 와 호환되어,
+     * 두 멤버가 동시에 탈퇴하면서 서로에게 밴드장을 넘길 때 사용자 행과 밴드 행의 교착을 막는다.
+     */
+    @Query(value = "select * from users where id = :id and deleted_at is null for no key update", nativeQuery = true)
+    Optional<User> findActiveByIdForUpdate(@Param("id") long id);
+
     Optional<User> findByEmailAndSocialProviderIsNullAndDeletedAtIsNull(String email);
 
     boolean existsByEmailAndSocialProviderIsNullAndDeletedAtIsNull(String email);

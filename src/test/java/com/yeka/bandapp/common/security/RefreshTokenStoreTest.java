@@ -3,6 +3,7 @@ package com.yeka.bandapp.common.security;
 import com.yeka.bandapp.support.IntegrationTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Duration;
 
@@ -14,6 +15,9 @@ class RefreshTokenStoreTest extends IntegrationTestSupport {
 
     @Autowired
     RefreshTokenStore store;
+
+    @Autowired
+    StringRedisTemplate redis;
 
     @Test
     void save_then_exists() {
@@ -49,9 +53,42 @@ class RefreshTokenStoreTest extends IntegrationTestSupport {
     void rotate_swaps_jti() {
         store.save(1L, "old", TTL);
 
-        store.rotate(1L, "old", "new", TTL);
+        assertThat(store.rotate(1L, "old", "new", TTL, "response")).contains("response");
 
         assertThat(store.exists(1L, "old")).isFalse();
         assertThat(store.exists(1L, "new")).isTrue();
+    }
+
+    @Test
+    void revoked_token_cannot_recreate_a_session() {
+        store.save(1L, "old", TTL);
+        store.remove(1L, "old");
+
+        assertThat(store.rotate(1L, "old", "new", TTL, "response")).isEmpty();
+        assertThat(store.exists(1L, "new")).isFalse();
+    }
+
+    @Test
+    void removing_all_sessions_also_prevents_replaying_a_cached_rotation() {
+        store.save(1L, "old", TTL);
+        store.rotate(1L, "old", "new", TTL, "response");
+        store.removeAll(1L);
+
+        assertThat(store.rotate(1L, "old", "retry", TTL, "retry-response")).isEmpty();
+        assertThat(store.exists(1L, "new")).isFalse();
+        assertThat(store.exists(1L, "retry")).isFalse();
+    }
+
+    @Test
+    void replay_after_grace_expires_still_revokes_all_sessions() {
+        store.save(1L, "old", TTL);
+        store.save(1L, "other-device", TTL);
+        store.rotate(1L, "old", "new", TTL, "response");
+        // Redis에서 유예 캐시를 즉시 만료시킨다. 테스트를 위해 60초 기다릴 필요는 없다.
+        redis.expire("auth:refresh:replay:1:old", Duration.ZERO);
+
+        assertThat(store.rotate(1L, "old", "retry", TTL, "retry-response")).isEmpty();
+        assertThat(store.exists(1L, "new")).isFalse();
+        assertThat(store.exists(1L, "other-device")).isFalse();
     }
 }

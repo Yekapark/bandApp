@@ -109,6 +109,22 @@ void main() {
     expect(find.text('LOGIN'), findsNothing);
   });
 
+  testWidgets('한글 25자 비밀번호는 안내하고 재설정 요청을 보내지 않는다', (tester) async {
+    final repo = _FakeAuthRepo();
+    await _pump(tester, repo);
+
+    await tester.enterText(find.byType(TextFormField).first, 'me@test.app');
+    await tester.tap(find.text('인증번호 받기'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), '123456');
+    await tester.enterText(find.byType(TextFormField).at(1), '가' * 25);
+    await tester.tap(find.text('비밀번호 바꾸기'));
+    await tester.pumpAndSettle();
+
+    expect(repo.confirmedCode, isNull);
+    expect(find.textContaining('비밀번호가 너무 길어요.'), findsOneWidget);
+  });
+
   testWidgets('인증번호 6자리가 아니면 확인 요청을 보내지 않는다', (tester) async {
     final repo = _FakeAuthRepo();
     await _pump(tester, repo);

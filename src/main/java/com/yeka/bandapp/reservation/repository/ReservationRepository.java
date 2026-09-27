@@ -95,16 +95,25 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     List<Reservation> findByRecurringRuleIdAndStartAtGreaterThanEqualOrderByStartAtAsc(
             Long recurringRuleId, Instant from);
 
-    /** 배치가 "이 시각 다음부터" 이어 만들도록, 규칙의 마지막 회차(상태 무관)를 준다. */
-    Optional<Reservation> findFirstByRecurringRuleIdOrderByStartAtDesc(Long recurringRuleId);
+    /** 실제 시각을 옮겨도 생성 범위가 바뀌지 않도록 원래 슬롯의 최댓값을 사용한다(취소분 포함). */
+    @Query("select max(r.originalStartAt) from Reservation r where r.recurringRuleId = :ruleId")
+    Optional<Instant> findLastOriginalOccurrenceStart(@Param("ruleId") long recurringRuleId);
 
-    /** 규칙이 이미 만든 회차 시작 시각들(상태 무관). 재생성 시 이미 있는 슬롯을 걸러내는 데 쓴다. */
-    @Query("select r.startAt from Reservation r where r.recurringRuleId = :ruleId")
+    /** 규칙이 이미 만든 원래 슬롯들(이동·취소분 포함). */
+    @Query("select r.originalStartAt from Reservation r where r.recurringRuleId = :ruleId")
     List<Instant> findOccurrenceStarts(@Param("ruleId") long recurringRuleId);
 
-    /** 규칙 삭제 시 취소 대상 — 아직 시작하지 않았고 살아 있는(PENDING·CONFIRMED) 회차. */
-    List<Reservation> findByRecurringRuleIdAndStartAtGreaterThanEqualAndStatusIn(
-            Long recurringRuleId, Instant from, Collection<ReservationStatus> statuses);
+    /** 개별 수정·취소와 같은 일정 행을 잠근 뒤 현재 상태를 읽는다. 모든 일정 잠금은 id 순서다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from Reservation r where r.recurringRuleId = :ruleId "
+            + "and r.startAt >= :from and r.status in :statuses order by r.id")
+    List<Reservation> findFutureOccurrencesForUpdate(@Param("ruleId") long ruleId,
+            @Param("from") Instant from, @Param("statuses") Collection<ReservationStatus> statuses);
+
+    /** 밴드 삭제도 일정 → 하위 행 순서로 잠근다. 셋리스트 변경과 반대 순서로 잠그지 않는다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from Reservation r where r.bandId = :bandId order by r.id")
+    List<Reservation> findByBandIdForUpdate(@Param("bandId") long bandId);
 
     /**
      * 정기 규칙 등록 응답의 겹침 경고용: 같은 밴드의 살아 있는 일정 중 주어진 구간과 겹치되

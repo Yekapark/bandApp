@@ -39,6 +39,11 @@ public interface RecurringRuleRepository extends JpaRepository<RecurringRule, Lo
     @Query("select r from RecurringRule r where r.id = :id")
     Optional<RecurringRule> findByIdForUpdate(@Param("id") long id);
 
+    /** 밴드 삭제 시 회차를 잠그기 전에 규칙을 잠근다. 연장·규칙 삭제와 같은 순서다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from RecurringRule r where r.bandId = :bandId order by r.id")
+    List<RecurringRule> findByBandIdForUpdate(@Param("bandId") long bandId);
+
     /** 밴드의 활성 규칙 목록, 최신 등록순. */
     List<RecurringRule> findByBandIdAndDeletedAtIsNullOrderByCreatedAtDesc(long bandId);
 

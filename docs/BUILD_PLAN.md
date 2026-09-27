@@ -106,13 +106,16 @@ Room { id, bandId, name, address, lat, lng, phone, memo, usageCount, createdBy, 
 Reservation { id, bandId, roomId, requestedBy,
               status(PENDING | CONFIRMED | CANCELLED | REJECTED),
               startAt, endAt, cost, note,
-              recurringRuleId, createdAt }
+              recurringRuleId, originalStartAt, createdAt }
   - status는 "밴드 내부 일정으로서의 등록 상태"이며 실제 합주실 예약 상태가 아니다
   - note: 외부 예약 방법 자유 기재 (예: "카톡 예약 완료, 예약자 홍길동")
   - 생성 시 초기 status는 Band.reservationPermission에 따라 분기
       LEADER_ONLY / ANYONE      → CONFIRMED
       APPROVAL_REQUIRED         → PENDING (밴드장 승인 시 CONFIRMED)
   - 시간대 겹침을 막지 않는다 (2장 2번 참조)
+  - originalStartAt: 2026-09-15 3차 점검 수정으로 추가. 반복 회차를 처음 만든 슬롯을 보관하며
+    실제 startAt 수정·취소에도 바꾸지 않는다. 단발 일정은 null. 연장 기준과 규칙 내 중복 방지는
+    이 값을 사용한다(V19). 기존 회차는 마이그레이션 시점의 startAt을 기준으로 보존한다.
 
 RecurringRule { id, bandId, roomId, frequency(WEEKLY | BIWEEKLY | MONTHLY),
                 dayOfWeek, startTime, endTime, startDate, endDate, createdBy }
@@ -227,7 +230,11 @@ CI에서 빌드·테스트가 통과한다.
 - 반복 규칙 등록 (주간/격주/월간, 요일·시간 지정)
 - 규칙에 따라 향후 N주분 Reservation 자동 생성
 - 개별 회차 수정/취소 (규칙 자체는 유지)
+- 같은 규칙의 회차끼리도 실제 시작 시각이 같아질 수 있다. 겹침은 경고이며 저장을 허용한다.
+  배치 중복 생성은 `(recurringRuleId, originalStartAt)`으로 차단한다.
 - 규칙 삭제 시 미래 회차만 삭제하고 과거 기록은 보존
+- 규칙 삭제의 회차 취소는 개별 일정 변경과 같은 일정 행 잠금을 사용하고, 실제로 취소된
+  회차만 합주실 사용 횟수에서 뺀다. 여러 일정·합주실 잠금은 각 ID 오름차순으로 얻는다.
 - 만료 임박한 규칙의 회차를 이어서 생성하는 배치잡
 
 **완료 기준**: 규칙 삭제 후에도 과거 일정과 그에 연결된 정산 기록이 남아 있는 테스트가 통과한다.
@@ -238,6 +245,7 @@ CI에서 빌드·테스트가 통과한다.
 - 본인 참석 상태 변경 API (본인 것만 수정 가능)
 - 일정 상세 조회 시 멤버별 참석 현황 및 집계(참석 N / 전체 M) 포함
 - 셋리스트 CRUD — 곡명, 아티스트, 참고 링크, 순서
+- 셋리스트 추가·수정·삭제·재정렬은 일정을 먼저 잠근 뒤 곡을 읽고 변경해 동시 편집을 보존한다.
 
 **완료 기준**: 일정 생성 이후 밴드에 합류한 멤버도 참석 응답이 가능하며,
 타인의 참석 상태 변경이 403으로 차단되는 테스트가 통과한다.

@@ -102,17 +102,16 @@ public class ReservationDirectoryService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
     }
 
-    /** 규칙이 이미 만든 회차 시작 시각(상태 무관). 재생성 시 중복 슬롯을 걸러내는 데 쓴다. */
+    /** 규칙이 이미 만든 원래 슬롯(이동·취소분 포함). 재생성 시 중복 슬롯을 걸러낸다. */
     @Transactional(readOnly = true)
     public Set<Instant> occurrenceStartsOf(long ruleId) {
         return Set.copyOf(reservationRepository.findOccurrenceStarts(ruleId));
     }
 
-    /** 규칙의 마지막(가장 늦은) 회차 시작 시각. 배치가 "그 다음부터" 이어 만든다. */
+    /** 가장 늦게 생성한 원래 슬롯. 개별 회차를 옮겨도 배치의 연장 위치는 바뀌지 않는다. */
     @Transactional(readOnly = true)
     public java.util.Optional<Instant> lastOccurrenceStartOf(long ruleId) {
-        return reservationRepository.findFirstByRecurringRuleIdOrderByStartAtDesc(ruleId)
-                .map(Reservation::getStartAt);
+        return reservationRepository.findLastOriginalOccurrenceStart(ruleId);
     }
 
     /**
@@ -137,7 +136,7 @@ public class ReservationDirectoryService {
     @Transactional
     public int cancelFutureOccurrences(long ruleId, Instant from) {
         List<Reservation> future = reservationRepository
-                .findByRecurringRuleIdAndStartAtGreaterThanEqualAndStatusIn(ruleId, from, ACTIVE);
+                .findFutureOccurrencesForUpdate(ruleId, from, ACTIVE);
         Map<Long, Integer> cancelledPerRoom = new TreeMap<>();
         for (Reservation r : future) {
             if (r.cancel()) {

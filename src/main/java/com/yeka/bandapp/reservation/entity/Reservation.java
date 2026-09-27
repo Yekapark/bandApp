@@ -65,6 +65,10 @@ public class Reservation extends BaseTimeEntity {
     @Column(name = "recurring_rule_id")
     private Long recurringRuleId;
 
+    /** 반복 회차의 원래 슬롯. 실제 시작 시각을 옮겨도 배치의 중복·연장 기준은 바뀌지 않는다. */
+    @Column(name = "original_start_at", updatable = false)
+    private Instant originalStartAt;
+
     private Reservation(Long bandId, Long roomId, Long requestedBy, ReservationStatus status,
                         Instant startAt, Instant endAt, Integer cost, String note) {
         this.bandId = bandId;
@@ -96,6 +100,7 @@ public class Reservation extends BaseTimeEntity {
         Reservation reservation = new Reservation(bandId, roomId, createdBy, ReservationStatus.CONFIRMED,
                 startAt, endAt, cost, note);
         reservation.recurringRuleId = recurringRuleId;
+        reservation.originalStartAt = startAt;
         return reservation;
     }
 

@@ -6,6 +6,7 @@ import com.yeka.bandapp.band.dto.InviteResponse;
 import com.yeka.bandapp.band.dto.IssueInviteRequest;
 import com.yeka.bandapp.band.entity.BandInvite;
 import com.yeka.bandapp.band.entity.BandMember;
+import com.yeka.bandapp.band.entity.BandMemberRole;
 import com.yeka.bandapp.band.repository.BandInviteRepository;
 import com.yeka.bandapp.band.repository.BandMemberRepository;
 import com.yeka.bandapp.band.repository.BandRepository;
@@ -13,6 +14,7 @@ import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.common.ratelimit.RateLimitProperties;
 import com.yeka.bandapp.common.ratelimit.RedisRateLimiter;
+import com.yeka.bandapp.user.service.UserDirectoryService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,11 +43,13 @@ public class BandInviteService {
     private final RedisRateLimiter rateLimiter;
     private final RateLimitProperties rateLimitProperties;
     private final DeeplinkProperties deeplinkProperties;
+    private final UserDirectoryService userDirectory;
 
     public BandInviteService(BandRepository bandRepository, BandMemberRepository bandMemberRepository,
                              BandInviteRepository bandInviteRepository, BandAccessGuard accessGuard,
                              InviteCodeGenerator codeGenerator, RedisRateLimiter rateLimiter,
-                             RateLimitProperties rateLimitProperties, DeeplinkProperties deeplinkProperties) {
+                             RateLimitProperties rateLimitProperties, DeeplinkProperties deeplinkProperties,
+                             UserDirectoryService userDirectory) {
         this.bandRepository = bandRepository;
         this.bandMemberRepository = bandMemberRepository;
         this.bandInviteRepository = bandInviteRepository;
@@ -54,11 +58,13 @@ public class BandInviteService {
         this.rateLimiter = rateLimiter;
         this.rateLimitProperties = rateLimitProperties;
         this.deeplinkProperties = deeplinkProperties;
+        this.userDirectory = userDirectory;
     }
 
     /** 초대코드 발급/재발급. 밴드장만 가능. 기존 활성 코드는 revoked 된다. */
     @Transactional
     public InviteResponse issue(long bandId, long userId, IssueInviteRequest request) {
+        accessGuard.lockBand(bandId);
         accessGuard.requireLeader(bandId, userId);
         bandInviteRepository.revokeActiveByBandId(bandId);
 
@@ -83,6 +89,7 @@ public class BandInviteService {
     /** 현재 활성 초대코드 무효화. 밴드장만 가능. 이미 없으면 조용히 통과(멱등). */
     @Transactional
     public void revokeCurrent(long bandId, long userId) {
+        accessGuard.lockBand(bandId);
         accessGuard.requireLeader(bandId, userId);
         bandInviteRepository.revokeActiveByBandId(bandId);
     }
@@ -98,7 +105,12 @@ public class BandInviteService {
         rateLimiter.check("invite-join:ip", clientIp,
                 rateLimitProperties.inviteJoinPerIpPerMin());
 
+        userDirectory.lockActiveUser(userId);
         String code = rawCode == null ? "" : rawCode.trim().toUpperCase(Locale.ROOT);
+        long bandId = bandInviteRepository.findBandIdByCode(code)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVITE_NOT_FOUND));
+        bandRepository.findByIdForUpdate(bandId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVITE_NOT_FOUND));
         BandInvite invite = bandInviteRepository.findByCode(code)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVITE_NOT_FOUND));
 
@@ -113,7 +125,9 @@ public class BandInviteService {
             throw new BusinessException(ErrorCode.INVITE_EXHAUSTED);
         }
 
-        long bandId = invite.getBandId();
+        if (bandMemberRepository.countByBandIdAndRoleAndLeftAtIsNull(bandId, BandMemberRole.LEADER) == 0) {
+            throw new BusinessException(ErrorCode.INVITE_REVOKED);
+        }
         if (bandMemberRepository.existsByBandIdAndUserIdAndLeftAtIsNull(bandId, userId)) {
             throw new BusinessException(ErrorCode.ALREADY_BAND_MEMBER);
         }

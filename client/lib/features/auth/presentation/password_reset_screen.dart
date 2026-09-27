@@ -9,6 +9,7 @@ import '../../../routing/app_router.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../data/auth_repository.dart';
+import 'password_validation.dart';
 
 /// 비밀번호 재설정. 한 화면에서 두 단계로 진행한다.
 ///   0) 이메일 입력 → 6자리 인증번호 메일 발송 (`POST /auth/password-reset/request`)
@@ -199,12 +200,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _resetPassword(),
                     decoration: const InputDecoration(hintText: '8자 이상'),
-                    validator: (v) {
-                      final s = v ?? '';
-                      if (s.length < 8) return '비밀번호는 8자 이상이어야 해요.';
-                      if (s.length > 64) return '비밀번호는 64자까지 쓸 수 있어요.';
-                      return null;
-                    },
+                    validator: validateNewPassword,
                   ),
                 ],
                 if (_error != null) ...[
