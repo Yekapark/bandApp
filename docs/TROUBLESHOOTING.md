@@ -1,5 +1,23 @@
 # 문제 기록
 
+## 2026-09-27 — 새 플러그인을 넣자 Windows 에서 빌드가 "symlink support" 로 멈췄다
+
+**증상** — `url_launcher` 를 추가한 뒤 `python tools/release_store.py` 가 `Building with plugins requires
+symlink support. Please enable Developer Mode in your system settings.` 를 내고 AAB 빌드에 실패했다
+(스크립트는 빌드 번호를 되돌렸다).
+
+**원인** — Flutter 는 Windows 에서 플러그인 소스를 `.plugin_symlinks` 아래 **심볼릭 링크**로 연결한다.
+Windows 는 관리자가 아니면 **개발자 모드**가 켜져 있어야 심볼릭 링크를 만들 수 있다. 이전 빌드는 새 플러그인이
+없어 링크를 새로 만들 일이 없었기 때문에 드러나지 않았다.
+
+**해결** — 설정 › 시스템 › 개발자용(`start ms-settings:developers`) 에서 **개발자 모드 켬**, 터미널을 새로 열고
+다시 빌드. 0.1.0+31 AAB 가 만들어졌다.
+
+**확인법** — 새 PC 나 플러그인을 추가한 뒤 첫 빌드에서 같은 메시지가 나오면 개발자 모드부터 본다.
+`docs/NEW_PC_SETUP.md` 의 준비 목록에도 해당한다.
+
+---
+
 ## 2026-09-27 — 구독 조건(자동 갱신·해지)을 구매한 뒤에야 보여 줬다
 
 **증상** — 요금제 화면의 구매 버튼에는 "PREMIUM 시작 · ₩19,000 / 년" 만 있었다. 매년 자동 갱신된다는 것,
