@@ -6,9 +6,13 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 /// 결과가 [purchaseStream] 으로 비동기로 온다는 점이 특징이다: [buy] 를 부른 뒤,
 /// 스트림에서 [productId] 에 해당하는 [PurchaseDetails] 를 받아 처리하고 [complete] 로 마무리한다.
 class IapService {
-  IapService({InAppPurchase? iap}) : _iap = iap ?? InAppPurchase.instance;
+  IapService({InAppPurchase? iap}) : _override = iap;
 
-  final InAppPurchase _iap;
+  final InAppPurchase? _override;
+
+  /// 처음 쓸 때 만든다 — `InAppPurchase.instance` 는 만들자마자 Play 결제 서비스에 연결하므로,
+  /// 쓰지 않는 곳(테스트의 가짜, 토큰만 꺼내는 경우)에서 연결이 일어나지 않게.
+  InAppPurchase get _iap => _override ?? InAppPurchase.instance;
 
   /// Play Console 에 만든 구독 상품(기본 요금제)의 id. 서버·스토어와 정확히 같아야 한다.
   static const String productId = 'premium_yearly';

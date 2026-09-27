@@ -41,19 +41,22 @@ class GooglePlaySubscriptionMapperTest {
 
     @Test
     void band_tag_comes_from_obfuscated_external_account_id() {
-        SubscriptionPurchaseV2 tagged = new SubscriptionPurchaseV2()
-                .setSubscriptionState("SUBSCRIPTION_STATE_ACTIVE")
-                .setExternalAccountIdentifiers(new ExternalAccountIdentifiers()
-                        .setObfuscatedExternalAccountId("band-7"))
-                .setLineItems(List.of(new SubscriptionPurchaseLineItem()
-                        .setProductId("premium_yearly")
-                        .setExpiryTime("2027-01-15T09:30:00Z")));
-        SubscriptionPurchaseV2 untagged = tagged.clone().setExternalAccountIdentifiers(null);
+        SubscriptionPurchaseV2 tagged = activePurchase().setExternalAccountIdentifiers(
+                new ExternalAccountIdentifiers().setObfuscatedExternalAccountId("band-7"));
+        SubscriptionPurchaseV2 untagged = activePurchase();
 
         assertThat(GooglePlaySubscriptionMapper.toStoreSubscription("t", tagged).obfuscatedAccountId())
                 .isEqualTo("band-7");
         assertThat(GooglePlaySubscriptionMapper.toStoreSubscription("t", untagged).obfuscatedAccountId())
                 .isNull();
+    }
+
+    private static SubscriptionPurchaseV2 activePurchase() {
+        return new SubscriptionPurchaseV2()
+                .setSubscriptionState("SUBSCRIPTION_STATE_ACTIVE")
+                .setLineItems(List.of(new SubscriptionPurchaseLineItem()
+                        .setProductId("premium_yearly")
+                        .setExpiryTime("2027-01-15T09:30:00Z")));
     }
 
     @Test
