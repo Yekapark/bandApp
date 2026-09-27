@@ -13,6 +13,11 @@ class IapService {
   /// Play Console 에 만든 구독 상품(기본 요금제)의 id. 서버·스토어와 정확히 같아야 한다.
   static const String productId = 'premium_yearly';
 
+  /// Play 스토어의 이 앱 구독 관리 화면. 해지·결제 수단·환불 요청이 여기 있다.
+  static final Uri manageSubscriptionUrl = Uri.parse(
+      'https://play.google.com/store/account/subscriptions'
+      '?sku=$productId&package=com.yeka.bandule');
+
   Future<bool> isAvailable() => _iap.isAvailable();
 
   Stream<List<PurchaseDetails>> get purchaseStream => _iap.purchaseStream;

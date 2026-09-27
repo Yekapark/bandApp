@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/format/formatters.dart';
 import '../../../core/network/api_exception.dart';
@@ -102,6 +103,16 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     }
   }
 
+  /// Play 스토어의 이 앱 구독 관리 화면을 연다. 해지·결제 수단 변경·환불 요청이 모두 거기 있다.
+  /// 결제한 Google 계정이 이 폰에 없으면 Play 가 구독 목록만 보여 준다(다른 사람이 결제한 밴드).
+  Future<void> _openSubscriptionManagement() async {
+    final ok = await launchUrl(IapService.manageSubscriptionUrl,
+        mode: LaunchMode.externalApplication);
+    if (!ok) {
+      _toast('Play 스토어를 열지 못했어요. Play 스토어 › 결제 및 구독 › 구독에서 확인해 주세요.');
+    }
+  }
+
   Future<void> _startPurchase() async {
     final product = _product;
     if (product == null) {
@@ -171,9 +182,9 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                 style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
               )
             else if (plan.isPremium && plan.canceled)
-              const _CanceledNotice()
+              _CanceledNotice(onManage: _openSubscriptionManagement)
             else if (plan.isPremium)
-              const _ManageNotice()
+              _ManageNotice(onManage: _openSubscriptionManagement)
             else ...[
               // 구독 조건은 구매 버튼을 누르기 **전에** 보여야 한다(Play 구독 정책 — 가격·주기·자동 갱신·
               // 해지 방법). 예전에는 구매 뒤 화면(_ManageNotice)에만 있었다. LAUNCH_REVIEW P4.
@@ -498,9 +509,11 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-/// 정상 PREMIUM. 갱신은 자동이고 해지·환불은 Play 스토어에서 한다 — 앱에는 버튼이 없다.
+/// 정상 PREMIUM. 갱신은 자동이고 해지·환불은 Play 스토어에서 한다 — 버튼은 그 화면으로 보낸다.
 class _ManageNotice extends StatelessWidget {
-  const _ManageNotice();
+  const _ManageNotice({required this.onManage});
+
+  final VoidCallback onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -511,17 +524,26 @@ class _ManageNotice extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('프리미엄 이용 중',
+          const Text('프리미엄 이용 중',
               style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-          SizedBox(height: 5),
-          Text(
+          const SizedBox(height: 5),
+          const Text(
             '기간이 끝나면 Google Play 가 자동으로 1년씩 갱신해요. 해지하거나 환불받으려면 '
-            'Play 스토어 > 메뉴 > 구독에서 하면 돼요.',
+            '아래 버튼으로 Play 스토어 구독 화면에서 하면 돼요.',
             style:
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: onManage,
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Google Play 에서 구독 관리'),
+            ),
           ),
         ],
       ),
@@ -529,10 +551,12 @@ class _ManageNotice extends StatelessWidget {
   }
 }
 
-/// 해지 예약된 PREMIUM. 남은 기간을 알려주고 버튼은 두지 않는다 — 결제한 기간이 끝나면
-/// 서버가 만료 배치로 FREE 로 내린다.
+/// 해지 예약된 PREMIUM. 남은 기간을 알려준다. 결제한 기간이 끝나면 서버가 만료 배치로 FREE 로
+/// 내린다. 마음이 바뀌면 Play 구독 화면에서 다시 구독할 수 있으니 같은 버튼을 둔다.
 class _CanceledNotice extends StatelessWidget {
-  const _CanceledNotice();
+  const _CanceledNotice({required this.onManage});
+
+  final VoidCallback onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -543,19 +567,28 @@ class _CanceledNotice extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             '해지 예약됨',
             style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
           ),
-          SizedBox(height: 5),
-          Text(
+          const SizedBox(height: 5),
+          const Text(
             '위에 적힌 날짜까지는 프리미엄 그대로예요. 그 뒤에 무료로 바뀌고, 30일이 더 지나면 '
             '사진·영상이 차례로 사라져요.',
             style:
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: onManage,
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Google Play 에서 구독 관리'),
+            ),
           ),
         ],
       ),

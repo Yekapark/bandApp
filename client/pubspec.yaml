@@ -64,6 +64,10 @@ dependencies:
   # 일어나고, 성공 시 구매 토큰을 서버(/plan/google/verify)로 보내 검증받는다.
   in_app_purchase: ^3.2.0
 
+  # 요금제 화면의 "Google Play 에서 구독 관리" 버튼 — Play 구독 화면(https 링크)을 외부 앱으로 연다.
+  # Flutter 팀 공식 패키지. 2026-09-27 추가 승인(LAUNCH_REVIEW P4).
+  url_launcher: ^6.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
