@@ -9,7 +9,8 @@ case "${1:-help}" in
   logs)       $C logs -f --tail "${2:-100}" app ;;
   nginx)      $C logs -f --tail "${2:-100}" nginx ;;
   errors)     $C logs --tail 2000 app | grep -iE "error|exception|warn" | tail -40 ;;
-  health)     echo "서버 안:  $(curl -s localhost:8080/actuator/health 2>/dev/null || echo 응답없음)"
+  # 앱 포트는 서버에 안 열려 있다(Nginx 만 80·443). 안쪽은 컨테이너 헬스 상태로 본다.
+  health)     echo "서버 안:  $(docker inspect -f '{{.State.Health.Status}}' $($C ps -q app) 2>/dev/null || echo 확인불가)"
               echo "바깥에서: $(curl -s https://api.bandule.com/actuator/health 2>/dev/null || echo 응답없음)" ;;
   # `docker compose restart` 가 아니라 `up -d` 다. restart 는 컨테이너만 다시 띄울 뿐
   # **.env.prod 를 다시 읽지 않는다** — 설정을 고쳐 올리고 restart 하면 아무것도 안 바뀐다

@@ -286,6 +286,86 @@ Docker의 PostgreSQL·Redis를 사용한 인증 범위 59개 테스트가 모두
 
 ---
 
+## 2026-09-17 — 매일 운영 점검이 멀쩡한 서버를 "health 응답없음" 으로 걸었다
+
+**증상** — 07:00 KST 스케줄 점검이 실패하고 이슈(#95)가 열렸다. 다른 항목은 전부 정상이었다.
+
+```
+https    200        컨테이너 5/5        백업 5시간 전
+!! health   응답이 UP 이 아니다: 응답없음
+```
+
+**원인** — `deploy/prod-check.sh` 가 서버에서 `curl localhost:8080/actuator/health` 를 찔렀다.
+그런데 운영 compose 는 **앱 포트를 서버에 열지 않는다** — `ports` 는 Nginx 의 80·443 뿐이고
+앱은 도커 내부 네트워크에만 있다. 그래서 서버 셸에서는 앱이 살아 있어도 **항상** 응답이 없다.
+처음 만든 날(09-16) 실행에서도 이 줄이 떴는데, 같이 뜬 "백업 8일 멈춤" 에만 눈이 가서 놓쳤다.
+`bandule health` 의 "서버 안" 줄도 같은 이유로 늘 "응답없음" 이었다.
+
+**해결** — `deploy.sh` 가 이미 쓰던 방식대로 **compose 헬스체크 결과**를 본다
+(`docker inspect -f '{{.State.Health.Status}}'` 가 `healthy`). 바깥 응답은 워크플로의
+"밖에서" 단계가 `https://api.bandule.com/actuator/health` 로 따로 본다.
+`deploy/bandule` 의 `health` 도 같이 고쳤다(서버의 `/usr/local/bin/bandule` 은 다시 복사해야 반영된다).
+
+**확인법** — GitHub → Actions → **운영 점검** → Run workflow. 로그에 `health   healthy` 가 나오고
+실행이 초록이면 된 것이다.
+
+---
+
+## 2026-09-16 — DB 백업이 8일 동안 조용히 멈춰 있었다 🔴
+
+**증상** — 새로 만든 매일 운영 점검(`.github/workflows/prod-check.yml`)이 첫 실행에서 걸렸다.
+
+```
+!! 백업   마지막이 202시간 전 (backups/bandapp-20260907T160139Z.dump)
+```
+
+마지막 성공이 **2026-09-07 16:01 (UTC)**. 그 뒤 8일 넘게 덤프가 한 개도 안 생겼다.
+로컬·R2 에 09-07 것까지는 남아 있어서 "백업이 아예 없는" 상태는 아니었지만,
+**그 8일치 데이터(가입·일정·게시글·결제)는 무방비였다.** 단일 VM 구성이라 이 백업이
+사용자 데이터를 지키는 유일한 수단이다.
+
+**원인** — `deploy/backup/pg-backup.sh` 가 `.env.prod` 를 `. "./$ENV_FILE"` 로 **source** 했다.
+`.env.prod` 는 docker compose 가 읽는 형식이지 셸 스크립트가 아니다 — `.`(source)은 각 줄을
+셸 코드로 **실행**하므로 값에 `#`·`<`·`>`·따옴표가 섞이면 문법 에러로 죽는다.
+
+**왜 하필 09-07 이었나** — 2026-09-08 에 공개 저장소로 비밀값이 유출돼(아래 항목)
+DB·Redis 비밀번호를 전부 교체했다. 새 값은 `openssl rand -base64` 로 만들었고,
+거기 섞인 특수문자에서 source 가 깨졌다. **비밀값을 교체한 그날부터 백업이 멈춘 것이다.**
+
+같은 실수를 `deploy/play-revoke.sh` 에서 2026-09-09 에 이미 겪고 고쳤는데(아래 항목),
+그때 **같은 패턴을 쓰는 다른 스크립트를 안 찾아봤다.** 백업·복구·인증서 발급 셋이 그대로 남아 있었다.
+
+**왜 8일이나 몰랐나** — 백업은 크론으로만 돌고(`30 3 * * *`), 실패가
+`/var/log/bandapp-backup.log` 에만 쌓인다. **아무도 안 보는 곳에서 조용히 죽는 종류다.**
+배포 직후 헬스체크 말고는 감시가 없었다.
+
+**해결**
+
+1. `source` 를 쓰는 스크립트 셋을 전부 고쳤다 — `pg-backup.sh`, `pg-restore.sh`,
+   `init-letsencrypt.sh`. 파일 전체를 읽지 말고 **필요한 값만 뽑는다**:
+
+   ```sh
+   envget() { grep -m1 "^$1=" "$ENV_FILE" | cut -d= -f2- | sed "s/[[:space:]]*#.*$//; s/[[:space:]]*$//"; }
+   DB_NAME=$(envget DB_NAME); DB_USERNAME=$(envget DB_USERNAME)
+   ```
+
+2. 백업이 멈춘 것을 **다음에는 하루 만에 안다.** 매일 운영 점검이 마지막 덤프가
+   36시간보다 오래되면 `prod-check` 라벨로 이슈를 연다 (`deploy/prod-check.sh`).
+
+**확인법** — 서버에서 한 번 돌려 새 덤프가 생기는지 본다.
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && sh deploy/backup/pg-backup.sh'
+```
+
+`== 검증 통과 (NNM)` → `== R2 업로드` → `== 백업 완료` 가 나오고,
+`bandule backups` 에 오늘 날짜 파일이 보이면 된 것이다. 그 다음 점검부터 백업 항목이 통과한다.
+
+파서만 따로 확인하려면 값에 `#<>"'` 를 섞은 가짜 env 파일을 만들어 `. 파일` 은 문법 에러로
+죽고 `envget` 은 값을 그대로 돌려주는지 본다.
+
+---
+
 ## 2026-09-10 — 발신 지메일에 "주소를 찾을 수 없음" 반송이 계속 쌓였다
 
 **증상** — SMTP 발신 계정 받은편지함에 `Mail Delivery Subsystem` 반송이 반복해서

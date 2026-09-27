@@ -1,0 +1,92 @@
+# 운영 서버를 매일 한 번 본다. 배포 직후 헬스체크 말고는 감시가 없어서, 밴드에 안 붙은
+# 구매 알림이 7일 동안 초당 한 번씩 서버를 때리는 동안 아무도 몰랐다
+# (docs/TROUBLESHOOTING.md 2026-09-09).
+#
+# 시크릿은 Deploy 워크플로가 쓰는 것을 그대로 쓴다: DEPLOY_HOST·DEPLOY_USER·DEPLOY_KEY(·DEPLOY_PORT).
+# 검사 내용과 임계값은 deploy/prod-check.sh 에 있다.
+#
+# 이 저장소는 공개고 **Actions 로그도 공개**다. 그래서 서버 스크립트를 QUIET=1 로 돌려
+# 숫자만 받는다 — 에러 줄·요청 경로에는 이메일이나 구매 토큰이 섞일 수 있다.
+
+name: 운영 점검
+
+on:
+  schedule:
+    - cron: '0 22 * * *'      # 매일 07:00 KST (UTC 22:00)
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DOMAIN: api.bandule.com
+    steps:
+      - uses: actions/checkout@v7
+
+      # 밖에서 본 모습. ssh 가 안 되더라도 이건 답을 준다.
+      # 앱이 컨테이너 안에서 healthy 여도 Nginx·인증서가 죽으면 사용자는 못 쓴다.
+      - name: 밖에서 (HTTPS · 인증서)
+        if: env.DEPLOY_HOST != ''
+        run: |
+          set -o pipefail
+          fail=0
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$DOMAIN/actuator/health" || echo 000)
+          if [ "$code" = 200 ]; then echo "https    $code"; else echo "!! https    $code"; fail=1; fi
+
+          end=$(echo | openssl s_client -servername "$DOMAIN" -connect "$DOMAIN:443" 2>/dev/null \
+                | openssl x509 -noout -enddate | cut -d= -f2)
+          if [ -n "$end" ]; then
+            days=$(( ( $(date -d "$end" +%s) - $(date +%s) ) / 86400 ))
+            # Let's Encrypt 는 만료 30일 전부터 갱신한다. 14일 아래면 갱신이 멈춘 것이다.
+            if [ "$days" -lt 14 ]; then echo "!! 인증서  ${days}일 남음"; fail=1; else echo "인증서   ${days}일 남음"; fi
+          else
+            echo "!! 인증서  확인 실패"; fail=1
+          fi
+          exit $fail
+        continue-on-error: true
+        id: outside
+
+      - name: 서버에서 (컨테이너 · 디스크 · 백업 · 에러 · 요청)
+        if: env.DEPLOY_HOST != ''
+        id: inside
+        continue-on-error: true
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -o pipefail
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > deploy_key
+          # 스크립트를 흘려 넣는다 — 서버 클론이 낡아 있어도 **이 커밋의 검사**가 돈다.
+          ssh -i deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 \
+              -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" \
+              'QUIET=1 sh -s' < deploy/prod-check.sh
+
+      - name: 배포 대상 없음 — 건너뜀
+        if: env.DEPLOY_HOST == ''
+        run: echo "::notice title=점검 건너뜀::DEPLOY_HOST 시크릿이 비어 있다."
+
+      # 둘 중 하나라도 걸리면 이슈로 남긴다. 이미 열린 것이 있으면 댓글만 단다 —
+      # 매일 새 이슈가 쌓이면 아무도 안 본다.
+      - name: 이상하면 이슈
+        if: env.DEPLOY_HOST != '' && (steps.outside.outcome == 'failure' || steps.inside.outcome == 'failure')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="운영 점검이 걸렸다. 어느 검사인지는 실행 로그에 있다: $RUN
+
+          로그에는 숫자만 남긴다(공개 저장소). 자세한 것은 서버에서:
+          \`ssh -i ~/.ssh/bandule_deploy root@\$DEPLOY_HOST 'sh -s' < deploy/prod-check.sh\`"
+          gh label create prod-check --color B60205 --description "매일 운영 점검" 2>/dev/null || true
+          num=$(gh issue list --label prod-check --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body "$body"
+          else
+            gh issue create --title "운영 점검 실패 $(date -u +%F)" --label prod-check --body "$body"
+          fi
+          exit 1

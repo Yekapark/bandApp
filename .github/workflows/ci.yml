@@ -40,3 +40,12 @@ jobs:
             build/reports/tests/test
             build/test-results/test
           retention-days: 7
+
+  # Gradle 없이 몇 초면 끝난다. 빌드가 오래 걸려도 규칙 위반은 먼저 답을 준다.
+  # 검사 내용과 뺀 이유는 tools/check-repo-rules.sh 주석에 있다.
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: 저장소 규칙 검사 (엔티티 Lombok · 비밀 파일)
+        run: sh tools/check-repo-rules.sh
