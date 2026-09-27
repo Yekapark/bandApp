@@ -57,6 +57,10 @@ val keystoreProperties: Properties? = rootProject.file("key.properties").let { f
     if (f.exists()) Properties().apply { f.inputStream().use { load(it) } } else null
 }
 
+// Google Play 가 요구하는 targetSdk 하한. 매년 8월 31일에 한 단계씩 오른다
+// (2026-08-31 부터 36 = Android 16). 올릴 때는 이 숫자 하나만 바꾼다.
+val playMinTargetSdk = 36
+
 // Firebase 설정은 개발용·운영용이 따로 있고, 아래 flavor 가 고른다
 // (app/src/dev/google-services.json, app/src/prod/google-services.json).
 // 둘 다 없으면 플러그인을 아예 적용하지 않아서 빌드는 그대로 되고 푸시만 조용히 꺼진다 —
@@ -74,7 +78,8 @@ if (hasAnyGoogleServices) {
 
 android {
     namespace = "com.yeka.bandule"
-    compileSdk = flutter.compileSdkVersion
+    // Play 스토어 하한(아래 targetSdk 주석)을 맞추려면 compileSdk 도 그 이상이어야 한다.
+    compileSdk = maxOf(flutter.compileSdkVersion, playMinTargetSdk)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -89,7 +94,12 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // 카카오맵 SDK 요건: Android 6.0(API 23) 이상.
         minSdk = maxOf(flutter.minSdkVersion, 23)
-        targetSdk = flutter.targetSdkVersion
+        // Google Play 는 2026-08-31 부터 신규 앱·업데이트에 targetSdk 36(Android 16) 이상을
+        // 요구한다. 예전에는 Flutter 기본값에 맡겼는데, 그 값은 Flutter SDK 버전마다 달라서
+        // 다른 PC·낮은 Flutter 로 빌드하면 조용히 낮은 값으로 나가 업로드가 거절된다.
+        // 하한만 박아 두고, Flutter 가 더 높은 값을 주면 그쪽을 따른다.
+        // 실제 값은 `python tools/release_store.py` 가 빌드 뒤에 검사한다.
+        targetSdk = maxOf(flutter.targetSdkVersion, playMinTargetSdk)
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
