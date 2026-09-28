@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,7 +11,8 @@ import '../../../plan/data/plan_models.dart';
 /// 푸시는 밴드장에게만 간다(요금제를 바꿀 수 있는 사람). 하지만 사진·영상이 사라지는 건 밴드원
 /// 모두의 일이고, 푸시를 꺼둔 사람도 있다. 그래서 홈에 한 줄 띄운다.
 ///
-/// **평소에는 아무것도 보여주지 않는다.** 만료 30일 안일 때만 나온다.
+/// **평소에는 아무것도 보여주지 않는다.** 만료 30일 안이고, 정말로 끝나는 구독(해지 예약·쿠폰)일 때만 나온다.
+/// 자동 갱신 중인 Google Play 구독은 만료일에 갱신되므로 띄우지 않는다(LAUNCH_REVIEW B6).
 class PlanExpiryBanner extends StatelessWidget {
   const PlanExpiryBanner({
     super.key,
@@ -24,9 +26,14 @@ class PlanExpiryBanner extends StatelessWidget {
   /// 이 안에 들면 알린다. 서버 예고 알림(30·7·1일 전)과 같은 기준이다.
   static const _noticeDays = 30;
 
+  /// 배너 문구. 띄우지 않을 상황이면 null. 테스트가 쓴다.
+  @visibleForTesting
+  static String? messageFor(BandPlan? plan, DateTime now) =>
+      _stateAt(plan, now)?.message;
+
   @override
   Widget build(BuildContext context) {
-    final state = _state(plan);
+    final state = _stateAt(plan, DateTime.now());
     if (state == null) return const SizedBox.shrink();
 
     return Container(
@@ -80,9 +87,12 @@ class PlanExpiryBanner extends StatelessWidget {
   }
 
   /// 배너를 띄울 상황인지, 띄운다면 뭐라고 할지. 아니면 null.
-  _BannerState? _state(BandPlan? plan) {
+  static _BannerState? _stateAt(BandPlan? plan, DateTime now) {
     if (plan == null) return null;
-    final now = DateTime.now();
+
+    // 자동 갱신 중이면 만료일에 Google 이 1년 더 청구하고 서버가 연장한다 — 끝나지 않는다.
+    // 예전에는 이런 밴드의 모든 멤버에게 "끝나요, 사진·영상이 사라져요" 를 보여 줬다(B6).
+    if (plan.autoRenewing) return null;
 
     if (plan.tier == 'PREMIUM') {
       final expiresAt = plan.expiresAt;

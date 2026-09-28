@@ -76,7 +76,8 @@ public class PlanDirectoryService {
 
     /**
      * 구독기간이 {@code until} 까지 끝나는 PREMIUM 밴드 id. 만료 예고 알림이 쓴다.
-     * 아직 안 지난 것만 고른다 — 이미 지난 밴드는 강등 배치의 몫이다.
+     * 아직 안 지난 것만 고른다 — 이미 지난 밴드는 강등 배치의 몫이다. 자동 갱신 중인 스토어 구독은
+     * 끝나지 않으므로 빠진다(해지 예약·쿠폰 밴드만).
      */
     @Transactional(readOnly = true)
     public List<ExpiringBand> premiumBandsExpiringBy(Instant now, Instant until, int limit) {

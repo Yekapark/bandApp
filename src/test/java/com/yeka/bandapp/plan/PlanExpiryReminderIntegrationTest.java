@@ -9,6 +9,7 @@ import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -32,10 +33,23 @@ class PlanExpiryReminderIntegrationTest extends PlanApiSupport {
     @Autowired
     private NotificationDispatchRepository dispatchRepository;
 
-    /** 구독 만료일을 원하는 시점으로 당긴다 — 1년을 기다릴 수는 없다. */
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    /**
+     * 구독 만료일을 원하는 시점으로 당기고 <b>해지 예약</b> 상태로 둔다 — 1년을 기다릴 수는 없다.
+     * 자동 갱신 중인 구독은 끝나지 않아 예고 대상이 아니므로(B6), 예고 테스트는 "정말로 끝나는" 구독으로 한다.
+     */
     private void setExpiry(long bandId, Instant expiresAt) {
+        setExpiry(bandId, expiresAt, false);
+    }
+
+    private void setExpiry(long bandId, Instant expiresAt, boolean autoRenewing) {
         BandPlan plan = bandPlanRepository.findByBandId(bandId).orElseThrow();
         plan.upgradeToPremium(plan.getStartedAt(), expiresAt, "GPA-" + bandId, Store.GOOGLE_PLAY, "tok" + bandId);
+        if (!autoRenewing) {
+            plan.cancelAtPeriodEnd(Instant.now());
+        }
         bandPlanRepository.saveAndFlush(plan);
     }
 
@@ -89,6 +103,33 @@ class PlanExpiryReminderIntegrationTest extends PlanApiSupport {
 
         assertThat(reminderService.remindExpiringSoon(now)).isZero();
         assertThat(countExpiringSoon()).isZero();
+    }
+
+    @Test
+    @DisplayName("자동 갱신 중인 구독에는 예고하지 않는다 — 만료일이 와도 Google 이 갱신한다 (B6)")
+    void auto_renewing_subscription_is_not_reminded() {
+        String leader = signup("exp-auto@band.app", "리더");
+        long bandId = createBand(leader, "자동갱신밴드");
+        subscribe(leader, bandId);
+
+        Instant now = Instant.now();
+        setExpiry(bandId, now.plus(6, ChronoUnit.DAYS), true);
+
+        assertThat(reminderService.remindExpiringSoon(now)).isZero();
+        assertThat(countExpiringSoon()).isZero();
+        assertThat(data(viewPlan(leader, bandId)).get("autoRenewing").asBoolean()).isTrue();
+    }
+
+    @Test
+    @DisplayName("쿠폰 프리미엄은 자동 갱신이 없으니 예고한다")
+    void coupon_premium_is_reminded() {
+        String leader = signup("exp-coupon@band.app", "리더");
+        long bandId = createBand(leader, "쿠폰예고밴드");
+        jdbc.update("insert into plan_coupons (code, grant_days, max_uses, created_at) values ('EXPCP6', 6, null, now())");
+        assertThat(redeemCoupon(leader, bandId, "EXPCP6").getStatusCode().value()).isEqualTo(200);
+
+        assertThat(reminderService.remindExpiringSoon(Instant.now())).isEqualTo(1);
+        assertThat(countExpiringSoon()).isEqualTo(1);
     }
 
     @Test

@@ -49,14 +49,20 @@ public interface BandPlanRepository extends JpaRepository<BandPlan, Long> {
     List<Long> findExpiredPremiumBandIds(@Param("now") Instant now, Pageable pageable);
 
     /**
-     * 구독기간이 {@code (now, until]} 사이에 끝나는 PREMIUM 밴드 — 만료 예고 배치가 쓴다.
+     * 구독기간이 {@code (now, until]} 사이에 <b>실제로 끝나는</b> PREMIUM 밴드 — 만료 예고 배치가 쓴다.
      *
      * <p>강등 배치의 {@code < :now} 와 겹치지 않도록 <b>아직 안 지난 것만</b> 고른다. 이미 지난 밴드는
      * 예고할 게 아니라 강등 대상이고, 강등 직후 별도 알림({@code PLAN_EXPIRED})이 나간다.
+     *
+     * <p><b>자동 갱신 중인 스토어 구독은 뺀다</b>({@code store} 있고 {@code subscriptionRef} 있음 =
+     * {@link BandPlan#isAutoRenewingStoreSubscription()}). 만료일이 와도 Google 이 갱신해 끝나지 않는데,
+     * 예전에는 "N일 뒤 끝나요, 사진·영상이 사라져요" 를 보내 겁을 줬다(LAUNCH_REVIEW B6). 남는 것은 해지
+     * 예약한 구독({@code subscriptionRef} 없음)과 쿠폰 PREMIUM({@code store} 없음) — 정말로 끝나는 밴드다.
      */
     @Query("select p from BandPlan p "
             + "where p.tier = com.yeka.bandapp.plan.entity.PlanTier.PREMIUM "
             + "and p.expiresAt > :now and p.expiresAt <= :until "
+            + "and (p.store is null or p.subscriptionRef is null) "
             + "order by p.expiresAt")
     List<BandPlan> findPremiumExpiringBetween(@Param("now") Instant now,
                                               @Param("until") Instant until,
