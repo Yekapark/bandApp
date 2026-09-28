@@ -154,9 +154,12 @@ app:
     android-sha256-cert-fingerprints: ${ANDROID_SHA256_CERT_FINGERPRINTS:}   # 쉼표 구분, assetlinks.json 검증용
   terms:
     # 지금 게시 중인 문서의 시행일. 회원가입 시 이 값으로 동의 기록을 남긴다.
-    # 문서를 고쳐 새로 게시하면 이 값도 함께 올린다 (docs/legal/).
-    version: ${TERMS_VERSION:2026-09-06}
-    privacy-version: ${PRIVACY_VERSION:2026-09-06}
+    # 문서를 고쳐 새로 게시하면 이 값도 함께 올린다 (docs/legal/ 의 "시행일"). 게시 중인 문서가 곧 시행될
+    # 개정본이면 그 시행일을 적는다 — 가입자는 화면에 보이는 그 문서에 동의한 것이다.
+    # 2026-09-29: 2026-09-06 에 멈춰 있었다(09-09·09-17·09-28 개정 때 안 올림, LAUNCH_REVIEW L6).
+    # docker-compose.prod.yml 이 TERMS_VERSION 을 넘기지 않아 운영도 이 기본값을 쓴다.
+    version: ${TERMS_VERSION:2026-10-06}
+    privacy-version: ${PRIVACY_VERSION:2026-10-06}
   report:
     # 신고가 접수되면 푸시를 받을 계정(users.id). 비우면 알림이 안 나간다 - 접수 자체는 그대로 된다.
     # 운영자 역할이 따로 없어서 계정 id 로 지정한다. 쉼표로 여럿.

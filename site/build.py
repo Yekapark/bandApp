@@ -153,7 +153,32 @@ def body_of(path):
     return body
 
 
+def check_agreement_versions():
+    """가입 동의 기록의 버전(application.yml app.terms)이 게시할 문서의 시행일과 같은지 본다.
+
+    문서만 고치고 이 값을 안 올려서, 세 번의 개정 동안 가입자 동의 기록이 옛 버전을 가리켰다
+    (TROUBLESHOOTING 2026-09-29, LAUNCH_REVIEW L6). 게시하려면 이 스크립트를 거치므로 여기서 막는다.
+    """
+    yml = (ROOT / "src/main/resources/application.yml").read_text(encoding="utf-8")
+    wanted = {
+        "version": LEGAL / "terms-ko.md",
+        "privacy-version": LEGAL / "privacy-policy-ko.md",
+    }
+    wrong = []
+    for key, doc in wanted.items():
+        conf = re.search(rf"^\s+{key}: \$\{{[A-Z_]+:([0-9-]+)\}}", yml, re.M)
+        date = re.search(r"\*\*시행일: ([0-9-]+)\*\*", doc.read_text(encoding="utf-8"))
+        if not conf or not date:
+            sys.exit(f"!! 동의 버전 확인 실패 — application.yml app.terms.{key} 나 {doc.name} 의 시행일을 못 찾았다")
+        if conf.group(1) != date.group(1):
+            wrong.append(f"app.terms.{key} = {conf.group(1)}, {doc.name} 시행일 = {date.group(1)}")
+    if wrong:
+        sys.exit("!! 가입 동의 버전이 문서 시행일과 다르다 — application.yml 을 문서 시행일로 올린다:\n   "
+                 + "\n   ".join(wrong))
+
+
 def main():
+    check_agreement_versions()
     OUT.mkdir(exist_ok=True)
     (OUT / "index.html").write_text(INDEX, encoding="utf-8", newline="\n")
     print("index.html")
