@@ -25,12 +25,15 @@ class AuthState {
 final authControllerProvider =
     NotifierProvider<AuthController, AuthState>(AuthController.new);
 
+/// 강제 로그아웃된 까닭 — 로그인 화면이 한 번 보여 주고 비운다(예: 이용 정지 안내, LAUNCH_REVIEW P7).
+final authNoticeProvider = StateProvider<String?>((ref) => null);
+
 class AuthController extends Notifier<AuthState> {
   @override
   AuthState build() {
     // refresh 실패 신호를 받으면 즉시 로그아웃 상태로.
     final signal = ref.watch(sessionExpiredSignalProvider);
-    void onExpired() => _onSessionExpired();
+    void onExpired() => _onSessionExpired(signal.takeNotice());
     signal.addListener(onExpired);
     ref.onDispose(() => signal.removeListener(onExpired));
 
@@ -120,7 +123,9 @@ class AuthController extends Notifier<AuthState> {
 
   /// 세션 만료(refresh 실패)로 강제 로그아웃. 인증 없이 통하는 로그아웃 요청으로 이 기기의 푸시 토큰을 지운다 —
   /// 안 그러면 다시 로그인하기 전까지 만료된 계정의 알림이 계속 온다(U1).
-  void _onSessionExpired() {
+  void _onSessionExpired([String? notice]) {
+    // 상태보다 먼저 — 상태가 바뀌면 라우터가 로그인 화면을 띄우고, 그 화면이 이걸 읽는다.
+    if (notice != null) ref.read(authNoticeProvider.notifier).state = notice;
     if (state.status == AuthStatus.unauthenticated) return;
     final stale = _storage.current?.refreshToken;
     final push = ref.read(pushServiceProvider);

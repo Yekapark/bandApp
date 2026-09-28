@@ -76,12 +76,16 @@
 ## 3. 도메인 모델
 
 ```
-User { id, email, passwordHash, name, socialProvider, socialId, emailVerified, createdAt, deletedAt }
+User { id, email, passwordHash, name, socialProvider, socialId, emailVerified, createdAt, deletedAt,
+       suspendedUntil, suspensionReason }
   - passwordHash: 이메일 가입자만 값이 있다(소셜 가입자는 NULL). BCrypt 해시로만 저장한다.
   - email: 소셜 가입자는 제공 동의가 없으면 NULL일 수 있다.
   - emailVerified: 승인됨(2026-09-06) — 이메일 가입자는 가입 시 false로 시작해 인증 코드
     메일로 true가 된다. 소셜 가입자는 항상 true. 강제하지 않는다(미인증이어도 기능 제한 없음,
     클라이언트 배너 안내용).
+  - suspendedUntil·suspensionReason: 승인됨(2026-09-28, LAUNCH_REVIEW P7) — 이용 정지(약관 제14조).
+    운영 스크립트 `tools/moderate.py` 만 쓴다(관리자 API 없음). 지나면 저절로 풀리고, 영구는 9999-12-31.
+    로그인·토큰 갱신이 읽어 401 `ACCOUNT_SUSPENDED`. 사유는 운영 기록이라 응답에 싣지 않고 익명화 때 지운다.
 
 Band { id, name, leaderId,
        reservationPermission(LEADER_ONLY | ANYONE | APPROVAL_REQUIRED),
