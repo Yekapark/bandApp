@@ -82,7 +82,7 @@ void main() {
   test('밴드 표시 없는 구매라도 이 앱에서 방금 결제한 밴드가 있으면 그 밴드로 검증한다', () async {
     repo.restoreError = ApiException(code: 'PURCHASE_BAND_UNKNOWN', message: 'x', statusCode: 422);
     sync.start();
-    await sync.buy(_product(), bandId: 3);
+    await sync.buy(_products(), bandId: 3);
     expect(iap.boughtFor, 3);
 
     final p = _purchase('tok-4', PurchaseStatus.purchased, pending: true);
@@ -91,6 +91,63 @@ void main() {
 
     expect(repo.verified, [(3, 'tok-4')]);
     expect(iap.completed, [p]);
+  });
+
+  group('밴드마다 결제 — 같은 값의 상품 여러 개 (B4)', () {
+    test('이 계정이 이미 가진 상품은 건너뛰고 다음 상품으로 결제한다', () async {
+      iap.ownedOnStore = ['premium_yearly'];
+      sync.start();
+      await settle();
+
+      await sync.buy(_products(), bandId: 2);
+
+      expect(iap.bought, ['premium_yearly_2']);
+    });
+
+    test('모두 가지고 있으면 결제 창을 띄우지 않고 알린다', () async {
+      iap.ownedOnStore = List.of(IapService.productIds);
+      sync.start();
+      await settle();
+
+      await expectLater(sync.buy(_products(), bandId: 2),
+          throwsA(isA<NoPremiumSlotException>()));
+      expect(iap.bought, isEmpty);
+    });
+
+    test('스토어에 올라간 상품만 고른다', () async {
+      sync.start();
+      await settle();
+
+      await sync.buy(_products(['premium_yearly_3']), bandId: 2);
+
+      expect(iap.bought, ['premium_yearly_3']);
+    });
+
+    test('"이미 보유" 로 실패하면 다음 상품으로 다시 띄운다', () async {
+      sync.start();
+      await settle();
+      await sync.buy(_products(), bandId: 2);
+      expect(iap.bought, ['premium_yearly']);
+
+      // Play 는 오류 결과에 상품 id 를 비워 보낸다.
+      iap.emit([_errorPurchase('BillingResponse.itemAlreadyOwned')]);
+      await settle();
+
+      expect(iap.bought, ['premium_yearly', 'premium_yearly_2']);
+    });
+
+    test('결제 창에서 취소하면(상품 id 가 빈 이벤트) 버튼을 풀라고 알린다', () async {
+      final events = <PurchaseEvent>[];
+      sync.events.listen(events.add);
+      sync.start();
+      await settle();
+      await sync.buy(_products(), bandId: 2);
+
+      iap.emit([_purchase('', PurchaseStatus.canceled, pending: false, productId: '')]);
+      await settle();
+
+      expect(events.map((e) => e.kind), [PurchaseEventKind.canceled]);
+    });
   });
 
   test('서버 반영이 실패하면 끝내지 않는다 — 다음 시작·복귀 때 다시 온다', () async {
@@ -103,9 +160,10 @@ void main() {
   });
 }
 
-PurchaseDetails _purchase(String token, PurchaseStatus status, {required bool pending}) {
+PurchaseDetails _purchase(String token, PurchaseStatus status,
+    {required bool pending, String productId = 'premium_yearly'}) {
   return PurchaseDetails(
-    productID: IapService.productId,
+    productID: productId,
     verificationData: PurchaseVerificationData(
       localVerificationData: '{}',
       serverVerificationData: token,
@@ -116,8 +174,20 @@ PurchaseDetails _purchase(String token, PurchaseStatus status, {required bool pe
   )..pendingCompletePurchase = pending;
 }
 
-ProductDetails _product() => ProductDetails(
-      id: IapService.productId,
+Map<String, ProductDetails> _products([List<String>? ids]) => {
+      for (final id in ids ?? IapService.productIds) id: _product(id),
+    };
+
+PurchaseDetails _errorPurchase(String message) => PurchaseDetails(
+      productID: '',
+      verificationData: PurchaseVerificationData(
+          localVerificationData: '', serverVerificationData: '', source: 'google_play'),
+      transactionDate: null,
+      status: PurchaseStatus.error,
+    )..error = IAPError(source: 'google_play', code: 'purchase_error', message: message);
+
+ProductDetails _product(String id) => ProductDetails(
+      id: id,
       title: 'PREMIUM',
       description: '',
       price: '₩19,000',
@@ -131,6 +201,10 @@ class _FakeIap extends IapService {
   final _controller = StreamController<List<PurchaseDetails>>.broadcast();
   int restoreCalls = 0;
   int? boughtFor;
+  final bought = <String>[];
+
+  /// 스토어가 "이 계정이 가진 구독" 으로 돌려줄 상품들(확인 처리 끝난 것).
+  List<String> ownedOnStore = [];
   final completed = <PurchaseDetails>[];
 
   void emit(List<PurchaseDetails> purchases) => _controller.add(purchases);
@@ -142,10 +216,21 @@ class _FakeIap extends IapService {
   Future<bool> isAvailable() async => true;
 
   @override
-  Future<void> restorePurchases() async => restoreCalls++;
+  Future<void> restorePurchases() async {
+    restoreCalls++;
+    if (ownedOnStore.isNotEmpty) {
+      emit([
+        for (final id in ownedOnStore)
+          _purchase('owned-$id', PurchaseStatus.restored, pending: false, productId: id)
+      ]);
+    }
+  }
 
   @override
-  Future<void> buy(ProductDetails product, {required int bandId}) async => boughtFor = bandId;
+  Future<void> buy(ProductDetails product, {required int bandId}) async {
+    boughtFor = bandId;
+    bought.add(product.id);
+  }
 
   @override
   Future<void> complete(PurchaseDetails purchase) async => completed.add(purchase);

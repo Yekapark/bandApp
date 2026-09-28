@@ -18,6 +18,7 @@ import java.util.Optional;
  * <p>구매 토큰 접두사로 고른다:
  * <ul>
  *   <li>{@code wrongproduct-…} — 우리가 파는 상품이 아닌 다른 구독 상품
+ *   <li>{@code slot3-…} — 우리가 파는 같은 값의 다른 슬롯 상품({@code premium_yearly_3}, B4)
  *   <li>{@code noexpiry-…} — 만료일이 없는 구독
  *   <li>그 밖 — 정상(대조군)
  * </ul>
@@ -35,7 +36,7 @@ public class QuirkyStoreBillingGatewayConfig {
             public Optional<StoreSubscription> fetch(Store store, String purchaseToken) {
                 String productId = purchaseToken.startsWith("wrongproduct-")
                         ? "premium_monthly_cheap"
-                        : OUR_PRODUCT;
+                        : purchaseToken.startsWith("slot3-") ? "premium_yearly_3" : OUR_PRODUCT;
                 Instant expiry = purchaseToken.startsWith("noexpiry-")
                         ? null
                         : Instant.now().plus(365, ChronoUnit.DAYS);

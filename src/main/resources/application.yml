@@ -133,10 +133,11 @@ app:
       gateway: ${PLAN_BILLING_GATEWAY:noop}            # noop(로컬·CI) | google(실제 Play 검증)
       webhook-secret: ${PLAN_BILLING_WEBHOOK_SECRET:}  # RTDN Pub/Sub push 공유 시크릿. 비면 웹훅 차단(fail-closed)
       google-package-name: ${PLAN_BILLING_GOOGLE_PACKAGE:com.yeka.bandule}
-      # 스토어가 돌려준 구매의 상품 id 가 이 값과 다르면 PREMIUM 을 주지 않는다.
-      # 상품이 하나뿐인 지금은 무해하지만, 더 싼 상품을 하나라도 추가하는 순간
-      # 그 토큰으로 PREMIUM 을 받는 길이 열린다.
-      google-product-id: ${PLAN_BILLING_GOOGLE_PRODUCT_ID:premium_yearly}
+      # 스토어가 돌려준 구매의 상품 id 가 이 목록에 없으면 PREMIUM 을 주지 않는다(더 싼 상품으로 PREMIUM 받기 방지).
+      # 여러 개인 이유: Google 계정 하나는 같은 구독 상품을 동시에 하나만 가진다. 밴드마다 결제하려면
+      # 값·기간이 같은 상품이 여러 개 있어야 한다(LAUNCH_REVIEW B4). 앱 IapService.productIds 와 같아야 한다.
+      # (옛 단수 설정 PLAN_BILLING_GOOGLE_PRODUCT_ID 는 더 이상 읽지 않는다.)
+      google-product-ids: ${PLAN_BILLING_GOOGLE_PRODUCT_IDS:premium_yearly,premium_yearly_2,premium_yearly_3,premium_yearly_4,premium_yearly_5}
       google-credentials-path: ${PLAN_BILLING_GOOGLE_CREDENTIALS_PATH:}  # 서비스 계정 JSON. gateway=google 이면 필수
       google-application-name: ${PLAN_BILLING_GOOGLE_APP_NAME:bandule}
       google-pubsub-audience: ${PLAN_BILLING_PUBSUB_AUDIENCE:}           # RTDN push OIDC audience. 설정 시 Bearer 토큰 검증
