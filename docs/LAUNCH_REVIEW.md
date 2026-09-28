@@ -55,7 +55,7 @@
 | 16 | B6 | 중간 | 자동 갱신 구독자에게 만료 경고 | ✅ 2026-09-28 서버 예고·앱 배너 모두 자동 갱신 구독 제외(해지 예약·쿠폰만) |
 | 17 | B8 | 중간 | 만료 배치가 스토어 재조회 없이 강등 | ✅ 2026-09-28 강등 전 스토어 재확인 — 유효하면 연장, 장애면 3일까지 미룸 |
 | 18 | B7 | 중간 | 쿠폰·결제 기간 섞임 | 🟡 2026-09-28 쌓기로 구현(스토어 결제일 연기). 서비스 계정 권한 확인 + 실결제 확인 남음 |
-| 19 | U2 | 중간 | 미디어 URL 10분 만료 + 상세 캐시 | ⬜ |
+| 19 | U2 | 중간 | 미디어 URL 10분 만료 + 상세 캐시 | 🟡 2026-09-28 실패 시 새 주소로 재조회·1회 재시도, 상세 autoDispose. 실기기 확인 남음 |
 | 20 | P7·P8 | 중간 | UGC 운영 수단·스토어 카테고리 | 🔧 P8: 카테고리 "도구" 선택(소셜 아님, 2026-09-27). P7 남음 |
 | 21 | L2·L3 | 중간 | 연락처 통일, 판매자 법적 요건 확인 | 🔧 L3: 사업자등록번호는 Play 에 입력, 통신판매업 신고번호·신고 기관 남음 (2026-09-27) |
 | 22 | U7 | 중간 | 카카오 SDK·video_compress 가 KGP 를 써서 향후 Flutter 에서 빌드 실패 예고 | ⬜ |
@@ -124,7 +124,7 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | ID | 심각도 | 증상 | 원인 | 해결방안 | 상태 |
 |---|---|---|---|---|---|
 | U1 | 높음 | 로그아웃해도 그 폰으로 이전 계정의 일정·정산 푸시가 계속 온다(공용 폰이면 다른 사람에게 노출) | `AuthController.logout()` 이 토큰 저장소를 먼저 비움 → `app.dart` 의 `push.stop()` 이 인증 없이 `DELETE /device-tokens` → 401 → 서버에 토큰 남음 | 로그아웃에서 `push.stop()` 을 먼저 await. 더 튼튼하게는 `/auth/logout` 본문에 `deviceToken` 을 실어 서버가 삭제 | 🟡 2026-09-28 — 둘 다 했다. 서버: `POST /auth/logout` 에 선택 필드 `deviceToken`, 받으면 `DeviceTokenService.forgetDevice` 로 그 토큰 행을 지운다(인증·소유자 확인 없이 — refresh 가 만료된 강제 로그아웃도 정리돼야 해서. 토큰 값을 아는 것이 곧 그 기기). 앱: `AuthController.logout()` 이 저장소를 비우기 **전에** 기기 토큰을 로그아웃 요청에 싣고 `push.stop(unregister: false)`, 세션 만료 강제 로그아웃도 같은 요청을 보낸다. `PushService.stop()` 은 끝에 `FirebaseMessaging.deleteToken()` 으로 기기 FCM 토큰을 폐기 — 서버 요청이 실패해도 이 기기로는 안 온다. 테스트: `DeviceTokenIntegrationTest` 3건, `client/test/logout_push_test.dart`. 남은 것: +32 실기기 확인 |
-| U2 | 중간 | 글을 본 지 10분 뒤 같은 글을 다시 열면 사진이 깨지고 영상 재생 실패 | presigned GET 10분 + `postDetailProvider` 가 autoDispose 아님 | autoDispose 로, 재생 오류 시 상세 재조회 후 1회 재시도, TTL 30~60분 검토(방침 "10분" 문구도 같이). 실기기 확인 | ⬜ |
+| U2 | 중간 | 글을 본 지 10분 뒤 같은 글을 다시 열면 사진이 깨지고 영상 재생 실패 | presigned GET 10분 + `postDetailProvider` 가 autoDispose 아님 | autoDispose 로, 재생 오류 시 상세 재조회 후 1회 재시도, TTL 30~60분 검토(방침 "10분" 문구도 같이). 실기기 확인 | 🟡 2026-09-28 — **TTL 은 10분 유지**(BUILD_PLAN 이 5~15분으로 정했고 방침 제9조 문구도 그대로 맞다). 대신 앱이 실패를 만료로 보고 새 주소를 받는다: `postDetailProvider` 를 autoDispose 로(닫으면 버림 — 알림으로 다시 열어도 새로 받음), 상세의 사진이 깨지면 상세 재조회, 전체화면 사진·영상은 실패 시 상세를 다시 받아 **새 주소로 한 번 더** 시도(`_FullImage`·`_FullVideo`), 피드 썸네일이 깨지면 피드 새로고침. 정말 깨진 파일에서 무한 재조회하지 않게 대상별 간격 제한(`core/media/stale_url_guard.dart`, 상세 60초·피드 2분). 테스트: `stale_url_guard_test.dart` 3건. **남은 것: 실기기에서 글 상세·피드를 연 채 10분 넘게 둔 뒤 사진·영상을 눌러 정상 표시되는지(§7)** |
 | U3 | 중간 | 스토어 AAB 를 손 명령으로 만든다. `dart_defines.json` 의 `API_BASE_URL` 이 localhost 라 옵션 하나 빠뜨리면 아무 데도 못 붙는 앱이 올라간다. `BUILD_LABEL` 이 없으면 "개발 빌드" 표시 | AAB 용 스크립트 없음 | `client/tools/release_store.py` | ✅ 2026-09-27 첫 실행 통과(서버 주소·16KB·targetSdk·업로드 키 서명 OK), AAB 0.1.0+30 생성 |
 | U4 | 낮음 | 구독 종료일이 "9월 10일 (목)" 처럼 연도 없이 나옴 | `Fmt.dateKoUtc` | 연도 포함 포매터 | ⬜ |
 | U5 | 낮음 | 첫 실행이 오프라인이면 기본 폰트, 매번 Google 폰트 서버 접속 | `google_fonts` 런타임 다운로드 | 폰트를 assets 에 넣고 `allowRuntimeFetching = false` | ⬜ |

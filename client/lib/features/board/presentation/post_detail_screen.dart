@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/format/formatters.dart';
+import '../../../core/media/stale_url_guard.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../routing/app_router.dart';
@@ -117,6 +118,20 @@ class PostDetailScreen extends ConsumerWidget {
                 for (final m in d.media) ...[
                   _MediaBlock(
                     media: m,
+                    // 주소가 만료됐으면(10분) 상세를 새로 받아 새 주소를 얻는다(U2).
+                    onUrlExpired: () {
+                      if (StaleUrlGuard.allow(('post', postId))) {
+                        ref.invalidate(postDetailProvider(key));
+                      }
+                    },
+                    freshUrl: () async {
+                      ref.invalidate(postDetailProvider(key));
+                      final fresh = await ref.read(postDetailProvider(key).future);
+                      for (final x in fresh.media) {
+                        if (x.id == m.id) return x.downloadUrl;
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -375,9 +390,19 @@ class _OverflowMenu extends StatelessWidget {
 }
 
 class _MediaBlock extends StatelessWidget {
-  const _MediaBlock({required this.media});
+  const _MediaBlock({
+    required this.media,
+    required this.onUrlExpired,
+    required this.freshUrl,
+  });
 
   final PostMedia media;
+
+  /// 이미지를 못 불러왔을 때 — 주소가 만료됐을 수 있으니 상세를 새로 받게 한다.
+  final VoidCallback onUrlExpired;
+
+  /// 전체화면에서 재생·표시가 실패하면 이걸로 새 주소를 받아 한 번 더 시도한다.
+  final Future<String?> Function() freshUrl;
 
   // 첨부 신고는 오른쪽 위 점 세 개 메뉴에 있다. 예전에는 길게 누르기였는데, 안내 문구를
   // 달아 둬도 아무도 찾지 못했다 — 숨은 제스처는 없는 기능이나 마찬가지다.
@@ -401,7 +426,7 @@ class _MediaBlock extends StatelessWidget {
       return GestureDetector(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => _FullVideo(url: media.downloadUrl!),
+            builder: (_) => _FullVideo(url: media.downloadUrl!, freshUrl: freshUrl),
           ),
         ),
         child: _frame(
@@ -435,7 +460,7 @@ class _MediaBlock extends StatelessWidget {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => _FullImage(url: media.downloadUrl!),
+          builder: (_) => _FullImage(url: media.downloadUrl!, freshUrl: freshUrl),
         ),
       ),
       child: ClipRRect(
@@ -444,8 +469,12 @@ class _MediaBlock extends StatelessWidget {
           media.downloadUrl!,
           fit: BoxFit.cover,
           width: double.infinity,
-          errorBuilder: (_, __, ___) => _frame(const _Note(
-              icon: Icons.broken_image_outlined, text: '이미지를 불러오지 못했어요.')),
+          errorBuilder: (_, __, ___) {
+            // build 중이라 바로 상태를 바꾸지 않고 다음 프레임에 새로 받게 한다.
+            WidgetsBinding.instance.addPostFrameCallback((_) => onUrlExpired());
+            return _frame(const _Note(
+                icon: Icons.broken_image_outlined, text: '이미지를 불러오지 못했어요.'));
+          },
           loadingBuilder: (context, child, progress) {
             if (progress == null) return child;
             return _frame(const Center(
@@ -503,32 +532,49 @@ class _Note extends StatelessWidget {
 /// 컨트롤은 video_player 가 주는 [VideoProgressIndicator] 로 충분해서 별도 UI 패키지를
 /// 붙이지 않았다. 화면을 탭하면 재생/일시정지.
 ///
-/// [url] 은 만료가 짧은 presigned URL 이라 재생 중 만료될 수 있다 — 그 경우 에러 안내를
-/// 보여주고, 사용자는 뒤로 갔다 다시 열면 새 URL 을 받는다.
+/// [url] 은 만료가 짧은(10분) presigned URL 이다. 상세를 연 채 오래 있다가 누르면 이미 만료됐을 수 있어서,
+/// 첫 시도가 실패하면 [freshUrl] 로 새 주소를 받아 **한 번 더** 시도한다(U2). 그래도 안 되면 안내만 보여 준다.
 class _FullVideo extends StatefulWidget {
-  const _FullVideo({required this.url});
+  const _FullVideo({required this.url, required this.freshUrl});
 
   final String url;
+  final Future<String?> Function() freshUrl;
 
   @override
   State<_FullVideo> createState() => _FullVideoState();
 }
 
 class _FullVideoState extends State<_FullVideo> {
-  late final VideoPlayerController _controller;
+  late VideoPlayerController _controller;
   bool _ready = false;
+  bool _retried = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _open(widget.url);
+  }
+
+  void _open(String url) {
+    _controller = VideoPlayerController.networkUrl(Uri.parse(url));
     _controller.initialize().then((_) {
       if (!mounted) return;
       setState(() => _ready = true);
       _controller.play();
-    }).catchError((Object e) {
+    }).catchError((Object e) async {
       if (!mounted) return;
+      if (!_retried) {
+        // 주소가 만료됐을 가능성이 가장 크다 — 새 주소로 한 번 더.
+        _retried = true;
+        final fresh = await widget.freshUrl().catchError((_) => null);
+        if (!mounted) return;
+        if (fresh != null) {
+          await _controller.dispose();
+          _open(fresh);
+          return;
+        }
+      }
       setState(() => _error = '영상을 재생할 수 없어요.');
     });
   }
@@ -601,9 +647,27 @@ class _FullVideoState extends State<_FullVideo> {
   }
 }
 
-class _FullImage extends StatelessWidget {
-  const _FullImage({required this.url});
+/// 전체화면 이미지. 주소가 만료돼 실패하면 새 주소로 한 번 더 시도한다(U2).
+class _FullImage extends StatefulWidget {
+  const _FullImage({required this.url, required this.freshUrl});
   final String url;
+  final Future<String?> Function() freshUrl;
+
+  @override
+  State<_FullImage> createState() => _FullImageState();
+}
+
+class _FullImageState extends State<_FullImage> {
+  late String _url = widget.url;
+  bool _retried = false;
+
+  Future<void> _retry() async {
+    if (_retried) return;
+    _retried = true;
+    final fresh = await widget.freshUrl().catchError((_) => null);
+    if (!mounted || fresh == null) return;
+    setState(() => _url = fresh);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -613,7 +677,14 @@ class _FullImage extends StatelessWidget {
       body: Center(
         child: InteractiveViewer(
           maxScale: 5,
-          child: Image.network(url),
+          child: Image.network(
+            _url,
+            errorBuilder: (_, __, ___) {
+              WidgetsBinding.instance.addPostFrameCallback((_) => _retry());
+              return const Text('이미지를 불러오지 못했어요.',
+                  style: TextStyle(fontSize: 13, color: AppColors.textDim));
+            },
+          ),
         ),
       ),
     );
