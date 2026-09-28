@@ -34,6 +34,8 @@ Java 21 / Spring Boot 3.x / PostgreSQL / Redis 백엔드. 클라이언트는 Flu
   구현 명세는 담지 않는다.
 - **`docs/TROUBLESHOOTING.md` — 겪은 문제와 해결의 기록.** 작업 시작 전에 훑는다.
 - `docs/BACKLOG.md` — 배포 요건과 디자인 작업 메모 (사람용 참고).
+- `docs/SERVICES_AND_SHUTDOWN.md` — 가입·결제한 외부 서비스 목록과 폐업 시 정리 순서.
+  **새 서비스에 가입하거나 결제 수단을 등록하면 이 표에 추가한다.**
 - `docs/progress/` — Phase별 진행 기록. **클라이언트(Flutter) 작업을 이어받을 때는
   `docs/progress/client-DEVLOG.md`를 먼저 읽는다** (현재 상태·다음 할 일·로컬 환경 함정).
 
