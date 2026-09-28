@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/format/formatters.dart';
 import '../../../core/network/api_exception.dart';
@@ -63,8 +62,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   /// Play 스토어의 이 앱 구독 관리 화면을 연다. 해지·결제 수단 변경·환불 요청이 모두 거기 있다.
   /// 결제한 Google 계정이 이 폰에 없으면 Play 가 구독 목록만 보여 준다(다른 사람이 결제한 밴드).
   Future<void> _openSubscriptionManagement() async {
-    final ok = await launchUrl(IapService.manageSubscriptionUrl,
-        mode: LaunchMode.externalApplication);
+    final ok = await IapService.openManageSubscriptions();
     if (!ok) {
       _toast('Play 스토어를 열지 못했어요. Play 스토어 › 결제 및 구독 › 구독에서 확인해 주세요.');
     }
@@ -491,7 +489,8 @@ class _ManageNotice extends StatelessWidget {
           const SizedBox(height: 5),
           const Text(
             '기간이 끝나면 Google Play 가 자동으로 1년씩 갱신해요. 해지하거나 환불받으려면 '
-            '아래 버튼으로 Play 스토어 구독 화면에서 하면 돼요.',
+            '아래 버튼으로 Play 스토어 구독 화면에서 하면 돼요. 구독은 결제한 사람의 '
+            'Google 계정에 있어서, 밴드장이 바뀌어도 그 계정에서만 관리할 수 있어요.',
             style:
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
           ),

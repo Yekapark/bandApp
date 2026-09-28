@@ -165,6 +165,44 @@ class BandDeletionIntegrationTest extends PlanApiSupport {
     }
 
     @Test
+    void band_with_auto_renewing_store_subscription_cannot_be_deleted() {
+        // 지워도 Google 은 계속 청구하고 갱신 알림은 찾을 밴드가 없어 버려진다(LAUNCH_REVIEW B5).
+        String leader = signup("bd-sub@band.app", "리더");
+        long bandId = createBand(leader, "구독밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("autoRenewing").asBoolean()).isTrue();
+
+        ResponseEntity<String> res = deleteBand(leader, bandId, "구독밴드");
+
+        assertThat(res.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(res)).isEqualTo("BAND_HAS_ACTIVE_SUBSCRIPTION");
+        assertThat(count("select count(*) from bands where id = %d", bandId)).isEqualTo(1);
+    }
+
+    @Test
+    void band_can_be_deleted_after_the_subscription_is_canceled() {
+        String leader = signup("bd-canceled@band.app", "리더");
+        long bandId = createBand(leader, "해지밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("autoRenewing").asBoolean()).isFalse();
+
+        assertThat(deleteBand(leader, bandId, "해지밴드").getStatusCode().value()).isEqualTo(204);
+    }
+
+    @Test
+    void coupon_premium_band_can_be_deleted() {
+        String leader = signup("bd-coupon@band.app", "리더");
+        long bandId = createBand(leader, "쿠폰밴드");
+        jdbc.update("insert into plan_coupons (code, grant_days, max_uses, created_at) values ('BDDEL30', 30, null, now())");
+        assertThat(redeemCoupon(leader, bandId, "BDDEL30").getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("PREMIUM");
+        assertThat(data(viewPlan(leader, bandId)).get("autoRenewing").asBoolean()).isFalse();
+
+        assertThat(deleteBand(leader, bandId, "쿠폰밴드").getStatusCode().value()).isEqualTo(204);
+    }
+
+    @Test
     void wrong_confirmation_name_deletes_nothing() {
         String leader = signup("bd-h@band.app", "리더");
         Fixture f = fullyPopulatedBand(leader, "확인밴드");
@@ -212,6 +250,8 @@ class BandDeletionIntegrationTest extends PlanApiSupport {
         long bandId = createBand(leader, bandName);
         issueInvite(leader, bandId, null);                       // band_invites
         assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);   // band_plans → PREMIUM
+        // 자동 갱신 중인 구독은 삭제를 막으므로(B5) 해지 예약해 둔다 — 스토어 토큰은 남아 있다.
+        assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
 
         long roomId = createRoom(leader, bandId, "합주실");
         long reservationId = createReservation(leader, bandId, roomId);

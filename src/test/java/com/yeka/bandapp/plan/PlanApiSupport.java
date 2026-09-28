@@ -48,6 +48,11 @@ public abstract class PlanApiSupport extends BoardApiSupport {
         return verifyGoogle(token, bandId, tokenFor(bandId));
     }
 
+    /** 맛보기 쿠폰 사용(밴드장). */
+    protected ResponseEntity<String> redeemCoupon(String token, long bandId, String code) {
+        return post(planPath(bandId) + "/coupons/redeem", "{\"code\":\"" + code + "\"}", token);
+    }
+
     protected ResponseEntity<String> verifyGoogle(String token, long bandId, String purchaseToken) {
         return post(planPath(bandId) + "/google/verify",
                 "{\"purchaseToken\":\"" + purchaseToken + "\"}", token);

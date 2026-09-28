@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../plan/data/iap_service.dart';
 
 /// 계정 — 내 정보 표시와 회원 탈퇴.
 class AccountScreen extends ConsumerStatefulWidget {
@@ -45,6 +46,22 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             style:
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.6),
           ),
+          const SizedBox(height: 10),
+          // 탈퇴는 막으면 안 된다(Play 계정 삭제 정책) — 대신 결제가 이어진다는 것을 먼저 알린다(B5).
+          const Text(
+            'Google Play 로 결제한 프리미엄 구독은 탈퇴해도 자동으로 해지되지 않아요. '
+            '결제했다면 먼저 Play 스토어에서 해지해 주세요.',
+            style:
+                TextStyle(fontSize: 12, color: AppColors.danger, height: 1.6),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: _openManageSubscriptions,
+              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+              child: const Text('Google Play 에서 구독 관리'),
+            ),
+          ),
           const SizedBox(height: 16),
           OutlinedButton(
             onPressed: _busy ? null : () => _withdraw(isEmail),
@@ -81,6 +98,12 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             const Text(
               '이 작업은 되돌릴 수 없어요.',
               style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Play 스토어 구독은 탈퇴와 별개예요. 해지하지 않으면 계속 청구돼요.',
+              style: TextStyle(
+                  fontSize: 12.5, color: AppColors.danger, height: 1.5),
             ),
             if (isEmail) ...[
               const SizedBox(height: 14),
@@ -122,6 +145,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       _toast('탈퇴하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _openManageSubscriptions() async {
+    final ok = await IapService.openManageSubscriptions();
+    if (!ok) {
+      _toast('Play 스토어를 열지 못했어요. Play 스토어 › 결제 및 구독 › 구독에서 확인해 주세요.');
     }
   }
 

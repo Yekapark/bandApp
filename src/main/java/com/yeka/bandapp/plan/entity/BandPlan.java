@@ -184,6 +184,15 @@ public class BandPlan extends BaseTimeEntity {
         return tier == PlanTier.PREMIUM;
     }
 
+    /**
+     * 스토어 결제로 PREMIUM 이고 해지 예약도 안 했다 = 다음 주기에 Google 이 또 청구한다.
+     * 쿠폰 PREMIUM(스토어 없음)·해지 예약·FREE(보류 뒤 토큰만 남은 것 포함)는 false.
+     * 이 밴드를 지우면 청구는 계속되는데 반영할 밴드가 없어진다(LAUNCH_REVIEW B5).
+     */
+    public boolean isAutoRenewingStoreSubscription() {
+        return isPremium() && store != null && !isCanceled();
+    }
+
     public boolean isFree() {
         return tier == PlanTier.FREE;
     }

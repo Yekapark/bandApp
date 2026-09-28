@@ -7,6 +7,7 @@ class BandPlan {
     this.startedAt,
     this.expiresAt,
     this.canceled = false,
+    this.autoRenewing = false,
   });
 
   /// FREE | PREMIUM
@@ -22,6 +23,10 @@ class BandPlan {
   /// 해지 예약됨. PREMIUM 인 채로 true 면 "결제한 기간은 남아 있지만 갱신하지 않는다" 는 뜻이다.
   /// 해지해도 [expiresAt] 까지는 혜택이 그대로고, 그 뒤에 서버 배치가 무료로 내린다.
   final bool canceled;
+
+  /// Google Play 자동 갱신 구독 중(해지 예약 아님). 이 밴드는 다음 해에도 청구되므로 서버가 삭제를 막고,
+  /// 앱은 삭제·위임·탈퇴 창에서 먼저 안내한다(LAUNCH_REVIEW B5). 쿠폰 프리미엄은 false.
+  final bool autoRenewing;
 
   bool get isPremium => tier == 'PREMIUM';
 
@@ -39,6 +44,7 @@ class BandPlan {
           ? null
           : DateTime.parse(json['expiresAt'] as String),
       canceled: json['canceled'] as bool? ?? false,
+      autoRenewing: json['autoRenewing'] as bool? ?? false,
     );
   }
 }

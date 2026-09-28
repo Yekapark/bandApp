@@ -25,16 +25,21 @@ public record PlanResponse(
 
         @Schema(description = "해지 예약됨. PREMIUM 인 채로 true 면 \"결제 기간은 남아 있지만 갱신하지 않는다\" 는 뜻이고, "
                 + "expiresAt 이 지나면 야간 배치가 FREE 로 내린다. 해지해도 남은 기간의 혜택은 그대로다.")
-        boolean canceled
+        boolean canceled,
+
+        @Schema(description = "Google Play 자동 갱신 구독 중(PREMIUM·스토어 결제·해지 예약 아님). 이 밴드는 다음 주기에 "
+                + "또 청구되므로 삭제할 수 없고(409 BAND_HAS_ACTIVE_SUBSCRIPTION), 앱은 탈퇴·위임 창에서 안내한다. "
+                + "쿠폰 PREMIUM 은 false.")
+        boolean autoRenewing
 ) {
 
     public static PlanResponse from(PlanView view) {
         return new PlanResponse(view.tier().name(), view.mediaRetentionDays(), view.startedAt(),
-                view.expiresAt(), view.canceled());
+                view.expiresAt(), view.canceled(), view.autoRenewing());
     }
 
     public static PlanResponse from(BandPlan plan) {
         return new PlanResponse(plan.getTier().name(), plan.retentionDaysOrNull(), plan.getStartedAt(),
-                plan.getExpiresAt(), plan.isCanceled());
+                plan.getExpiresAt(), plan.isCanceled(), plan.isAutoRenewingStoreSubscription());
     }
 }

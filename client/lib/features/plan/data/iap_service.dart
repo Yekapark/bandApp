@@ -1,4 +1,5 @@
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Play Billing(인앱결제)을 얇게 감싼다. 결제 자체는 스토어에서 일어나고, 성공하면 구매 토큰을
 /// 서버(`/plan/google/restore`·`/plan/google/verify`)로 보내 검증받는다 — 이 클래스는 스토어 쪽만 담당한다.
@@ -21,6 +22,11 @@ class IapService {
   static final Uri manageSubscriptionUrl = Uri.parse(
       'https://play.google.com/store/account/subscriptions'
       '?sku=$productId&package=com.yeka.bandule');
+
+  /// Play 스토어 구독 관리 화면을 외부 앱으로 연다. 못 열면 false.
+  static Future<bool> openManageSubscriptions() => launchUrl(
+      manageSubscriptionUrl,
+      mode: LaunchMode.externalApplication);
 
   Future<bool> isAvailable() => _iap.isAvailable();
 

@@ -199,10 +199,6 @@ class PlanCouponIntegrationTest extends PlanApiSupport {
         assertThat(usedCount("NOLEAK01")).isEqualTo(1);
     }
 
-    private ResponseEntity<String> redeemCoupon(String token, long bandId, String code) {
-        return post(planPath(bandId) + "/coupons/redeem", "{\"code\":\"" + code + "\"}", token);
-    }
-
     /** 운영자가 하는 발급 INSERT 와 같은 형태(V12 주석의 예시). */
     private void insertCoupon(String code, int grantDays, Integer maxUses, Instant expiresAt) {
         jdbc.update("insert into plan_coupons (code, grant_days, max_uses, expires_at, created_at) "

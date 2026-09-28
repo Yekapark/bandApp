@@ -30,5 +30,12 @@ void main() {
     test('defaults to FREE when tier missing', () {
       expect(BandPlan.fromJson(<String, dynamic>{}).tier, 'FREE');
     });
+
+    test('autoRenewing: 서버 값을 읽고, 없으면 false (옛 서버 응답)', () {
+      expect(
+          BandPlan.fromJson({'tier': 'PREMIUM', 'autoRenewing': true}).autoRenewing,
+          isTrue);
+      expect(BandPlan.fromJson({'tier': 'PREMIUM'}).autoRenewing, isFalse);
+    });
   });
 }

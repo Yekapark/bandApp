@@ -9,6 +9,9 @@ import '../../auth/application/auth_controller.dart';
 import '../../band/application/band_providers.dart';
 import '../../band/data/band_models.dart';
 import '../../band/data/band_repository.dart';
+import '../../plan/application/plan_providers.dart';
+import '../../plan/data/iap_service.dart';
+import '../../plan/data/plan_models.dart';
 
 const _permModes = ['LEADER_ONLY', 'ANYONE', 'APPROVAL_REQUIRED'];
 
@@ -160,6 +163,13 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
   /// 밴드 삭제. 되돌릴 수 없어서 무엇이 지워지는지 먼저 보여주고,
   /// 밴드 이름을 정확히 입력해야만 삭제 버튼이 살아난다.
   Future<void> _deleteBand(int bandId, String bandName) async {
+    final plan = await _planOf(bandId);
+    if (!mounted) return;
+    // 자동 갱신 중이면 지워도 Google 은 계속 청구한다 — 서버도 막지만(409), 이름을 다 치게 하기 전에 알린다.
+    if (plan != null && plan.autoRenewing) {
+      await _explainActiveSubscription();
+      return;
+    }
     final controller = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -179,6 +189,14 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
               style: TextStyle(
                   fontSize: 12.5, color: AppColors.textDim, height: 1.5),
             ),
+            if (plan != null && plan.isPremium) ...[
+              const SizedBox(height: 8),
+              const Text(
+                '남은 프리미엄 기간도 함께 사라져요.',
+                style: TextStyle(
+                    fontSize: 12.5, color: AppColors.danger, height: 1.5),
+              ),
+            ],
             const SizedBox(height: 14),
             Text(
               '맞다면 밴드 이름 \'$bandName\' 을 그대로 입력해 주세요.',
@@ -250,16 +268,34 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
   }
 
   Future<void> _delegate(int bandId, BandMember m) async {
+    final plan = await _planOf(bandId);
+    if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: Text('${m.name} 님에게 밴드장을 넘길까요?',
             style: const TextStyle(fontSize: 16)),
-        content: const Text(
-          '위임하면 나는 일반 멤버가 되고, 되돌리려면 새 밴드장이 다시 위임해야 해요.',
-          style:
-              TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '위임하면 나는 일반 멤버가 되고, 되돌리려면 새 밴드장이 다시 위임해야 해요.',
+              style: TextStyle(
+                  fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+            ),
+            // 구독은 결제한 사람의 Google 계정에 묶여 있어 밴드장을 넘겨도 따라가지 않는다(B5).
+            if (plan != null && plan.autoRenewing) ...[
+              const SizedBox(height: 10),
+              const Text(
+                '프리미엄 구독은 결제한 사람의 Google 계정에 그대로 남아요. 위임한 뒤에도 해지나 '
+                '결제 수단 변경은 결제한 사람이 Play 스토어에서 해야 해요.',
+                style: TextStyle(
+                    fontSize: 12.5, color: AppColors.danger, height: 1.5),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -289,6 +325,53 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
       _toast('위임하지 못했어요.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 이 밴드의 요금제. 못 불러오면 null — 안내를 못 할 뿐 동작은 막지 않는다(서버가 마지막에 막는다).
+  Future<BandPlan?> _planOf(int bandId) async {
+    try {
+      // 캐시가 아니라 새로 받는다 — Play 에서 방금 해지했을 수 있다.
+      return await ref.refresh(bandPlanProvider(bandId).future);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 자동 갱신 중인 구독이 있어 밴드를 지울 수 없다는 안내.
+  Future<void> _explainActiveSubscription() async {
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('구독을 먼저 해지해 주세요',
+            style: TextStyle(fontSize: 16)),
+        content: const Text(
+          '이 밴드는 Google Play 프리미엄 구독이 자동 갱신 중이에요. 밴드를 지워도 결제는 멈추지 않아서, '
+          '먼저 해지해야 삭제할 수 있어요.\n\n'
+          '결제한 사람의 Google 계정에서 Play 스토어 › 결제 및 구독 › 구독으로 들어가 해지하면 돼요. '
+          '해지가 반영되면(보통 몇 분 안) 삭제할 수 있어요.',
+          style:
+              TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('닫기')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('구독 관리 열기'),
+          ),
+        ],
+      ),
+    );
+    if (open == true) await _openManageSubscriptions();
+  }
+
+  Future<void> _openManageSubscriptions() async {
+    final ok = await IapService.openManageSubscriptions();
+    if (!ok) {
+      _toast('Play 스토어를 열지 못했어요. Play 스토어 › 결제 및 구독 › 구독에서 확인해 주세요.');
     }
   }
 
