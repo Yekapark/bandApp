@@ -28,7 +28,7 @@
 | 🆓 **Cloudflare R2** (버킷 `bandule-prod`) | 사진·영상 저장, **매일 DB 백업**(`db-backups/`) | 무료 한도(저장 10GB 등) 초과분부터 과금 — 결제 수단 등록돼 있음 ❓ | Cloudflare › R2 |
 | 🆓 **Cloudflare Pages** | `bandule.com` 약관·개인정보처리방침·계정 삭제 안내 페이지 (`site/`) | 무료 | Cloudflare › Workers & Pages |
 | 🆓 **Cloudflare Email Routing** | `notice@bandule.com` 등 수신 → 개인 메일로 전달 | 무료 | Cloudflare › Email |
-| 🆓 **메일 발송 SMTP** | 가입 인증·비밀번호 재설정·신고 알림 | ❓ **Resend 무료**(`docs/EMAIL.md`) 또는 **Gmail SMTP**(LAUNCH_REVIEW L1) — 서버 `.env.prod` 의 `MAIL_SMTP_HOST` 로 확인 | Resend 대시보드 / Google 계정 앱 비밀번호 |
+| 🆓 **Resend** (메일 발송 SMTP) | 가입 인증·비밀번호 재설정·신고 알림 | 무료(일 100통·월 3,000통). 넘으면 유료 플랜 필요 — 서버 `smtp.resend.com` 확인(2026-09-28) | Resend 대시보드 · `docs/EMAIL.md` |
 | 🆓 **Firebase** — 운영 `bandule-b94d2`, 개발 `bandapp-dev-67c6f` | 푸시(FCM), 테스터 배포(App Distribution) | 무료(Spark) ❓ | Firebase 콘솔 |
 | 🆓 **Google Cloud 프로젝트** | Play Developer API 서비스 계정(구매 검증), Pub/Sub 토픽·push 구독(결제 알림 RTDN) | Pub/Sub 무료 한도 안 ❓ 결제 계정 연결 여부 확인 | Google Cloud 콘솔 › 결제 |
 | 🆓 **카카오 개발자 앱** | 카카오 로그인, 장소 검색, 지도 | 무료 한도 안 | developers.kakao.com |
@@ -93,7 +93,7 @@
 - [ ] **Google Cloud** — Play Developer API 서비스 계정 키 폐기, Pub/Sub push 구독·토픽 삭제, 쓸 일이 없으면 프로젝트 종료(결제 계정 연결 해제).
 - [ ] Play Console › 수익 창출 설정 › 실시간 개발자 알림 토픽 비우기.
 - [ ] **카카오 개발자 앱** 삭제(또는 비활성화) — 앱 키 무효화.
-- [ ] 메일 발송 — Resend 도메인·API 키 삭제 / Gmail 앱 비밀번호 폐기.
+- [ ] 메일 발송 — Resend 도메인·API 키 삭제.
 - [ ] Cloudflare Email Routing 규칙, Pages 프로젝트(약관 사이트)는 **공지 기간 동안 유지**한 뒤 삭제.
 - [ ] UptimeRobot 모니터 삭제.
 - [ ] GitHub — Actions 시크릿(SSH 키·토큰) 삭제, 서버에 등록했던 배포용 SSH 키 폐기, 저장소는 보관(Archive).

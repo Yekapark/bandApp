@@ -1,5 +1,26 @@
 # 문제 기록
 
+## 2026-09-28 — 메일 발송 업체가 문서마다 달랐다, 방침에 위탁 업체가 빠졌다
+
+**증상** — `docs/EMAIL.md`·`.env.prod.example` 은 Resend 인데, LAUNCH_REVIEW L1·설정 기본값(`application.yml`·
+`docker-compose.prod.yml`·`.env.example`)·NEXT.md 는 예전 발신 업체를 가리켰다. 개인정보처리방침에는
+어느 쪽도, 서버 호스팅(Vultr)도, 매일 R2 로 올라가는 DB 백업도 없었다(LAUNCH_REVIEW L1).
+
+**원인** — 처음 쓰던 발신 업체에서 Resend 로 옮겼는데, 코드 기본값과 예전 문서를 같이 바꾸지 않았다. 서버 `.env.prod` 는 git 에 없어서 저장소만 보면 어느 쪽인지 알 수 없었다. 방침은 처음 쓸 때
+"사진·영상 → Cloudflare" 만 생각했고, 백업 스크립트(`deploy/backup/pg-backup.sh`)가 나중에 생기면서 빠졌다.
+
+**해결** — Claude 세션엔 SSH 가 없어서, 운영 점검 워크플로(`prod-check.yml`)에 서버 `.env.prod` 의 `MAIL_SMTP_HOST`
+**호스트 이름만** 체크 주석으로 남기는 단계를 넣고 브랜치에서 `workflow_dispatch` 로 돌렸다 → `smtp.resend.com`.
+쓰지 않는 예전 발신 설정은 모든 파일에서 걷어 냈다: 설정 기본값·견본을 Resend(465/SSL, 사용자명 `resend`)로, EMAIL.md 의
+전환 절차 삭제, NEXT.md·TROUBLESHOOTING·코드 주석의 발신 업체 언급을 Resend/중립으로. (메일을 **받는 주소**의 예시 —
+테스터 계정, 데모 주소, 테스트의 수신자 — 는 발송과 무관해 그대로 뒀다.) 방침은 제3조 DB 백업 7일,
+제6조 Vultr·Resend·Cloudflare(백업·IP·문의 메일), 제7조 Cloudflare 백업·문의 메일과 Resend, 서버가 서울이라 이전 아님.
+
+**확인법** — GitHub Actions › 운영 점검 실행의 주석 "메일 발신 호스트". 설정 파일의 `MAIL_SMTP_HOST` 기본값이 모두 `smtp.resend.com` 이어야 한다.
+`https://bandule.com/privacy/` 제6·7조에 Vultr·Resend 가 보여야 한다(Pages 배포 후).
+
+---
+
 ## 2026-09-28 — 로그아웃해도 그 폰으로 이전 계정의 푸시가 계속 왔다
 
 **증상** — (코드 검토로 발견) 로그아웃한 뒤에도 그 폰으로 이전 계정의 일정·정산 알림이 왔다. 공용·가족 폰이면
@@ -573,7 +594,7 @@ ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && sh deploy/b
    가입**을 4건 돌렸다(운영 DB에). `bandule.com` 은 실도메인이라 `EmailPolicy` 예약 도메인
    필터를 통과했지만 그 사서함들은 없다.
 2. 가입 때마다 `AuthService.signup` 이 **인증번호 메일을 자동 발송**했다. 없는 주소 →
-   Gmail 이 몇 시간 재시도 후 반송 통지(NDR)를 발신 계정으로 보냄. 4건이 시차 두고 도착해
+   발신 서버가 몇 시간 재시도 후 반송 통지(NDR)를 발신 계정으로 보냄. 4건이 시차 두고 도착해
    "자꾸 오는" 것처럼 보였다. 크론·재발송 루프는 아니다.
 
 **해결** — 가입 시 인증번호 자동 발송을 **제거**했다(`AuthService.signup`).
@@ -925,8 +946,8 @@ DB 를 보니 실제로 계정이 있었다. `users.id = 9`, `testuser12345@exam
    같은 전형적인 값을 넣어 본다. 계정 생성 시각이 정확히 반송 시각과 같은 것도 그 그림에 맞는다.
    (다만 **어느 IP 에서 왔는지 확인하기 전까지는 단정하지 않는다** — 확인법은 아래.)
 
-이게 왜 위험한가: 발송이 Gmail SMTP 한 계정에 얹혀 있다. 반송이 쌓이면 발신 평판이 깎이고
-Google 이 발송을 정지시킨다. 그러면 인증 메일만 죽는 게 아니라 **비밀번호 재설정과 신고 접수
+이게 왜 위험한가: 발송이 SMTP 발신 계정 하나에 얹혀 있다. 반송이 쌓이면 발신 평판이 깎이고
+메일 업체가 발송을 정지시킨다. 그러면 인증 메일만 죽는 게 아니라 **비밀번호 재설정과 신고 접수
 알림까지 같이 죽는다.** 게다가 비밀번호 재설정 요청은 IP 당 분당 20회 제한뿐이라, 남의 주소로
 **분당 20통**을 대신 쏘는 중계기로도 쓸 수 있었다(계정이 있는 주소에 한해).
 
@@ -1101,7 +1122,7 @@ flutter build appbundle --release --flavor prod \
 **해결** — 그 5개(`MAIL_SMTP_USERNAME`, `MAIL_SMTP_PASSWORD`, `MAIL_FROM`,
 `REPORT_NOTIFY_USER_IDS`, `REPORT_NOTIFY_EMAILS`)를 `app` `environment:` 에 추가.
 `main` 머지 → 자동 배포로 서버 반영된다.
-**앱 비밀번호(`MAIL_SMTP_PASSWORD`)는 2026-09-07 대화 중 노출됐으니 폐기·재발급이 먼저다**
+**SMTP 비밀번호(`MAIL_SMTP_PASSWORD`)는 2026-09-07 대화 중 노출됐으니 폐기·재발급이 먼저다**
 (NEXT.md §1-Y). 재발급 값을 `.env.prod`(서버·로컬 둘 다)에 넣고 배포해야 실제로 나간다.
 
 **확인법**

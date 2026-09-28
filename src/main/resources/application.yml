@@ -25,20 +25,20 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}          # 운영은 requirepass 필수. 로컬은 비워 둔다
   mail:
-    # SMTP 제공자 설정. app.mail.from 이 비어 있으면 EmailSender 가 아예 시도하지 않으므로,
-    # 계정 정보가 없는 로컬 개발에서도 안전하다.
-    host: ${MAIL_SMTP_HOST:smtp.gmail.com}
-    port: ${MAIL_SMTP_PORT:587}
-    username: ${MAIL_SMTP_USERNAME:}
+    # SMTP 제공자 = Resend(docs/EMAIL.md). app.mail.from 이 비어 있으면 EmailSender 가 아예 시도하지
+    # 않으므로, 계정 정보가 없는 로컬 개발에서도 안전하다.
+    host: ${MAIL_SMTP_HOST:smtp.resend.com}
+    port: ${MAIL_SMTP_PORT:465}
+    username: ${MAIL_SMTP_USERNAME:resend}
     password: ${MAIL_SMTP_PASSWORD:}
     properties:
       mail:
         smtp:
           auth: true
           starttls:
-            enable: ${MAIL_SMTP_STARTTLS:true}
+            enable: ${MAIL_SMTP_STARTTLS:false}
           ssl:
-            enable: ${MAIL_SMTP_SSL:false}
+            enable: ${MAIL_SMTP_SSL:true}
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000

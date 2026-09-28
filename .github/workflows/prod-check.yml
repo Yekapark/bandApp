@@ -66,7 +66,7 @@ jobs:
               -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" \
               'QUIET=1 sh -s' < deploy/prod-check.sh
 
-      # 어떤 메일 업체로 보내고 있는지 — 문서끼리 엇갈린 적이 있어서(Resend / Gmail SMTP) 서버 값을 주석으로 남긴다.
+      # 어떤 메일 업체로 보내고 있는지 — 문서끼리 엇갈린 적이 있어서 서버 값을 주석으로 남긴다(2026-09-28: smtp.resend.com).
       # 호스트 이름만 뽑는다(비밀번호·계정은 출력하지 않는다). 개인정보처리방침의 위탁 업체와 맞는지 볼 때 쓴다.
       - name: 메일 발신 설정
         if: env.DEPLOY_HOST != ''

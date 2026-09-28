@@ -70,9 +70,11 @@
 
 | 받는 곳 | 무엇을 | 왜 |
 |---|---|---|
+| **Vultr** (The Constant Company, LLC) | 서버·DB 전체 | 운영 서버 호스팅. **서울 데이터센터**(`64.176.231.126`) — 국외 이전 아님 |
 | **카카오** (Kakao Corp.) | 카카오 회원번호·이메일·닉네임 | 카카오 로그인 |
 | **카카오** | 검색어, 주소 | 합주실 지도·장소 검색·주소→좌표 변환 |
-| **Cloudflare** | 올린 사진·영상, 접속 요청 | 파일 보관(R2), 트래픽 중계 |
+| **Cloudflare** | 올린 사진·영상, 접속 요청, **매일 DB 백업(회원정보 전체, 7개 보관)**, 문의 메일 | 파일 보관(R2 `bandule-prod`, 백업은 `db-backups/` — `deploy/backup/pg-backup.sh`), 트래픽 중계, `notice@` 수신 전달(Email Routing) |
+| **Resend** (Plus Five Five, Inc.) | 받는 사람 이메일, 메일 내용 | 인증·비밀번호 재설정·신고 알림 발송(SMTP `smtp.resend.com` — 2026-09-28 서버 확인, `docs/EMAIL.md`) |
 | **Google** (Firebase) | 기기 푸시 토큰, 알림 내용 | 푸시 알림 발송 |
 | **Google** (Play) | 구매 토큰, 결제한 밴드 표시(`band-{밴드 id}`, 구매할 때 obfuscatedAccountId 로 넣음 — 개인을 식별하지 않는다) | 구독 결제 검증·상태 조회 (Play Developer API). 결제 자체도 Google 이 처리한다 |
 
@@ -82,11 +84,12 @@
 
 | 받는 곳 | 나라 | 항목 |
 |---|---|---|
-| Cloudflare, Inc. | 미국 (전 세계 분산) | 사진·영상 |
+| Cloudflare, Inc. | 미국 (전 세계 분산) | 사진·영상, DB 백업(7일), 문의 메일 |
+| Plus Five Five, Inc. (Resend) | 미국 | 받는 사람 이메일, 메일 내용 |
 | Google LLC | 미국 | 기기 푸시 토큰, 알림 제목·내용 |
 | Google LLC | 미국 | 구매 토큰 (구독 결제 검증) |
 
-> 카카오는 국내 사업자라 국외 이전에 해당하지 않는다.
+> 카카오는 국내 사업자라 국외 이전에 해당하지 않는다. Vultr 는 미국 회사지만 서버가 서울이라 이전이 아니다(위탁만).
 
 ---
 
