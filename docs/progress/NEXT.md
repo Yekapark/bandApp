@@ -167,14 +167,14 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --flavor dev --dart-define
 | 증상 | 뜻 |
 |---|---|
 | 로그에 `[email] 발신 계정 미설정` | `MAIL_FROM` 이 앱 컨테이너까지 안 갔다 → `up -d app` 로 재기동 (restart 아님) |
-| 로그에 `[email] 발송 실패` | SMTP 인증·주소 형식 → 앱 비밀번호, `MAIL_FROM` 의 꺾쇠 |
+| 로그에 `[email] 발송 실패` | SMTP 인증·주소 형식 → Resend API 키(`MAIL_SMTP_PASSWORD`), `MAIL_FROM` 의 꺾쇠 |
 | 로그에 mail 줄이 아예 없음 | **접수 자체가 안 됐다.** `SELECT id,status FROM reports ORDER BY id DESC LIMIT 5;` — 같은 신고자+대상에 OPEN 이 이미 있으면 409 라 새 행이 안 생긴다 |
 
 **참고**
 
 - `EmailSender.send()` 는 **성공 시 로그를 안 남긴다.** mail 줄이 없다고 실패한 게 아니다.
-- `MAIL_FROM` 은 `밴듈 <주소@gmail.com>` 처럼 **꺾쇠 필수.** 없으면 `AddressException`.
-- 앱 비밀번호는 2026-09-07 노출 → 2026-09-08 재발급·반영 완료(§1-A).
+- `MAIL_FROM` 은 `밴듈 <notice@bandule.com>` 처럼 **꺾쇠 필수.** 없으면 `AddressException`.
+- 발송은 Resend 로 한다(`docs/EMAIL.md`). 서버에서 `smtp.resend.com` 확인(2026-09-28).
 - 메일 본문·조회 쿼리는 `ReportMail`, `ReportMailTest` 가 지킨다.
 - 운영자가 신고를 받고 할 수 있는 일은 [docs/MODERATION.md](../MODERATION.md) — 앱으로 할 수
   있는 건 없고 밴드장 연락 또는 DB 직접.
@@ -189,7 +189,7 @@ cd C:\band\bandApp\client; flutter run -d R3CX40J7QJE --flavor dev --dart-define
 | ~~기존 앱 지우고 재설치~~ | ✅ 완료 | 서명이 바뀐 뒤로는 그냥 업데이트된다 |
 | ~~Cloudflare Pages 연결~~ | ✅ 완료 (2026-09-08) | `bandule.com` · `/privacy/` · `/terms/` 라이브(200). `site/` 폴더가 그대로 게시된다 |
 | ~~ProGuard 켜기~~ | ✅ 완료(코드) | `client/android/app/build.gradle.kts` 의 release 에 `isMinifyEnabled`/`isShrinkResources` = true, `proguard-rules.pro` 에 카카오 keep. **실기기 릴리스 빌드로 지도·로그인·푸시 재확인은 아직 — 스토어 제출 빌드 뽑을 때 같이** |
-| ~~Gmail 앱 비밀번호 발급~~ | ✅ 완료 (2026-09-08) | 재발급분이 서버·로컬 `.env.prod` 에 반영됨(§1-A). 신고·재설정·인증 메일 나간다 |
+| ~~메일 발송 계정~~ | ✅ 완료 | Resend 로 발송(`docs/EMAIL.md`). 신고·재설정·인증 메일 나간다 |
 
 **릴리스 서명 키가 생겼다 (2026-09-06).** `client/android/bandule-release.jks`, 인증서
 `CN=yeka, L=seoul`. `android/key.properties` 가 있으면 그 키로 서명하고 없으면 디버그 키로

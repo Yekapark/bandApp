@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@link EmailPolicy} 단위 테스트 — Docker 불필요.
  *
  * <p>메일을 절대 받을 수 없는 예약 도메인(RFC 2606/6761)을 가입에서 거른다. 이게 없으면 인증 메일이
- * 100% 반송돼 Gmail 발신 평판이 깎이고, 그러면 비밀번호 재설정·신고 알림까지 같이 죽는다.
+ * 100% 반송돼 발신 평판이 깎이고, 그러면 비밀번호 재설정·신고 알림까지 같이 죽는다.
  */
 class EmailPolicyTest {
 

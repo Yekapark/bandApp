@@ -1,8 +1,8 @@
 # 운영 메일 설정
 
-`notice@bandule.com` 은 수신과 발신을 서로 다른 서비스가 담당한다.
+`notice@bandule.com` 은 수신과 발신을 서로 다른 서비스가 담당한다. **발송은 Resend 하나만 쓴다.**
 
-- 수신: Cloudflare Email Routing → 운영자 Gmail 로 전달
+- 수신: Cloudflare Email Routing → 운영자 개인 메일함으로 전달
 - 발신: Resend SMTP → 가입 인증·비밀번호 재설정·신고 알림 발송
 
 Cloudflare Email Sending 은 Workers Paid 요금제가 필요하므로 사용하지 않는다. Resend 무료
@@ -32,7 +32,7 @@ Resend **API Keys → Create API Key** 에서 다음과 같이 만든다.
 
 ## 3. 서버 환경변수
 
-서버 `/opt/bandapp/.env.prod` 의 기존 `MAIL_*` 값을 아래처럼 교체한다.
+서버 `/opt/bandapp/.env.prod` 의 `MAIL_*` 값(2026-09-28 서버에서 `smtp.resend.com` 확인).
 
 ```dotenv
 MAIL_SMTP_HOST=smtp.resend.com
@@ -47,13 +47,9 @@ MAIL_FROM=밴듈 <notice@bandule.com>
 `MAIL_SMTP_USERNAME` 은 사용자에게 보이는 주소가 아니라 Resend 가 요구하는 고정 SMTP 사용자명이다.
 사용자에게 표시되는 발신자는 `MAIL_FROM` 이 결정한다.
 
-## 4. 무중단 전환 순서
+## 4. 값을 바꾼 뒤
 
-1. SMTP host/port/TLS/SSL 환경변수를 지원하는 앱 버전을 먼저 배포한다.
-2. Resend 도메인 상태가 `Verified` 인지 확인한다.
-3. 발송 전용 API 키를 만든다.
-4. 서버 `.env.prod` 의 일곱 `MAIL_*` 값을 교체한다.
-5. 앱 컨테이너만 다시 만든다.
+1. 앱 컨테이너만 다시 만든다(`restart` 는 `.env.prod` 를 다시 읽지 않는다).
 
 ```bash
 cd /opt/bandapp
@@ -63,8 +59,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T app \
 # 7 이 나와야 한다.
 ```
 
-기존 서버 설정에는 `MAIL_SMTP_HOST` 등이 없으므로 새 앱을 먼저 배포해도 Gmail 기본값으로
-계속 발송한다. Resend 인증과 키 준비가 끝난 뒤 환경변수를 바꿔야 전환 중 공백이 없다.
+2. 운영 점검 워크플로(`.github/workflows/prod-check.yml`)의 "메일 발신 호스트" 주석이 `smtp.resend.com` 인지 본다.
 
 ## 5. 확인
 
