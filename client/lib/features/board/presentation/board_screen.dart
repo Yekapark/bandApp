@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/media/stale_url_guard.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -123,6 +124,14 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
                 final post = feed.posts[i];
                 return _PostCard(
                   post: post,
+                  // 썸네일 주소는 10분짜리 서명 URL 이다(LAUNCH_REVIEW U2). 피드를 오래 띄워 두면 깨지므로 목록을
+                  // 다시 받아 새 주소를 얻는다. 여러 장이 한꺼번에 깨지니 밴드당 한 번만, 짧은 간격으로는 반복하지 않는다.
+                  onThumbnailExpired: () {
+                    if (StaleUrlGuard.allow(('feed', band.id),
+                        gap: const Duration(minutes: 2))) {
+                      ref.read(boardFeedProvider(band.id).notifier).refresh();
+                    }
+                  },
                   onTap: () async {
                     await context.push(Routes.post(post.id));
                     ref.invalidate(
@@ -143,10 +152,15 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
 }
 
 class _PostCard extends StatelessWidget {
-  const _PostCard({required this.post, required this.onTap});
+  const _PostCard({
+    required this.post,
+    required this.onTap,
+    required this.onThumbnailExpired,
+  });
 
   final PostSummary post;
   final VoidCallback onTap;
+  final VoidCallback onThumbnailExpired;
 
   @override
   Widget build(BuildContext context) {
@@ -214,12 +228,17 @@ class _PostCard extends StatelessWidget {
                     child: Image.network(
                       post.thumbnailUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: AppColors.surfaceAlt,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.broken_image_outlined,
-                            color: AppColors.textFaint),
-                      ),
+                      errorBuilder: (_, __, ___) {
+                        // build 중에는 provider 를 건드릴 수 없어 다음 프레임에 알린다.
+                        WidgetsBinding.instance.addPostFrameCallback(
+                            (_) => onThumbnailExpired());
+                        return Container(
+                          color: AppColors.surfaceAlt,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.broken_image_outlined,
+                              color: AppColors.textFaint),
+                        );
+                      },
                       loadingBuilder: (context, child, progress) {
                         if (progress == null) return child;
                         return Container(

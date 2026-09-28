@@ -84,8 +84,10 @@ class BoardFeed extends FamilyAsyncNotifier<BoardFeedState, int> {
 typedef PostKey = ({int bandId, int postId});
 
 /// 게시글 상세(본문 + 첨부).
+/// 상세 화면을 닫으면 버린다(autoDispose) — 안의 사진·영상 주소가 10분짜리라, 캐시를 들고 있다가 나중에
+/// (알림 등으로) 다시 열면 만료된 주소를 보여 주게 된다(LAUNCH_REVIEW U2).
 final postDetailProvider =
-    FutureProvider.family<PostDetail, PostKey>((ref, key) async {
+    FutureProvider.autoDispose.family<PostDetail, PostKey>((ref, key) async {
   return ref.watch(boardRepositoryProvider).detail(
         bandId: key.bandId,
         postId: key.postId,
