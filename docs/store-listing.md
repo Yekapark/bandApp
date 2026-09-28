@@ -97,16 +97,17 @@
 
 ■ 문의
 
-qkrwkddjs777@naver.com
+notice@bandule.com
 ```
 
 ## 연락처 이메일
 
 ```
-qkrwkddjs777@naver.com
+notice@bandule.com
 ```
 
-> 약관·개인정보처리방침·계정 삭제 안내에 적은 주소와 같다.
+> 약관·개인정보처리방침·계정 삭제 안내·정지 안내(앱)에 적은 주소와 같다(LAUNCH_REVIEW L2, 2026-09-29 통일 —
+> 예전에는 여기만 개인 메일이었다). **Play Console 에 넣기 전에 다른 메일에서 이 주소로 보내 실제로 받는지 확인한다.**
 > 웹사이트 `https://bandule.com`, 개인정보처리방침 `https://bandule.com/privacy/`.
 
 ---
