@@ -82,6 +82,7 @@ TEMPLATE = """<!doctype html>
   footer {{ margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line);
             color: var(--dim); font-size: 13px; }}
   footer a {{ color: var(--accent); }}
+  footer .biz {{ margin: 12px 0 0; font-size: 12px; line-height: 1.7; }}
 </style>
 </head>
 <body>
@@ -90,6 +91,7 @@ TEMPLATE = """<!doctype html>
   {body}
   <footer>
     <a href="/privacy/">개인정보처리방침</a> · <a href="/terms/">이용약관</a> · <a href="/account-deletion/">계정 삭제</a>
+    <p class="biz">{business}</p>
   </footer>
 </div>
 </body>
@@ -115,6 +117,7 @@ INDEX = """<!doctype html>
   h1 { font-size:34px; letter-spacing:4px; margin:0 0 10px; color:var(--accent); }
   p { color:var(--dim); font-size:15px; line-height:1.8; margin:0 0 28px; }
   a { color:var(--accent); font-size:14px; margin:0 10px; }
+  .biz { margin:36px 0 0; font-size:12px; line-height:1.7; }
 </style>
 </head>
 <body>
@@ -122,6 +125,7 @@ INDEX = """<!doctype html>
     <h1>BANDULE</h1>
     <p>우리 밴드 합주, 한 곳에서 정리하자</p>
     <a href="/privacy/">개인정보처리방침</a><a href="/terms/">이용약관</a><a href="/account-deletion/">계정 삭제</a>
+    <p class="biz">__BUSINESS__</p>
   </div>
 </body>
 </html>
@@ -153,6 +157,17 @@ def body_of(path):
     return body
 
 
+# 판매자 정보 — 유료 구독을 파는 통신판매업자라 사이트 모든 쪽 아래에 표시한다(전자상거래법 제10조, LAUNCH_REVIEW L3).
+# 바뀌면(이사·번호 변경) 여기와 앱 요금제 화면(plan_screen.dart `_sellerLine`)을 함께 고치고, 주소가 바뀌면
+# 통신판매업 변경신고도 한다(docs/SERVICES_AND_SHUTDOWN.md).
+BUSINESS = [
+    "상호 밴듈", "대표 박장언", "사업자등록번호 425-45-01193",
+    "통신판매업 신고 제2026-서울성북-1209호",
+    "서울시 성북구 보문사길 111 상가동 10호", "전화 010-6327-4017", "notice@bandule.com",
+]
+BUSINESS_HTML = " · ".join(BUSINESS)
+
+
 def check_agreement_versions():
     """가입 동의 기록의 버전(application.yml app.terms)이 게시할 문서의 시행일과 같은지 본다.
 
@@ -180,7 +195,7 @@ def check_agreement_versions():
 def main():
     check_agreement_versions()
     OUT.mkdir(exist_ok=True)
-    (OUT / "index.html").write_text(INDEX, encoding="utf-8", newline="\n")
+    (OUT / "index.html").write_text(INDEX.replace("__BUSINESS__", BUSINESS_HTML), encoding="utf-8", newline="\n")
     print("index.html")
 
     for slug, title, path in PAGES:
@@ -192,7 +207,7 @@ def main():
         target = OUT / slug
         target.mkdir(exist_ok=True)
         (target / "index.html").write_text(
-            TEMPLATE.format(title=title, body=html), encoding="utf-8", newline="\n")
+            TEMPLATE.format(title=title, body=html, business=BUSINESS_HTML), encoding="utf-8", newline="\n")
         print(f"{slug}/index.html  ({path.name})")
 
     print(f"\n== site/ 완성. Cloudflare Pages 에 이 폴더를 올리면 된다.")

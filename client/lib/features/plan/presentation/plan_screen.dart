@@ -401,6 +401,12 @@ class _CompareTable extends StatelessWidget {
 }
 
 /// 구매 전 고지. 가격은 스토어가 준 현지화 문자열(예: ₩19,000)을 쓰고, 아직 못 받았으면 빼고 쓴다.
+/// 판매자 정보 — 구독을 파는 화면에 표시한다(전자상거래법 제10조, LAUNCH_REVIEW L3). 사이트 하단(site/build.py
+/// `BUSINESS`)과 같게 유지한다.
+const _sellerLine = '판매자: 밴듈(대표 박장언) · 사업자등록번호 425-45-01193 · '
+    '통신판매업 제2026-서울성북-1209호 · 서울시 성북구 보문사길 111 상가동 10호 · '
+    '010-6327-4017 · notice@bandule.com';
+
 class _SubscriptionTerms extends StatelessWidget {
   const _SubscriptionTerms({required this.price});
 
@@ -444,6 +450,7 @@ class _SubscriptionTerms extends StatelessWidget {
           line('구독은 이 밴드 전체에 적용되고 밴드마다 따로 결제해요. 한 Google 계정으로 밴드 '
               '${IapService.productIds.length}개까지 결제할 수 있어요.'),
           line('이용약관·개인정보처리방침: bandule.com/terms · bandule.com/privacy'),
+          line(_sellerLine),
         ],
       ),
     );
