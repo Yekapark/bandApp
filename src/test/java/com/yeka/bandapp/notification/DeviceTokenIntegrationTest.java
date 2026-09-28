@@ -69,6 +69,50 @@ class DeviceTokenIntegrationTest extends NotificationApiSupport {
                 registerToken(user, "tok-" + seq.getAndIncrement(), "ANDROID").getStatusCode().value());
     }
 
+    /**
+     * 로그아웃 요청에 기기 토큰을 실으면 그 기기로 가던 푸시가 끊긴다(LAUNCH_REVIEW U1). 예전에는 앱이 토큰을 지운
+     * 뒤에 인증이 필요한 DELETE 를 불러 401 이 났고, 로그아웃한 폰에 이전 계정 알림이 계속 갔다.
+     */
+    @Test
+    void logout_with_device_token_stops_push_to_that_device() {
+        ResponseEntity<String> signup = post("/api/v1/auth/signup",
+                "{\"email\":\"dt-logout@band.app\",\"password\":\"pw12345678\",\"name\":\"유저\"}");
+        String access = body(signup).at("/data/tokens/accessToken").asText();
+        String refresh = body(signup).at("/data/tokens/refreshToken").asText();
+        registerToken(access, "tok-logout", "ANDROID");
+
+        ResponseEntity<String> res = post("/api/v1/auth/logout",
+                "{\"refreshToken\":\"" + refresh + "\",\"deviceToken\":\"tok-logout\"}");
+
+        assertThat(res.getStatusCode().value()).isEqualTo(204);
+        assertThat(deviceTokenRepository.findByToken("tok-logout")).isEmpty();
+    }
+
+    /** 세션이 만료돼 강제로 로그아웃된 기기(refresh 무효)도 푸시를 끊을 수 있다. */
+    @Test
+    void logout_with_an_expired_session_still_forgets_the_device() {
+        String user = signup("dt-expired@band.app", "유저");
+        registerToken(user, "tok-expired", "ANDROID");
+
+        ResponseEntity<String> res = post("/api/v1/auth/logout",
+                "{\"refreshToken\":\"not-a-valid-refresh\",\"deviceToken\":\"tok-expired\"}");
+
+        assertThat(res.getStatusCode().value()).isEqualTo(204);
+        assertThat(deviceTokenRepository.findByToken("tok-expired")).isEmpty();
+    }
+
+    /** 기기 토큰 없이 로그아웃하는 옛 앱도 그대로 된다. */
+    @Test
+    void logout_without_device_token_keeps_working() {
+        String user = signup("dt-notoken@band.app", "유저");
+        registerToken(user, "tok-kept", "ANDROID");
+
+        ResponseEntity<String> res = post("/api/v1/auth/logout", "{\"refreshToken\":\"whatever\"}");
+
+        assertThat(res.getStatusCode().value()).isEqualTo(204);
+        assertThat(deviceTokenRepository.findByToken("tok-kept")).isPresent();
+    }
+
     @Test
     void device_token_endpoints_require_authentication() {
         assertThat(post("/api/v1/notifications/device-tokens",

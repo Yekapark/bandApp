@@ -91,10 +91,14 @@ class AuthRepository {
     }
   }
 
-  Future<void> logout({required String refreshToken}) async {
+  /// 세션 정리. [deviceToken] 을 주면 서버가 이 기기의 푸시 토큰도 지운다 — 로그아웃한 폰에 이전 계정 알림이
+  /// 가지 않게(U1). 인증이 필요 없는 요청이라 토큰을 지운 뒤에도, 세션이 만료된 뒤에도 통한다.
+  Future<void> logout({required String refreshToken, String? deviceToken}) async {
     try {
-      await _dio
-          .post<dynamic>('/auth/logout', data: {'refreshToken': refreshToken});
+      await _dio.post<dynamic>('/auth/logout', data: {
+        'refreshToken': refreshToken,
+        if (deviceToken != null) 'deviceToken': deviceToken,
+      });
     } on DioException catch (_) {
       // 로그아웃은 멱등 — 실패해도 로컬 토큰은 지운다.
     }

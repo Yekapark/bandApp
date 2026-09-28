@@ -6,6 +6,7 @@ import com.yeka.bandapp.common.security.JwtProperties;
 import com.yeka.bandapp.common.security.JwtTokenProvider;
 import com.yeka.bandapp.common.security.RefreshTokenStore;
 import com.yeka.bandapp.common.security.TokenPair;
+import com.yeka.bandapp.notification.service.DeviceTokenService;
 import com.yeka.bandapp.user.dto.AuthResponse;
 import com.yeka.bandapp.user.dto.LoginRequest;
 import com.yeka.bandapp.user.dto.SignupRequest;
@@ -43,11 +44,12 @@ public class AuthService {
     private final KakaoProperties kakaoProperties;
     /** 가입 시점에 동의 사실을 남긴다 — 앱의 동의 화면을 두 가입 경로가 모두 거친다. */
     private final TermsAgreementService termsAgreements;
+    private final DeviceTokenService deviceTokenService;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                        JwtTokenProvider tokenProvider, RefreshTokenStore refreshTokenStore,
                        JwtProperties jwtProperties, KakaoClient kakaoClient, KakaoProperties kakaoProperties,
-                       TermsAgreementService termsAgreements) {
+                       TermsAgreementService termsAgreements, DeviceTokenService deviceTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
@@ -56,6 +58,7 @@ public class AuthService {
         this.kakaoClient = kakaoClient;
         this.kakaoProperties = kakaoProperties;
         this.termsAgreements = termsAgreements;
+        this.deviceTokenService = deviceTokenService;
     }
 
     @Transactional
@@ -136,13 +139,22 @@ public class AuthService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.REFRESH_TOKEN_INVALID));
     }
 
-    public void logout(String refreshToken) {
+    /**
+     * 로그아웃 — 세션(refresh) 정리 + 이 기기의 푸시 토큰 정리.
+     *
+     * <p>푸시 토큰을 여기서 지우는 이유 — 예전에는 앱이 로그아웃 뒤에 인증이 필요한
+     * {@code DELETE /device-tokens} 를 불렀는데, 그땐 이미 토큰을 지운 뒤라 401 이 나고 서버에 토큰이 남았다.
+     * 공용 폰이면 로그아웃한 사람의 일정·정산 알림이 다음 사람에게 보였다(LAUNCH_REVIEW U1). 로그아웃 요청 자체에
+     * 실어 보내면 인증 순서와 상관없이 지워진다. refresh 토큰이 이미 만료된 강제 로그아웃도 같다.
+     */
+    public void logout(String refreshToken, String deviceToken) {
         try {
             JwtTokenProvider.ParsedToken parsed = tokenProvider.parseRefresh(refreshToken);
             refreshTokenStore.remove(parsed.userId(), parsed.jti());
         } catch (BusinessException ignored) {
             // 이미 만료·무효한 토큰이면 정리할 것이 없다. 로그아웃은 멱등이다.
         }
+        deviceTokenService.forgetDevice(deviceToken);
     }
 
     private TokenPair issue(long userId) {

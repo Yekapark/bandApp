@@ -49,7 +49,7 @@
 | 10 | B3 | 높음 | 구매를 밴드에 묶기 (obfuscatedAccountId) | 🟡 2026-09-28 B2 와 한 PR(#103) 머지·배포. `band-{id}` 표시 + 서버 대조. +32 에서 실결제 확인 남음 |
 | 11 | B5 | 높음 | 밴드 삭제·탈퇴 시 구독 경고·차단 | 🟡 2026-09-28 서버 삭제 차단(409) + 앱 삭제·위임·탈퇴 안내. +32 에서 실기기 확인 남음 |
 | 12 | B4 | 높음 | 한 계정이 여러 밴드를 결제할 수 있게 (같은 값의 상품 5개) | 🟡 2026-09-28 코드 완료(#105)·배포. Play Console 에 `premium_yearly_2`~`_5` 생성·활성화 완료. +32 에서 밴드 2개 결제 확인 남음 |
-| 13 | U1 | 높음 | 로그아웃 후에도 푸시가 옴 | ⬜ |
+| 13 | U1 | 높음 | 로그아웃 후에도 푸시가 옴 | 🟡 2026-09-28 서버·앱 수정. +32 실기기에서 로그아웃 뒤 푸시 안 오는지 확인 남음 |
 | 14 | L1 | 높음 | 개인정보처리방침 위탁·국외이전 보완 | ⬜ |
 | 15 | U3 | 중간 | 스토어 빌드 스크립트 | ✅ 2026-09-27 `release_store.py` 첫 실행 통과 |
 | 16 | B6 | 중간 | 자동 갱신 구독자에게 만료 경고 | ⬜ |
@@ -123,7 +123,7 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 
 | ID | 심각도 | 증상 | 원인 | 해결방안 | 상태 |
 |---|---|---|---|---|---|
-| U1 | 높음 | 로그아웃해도 그 폰으로 이전 계정의 일정·정산 푸시가 계속 온다(공용 폰이면 다른 사람에게 노출) | `AuthController.logout()` 이 토큰 저장소를 먼저 비움 → `app.dart` 의 `push.stop()` 이 인증 없이 `DELETE /device-tokens` → 401 → 서버에 토큰 남음 | 로그아웃에서 `push.stop()` 을 먼저 await. 더 튼튼하게는 `/auth/logout` 본문에 `deviceToken` 을 실어 서버가 삭제 | ⬜ |
+| U1 | 높음 | 로그아웃해도 그 폰으로 이전 계정의 일정·정산 푸시가 계속 온다(공용 폰이면 다른 사람에게 노출) | `AuthController.logout()` 이 토큰 저장소를 먼저 비움 → `app.dart` 의 `push.stop()` 이 인증 없이 `DELETE /device-tokens` → 401 → 서버에 토큰 남음 | 로그아웃에서 `push.stop()` 을 먼저 await. 더 튼튼하게는 `/auth/logout` 본문에 `deviceToken` 을 실어 서버가 삭제 | 🟡 2026-09-28 — 둘 다 했다. 서버: `POST /auth/logout` 에 선택 필드 `deviceToken`, 받으면 `DeviceTokenService.forgetDevice` 로 그 토큰 행을 지운다(인증·소유자 확인 없이 — refresh 가 만료된 강제 로그아웃도 정리돼야 해서. 토큰 값을 아는 것이 곧 그 기기). 앱: `AuthController.logout()` 이 저장소를 비우기 **전에** 기기 토큰을 로그아웃 요청에 싣고 `push.stop(unregister: false)`, 세션 만료 강제 로그아웃도 같은 요청을 보낸다. `PushService.stop()` 은 끝에 `FirebaseMessaging.deleteToken()` 으로 기기 FCM 토큰을 폐기 — 서버 요청이 실패해도 이 기기로는 안 온다. 테스트: `DeviceTokenIntegrationTest` 3건, `client/test/logout_push_test.dart`. 남은 것: +32 실기기 확인 |
 | U2 | 중간 | 글을 본 지 10분 뒤 같은 글을 다시 열면 사진이 깨지고 영상 재생 실패 | presigned GET 10분 + `postDetailProvider` 가 autoDispose 아님 | autoDispose 로, 재생 오류 시 상세 재조회 후 1회 재시도, TTL 30~60분 검토(방침 "10분" 문구도 같이). 실기기 확인 | ⬜ |
 | U3 | 중간 | 스토어 AAB 를 손 명령으로 만든다. `dart_defines.json` 의 `API_BASE_URL` 이 localhost 라 옵션 하나 빠뜨리면 아무 데도 못 붙는 앱이 올라간다. `BUILD_LABEL` 이 없으면 "개발 빌드" 표시 | AAB 용 스크립트 없음 | `client/tools/release_store.py` | ✅ 2026-09-27 첫 실행 통과(서버 주소·16KB·targetSdk·업로드 키 서명 OK), AAB 0.1.0+30 생성 |
 | U4 | 낮음 | 구독 종료일이 "9월 10일 (목)" 처럼 연도 없이 나옴 | `Fmt.dateKoUtc` | 연도 포함 포매터 | ⬜ |

@@ -1,7 +1,10 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/token_storage.dart';
+import '../../notification/data/push_service.dart';
 import '../data/auth_models.dart';
 import '../data/auth_repository.dart';
 
@@ -85,11 +88,17 @@ class AuthController extends Notifier<AuthState> {
     await _apply(result);
   }
 
+  /// 로그아웃. **푸시 정리를 토큰을 지우기 전에** 한다 — 예전에는 토큰을 먼저 지운 뒤 인증이 필요한 해제 요청을
+  /// 보내 401 이 났고, 로그아웃한 폰에 이전 계정의 일정·정산 알림이 계속 갔다(LAUNCH_REVIEW U1). 이제 기기 토큰을
+  /// 로그아웃 요청에 실어 서버가 지우고, 기기의 FCM 토큰도 폐기한다.
   Future<void> logout() async {
     final refresh = _storage.current?.refreshToken;
-    if (refresh != null) {
-      await _repo.logout(refreshToken: refresh);
+    final push = ref.read(pushServiceProvider);
+    final deviceToken = push.currentToken;
+    if (refresh != null || deviceToken != null) {
+      await _repo.logout(refreshToken: refresh ?? '-', deviceToken: deviceToken);
     }
+    await push.stop(unregister: false);
     await _storage.clear();
     state = const AuthState.signedOut();
   }
@@ -109,8 +118,17 @@ class AuthController extends Notifier<AuthState> {
     state = AuthState(status: AuthStatus.authenticated, user: result.user);
   }
 
+  /// 세션 만료(refresh 실패)로 강제 로그아웃. 인증 없이 통하는 로그아웃 요청으로 이 기기의 푸시 토큰을 지운다 —
+  /// 안 그러면 다시 로그인하기 전까지 만료된 계정의 알림이 계속 온다(U1).
   void _onSessionExpired() {
     if (state.status == AuthStatus.unauthenticated) return;
+    final stale = _storage.current?.refreshToken;
+    final push = ref.read(pushServiceProvider);
+    final deviceToken = push.currentToken;
+    if (deviceToken != null) {
+      unawaited(_repo.logout(refreshToken: stale ?? '-', deviceToken: deviceToken));
+    }
+    unawaited(push.stop(unregister: false));
     _storage.clear();
     state = const AuthState.signedOut();
   }

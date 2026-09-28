@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * FCM 디바이스 토큰 등록/해제, 그리고 계정 탈퇴 시 알림 데이터 정리.
@@ -70,6 +71,19 @@ public class DeviceTokenService {
         if (deviceTokenRepository.deleteByUserIdAndToken(userId, token) == 0) {
             throw new BusinessException(ErrorCode.DEVICE_TOKEN_NOT_FOUND);
         }
+    }
+
+    /**
+     * 로그아웃한 기기 — 이 토큰으로 가던 푸시를 끊는다. 누구 소유든 지운다: 토큰은 기기에 하나라 "이 기기에 더 보내지
+     * 말라" 는 뜻이고, refresh 토큰이 만료된 채 강제 로그아웃된 기기도 정리해야 해서 소유자 확인을 요구하지 않는다
+     * (토큰 값을 아는 것이 곧 그 기기다). 없으면 조용히 넘어간다(멱등).
+     */
+    @Transactional
+    public void forgetDevice(String token) {
+        if (token == null || token.isBlank()) {
+            return;
+        }
+        deviceTokenRepository.deleteByTokenIn(List.of(token));
     }
 
     /** 계정 탈퇴·파기 시 — 그 사용자의 토큰과 알림 설정을 모두 제거한다. */
