@@ -1,5 +1,29 @@
 # 문제 기록
 
+## 2026-09-28 — 밴드 두 개의 밴드장이 두 번째 밴드를 결제할 수 없었다 (+ 결제 창 취소가 무시됐다)
+
+**증상** — (코드 검토로 발견, 출시 전) 구독은 밴드 단위인데, 1밴드를 프리미엄으로 올린 사람이 2밴드에서 결제하면
+Play 결제 창이 "이미 보유한 항목" 으로 막는다. 서버까지 오지도 않는다(LAUNCH_REVIEW B4).
+같이 찾은 것: 결제 창에서 취소하거나 결제 오류가 나면 요금제 화면 버튼이 잠긴 채 남을 수 있었다.
+
+**원인** — **Google 계정 하나는 같은 구독 상품을 동시에 하나만 가질 수 있다**(Play 정책·Billing 동작). 상품이
+`premium_yearly` 하나뿐이라 두 번째 구매는 같은 상품의 재구매가 된다. 취소 문제는 `in_app_purchase_android` 가
+취소·오류 결과를 **상품 id 가 빈** `PurchaseDetails` 로 보내는데, 앱이 상품 id 로 이벤트를 걸러 버렸기 때문이다.
+
+**해결** — 값·기간이 같은 구독 상품 5개(`premium_yearly`, `premium_yearly_2` … `_5`). 앱(`PurchaseSync.buy`)은 결제
+직전 `restorePurchases()` 로 이 계정이 가진 상품을 받아 빼고, `IapService.productIds` 순서로 첫 번째 안 가진 상품을
+결제한다. "이미 보유"(`BillingResponse.itemAlreadyOwned`)로 실패하면 그 상품을 가진 것으로 적고 다음 상품으로 다시
+띄운다. 다 가졌으면 "한 Google 계정으로는 밴드 5개까지" 안내. 서버는 `app.plan.billing.google-product-ids`
+(`PLAN_BILLING_GOOGLE_PRODUCT_IDS`, 기본 5개) 목록에 있는 상품만 PREMIUM — 옛 단수 설정 `PLAN_BILLING_GOOGLE_PRODUCT_ID`
+는 더 읽지 않는다. 어느 밴드의 구매인지는 상품이 아니라 구매에 적은 `band-{id}`(B3)로 정하므로 상품 번호와 밴드는
+관계없다. 취소·오류는 이 앱이 결제 창을 띄운 동안이면 빈 id 도 우리 것으로 본다.
+
+**확인법** — `test/purchase_sync_test.dart` 의 "밴드마다 결제" 묶음, `PlanPurchaseValidationIntegrationTest.a_purchase_of_another_premium_slot_grants_premium`,
+`StoreBillingPropertiesTest`. 실기기(Play Console 에 상품 5개가 활성화된 뒤): 밴드 A 결제 → 밴드 B 결제 시 결제 창이
+정상으로 뜨고 B 도 PREMIUM. 결제 창에서 취소하면 버튼이 바로 풀린다.
+
+---
+
 ## 2026-09-28 — 구독 중인 밴드를 지우거나 결제한 밴드장이 탈퇴해도 Google 결제는 계속됐다
 
 **증상** — (코드 검토로 발견, 출시 전) 밴드장이 PREMIUM 밴드를 삭제해도, 결제한 사람이 탈퇴하거나 밴드장을

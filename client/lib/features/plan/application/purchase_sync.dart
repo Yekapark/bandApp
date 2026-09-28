@@ -10,6 +10,18 @@ import '../data/iap_service.dart';
 import '../data/plan_repository.dart';
 import 'plan_providers.dart';
 
+/// 이 Google 계정이 PREMIUM 상품을 모두 가지고 있어 더 결제할 수 없다(B4).
+class NoPremiumSlotException implements Exception {
+  const NoPremiumSlotException();
+
+  static final String message =
+      '한 Google 계정으로는 밴드 ${IapService.productIds.length}개까지 프리미엄을 결제할 수 있어요. '
+      '다른 Google 계정으로 결제해 주세요.';
+
+  @override
+  String toString() => message;
+}
+
 /// 결제 흐름의 상태 — 요금제 화면이 버튼을 잠그고 풀 때 쓴다. 안내 문구는 [PurchaseSync] 가 직접 띄운다.
 enum PurchaseEventKind { pending, verified, failed, canceled }
 
@@ -64,6 +76,14 @@ class PurchaseSync {
 
   DateTime? _lastRestore;
 
+  /// 이 Google 계정이 지금 가진 PREMIUM 상품(해지 예약한 것 포함). 스토어가 알려 준 구매로 채운다.
+  /// 같은 상품은 다시 살 수 없으므로 결제할 때 이걸 빼고 고른다(B4).
+  final _owned = <String>{};
+
+  /// 방금 결제 창을 띄운 상품과 고를 수 있던 상품들 — "이미 보유" 로 실패하면 다음 상품으로 다시 띄운다.
+  String? _buyingProductId;
+  Map<String, ProductDetails> _buyingCandidates = const {};
+
   /// 스토어에 다시 묻는 최소 간격 — 알림 눌러 들락날락할 때마다 묻지 않게.
   static const _minRestoreGap = Duration(seconds: 30);
 
@@ -92,16 +112,46 @@ class PurchaseSync {
     _events.close();
   }
 
-  /// 요금제 화면의 구매 버튼. 결과는 [events] 와 안내 문구로 온다.
-  Future<void> buy(ProductDetails product, {required int bandId}) async {
+  /// 요금제 화면의 구매 버튼. [products] 는 스토어에 올라가 있는 PREMIUM 상품들이다. 이 Google 계정이
+  /// 아직 안 가진 상품을 [IapService.productIds] 순서로 골라 결제 창을 띄운다. 결과는 [events] 와 안내
+  /// 문구로 온다. 모두 가지고 있으면 [NoPremiumSlotException].
+  Future<void> buy(Map<String, ProductDetails> products,
+      {required int bandId}) async {
     start(); // 로그인 이벤트보다 먼저 화면이 열린 경우에도 결과를 놓치지 않게.
+    await _refreshOwned();
+    final product = _nextSlot(products);
+    if (product == null) throw const NoPremiumSlotException();
     _buyingBandId = bandId;
+    _buyingCandidates = products;
+    _buyingProductId = product.id;
     try {
       await _iap.buy(product, bandId: bandId);
     } catch (_) {
-      _buyingBandId = null;
+      _clearBuying();
       rethrow;
     }
+  }
+
+  ProductDetails? _nextSlot(Map<String, ProductDetails> products) {
+    for (final id in IapService.productIds) {
+      final p = products[id];
+      if (p != null && !_owned.contains(id)) return p;
+    }
+    return null;
+  }
+
+  void _clearBuying() {
+    _buyingBandId = null;
+    _buyingProductId = null;
+    _buyingCandidates = const {};
+  }
+
+  /// 가진 상품 목록을 지금 새로 받는다(간격 제한 없이). 스토어가 구매를 스트림으로 흘려보내면
+  /// [_onUpdates] 가 [_owned] 를 채운다 — 스트림 전달은 한 박자 늦어서 한 번 양보한다.
+  Future<void> _refreshOwned() async {
+    _lastRestore = null;
+    await _restore();
+    await Future<void>.delayed(Duration.zero);
   }
 
   Future<void> _restore() async {
@@ -118,20 +168,34 @@ class PurchaseSync {
   }
 
   Future<void> _onUpdates(List<PurchaseDetails> purchases) async {
+    // 가진 상품은 먼저, 기다림 없이 기록한다 — [_refreshOwned] 가 한 박자만 기다리고 고르기 때문.
     for (final p in purchases) {
-      if (p.productID != IapService.productId) continue;
+      if (!IapService.productIds.contains(p.productID)) continue;
+      if (p.status == PurchaseStatus.purchased ||
+          p.status == PurchaseStatus.restored) {
+        _owned.add(p.productID);
+      }
+    }
+    for (final p in purchases) {
+      if (!_isOurs(p)) continue;
       switch (p.status) {
         case PurchaseStatus.pending:
           _emit(const PurchaseEvent(PurchaseEventKind.pending));
         case PurchaseStatus.canceled:
-          _buyingBandId = null;
+          _clearBuying();
           _emit(const PurchaseEvent(PurchaseEventKind.canceled));
           if (p.pendingCompletePurchase) await _iap.complete(p);
         case PurchaseStatus.error:
-          _buyingBandId = null;
-          _emit(const PurchaseEvent(PurchaseEventKind.failed));
-          _toast(p.error?.message ?? '결제에 실패했어요.');
           if (p.pendingCompletePurchase) await _iap.complete(p);
+          // 가진 줄 몰랐던 상품이었다(다른 기기에서 샀거나 목록이 늦게 옴) — 다음 상품으로 다시 띄운다.
+          final retried = _isAlreadyOwned(p) && await _retryWithNextSlot();
+          if (!retried) {
+            _clearBuying();
+            _emit(const PurchaseEvent(PurchaseEventKind.failed));
+            _toast(_isAlreadyOwned(p)
+                ? NoPremiumSlotException.message
+                : (p.error?.message ?? '결제에 실패했어요.'));
+          }
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
           // 이미 확인 처리된 구매는 서버가 반영을 끝낸 것이다 — 다시 보내지 않는다.
@@ -159,7 +223,7 @@ class PurchaseSync {
       }
       _ref.invalidate(bandPlanProvider(bandId));
       await _iap.complete(p);
-      _buyingBandId = null;
+      _clearBuying();
       _emit(PurchaseEvent(PurchaseEventKind.verified, bandId: bandId));
       _toast('결제가 확인돼 프리미엄이 시작됐어요.');
     } on ApiException catch (e) {
@@ -175,9 +239,36 @@ class PurchaseSync {
   /// 매번 안내를 띄우지 않는다.
   void _failed(int? buyingBand, String message) {
     if (buyingBand == null) return;
-    _buyingBandId = null;
+    _clearBuying();
     _emit(const PurchaseEvent(PurchaseEventKind.failed));
     _toast(message);
+  }
+
+  /// 우리 상품의 이벤트인가. Play 는 **취소·오류 결과에 상품 id 를 비워** 보낸다 — 예전엔 id 로만 걸러서
+  /// 이 이벤트들을 버렸고, 결제 창에서 취소하면 요금제 화면 버튼이 잠긴 채 남았다. 이 앱이 결제 창을 띄운
+  /// 중이면 빈 id 도 우리 것으로 본다.
+  bool _isOurs(PurchaseDetails p) =>
+      IapService.productIds.contains(p.productID) ||
+      (p.productID.isEmpty && _buyingBandId != null);
+
+  static bool _isAlreadyOwned(PurchaseDetails p) =>
+      (p.error?.message ?? '').contains('itemAlreadyOwned');
+
+  /// 방금 띄운 상품을 "가진 것" 으로 적고, 남은 상품이 있으면 결제 창을 다시 띄운다.
+  Future<bool> _retryWithNextSlot() async {
+    final bandId = _buyingBandId;
+    final tried = _buyingProductId;
+    if (bandId == null || tried == null) return false;
+    _owned.add(tried);
+    final next = _nextSlot(_buyingCandidates);
+    if (next == null) return false;
+    _buyingProductId = next.id;
+    try {
+      await _iap.buy(next, bandId: bandId);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _emit(PurchaseEvent e) {

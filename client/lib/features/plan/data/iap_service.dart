@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 /// 서버(`/plan/google/restore`·`/plan/google/verify`)로 보내 검증받는다 — 이 클래스는 스토어 쪽만 담당한다.
 ///
 /// 결과가 [purchaseStream] 으로 비동기로 온다는 점이 특징이다: [buy] 를 부른 뒤,
-/// 스트림에서 [productId] 에 해당하는 [PurchaseDetails] 를 받아 처리하고 [complete] 로 마무리한다.
+/// 스트림에서 [productIds] 에 해당하는 [PurchaseDetails] 를 받아 처리하고 [complete] 로 마무리한다.
 class IapService {
   IapService({InAppPurchase? iap}) : _override = iap;
 
@@ -15,13 +15,24 @@ class IapService {
   /// 쓰지 않는 곳(테스트의 가짜, 토큰만 꺼내는 경우)에서 연결이 일어나지 않게.
   InAppPurchase get _iap => _override ?? InAppPurchase.instance;
 
-  /// Play Console 에 만든 구독 상품(기본 요금제)의 id. 서버·스토어와 정확히 같아야 한다.
-  static const String productId = 'premium_yearly';
+  /// Play Console 에 만든 PREMIUM 연 구독 상품들. **값·기간이 모두 같다.** 서버
+  /// `app.plan.billing.google-product-ids` 와 정확히 같아야 한다.
+  ///
+  /// **왜 여러 개인가** — Google 계정 하나는 같은 구독 상품을 동시에 하나만 가질 수 있다. 구독은 밴드
+  /// 단위라서, 밴드 두 개의 밴드장이 두 번째 밴드를 결제하려면 다른 상품이어야 한다. 그래서 아직 안 산
+  /// 상품을 앞에서부터 골라 결제한다(LAUNCH_REVIEW B4). 이 개수가 한 Google 계정이 결제할 수 있는 밴드 수다.
+  static const List<String> productIds = [
+    'premium_yearly',
+    'premium_yearly_2',
+    'premium_yearly_3',
+    'premium_yearly_4',
+    'premium_yearly_5',
+  ];
 
-  /// Play 스토어의 이 앱 구독 관리 화면. 해지·결제 수단·환불 요청이 여기 있다.
+  /// Play 스토어의 구독 목록 화면. 해지·결제 수단·환불 요청이 여기 있다. 상품이 여러 개라 특정 상품(sku)을
+  /// 고르지 않고 목록을 연다 — 어느 밴드가 어느 상품인지는 구독 이름이 아니라 결제 기록에만 있다.
   static final Uri manageSubscriptionUrl = Uri.parse(
-      'https://play.google.com/store/account/subscriptions'
-      '?sku=$productId&package=com.yeka.bandule');
+      'https://play.google.com/store/account/subscriptions?package=com.yeka.bandule');
 
   /// Play 스토어 구독 관리 화면을 외부 앱으로 연다. 못 열면 false.
   static Future<bool> openManageSubscriptions() => launchUrl(
@@ -32,11 +43,10 @@ class IapService {
 
   Stream<List<PurchaseDetails>> get purchaseStream => _iap.purchaseStream;
 
-  /// 상품 정보(가격 표기 등). 스토어에 상품이 없거나 심사 전이면 null.
-  Future<ProductDetails?> loadProduct() async {
-    final resp = await _iap.queryProductDetails({productId});
-    if (resp.productDetails.isEmpty) return null;
-    return resp.productDetails.first;
+  /// 스토어에 올라가 있는 PREMIUM 상품들(id → 정보). Play Console 에서 아직 활성화 안 한 상품은 빠진다.
+  Future<Map<String, ProductDetails>> loadProducts() async {
+    final resp = await _iap.queryProductDetails(productIds.toSet());
+    return {for (final p in resp.productDetails) p.id: p};
   }
 
   /// 구매에 적는 "어느 밴드를 위해 결제했나" 표시. Play 의 obfuscatedAccountId 로 들어가고, 서버는

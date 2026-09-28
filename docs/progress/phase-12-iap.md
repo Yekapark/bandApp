@@ -198,6 +198,7 @@ flutter test                 # 56개 통과
 
 **Play Console 준비 (사람):**
 1. 구독 상품 `premium_yearly`, 기본 요금제 = ₩19,000 / 1년
+   - 2026-09-28 추가: 같은 설정의 `premium_yearly_2`~`premium_yearly_5` (한 Google 계정이 밴드 여러 개를 결제하려면 상품이 달라야 한다 — LAUNCH_REVIEW B4)
 2. Google Cloud 서비스 계정 생성 → Play Console > 사용자 및 권한에서 "재무 데이터 보기"
    권한 부여 → JSON 키 발급 → 서버 `secrets/play-developer-sa.json` 로 마운트(`chown 999:999`)
 3. RTDN: Google Cloud Pub/Sub 토픽 생성 → Play Console > 수익 창출 설정 > 실시간 개발자 알림에

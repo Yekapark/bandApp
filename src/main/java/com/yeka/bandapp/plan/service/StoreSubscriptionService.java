@@ -84,7 +84,7 @@ public class StoreSubscriptionService {
      *
      * <ol>
      *   <li><b>상태</b> — ACTIVE/CANCELED/IN_GRACE 만 준다.
-     *   <li><b>상품</b> — 우리가 파는 그 상품이어야 한다({@code app.plan.billing.google-product-id}).
+     *   <li><b>상품</b> — 우리가 파는 상품 중 하나여야 한다({@code app.plan.billing.google-product-ids}).
      *       {@code subscriptionsv2.get} 은 패키지 단위라 <b>이 앱의 어떤 구독 토큰이든 통과한다</b> —
      *       상품이 하나뿐인 지금은 무해하지만, 더 싼 상품을 하나라도 추가하는 순간 그 토큰으로
      *       PREMIUM 을 받는 길이 열린다. 상품이 늘기 전에 막아 둔다.
@@ -101,9 +101,9 @@ public class StoreSubscriptionService {
         if (!sub.state().grantsPremium()) {
             return false;
         }
-        if (!billingProperties.googleProductId().equals(sub.productId())) {
+        if (!billingProperties.sellsGoogleProduct(sub.productId())) {
             log.warn("구매 검증: 우리 상품이 아니다 productId={} (기대={})",
-                    sub.productId(), billingProperties.googleProductId());
+                    sub.productId(), billingProperties.googleProductIds());
             return false;
         }
         if (sub.expiryTime() == null) {

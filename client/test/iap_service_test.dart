@@ -7,7 +7,7 @@ void main() {
 
   test('Android server verification data를 구매 토큰으로 그대로 사용한다', () {
     final purchase = PurchaseDetails(
-      productID: IapService.productId,
+      productID: IapService.productIds.first,
       verificationData: PurchaseVerificationData(
         localVerificationData: '{}',
         serverVerificationData: 'play-purchase-token',

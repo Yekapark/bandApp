@@ -27,7 +27,10 @@ class PlanScreen extends ConsumerStatefulWidget {
 class _PlanScreenState extends ConsumerState<PlanScreen> {
   late final IapService _iap = ref.read(iapServiceProvider);
   StreamSubscription<PurchaseEvent>? _eventSub;
-  ProductDetails? _product;
+  /// 스토어에 올라가 있는 PREMIUM 상품들. 값이 모두 같아서 가격은 아무거나 하나로 보여 준다.
+  Map<String, ProductDetails> _products = const {};
+  ProductDetails? get _product =>
+      _products.isEmpty ? null : _products.values.first;
   bool _storeReady = true;
   bool _busy = false;
 
@@ -51,11 +54,12 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
 
   Future<void> _initStore() async {
     final available = await _iap.isAvailable();
-    final product = available ? await _iap.loadProduct() : null;
+    final products =
+        available ? await _iap.loadProducts() : <String, ProductDetails>{};
     if (!mounted) return;
     setState(() {
-      _storeReady = available && product != null;
-      _product = product;
+      _storeReady = available && products.isNotEmpty;
+      _products = products;
     });
   }
 
@@ -69,8 +73,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   }
 
   Future<void> _startPurchase() async {
-    final product = _product;
-    if (product == null) {
+    if (_products.isEmpty) {
       _toast('지금은 결제를 시작할 수 없어요. 잠시 후 다시 시도해 주세요.');
       return;
     }
@@ -78,7 +81,10 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     if (band == null) return;
     setState(() => _busy = true);
     try {
-      await ref.read(purchaseSyncProvider).buy(product, bandId: band.id);
+      await ref.read(purchaseSyncProvider).buy(_products, bandId: band.id);
+    } on NoPremiumSlotException {
+      if (mounted) setState(() => _busy = false);
+      _toast(NoPremiumSlotException.message);
     } catch (_) {
       if (mounted) setState(() => _busy = false);
       _toast('결제를 시작하지 못했어요.');
@@ -426,7 +432,8 @@ class _SubscriptionTerms extends StatelessWidget {
           line('1년마다 자동으로 갱신되고, 갱신 때 Google Play 계정으로 청구돼요.'),
           line('Play 스토어 › 프로필 › 결제 및 구독 › 구독에서 언제든 해지할 수 있어요.'),
           line('해지해도 결제한 기간이 끝날 때까지는 프리미엄이 유지돼요.'),
-          line('구독은 이 밴드 전체에 적용되고, 한 Google 계정은 한 번에 한 밴드만 구독할 수 있어요.'),
+          line('구독은 이 밴드 전체에 적용되고 밴드마다 따로 결제해요. 한 Google 계정으로 밴드 '
+              '${IapService.productIds.length}개까지 결제할 수 있어요.'),
           line('이용약관·개인정보처리방침: bandule.com/terms · bandule.com/privacy'),
         ],
       ),

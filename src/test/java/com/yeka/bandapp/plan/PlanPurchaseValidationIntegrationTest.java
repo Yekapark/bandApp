@@ -45,6 +45,21 @@ class PlanPurchaseValidationIntegrationTest extends PlanApiSupport {
         assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("FREE");
     }
 
+    /**
+     * 같은 값의 다른 슬롯 상품도 PREMIUM 을 준다 — Google 계정 하나는 같은 구독 상품을 하나만 가질 수 있어서,
+     * 두 번째 밴드는 {@code premium_yearly_2…} 로 결제한다(LAUNCH_REVIEW B4).
+     */
+    @Test
+    void a_purchase_of_another_premium_slot_grants_premium() {
+        String leader = signup("pv-slot@band.app", "리더");
+        long bandId = createBand(leader, "슬롯밴드");
+
+        ResponseEntity<String> res = verifyGoogle(leader, bandId, "slot3-" + bandId);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
+        assertThat(data(res).get("tier").asText()).isEqualTo("PREMIUM");
+    }
+
     /** 대조군 — 같은 게이트웨이가 정상 구매에는 그대로 PREMIUM 을 준다(위 둘이 과잉 차단이 아님). */
     @Test
     void a_normal_purchase_still_grants_premium() {
