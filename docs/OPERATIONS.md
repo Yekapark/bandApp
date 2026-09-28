@@ -1,6 +1,7 @@
 # 운영 안내서 — DB 접속과 자주 쓰는 쿼리
 
 > 운영자 화면이 아직 없어서 통계·쿠폰 발급·신고 확인은 DB 를 직접 본다.
+> 신고 조치(글 숨김·계정 이용 정지)는 SQL 을 손으로 치지 않고 **`tools/moderate.py`** 로 한다 — [5장](#5-신고-확인과-조치--글-숨김이용-정지).
 > 여기 있는 것을 복사해 붙이면 된다. 스키마 뜻은 **DB 도구가 컬럼 옆에 보여주는 설명**을
 > 보면 되고(V16 마이그레이션이 채웠다), 겪은 문제는 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) 에 있다.
 
@@ -275,7 +276,7 @@ ORDER BY p.tier DESC, b.id;
 
 ---
 
-## 5. 신고 확인
+## 5. 신고 확인과 조치 — 글 숨김·이용 정지
 
 접수되면 `REPORT_NOTIFY_EMAILS` 주소로 **메일**이 가고, `REPORT_NOTIFY_USER_IDS` 계정으로
 **푸시**가 간다. 메일 본문에 이 신고에 맞는 조회 쿼리가 함께 들어 있다.
@@ -290,6 +291,52 @@ WHERE r.status = 'OPEN' ORDER BY r.created_at;
 -- 처리 완료로
 UPDATE reports SET status = 'RESOLVED' WHERE id = 1;
 ```
+
+### 조치 명령 — `tools/moderate.py`
+
+내 PC(저장소 폴더)에서 돌린다. 배포 키 `~/.ssh/bandule_deploy` 로 서버에 들어가 DB·Redis 에 쓴다.
+**모든 명령은 바뀔 대상을 먼저 보여 주고 `yes` 를 쳐야 실행한다.** 무엇을 할지 고르는 기준·본인 고지 메일
+견본은 [MODERATION.md](MODERATION.md).
+
+```bash
+# 보기 (바꾸지 않는다)
+python tools/moderate.py reports                 # 처리 안 된 신고 목록
+python tools/moderate.py post 123                # 글 123 내용과 첨부
+
+# 글 숨김 — 앱의 글 삭제와 같다. 첨부는 04:15 배치가 저장소에서 지운다. 관련 신고는 처리 완료로.
+python tools/moderate.py hide-post 123
+python tools/moderate.py hide-media 77           # 첨부 77 이 달린 글을 통째로 숨김
+
+# 이용 정지 — 로그인 차단 + 쓰던 로그인 즉시 끊김 + 푸시 끊김. 기간이 지나면 저절로 풀린다.
+python tools/moderate.py suspend 45 --days 7 --reason "비방 게시(신고 12)"
+python tools/moderate.py suspend 45 --forever --reason "불법촬영물(신고 13)" --hide-posts   # 글까지 전부 숨김
+
+# 정지 해제 (이의 인정 등) — 사유 기록은 남는다
+python tools/moderate.py unsuspend 45
+
+# 조치 없이 신고만 닫기
+python tools/moderate.py resolve 12
+```
+
+> **약관 제14조 제5~8항(정지 근거)은 2026-10-06 시행이다. 그 전에는 `suspend` 를 쓰지 않는다.**
+> 정지한 뒤에는 스크립트가 마지막에 보여 주는 가입 이메일로 **사유·기간·이의 방법을 보낸다**(약관 제14조 제7항).
+> `users.deleted_at` 을 손으로 채워 "정지" 하지 않는다 — 탈퇴로 처리돼 90일 뒤 개인정보가 파기된다.
+
+```sql
+-- 지금 정지 중인 계정
+SELECT id, name, email, suspended_until, suspension_reason
+FROM users WHERE suspended_until > now() ORDER BY suspended_until;
+
+-- 정지 이력(풀린 것 포함)
+SELECT id, name, suspended_until, suspension_reason
+FROM users WHERE suspension_reason IS NOT NULL ORDER BY suspended_until DESC;
+```
+
+**정지된 사람 앱에 보이는 것** — 로그인 화면에 "이용이 정지된 계정이에요 (M월 D일까지). 이의가 있으면
+notice@bandule.com 으로 알려 주세요." 사유는 보이지 않는다(`suspension_reason` 은 운영 기록).
+
+**`ssh` 가 실패할 때** — 배포 키 경로가 다르면 `BANDULE_SSH_KEY=경로 python tools/moderate.py ...`.
+키가 없는 PC 면 [NEW_PC_SETUP.md](NEW_PC_SETUP.md).
 
 **신고가 안 들어온 것 같을 때** — 자기 글·자기 사진은 신고할 수 없다(앱에서 메뉴 자체가 안 뜬다).
 같은 대상을 같은 사람이 두 번 신고하면 두 번째는 409 로 막힌다.
