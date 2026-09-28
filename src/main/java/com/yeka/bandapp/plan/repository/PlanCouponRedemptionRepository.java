@@ -12,4 +12,9 @@ public interface PlanCouponRedemptionRepository extends JpaRepository<PlanCoupon
     @Modifying
     @Query("delete from PlanCouponRedemption r where r.bandId = :bandId")
     int deleteByBandId(@Param("bandId") long bandId);
+
+    /** 사용 기록 되돌리기 — 쿠폰을 스토어 결제일에 쌓으려다 실패했을 때(B7). */
+    @Modifying
+    @Query("delete from PlanCouponRedemption r where r.couponId = :couponId and r.bandId = :bandId")
+    int deleteByCouponIdAndBandId(@Param("couponId") long couponId, @Param("bandId") long bandId);
 }

@@ -1,5 +1,29 @@
 # 문제 기록
 
+## 2026-09-28 — 쿠폰 기간과 결제 기간이 섞이면 쿠폰 일수가 사라졌다
+
+**증상** — (코드 검토로 발견) ① 결제 중인 밴드에 쿠폰을 쓰면 DB 만료일만 늘었다가 다음 갱신 알림 때 스토어 만료일로 덮여
+사라졌고, 청구일도 그대로였다. ② 쿠폰 기간 중에 결제하면 스토어가 결제한 날부터 1년을 세고 서버가 그 날짜로 덮어 남은
+쿠폰 일수가 사라졌다. ③ 결제 중 쿠폰을 쓰고 해지하면 스토어 만료일에 EXPIRED 가 와서 쿠폰 일수째 강등됐다(LAUNCH_REVIEW B7).
+
+**원인** — 스토어 구독의 만료일·다음 결제일의 주인은 Google 이고 DB 값은 사본이다. 쿠폰은 사본만 늘렸고, 결제·갱신 알림은
+언제나 Google 날짜로 사본을 덮는다(`applyStoreRenew`).
+
+**해결** — 사용자 결정: 막지 않고 **쌓는다**. Play Developer API `purchases.subscriptionsv2.defer`(최신 `etag` 와
+`deferDuration` 을 보냄)로 Google 쪽 날짜 자체를 미룬다. 결제 중 쿠폰은 `PlanCouponService` 가 사용 기록·차감을 먼저 커밋하고
+트랜잭션 밖에서 defer, 성공하면 Google 이 돌려준 만료일로 맞추고 실패하면 사용 기록·차감을 되돌린다(외부 호출은 트랜잭션 밖 —
+CLAUDE.md). 쿠폰 중 결제는 `applyStoreRenewCarryingCoupon` 이 행 잠금 안에서 남은 쿠폰 기간을 한 번만 돌려주고, 확인 처리 뒤
+그만큼 defer. 쿠폰 PREMIUM 은 `subscriptionRef` 의 `coupon-` 접두사로 구분(`BandPlan.isCouponPeriod`).
+
+**아직 확인 못 한 것** — defer 는 Play Console 서비스 계정에 **"주문 및 구독 관리"** 권한이 필요할 수 있다. 결제 검증만
+하던 계정("재무 데이터 보기")이면 403 → 앱에는 409 `COUPON_STORE_REJECTED` 로 보인다. 실제 Play 에서 한 번 확인해야 한다.
+
+**확인법** — `./gradlew test --tests '*PlanCouponIntegrationTest'`(쌓기·거절 되돌림·장애 503·쿠폰 중 결제 이월). 실기기:
+라이선스 테스터로 결제 → 쿠폰 사용 → Play 스토어 › 구독에서 다음 결제일이 쿠폰 일수만큼 밀렸는지. 운영 로그
+`쿠폰 N일을 스토어 결제일에 쌓음` / `스토어가 결제일 연기를 거절`.
+
+---
+
 ## 2026-09-28 — 야간 만료 배치가 스토어에 묻지 않고 결제한 밴드를 FREE 로 내렸다
 
 **증상** — (코드 검토로 발견) 연 구독 갱신 알림(RTDN RENEWED)이 늦게 오거나 빠지면, 또는 카드 결제가 실패해 Google 이

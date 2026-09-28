@@ -5,6 +5,10 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.androidpublisher.AndroidPublisher;
 import com.google.api.services.androidpublisher.AndroidPublisherScopes;
+import com.google.api.services.androidpublisher.model.DeferSubscriptionPurchaseRequest;
+import com.google.api.services.androidpublisher.model.DeferSubscriptionPurchaseResponse;
+import com.google.api.services.androidpublisher.model.DeferralContext;
+import com.google.api.services.androidpublisher.model.ItemExpiryTimeDetails;
 import com.google.api.services.androidpublisher.model.SubscriptionPurchaseV2;
 import com.google.api.services.androidpublisher.model.SubscriptionPurchasesAcknowledgeRequest;
 import com.google.auth.http.HttpCredentialsAdapter;
@@ -13,6 +17,7 @@ import com.yeka.bandapp.plan.config.StoreBillingProperties;
 import com.yeka.bandapp.plan.entity.Store;
 import com.yeka.bandapp.plan.gateway.StoreBillingGateway;
 import com.yeka.bandapp.plan.gateway.StoreBillingUnavailableException;
+import com.yeka.bandapp.plan.gateway.StoreDeferRejectedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,6 +28,9 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -36,6 +44,8 @@ import java.util.Optional;
  *       토큰이 없거나 더는 유효하지 않으면(404/410, invalid-token 400) {@code Optional.empty()}.
  *       일시적 실패(네트워크·5xx)는 {@link StoreBillingUnavailableException}.
  *   <li>{@link #acknowledge} — {@code purchases.subscriptions.acknowledge}. 이미 확인된 구매의 400 은 삼킨다.
+ *   <li>{@link #defer} — {@code purchases.subscriptionsv2.defer}. 최신 {@code etag} 를 get 으로 받아 함께 보낸다
+ *       (그 사이 상태가 바뀌었으면 Google 이 거절한다). 쿠폰 기간을 결제 기간에 쌓을 때 쓴다(B7).
  * </ul>
  *
  * <p>서비스 계정 키 파일이 없으면 <b>기동에 실패</b>한다(FCM 자격증명과 같은 방식) — {@code google}
@@ -88,6 +98,44 @@ public class GooglePlayBillingGateway implements StoreBillingGateway {
             throw new StoreBillingUnavailableException("Play acknowledge 실패 status=" + e.getStatusCode(), e);
         } catch (IOException e) {
             throw new StoreBillingUnavailableException("Play acknowledge 중 네트워크 오류", e);
+        }
+    }
+
+    @Override
+    public Instant defer(Store store, String purchaseToken, Duration by) {
+        try {
+            SubscriptionPurchaseV2 current = publisher.purchases().subscriptionsv2()
+                    .get(packageName, purchaseToken).execute();
+            DeferSubscriptionPurchaseRequest request = new DeferSubscriptionPurchaseRequest()
+                    .setDeferralContext(new DeferralContext()
+                            .setEtag(current.getEtag())
+                            .setDeferDuration(by.toSeconds() + "s"));
+            DeferSubscriptionPurchaseResponse response = publisher.purchases().subscriptionsv2()
+                    .defer(packageName, purchaseToken, request).execute();
+            Instant newExpiry = response.getItemExpiryTimeDetails() == null ? null
+                    : response.getItemExpiryTimeDetails().stream()
+                            .map(ItemExpiryTimeDetails::getExpiryTime)
+                            .filter(t -> t != null && !t.isBlank())
+                            .map(t -> OffsetDateTime.parse(t).toInstant())
+                            .max(Instant::compareTo)
+                            .orElse(null);
+            if (newExpiry == null) {
+                // 응답에 없으면 다시 읽는다 — 연기는 이미 반영됐다.
+                newExpiry = fetch(store, purchaseToken)
+                        .map(StoreSubscription::expiryTime)
+                        .orElseThrow(() -> new StoreDeferRejectedException("연기 뒤 구독을 다시 읽지 못했다", null));
+            }
+            log.info("Play 구독 결제일 연기 by={} newExpiry={}", by, newExpiry);
+            return newExpiry;
+        } catch (GoogleJsonResponseException e) {
+            if (e.getStatusCode() >= 500 || e.getStatusCode() == 429 || e.getStatusCode() == 409) {
+                // 409 = etag 불일치(그 사이 상태가 바뀜) — 다시 하면 된다.
+                throw new StoreBillingUnavailableException("Play 결제일 연기 일시 실패 status=" + e.getStatusCode(), e);
+            }
+            throw new StoreDeferRejectedException("Play 가 결제일 연기를 거절 status=" + e.getStatusCode()
+                    + " " + messageOf(e), e);
+        } catch (IOException e) {
+            throw new StoreBillingUnavailableException("Play 결제일 연기 중 네트워크 오류", e);
         }
     }
 

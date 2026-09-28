@@ -34,6 +34,9 @@ public class BandPlan extends BaseTimeEntity {
     /** FREE 플랜 미디어 보관일수. V10 마이그레이션의 백필 리터럴과 일치시킨다. */
     public static final int FREE_RETENTION_DAYS = 30;
 
+    /** 쿠폰으로 받은 PREMIUM 의 {@code subscriptionRef} 접두사({@code coupon-코드}). */
+    public static final String COUPON_REF_PREFIX = "coupon-";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -186,11 +189,16 @@ public class BandPlan extends BaseTimeEntity {
 
     /**
      * 스토어 결제로 PREMIUM 이고 해지 예약도 안 했다 = 다음 주기에 Google 이 또 청구한다.
-     * 쿠폰 PREMIUM(스토어 없음)·해지 예약·FREE(보류 뒤 토큰만 남은 것 포함)는 false.
+     * 쿠폰 PREMIUM(스토어 없음, 또는 보류 뒤 남은 토큰 위에 쿠폰을 쓴 것)·해지 예약·FREE 는 false.
      * 이 밴드를 지우면 청구는 계속되는데 반영할 밴드가 없어진다(LAUNCH_REVIEW B5).
      */
     public boolean isAutoRenewingStoreSubscription() {
-        return isPremium() && store != null && !isCanceled();
+        return isPremium() && store != null && !isCanceled() && !isCouponPeriod();
+    }
+
+    /** 지금 PREMIUM 이 쿠폰으로 받은 기간인가({@code subscriptionRef} 가 {@link #COUPON_REF_PREFIX} 로 시작). */
+    public boolean isCouponPeriod() {
+        return isPremium() && subscriptionRef != null && subscriptionRef.startsWith(COUPON_REF_PREFIX);
     }
 
     public boolean isFree() {

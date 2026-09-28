@@ -66,6 +66,26 @@ class BandPlanTest {
     }
 
     @Test
+    void coupon_period_is_not_an_auto_renewing_store_subscription_even_with_a_dormant_token() {
+        // 계정 보류로 FREE(토큰은 남음, B1) → 쿠폰으로 PREMIUM. 청구되는 구독이 아니다.
+        BandPlan plan = BandPlan.freePlan(1L, NOW);
+        plan.upgradeToPremium(NOW, NOW.plus(30, ChronoUnit.DAYS),
+                BandPlan.COUPON_REF_PREFIX + "TASTE30", Store.GOOGLE_PLAY, "purchase-tok-1");
+
+        assertThat(plan.isCouponPeriod()).isTrue();
+        assertThat(plan.isAutoRenewingStoreSubscription()).isFalse();
+    }
+
+    @Test
+    void store_paid_premium_is_not_a_coupon_period() {
+        BandPlan plan = BandPlan.freePlan(1L, NOW);
+        plan.upgradeToPremium(NOW, NOW.plus(365, ChronoUnit.DAYS), "GPA.1", Store.GOOGLE_PLAY, "purchase-tok-1");
+
+        assertThat(plan.isCouponPeriod()).isFalse();
+        assertThat(plan.isAutoRenewingStoreSubscription()).isTrue();
+    }
+
+    @Test
     void revoke_to_free_also_clears_store_and_token() {
         BandPlan plan = BandPlan.freePlan(1L, NOW);
         plan.upgradeToPremium(NOW, NOW.plus(30, ChronoUnit.DAYS), "GPA.1", Store.GOOGLE_PLAY, "purchase-tok-1");

@@ -57,6 +57,78 @@ class PlanCouponIntegrationTest extends PlanApiSupport {
         assertThat(tierOf(bandId)).isEqualTo(PlanTier.PREMIUM);
     }
 
+    /**
+     * 스토어 결제 중인 밴드는 스토어 결제일을 미뤄 쌓는다(B7) — DB 만 늘리면 다음 갱신 알림이 덮어쓴다.
+     * 자동 갱신 구독 표시는 그대로여야 한다(쿠폰 밴드로 바뀌면 안 된다).
+     */
+    @Test
+    void coupon_on_a_store_subscription_defers_the_store_billing_date() {
+        String leader = signup("cp-stack@band.app", "리더");
+        long bandId = createBand(leader, "쌓기밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        insertCoupon("STACK30", 30, null, null);
+
+        ResponseEntity<String> res = redeemCoupon(leader, bandId, "STACK30");
+
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
+        assertThat(daysUntilExpiry(bandId)).isBetween(394L, 396L);   // no-op 스토어: 지금부터 1년 + 30일
+        assertThat(data(res).get("autoRenewing").asBoolean()).isTrue();
+        assertThat(usedCount("STACK30")).isEqualTo(1);
+    }
+
+    /** 스토어가 연기를 거절하면 쿠폰을 쓴 것으로 치지 않는다 — 다시 쓸 수 있다. */
+    @Test
+    void store_rejecting_the_deferral_rolls_the_coupon_back() {
+        String leader = signup("cp-nodefer@band.app", "리더");
+        long bandId = createBand(leader, "거절밴드");
+        assertThat(verifyGoogle(leader, bandId, "nodefer-" + bandId).getStatusCode().value()).isEqualTo(200);
+        long before = daysUntilExpiry(bandId);
+        insertCoupon("NODEF30", 30, 5, null);
+
+        ResponseEntity<String> res = redeemCoupon(leader, bandId, "NODEF30");
+
+        assertThat(res.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(res)).isEqualTo("COUPON_STORE_REJECTED");
+        assertThat(usedCount("NODEF30")).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from plan_coupon_redemptions where band_id = ?",
+                Long.class, bandId)).isZero();
+        assertThat(daysUntilExpiry(bandId)).isBetween(before - 1, before);
+    }
+
+    /** 스토어가 잠깐 답하지 않으면 503 으로 알리고 쿠폰은 되돌린다. */
+    @Test
+    void store_unavailable_rolls_the_coupon_back_with_503() {
+        String leader = signup("cp-unavail@band.app", "리더");
+        long bandId = createBand(leader, "장애쿠폰밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        jdbc.update("update band_plans set purchase_token = ? where band_id = ?", "unavailable-" + bandId, bandId);
+        insertCoupon("UNAV30", 30, null, null);
+
+        ResponseEntity<String> res = redeemCoupon(leader, bandId, "UNAV30");
+
+        assertThat(res.getStatusCode().value()).isEqualTo(503);
+        assertThat(errorCode(res)).isEqualTo("COUPON_STORE_UNAVAILABLE");
+        assertThat(usedCount("UNAV30")).isZero();
+    }
+
+    /**
+     * 쿠폰 기간 중에 결제하면 남은 쿠폰 기간이 결제 기간 뒤에 붙는다(B7) — 스토어는 결제한 날부터 1년을 세므로,
+     * 그대로 두면 남은 쿠폰 일수가 겹쳐 사라진다.
+     */
+    @Test
+    void purchase_during_a_coupon_period_carries_the_remaining_days() {
+        String leader = signup("cp-carry@band.app", "리더");
+        long bandId = createBand(leader, "이월밴드");
+        insertCoupon("CARRY30", 30, null, null);
+        assertThat(redeemCoupon(leader, bandId, "CARRY30").getStatusCode().value()).isEqualTo(200);
+
+        ResponseEntity<String> res = subscribe(leader, bandId);
+
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
+        assertThat(daysUntilExpiry(bandId)).isBetween(393L, 396L);   // 1년 + 남은 쿠폰 ~30일
+        assertThat(data(viewPlan(leader, bandId)).get("autoRenewing").asBoolean()).isTrue();
+    }
+
     @Test
     void lowercase_and_padded_codes_are_accepted() {
         String leader = signup("cp-c@band.app", "리더");

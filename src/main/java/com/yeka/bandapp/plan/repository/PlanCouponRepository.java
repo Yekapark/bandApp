@@ -23,4 +23,9 @@ public interface PlanCouponRepository extends JpaRepository<PlanCoupon, Long> {
             + "where c.id = :id and c.revoked = false "
             + "and (c.maxUses is null or c.usedCount < c.maxUses)")
     int consume(@Param("id") long id);
+
+    /** {@link #consume} 되돌리기 — 쿠폰을 스토어 결제일에 쌓으려다 스토어가 거절·장애일 때(B7). */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update PlanCoupon c set c.usedCount = c.usedCount - 1 where c.id = :id and c.usedCount > 0")
+    int release(@Param("id") long id);
 }
