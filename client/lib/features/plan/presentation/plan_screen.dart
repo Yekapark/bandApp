@@ -91,6 +91,29 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     }
   }
 
+  /// 구독 조건 고지 + 구매 버튼. 구독 조건은 구매 버튼을 누르기 **전에** 보여야 한다(Play 구독 정책 — 가격·주기·
+  /// 자동 갱신·해지 방법). 예전에는 구매 뒤 화면(_ManageNotice)에만 있었다. LAUNCH_REVIEW P4.
+  List<Widget> _purchaseSection() => [
+        _SubscriptionTerms(price: _product?.price),
+        const SizedBox(height: 12),
+        _ActionButton(
+          label: _product == null
+              ? 'PREMIUM 시작'
+              : 'PREMIUM 시작 · ${_product!.price} / 년',
+          busy: _busy,
+          onTap: _storeReady ? () => _startPurchase() : null,
+        ),
+        if (!_storeReady)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text(
+              '지금은 스토어 결제를 쓸 수 없어요. 잠시 후 다시 시도해 주세요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: AppColors.textFaint),
+            ),
+          ),
+      ];
+
   @override
   Widget build(BuildContext context) {
     final band = ref.watch(currentBandProvider);
@@ -146,30 +169,16 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
               )
             else if (plan.isPremium && plan.canceled)
               _CanceledNotice(onManage: _openSubscriptionManagement)
-            else if (plan.isPremium)
+            else if (plan.isPremium && plan.autoRenewing)
               _ManageNotice(onManage: _openSubscriptionManagement)
-            else ...[
-              // 구독 조건은 구매 버튼을 누르기 **전에** 보여야 한다(Play 구독 정책 — 가격·주기·자동 갱신·
-              // 해지 방법). 예전에는 구매 뒤 화면(_ManageNotice)에만 있었다. LAUNCH_REVIEW P4.
-              _SubscriptionTerms(price: _product?.price),
+            else if (plan.isPremium) ...[
+              // 쿠폰으로 받은 프리미엄 — 자동 갱신이 없다. 이어서 쓰려면 결제하고, 남은 쿠폰 기간은
+              // 서버가 스토어 결제일을 미뤄 결제 기간 뒤에 붙인다(LAUNCH_REVIEW B7).
+              const _CouponNotice(),
               const SizedBox(height: 12),
-              _ActionButton(
-                label: _product == null
-                    ? 'PREMIUM 시작'
-                    : 'PREMIUM 시작 · ${_product!.price} / 년',
-                busy: _busy,
-                onTap: _storeReady ? () => _startPurchase() : null,
-              ),
-              if (!_storeReady)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    '지금은 스토어 결제를 쓸 수 없어요. 잠시 후 다시 시도해 주세요.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: AppColors.textFaint),
-                  ),
-                ),
-            ],
+              ..._purchaseSection(),
+            ] else
+              ..._purchaseSection(),
             if (band.isLeader) ...[
               const SizedBox(height: 10),
               TextButton(
@@ -518,6 +527,38 @@ class _ManageNotice extends StatelessWidget {
 
 /// 해지 예약된 PREMIUM. 남은 기간을 알려준다. 결제한 기간이 끝나면 서버가 만료 배치로 FREE 로
 /// 내린다. 마음이 바뀌면 Play 구독 화면에서 다시 구독할 수 있으니 같은 버튼을 둔다.
+/// 쿠폰으로 받은 프리미엄 안내 — 자동 갱신되지 않고, 결제하면 남은 쿠폰 기간이 결제 기간 뒤에 붙는다.
+class _CouponNotice extends StatelessWidget {
+  const _CouponNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '쿠폰으로 받은 프리미엄',
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+          ),
+          SizedBox(height: 5),
+          Text(
+            '위에 적힌 날짜까지 프리미엄이에요. 자동으로 갱신되지 않아요. 계속 쓰려면 지금 결제해도 돼요 — '
+            '남은 쿠폰 기간은 결제한 1년 뒤에 그대로 붙어요.',
+            style: TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CanceledNotice extends StatelessWidget {
   const _CanceledNotice({required this.onManage});
 

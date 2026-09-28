@@ -9,6 +9,7 @@ import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 
 /**
@@ -109,6 +110,29 @@ public class PlanMutationService {
         }
         plan.renewFromStore(now, newPeriodEnd, subscriptionRef, store, purchaseToken);
         return plan;
+    }
+
+    /** 스토어 결제 반영 결과 + 그 직전까지 남아 있던 쿠폰 기간(없으면 0). */
+    public record StoreRenewal(BandPlan plan, Duration couponLeft) {
+    }
+
+    /**
+     * {@link #applyStoreRenew} 와 같고, <b>쿠폰 기간 중이었다면 남은 기간을 함께 돌려준다</b>(B7). 호출자가 그만큼
+     * 스토어 결제일을 미뤄 쿠폰 기간을 결제 기간 뒤에 쌓는다. 행 잠금 안에서 판정하므로 결제 확인과 웹훅이 동시에
+     * 와도 남은 기간은 한 번만 나온다(두 번째는 이미 스토어 결제로 바뀐 행을 본다).
+     */
+    @Transactional
+    public StoreRenewal applyStoreRenewCarryingCoupon(long bandId, Instant now, Instant newPeriodEnd,
+                                                      String subscriptionRef, Store store, String purchaseToken) {
+        BandPlan plan = requirePlan(bandId);
+        if (!plan.isPremium()) {
+            throw new BusinessException(ErrorCode.PLAN_ALREADY_FREE);
+        }
+        Duration couponLeft = plan.isCouponPeriod() && plan.getExpiresAt() != null && plan.getExpiresAt().isAfter(now)
+                ? Duration.between(now, plan.getExpiresAt())
+                : Duration.ZERO;
+        plan.renewFromStore(now, newPeriodEnd, subscriptionRef, store, purchaseToken);
+        return new StoreRenewal(plan, couponLeft);
     }
 
     // --- 웹훅 경로 (조용히 no-op) --------------------------------------------------------

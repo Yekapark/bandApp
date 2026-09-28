@@ -191,7 +191,7 @@ public class StoreSubscriptionService {
     }
 
     private PlanResponse grantAndAcknowledge(long bandId, StoreSubscription sub) {
-        BandPlan updated = grantPremium(bandId, Instant.now(), sub);
+        Granted granted = grantPremium(bandId, Instant.now(), sub);
 
         if (!sub.acknowledged()) {
             // 확인 처리 실패로 응답을 깨지 않는다 — 등급은 이미 올라갔다. 3일 안에 acknowledge 가
@@ -202,7 +202,8 @@ public class StoreSubscriptionService {
                 log.error("구매 acknowledge 실패 bandId={} — Play 자동환불 위험", bandId, e);
             }
         }
-        return PlanResponse.from(updated);
+        // 확인 처리 뒤에 미룬다 — 확인 전 구매는 연기를 받아 주지 않을 수 있다.
+        return PlanResponse.from(carryCouponDays(bandId, sub, granted));
     }
 
     /**
@@ -245,7 +246,7 @@ public class StoreSubscriptionService {
                         .filter(this::grantable)
                         .orElseThrow(() -> new StoreWebhookRetryException(
                                 "type=" + notificationType + " 인데 스토어 조회 실패/무효 bandId=" + bandId));
-                grantPremium(bandId, now, sub);
+                carryCouponDays(bandId, sub, grantPremium(bandId, now, sub));
             }
             case SUB_CANCELED -> planMutationService.applyCancelAtPeriodEndIfPremium(bandId, now);
             case SUB_REVOKED -> planMutationService.applyRevoke(bandId, now);
@@ -266,7 +267,32 @@ public class StoreSubscriptionService {
      * {@code PURCHASE_ALREADY_LINKED}(409). 한 번 산 구독으로 여러 밴드를 PREMIUM 만드는 것을 막는다.
      * (Play 의 obfuscatedAccountId 대조는 슬라이스 2에서 더한다.)
      */
-    private BandPlan grantPremium(long bandId, Instant now, StoreSubscription sub) {
+    /** 스토어 결제 반영 결과. {@code couponLeft} 는 그 직전까지 남아 있던 쿠폰 기간(B7). */
+    private record Granted(BandPlan plan, Duration couponLeft) {
+    }
+
+    /**
+     * 쿠폰 기간 중에 결제했으면 남은 쿠폰 기간만큼 스토어 결제일을 미뤄 <b>결제 기간 뒤에 쌓는다</b>(LAUNCH_REVIEW B7).
+     * 스토어는 결제한 날부터 기간을 세므로, 그대로 두면 남은 쿠폰 일수가 결제 기간과 겹쳐 사라진다. 스토어 날짜를
+     * 옮겨야 다음 갱신 알림이 와도 덮이지 않는다. 실패해도 결제는 이미 반영됐으니 막지 않는다 — 기록만 남긴다.
+     */
+    private BandPlan carryCouponDays(long bandId, StoreSubscription sub, Granted granted) {
+        if (granted.couponLeft().isZero() || granted.couponLeft().isNegative()) {
+            return granted.plan();
+        }
+        try {
+            Instant newExpiry = billingGateway.defer(Store.GOOGLE_PLAY, sub.purchaseToken(), granted.couponLeft());
+            log.info("쿠폰 남은 기간을 결제 기간 뒤로 쌓음 bandId={} carried={} newExpiry={}",
+                    bandId, granted.couponLeft(), newExpiry);
+            return planMutationService.applyRenew(bandId, Instant.now(), newExpiry);
+        } catch (RuntimeException e) {
+            log.error("쿠폰 남은 기간({})을 스토어 결제일로 옮기지 못했다 bandId={} — 그 기간은 사라진다",
+                    granted.couponLeft(), bandId, e);
+            return granted.plan();
+        }
+    }
+
+    private Granted grantPremium(long bandId, Instant now, StoreSubscription sub) {
         Long linkedBand = bandPlanRepository.findBandIdByPurchaseToken(sub.purchaseToken()).orElse(null);
         if (linkedBand != null && linkedBand != bandId) {
             throw new BusinessException(ErrorCode.PURCHASE_ALREADY_LINKED);
@@ -275,8 +301,8 @@ public class StoreSubscriptionService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.PLAN_NOT_FOUND));
         if (current.isFree()) {
             try {
-                return planMutationService.applyUpgrade(bandId, now, sub.expiryTime(),
-                        sub.orderId(), sub.store(), sub.purchaseToken());
+                return new Granted(planMutationService.applyUpgrade(bandId, now, sub.expiryTime(),
+                        sub.orderId(), sub.store(), sub.purchaseToken()), Duration.ZERO);
             } catch (BusinessException raced) {
                 if (raced.errorCode() != ErrorCode.PLAN_ALREADY_PREMIUM) {
                     throw raced;
@@ -284,8 +310,9 @@ public class StoreSubscriptionService {
                 // 동시 요청(클라 verify + PURCHASED 웹훅)이 먼저 올려놨다 — 연장으로 이어간다.
             }
         }
-        return planMutationService.applyStoreRenew(bandId, now, sub.expiryTime(),
-                sub.orderId(), sub.store(), sub.purchaseToken());
+        PlanMutationService.StoreRenewal renewal = planMutationService.applyStoreRenewCarryingCoupon(bandId, now,
+                sub.expiryTime(), sub.orderId(), sub.store(), sub.purchaseToken());
+        return new Granted(renewal.plan(), renewal.couponLeft());
     }
 
     /**

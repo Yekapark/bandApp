@@ -62,7 +62,7 @@ public interface BandPlanRepository extends JpaRepository<BandPlan, Long> {
     @Query("select p from BandPlan p "
             + "where p.tier = com.yeka.bandapp.plan.entity.PlanTier.PREMIUM "
             + "and p.expiresAt > :now and p.expiresAt <= :until "
-            + "and (p.store is null or p.subscriptionRef is null) "
+            + "and (p.store is null or p.subscriptionRef is null or p.subscriptionRef like 'coupon-%') "
             + "order by p.expiresAt")
     List<BandPlan> findPremiumExpiringBetween(@Param("now") Instant now,
                                               @Param("until") Instant until,

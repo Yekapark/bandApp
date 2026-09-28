@@ -2,6 +2,7 @@ package com.yeka.bandapp.plan.gateway;
 
 import com.yeka.bandapp.plan.entity.Store;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 
@@ -29,6 +30,19 @@ public interface StoreBillingGateway {
      * 엔드포인트가 요구하는 구독 상품 id — {@link StoreSubscription#productId()} 를 그대로 넘긴다.
      */
     void acknowledge(Store store, String productId, String purchaseToken);
+
+    /**
+     * 구독의 다음 결제일(=만료일)을 {@code by} 만큼 뒤로 미룬다 — 쿠폰으로 받은 무료 기간을 결제 기간에 <b>쌓을</b>
+     * 때 쓴다(LAUNCH_REVIEW B7). 우리 DB 만 늘리면 다음 갱신 알림이 스토어 만료일로 덮어써 쿠폰 기간이 사라진다.
+     * 스토어 쪽 날짜를 옮겨야 청구도 그만큼 늦어지고 날짜가 어긋나지 않는다.
+     *
+     * @return 연기된 뒤의 새 만료 시각
+     * @throws StoreBillingUnavailableException 스토어가 일시적으로 답하지 않음(다시 시도할 만함)
+     * @throws StoreDeferRejectedException      스토어가 확정적으로 거절(구독 상태가 연기할 수 없음 등)
+     */
+    default Instant defer(Store store, String purchaseToken, Duration by) {
+        throw new StoreDeferRejectedException("이 게이트웨이는 결제일 연기를 지원하지 않는다", null);
+    }
 
     /**
      * 스토어가 말하는 구독의 현재 모습.

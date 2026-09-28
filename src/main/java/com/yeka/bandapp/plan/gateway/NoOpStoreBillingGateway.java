@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
@@ -81,6 +82,21 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
         return Optional.of(new StoreSubscription(
                 store, purchaseToken, "premium_yearly", "noop-order-" + purchaseToken, state, expiry, true,
                 accountTag));
+    }
+
+    /**
+     * 연기 흉내 — 이 게이트웨이는 상태가 없으므로 "지금부터 1년 + by" 를 새 만료일로 돌려준다.
+     * {@code nodefer-…} 는 스토어가 거절, {@code unavailable-…} 은 일시 장애를 흉내낸다.
+     */
+    @Override
+    public Instant defer(Store store, String purchaseToken, Duration by) {
+        if (refuseEverything || purchaseToken == null || purchaseToken.startsWith("nodefer-")) {
+            throw new StoreDeferRejectedException("[no-op billing] 연기 거절 흉내 token=" + purchaseToken, null);
+        }
+        if (purchaseToken.startsWith("unavailable-")) {
+            throw new StoreBillingUnavailableException("[no-op billing] 스토어 일시 장애 흉내 token=" + purchaseToken, null);
+        }
+        return Instant.now().plus(planProperties.premiumPeriodDays(), ChronoUnit.DAYS).plus(by);
     }
 
     @Override

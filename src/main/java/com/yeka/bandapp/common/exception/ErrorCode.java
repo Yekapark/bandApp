@@ -130,6 +130,8 @@ public enum ErrorCode {
     // 요금제 쿠폰
     COUPON_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 쿠폰 코드입니다."),
     COUPON_EXPIRED(HttpStatus.GONE, "사용 기한이 지난 쿠폰입니다."),
+    COUPON_STORE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "지금은 쿠폰 기간을 구독에 더할 수 없어요. 잠시 후 다시 시도해 주세요."),
+    COUPON_STORE_REJECTED(HttpStatus.CONFLICT, "이 구독에는 쿠폰 기간을 더할 수 없어요. Google Play 구독 상태를 확인해 주세요."),
     COUPON_EXHAUSTED(HttpStatus.CONFLICT, "모두 사용된 쿠폰입니다."),
     COUPON_ALREADY_USED(HttpStatus.CONFLICT, "이미 사용한 쿠폰입니다.");
 
