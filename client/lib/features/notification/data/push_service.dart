@@ -48,8 +48,17 @@ class PushService {
     await _tryRegister();
   }
 
+  /// 이 기기의 푸시 토큰(등록을 시도한 적이 없으면 null). 로그아웃 요청에 실어 서버가 지우게 한다.
+  String? get currentToken => _token;
+
   /// 로그아웃 시. 등록했던 토큰을 해제하고 상태를 되돌린다.
-  Future<void> stop() async {
+  ///
+  /// [unregister] 가 false 면 서버 해제 요청을 건너뛴다 — 로그아웃 요청(`/auth/logout` 의 `deviceToken`)으로
+  /// 이미 지웠을 때. 해제 요청은 인증이 필요한데, 로그아웃 뒤에 부르면 401 이 나서 서버에 토큰이 남았다(U1).
+  ///
+  /// 마지막에 **기기의 FCM 토큰 자체를 폐기**한다. 서버 요청이 네트워크 문제로 실패해도 이 기기로는 이전 계정의
+  /// 알림이 더 오지 않는다(서버에 남은 옛 토큰은 발송 때 무효로 판정돼 정리된다). 다음 로그인에서 새 토큰을 받는다.
+  Future<void> stop({bool unregister = true}) async {
     final token = _token;
     _active = false;
     _registered = false;
@@ -57,10 +66,17 @@ class PushService {
     _lifecycle?.dispose();
     _lifecycle = null;
     if (token == null) return;
+    if (unregister) {
+      try {
+        await _repo.unregisterDeviceToken(token);
+      } catch (_) {
+        // 해제 실패는 무시 — 아래에서 기기 토큰을 폐기하고, 서버 배치가 무효 토큰을 정리한다.
+      }
+    }
     try {
-      await _repo.unregisterDeviceToken(token);
-    } catch (_) {
-      // 해제 실패는 무시 — 서버 배치가 무효 토큰을 정리한다.
+      if (_available) await FirebaseMessaging.instance.deleteToken();
+    } catch (e) {
+      debugPrint('PushService: 기기 토큰 폐기 실패 ($e)');
     }
   }
 

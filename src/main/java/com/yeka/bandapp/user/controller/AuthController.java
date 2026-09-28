@@ -80,11 +80,11 @@ public class AuthController {
 
     @Operation(summary = "로그아웃",
             description = "refresh 토큰만으로 해당 세션을 정리한다(204). 이미 만료·무효한 토큰이어도 204(멱등). "
-                    + "다른 기기 세션은 유지된다.")
+                    + "다른 기기 세션은 유지된다. deviceToken 을 주면 이 기기의 푸시 토큰도 지운다.")
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@Valid @RequestBody LogoutRequest request) {
-        authService.logout(request.refreshToken());
+        authService.logout(request.refreshToken(), request.deviceToken());
     }
 
     @Operation(summary = "비밀번호 재설정 인증번호 발송",
