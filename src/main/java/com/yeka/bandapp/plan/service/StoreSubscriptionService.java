@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.OptionalLong;
 
 /**
@@ -54,6 +55,24 @@ public class StoreSubscriptionService {
     private static final int SUB_RESTARTED = 7;
     private static final int SUB_REVOKED = 12;
     private static final int SUB_EXPIRED = 13;
+
+    /**
+     * 만료 배치가 스토어를 못 물어봤을 때(일시 장애) 강등을 미뤄 줄 기간. 이보다 오래 지났으면 스토어 답을 못 받아도
+     * 강등한다 — 장애가 길어진다고 무기한 PREMIUM 이 되면 안 된다.
+     */
+    static final Duration STORE_RECHECK_PATIENCE = Duration.ofDays(3);
+
+    /** 만료 배치의 스토어 재확인 결과. */
+    public enum ExpiryRecheck {
+        /** 스토어 결제가 아니다(쿠폰 등) — 그대로 강등한다. */
+        NOT_STORE,
+        /** 스토어에선 아직 유효 — 만료일을 연장했으니 강등하지 않는다. */
+        STILL_ACTIVE,
+        /** 스토어에서도 끝났다 — 강등한다. */
+        ENDED,
+        /** 스토어가 답하지 않았고 아직 기다릴 만하다 — 이번엔 건너뛴다. */
+        UNKNOWN
+    }
 
     /** 밴드에 안 붙은 구매·갱신 알림을 재전송받아 볼 시간. 이보다 오래된 메시지는 포기한다. */
     private static final Duration GRANT_RETRY_WINDOW = Duration.ofHours(1);
@@ -267,6 +286,58 @@ public class StoreSubscriptionService {
         }
         return planMutationService.applyStoreRenew(bandId, now, sub.expiryTime(),
                 sub.orderId(), sub.store(), sub.purchaseToken());
+    }
+
+    /**
+     * 만료 배치 전용 — DB 만료일이 지난 밴드가 <b>스토어에서도 끝났는지</b> 강등하기 전에 물어본다(LAUNCH_REVIEW B8).
+     *
+     * <p>DB 만료일은 갱신 알림(RENEWED)이 와야 늘어난다. 알림이 늦거나 빠지면, 또는 결제가 실패해 유예 기간(IN_GRACE)
+     * 인데 Google 이 접근을 유지하는 동안에는, 돈을 낸 밴드가 야간 배치에 FREE 로 내려갔다. 여기서 스토어에 다시
+     * 물어 아직 유효하면 만료일을 스토어 값으로 늘리고 강등하지 않는다. 스토어가 "해지 예약(CANCELED)" 이라고 하면
+     * 해지 예약 표시도 맞춘다.
+     *
+     * <p>{@code @Transactional} 없음 — 스토어 조회(외부 I/O)를 먼저 끝내고 확정된 값으로 짧은 트랜잭션을 부른다.
+     */
+    public ExpiryRecheck recheckBeforeExpiry(long bandId, Instant now) {
+        BandPlan plan = bandPlanRepository.findByBandId(bandId).orElse(null);
+        if (plan == null || plan.getStore() != Store.GOOGLE_PLAY || plan.getPurchaseToken() == null) {
+            return ExpiryRecheck.NOT_STORE;
+        }
+
+        Optional<StoreSubscription> fetched;
+        try {
+            fetched = billingGateway.fetch(Store.GOOGLE_PLAY, plan.getPurchaseToken());
+        } catch (StoreBillingUnavailableException unavailable) {
+            Instant expiresAt = plan.getExpiresAt();
+            if (expiresAt != null && expiresAt.isAfter(now.minus(STORE_RECHECK_PATIENCE))) {
+                log.warn("만료 배치: 스토어 조회 실패 — 강등을 미룬다 bandId={}", bandId, unavailable);
+                return ExpiryRecheck.UNKNOWN;
+            }
+            log.warn("만료 배치: 스토어 조회 실패가 {} 넘게 이어졌다 — 강등한다 bandId={}",
+                    STORE_RECHECK_PATIENCE, bandId, unavailable);
+            return ExpiryRecheck.ENDED;
+        }
+
+        StoreSubscription alive = fetched
+                .filter(this::grantable)
+                .filter(sub -> sub.expiryTime().isAfter(now))
+                .orElse(null);
+        if (alive == null) {
+            return ExpiryRecheck.ENDED;
+        }
+        try {
+            planMutationService.applyStoreRenew(bandId, now, alive.expiryTime(), alive.orderId(),
+                    alive.store(), alive.purchaseToken());
+            if (alive.state() == StoreBillingGateway.StoreSubscriptionState.CANCELED) {
+                planMutationService.applyCancelAtPeriodEndIfPremium(bandId, now);
+            }
+        } catch (BusinessException raced) {
+            // 그 사이 웹훅이 먼저 FREE 로 내렸다 — 강등 경로에 맡긴다(거기서도 이미 FREE 면 조용히 끝난다).
+            return ExpiryRecheck.ENDED;
+        }
+        log.info("만료 배치: 스토어에선 아직 유효 — 강등 대신 연장 bandId={} state={} expiry={}",
+                bandId, alive.state(), alive.expiryTime());
+        return ExpiryRecheck.STILL_ACTIVE;
     }
 
     /**

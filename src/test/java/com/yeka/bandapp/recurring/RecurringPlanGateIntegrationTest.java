@@ -87,8 +87,9 @@ class RecurringPlanGateIntegrationTest extends RecurringApiSupport {
                 .getStatusCode().value()).isEqualTo(201);
 
         // 구독기간이 지나면 배치가 FREE 로 내린다.
-        jdbc.update("update band_plans set expires_at = ? where band_id = ?",
-                Timestamp.from(Instant.now().minus(1, ChronoUnit.DAYS)), bandId);
+        // 스토어도 끝났다고 답하게 토큰을 no-op 의 expired- 로 — 배치가 강등 전에 스토어에 묻는다(B8).
+        jdbc.update("update band_plans set expires_at = ?, purchase_token = ? where band_id = ?",
+                Timestamp.from(Instant.now().minus(1, ChronoUnit.DAYS)), "expired-" + bandId, bandId);
         assertThat(planService.expireOverdue(Instant.now())).isEqualTo(1);
 
         // 회차 이어 만들기 배치가 도는 것과 같은 경로 — FREE 로 내려가도 계속 돈다.

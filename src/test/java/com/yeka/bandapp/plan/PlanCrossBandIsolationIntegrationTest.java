@@ -66,8 +66,9 @@ class PlanCrossBandIsolationIntegrationTest extends PlanApiSupport {
         assertThat(cancel(leader, bandA).getStatusCode().value()).isEqualTo(200);
         assertThat(expiresAt(mediaA)).isNull();          // 해지 직후에는 아직 무제한
 
-        jdbc.update("update band_plans set expires_at = ? where band_id = ?",
-                Timestamp.from(Instant.now().minus(1, ChronoUnit.DAYS)), bandA);
+        // 스토어도 끝났다고 답하게 토큰을 no-op 의 expired- 로 — 배치가 강등 전에 스토어에 묻는다(B8).
+        jdbc.update("update band_plans set expires_at = ?, purchase_token = ? where band_id = ?",
+                Timestamp.from(Instant.now().minus(1, ChronoUnit.DAYS)), "expired-" + bandA, bandA);
         assertThat(planService.expireOverdue(Instant.now())).isEqualTo(1);
 
         assertThat(expiresAt(mediaA)).isNotNull();       // A: 유예 30일 설정
