@@ -6,6 +6,8 @@ import com.yeka.bandapp.board.service.StorageKeys;
 import com.yeka.bandapp.board.storage.StorageClient;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import com.yeka.bandapp.plan.entity.BandPlan;
+import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,13 +35,16 @@ public class BandDeletionService {
     private final BandRepository bandRepository;
     private final BandPurgeService bandPurgeService;
     private final StorageClient storage;
+    private final BandPlanRepository bandPlanRepository;
 
     public BandDeletionService(BandAccessGuard accessGuard, BandRepository bandRepository,
-                               BandPurgeService bandPurgeService, StorageClient storage) {
+                               BandPurgeService bandPurgeService, StorageClient storage,
+                               BandPlanRepository bandPlanRepository) {
         this.accessGuard = accessGuard;
         this.bandRepository = bandRepository;
         this.bandPurgeService = bandPurgeService;
         this.storage = storage;
+        this.bandPlanRepository = bandPlanRepository;
     }
 
     /**
@@ -55,6 +60,13 @@ public class BandDeletionService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAND_NOT_FOUND));
         if (confirmName == null || !band.getName().equals(confirmName.trim())) {
             throw new BusinessException(ErrorCode.BAND_NAME_MISMATCH);
+        }
+        // 자동 갱신 중인 Play 구독이 있으면 막는다. 지워도 Google 은 매년 계속 청구하는데, 갱신 알림이
+        // 찾을 밴드가 없어 버려진다 — 사용자는 없는 밴드에 돈을 낸다(LAUNCH_REVIEW B5). 해지 예약한 뒤에는
+        // 남은 기간을 포기하고 지울 수 있다. 앱은 삭제 창에서 먼저 안내하고, 이건 마지막 방어선이다.
+        if (bandPlanRepository.findByBandId(bandId)
+                .map(BandPlan::isAutoRenewingStoreSubscription).orElse(false)) {
+            throw new BusinessException(ErrorCode.BAND_HAS_ACTIVE_SUBSCRIPTION);
         }
 
         // R2 먼저. 실패하면 여기서 502 로 끝나고 DB 는 그대로다 — 다시 시도할 수 있다.
