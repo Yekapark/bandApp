@@ -1,5 +1,26 @@
 # 문제 기록
 
+## 2026-09-28 — 자동 갱신 중인 구독자에게 "프리미엄이 끝나요, 사진·영상이 사라져요" 경고가 갔다
+
+**증상** — (코드 검토로 발견) 연 구독은 Google Play 가 매년 자동 갱신하는데, 만료일 30·7·1일 전에 밴드장에게
+"프리미엄이 N일 뒤 끝나요" 푸시가 가고, 홈에는 모든 멤버에게 "끝나면 30일 뒤부터 사진·영상이 차례로 사라져요" 배너가
+떴다. 해지하지 않은 사람에게는 틀린 경고이고, 겁을 줘서 해지·문의를 부른다(LAUNCH_REVIEW B6).
+
+**원인** — 예고 기능은 결제 수단이 없던 시절(쿠폰·가짜 결제, 만료되면 끝)에 만들어졌다. 그때는 "만료일 = 끝" 이었고,
+Play 자동 갱신 구독을 붙인 뒤에도 예고 조회(`BandPlanRepository.findPremiumExpiringBetween`)와 배너
+(`plan_expiry_banner.dart`)가 해지 예약 여부·스토어 결제 여부를 보지 않았다.
+
+**해결** — "정말로 끝나는" 구독에만 알린다. 자동 갱신 = `store` 있고 `subscriptionRef` 있음
+(`BandPlan.isAutoRenewingStoreSubscription()`). 서버 예고 조회에 `(store is null or subscriptionRef is null)` 조건,
+앱 배너는 요금제 응답의 `autoRenewing` 이 true 면 숨긴다. 해지 예약(`subscriptionRef` 없음)과 쿠폰(`store` 없음)은 그대로 알린다.
+
+**확인법** — `./gradlew test --tests '*PlanExpiryReminderIntegrationTest'`(자동 갱신 제외·쿠폰 예고),
+`flutter test test/plan_expiry_banner_test.dart`. 운영: `select band_id, expires_at, store, subscription_ref is null as canceled
+from band_plans where tier='PREMIUM' and expires_at < now() + interval '30 days'` 에서 `store` 있고 `canceled=false` 인 밴드는
+예고를 받지 않아야 한다.
+
+---
+
 ## 2026-09-28 — 메일 발송 업체가 문서마다 달랐다, 방침에 위탁 업체가 빠졌다
 
 **증상** — `docs/EMAIL.md`·`.env.prod.example` 은 Resend 인데, LAUNCH_REVIEW L1·설정 기본값(`application.yml`·
