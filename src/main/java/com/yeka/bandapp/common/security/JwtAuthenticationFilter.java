@@ -48,8 +48,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = header.substring(BEARER_PREFIX.length()).trim();
             try {
                 JwtTokenProvider.ParsedToken parsed = tokenProvider.parseAccess(token);
-                if (blocklist.isBlocked(parsed.userId())) {
-                    throw new BusinessException(ErrorCode.ACCOUNT_WITHDRAWN);
+                var blocked = blocklist.reason(parsed.userId());
+                if (blocked.isPresent()) {
+                    throw new BusinessException(blocked.get() == AccessTokenBlocklist.Reason.SUSPENDED
+                            ? ErrorCode.ACCOUNT_SUSPENDED
+                            : ErrorCode.ACCOUNT_WITHDRAWN);
                 }
                 var authentication = new UsernamePasswordAuthenticationToken(
                         new AuthPrincipal(parsed.userId()), null, List.of());

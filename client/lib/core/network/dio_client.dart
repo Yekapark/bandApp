@@ -24,9 +24,9 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     _AuthInterceptor(
       storage: storage,
-      onSessionExpired: () {
+      onSessionExpired: (notice) {
         // 지연 read — dio 생성 시점에는 authController 를 건드리지 않는다(순환 방지).
-        ref.read(sessionExpiredSignalProvider).fire();
+        ref.read(sessionExpiredSignalProvider).fire(notice: notice);
       },
     ),
   );
@@ -49,14 +49,33 @@ final sessionExpiredSignalProvider = Provider<SessionExpiredSignal>((ref) {
 });
 
 class SessionExpiredSignal extends ChangeNotifier {
-  void fire() => notifyListeners();
+  String? _notice;
+
+  /// [notice] — 로그인 화면에 보여 줄 까닭(예: 이용 정지 안내). 그냥 만료면 null.
+  void fire({String? notice}) {
+    _notice = notice;
+    notifyListeners();
+  }
+
+  /// 마지막 신호의 안내를 꺼낸다(한 번만).
+  String? takeNotice() {
+    final n = _notice;
+    _notice = null;
+    return n;
+  }
+}
+
+/// 토큰 갱신이 "이용 정지" 로 거절됐다(LAUNCH_REVIEW P7). 서버 문구(기간·문의처)를 그대로 싣는다.
+class AccountSuspendedException implements Exception {
+  AccountSuspendedException(this.message);
+  final String message;
 }
 
 class _AuthInterceptor extends Interceptor {
   _AuthInterceptor({required this.storage, required this.onSessionExpired});
 
   final TokenStorage storage;
-  final VoidCallback onSessionExpired;
+  final void Function(String? notice) onSessionExpired;
 
   /// refresh 및 재시도 전용 Dio (인터셉터 없음 — 재귀 방지).
   final Dio _refreshDio = Dio(
@@ -93,8 +112,8 @@ class _AuthInterceptor extends Interceptor {
         await _ensureRefreshed();
         final retried = await _retry(response.requestOptions);
         return handler.resolve(retried);
-      } catch (_) {
-        onSessionExpired();
+      } catch (e) {
+        onSessionExpired(e is AccountSuspendedException ? e.message : null);
         return handler.next(response);
       }
     }
@@ -113,6 +132,11 @@ class _AuthInterceptor extends Interceptor {
       '/auth/refresh',
       data: {'refreshToken': refresh},
     );
+    final error = res.data?['error'];
+    if (error is Map && error['code'] == 'ACCOUNT_SUSPENDED') {
+      throw AccountSuspendedException(
+          (error['message'] ?? '이용이 정지된 계정이에요.').toString());
+    }
     final data = res.data?['data'] as Map<String, dynamic>?;
     if (data == null) throw StateError('refresh: empty body');
 

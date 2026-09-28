@@ -24,6 +24,11 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     ACCOUNT_WITHDRAWN(HttpStatus.UNAUTHORIZED, "탈퇴한 계정입니다."),
+    /**
+     * 이용 정지(약관 제14조). 401 인 이유 — 앱은 401 이면 토큰 갱신을 시도하고, 갱신도 이 코드로 거절되면
+     * 로그아웃하면서 안내를 띄운다. 403 이면 로그인한 채로 모든 화면이 실패만 한다.
+     */
+    ACCOUNT_SUSPENDED(HttpStatus.UNAUTHORIZED, "이용이 정지된 계정이에요."),
     PASSWORD_RESET_CODE_INVALID(HttpStatus.BAD_REQUEST, "인증번호가 올바르지 않거나 만료되었습니다."),
     EMAIL_VERIFICATION_CODE_INVALID(HttpStatus.BAD_REQUEST, "인증번호가 올바르지 않거나 만료되었습니다."),
 

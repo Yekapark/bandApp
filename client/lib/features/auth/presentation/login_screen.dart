@@ -30,6 +30,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // 이용 정지 등으로 강제 로그아웃됐으면 그 까닭을 먼저 보여 준다(P7). 한 번만.
+    _error = ref.read(authNoticeProvider);
+    if (_error != null) {
+      Future.microtask(() => ref.read(authNoticeProvider.notifier).state = null);
+    }
+  }
+
+  @override
   void dispose() {
     _email.dispose();
     _password.dispose();

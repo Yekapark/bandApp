@@ -24,6 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -34,6 +36,11 @@ import java.util.Optional;
 public class AuthService {
 
     private static final int MAX_NAME_LENGTH = 30;
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    /** 이 해 이후까지면 영구 정지로 본다(운영 스크립트는 9999-12-31 을 쓴다). */
+    private static final int PERMANENT_FROM_YEAR = 9000;
+    /** 정지 안내에 적는 이의 제기 창구 — 약관 제14조·개인정보처리방침의 연락처와 같다. */
+    static final String APPEAL_CONTACT = "notice@bandule.com";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -96,6 +103,8 @@ public class AuthService {
                 || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
+        // 비밀번호가 맞은 뒤에만 알린다 — 틀린 비밀번호로 정지 여부를 캐낼 수 없게.
+        requireNotSuspended(user);
         return AuthResponse.of(user, issue(user.getId()), false);
     }
 
@@ -110,6 +119,7 @@ public class AuthService {
                 .findBySocialProviderAndSocialIdAndDeletedAtIsNull(SocialProvider.KAKAO, identity.id());
         if (existing.isPresent()) {
             User user = existing.get();
+            requireNotSuspended(user);
             return AuthResponse.of(user, issue(user.getId()), false);
         }
         try {
@@ -131,6 +141,14 @@ public class AuthService {
         JwtTokenProvider.ParsedToken parsed = tokenProvider.parseRefresh(refreshToken);
         long userId = parsed.userId();
         String jti = parsed.jti();
+
+        // 정지는 운영자가 DB 에 적는다(tools/moderate.py). 갱신 때마다 확인해 두면 늦어도 access 토큰 수명(30분)
+        // 안에 막힌다 — 스크립트가 차단 목록에도 올리므로 보통은 즉시다. 남은 세션도 모두 지운다.
+        User user = userRepository.findById(userId).orElse(null);
+        if (user != null && user.isSuspendedAt(Instant.now())) {
+            refreshTokenStore.removeAll(userId);
+            throw suspended(user);
+        }
 
         TokenPair pair = tokenProvider.issue(userId);
         return refreshTokenStore.rotate(userId, jti, pair.refreshJti(), jwtProperties.refreshTokenTtl(),
@@ -155,6 +173,22 @@ public class AuthService {
             // 이미 만료·무효한 토큰이면 정리할 것이 없다. 로그아웃은 멱등이다.
         }
         deviceTokenService.forgetDevice(deviceToken);
+    }
+
+    private static void requireNotSuspended(User user) {
+        if (user.isSuspendedAt(Instant.now())) {
+            throw suspended(user);
+        }
+    }
+
+    /** 본인에게는 기간과 이의 창구만 알린다. 사유는 운영 기록이라 싣지 않는다(정지 안내 메일에서 따로 알린다). */
+    static BusinessException suspended(User user) {
+        LocalDate until = user.getSuspendedUntil().atZone(KST).toLocalDate();
+        String period = until.getYear() >= PERMANENT_FROM_YEAR
+                ? ""
+                : " (%d년 %d월 %d일까지)".formatted(until.getYear(), until.getMonthValue(), until.getDayOfMonth());
+        return new BusinessException(ErrorCode.ACCOUNT_SUSPENDED,
+                "이용이 정지된 계정이에요" + period + ". 이의가 있으면 " + APPEAL_CONTACT + " 로 알려 주세요.");
     }
 
     private TokenPair issue(long userId) {

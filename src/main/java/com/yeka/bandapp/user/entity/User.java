@@ -59,6 +59,17 @@ public class User extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /**
+     * 이용 정지가 끝나는 시각(약관 제14조, LAUNCH_REVIEW P7). 지금보다 뒤면 로그인·토큰 갱신이 막힌다.
+     * 운영자가 {@code tools/moderate.py} 로 채운다 — 관리자 API 가 없어서 앱 코드는 읽기만 한다.
+     */
+    @Column(name = "suspended_until")
+    private Instant suspendedUntil;
+
+    /** 정지 사유(운영 기록). 본인에게 그대로 보여 주지 않는다. */
+    @Column(name = "suspension_reason", length = 200)
+    private String suspensionReason;
+
     @Builder(access = AccessLevel.PRIVATE)
     private User(String email, String passwordHash, String name, SocialProvider socialProvider, String socialId,
                 boolean emailVerified) {
@@ -85,6 +96,11 @@ public class User extends BaseTimeEntity {
 
     public boolean isWithdrawn() {
         return deletedAt != null;
+    }
+
+    /** {@code now} 시점에 이용 정지 중인가. 기간이 지나면 저절로 풀린다. */
+    public boolean isSuspendedAt(Instant now) {
+        return suspendedUntil != null && suspendedUntil.isAfter(now);
     }
 
     /** 소프트 삭제. 이미 탈퇴한 계정이면 시각을 덮어쓰지 않는다. */
@@ -114,6 +130,7 @@ public class User extends BaseTimeEntity {
         this.passwordHash = null;
         this.socialId = null;
         this.name = "탈퇴한 사용자";
+        this.suspensionReason = null;
     }
 
     public boolean isAnonymized() {
