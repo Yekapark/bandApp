@@ -68,6 +68,49 @@ class PlanExpirationIntegrationTest extends PlanApiSupport {
         assertThat(Duration.between(Instant.now(), grace).toDays()).isBetween(28L, 31L);
     }
 
+    /**
+     * 갱신 알림이 늦어 DB 만료일은 지났지만 스토어에선 아직 유효한 구독 — 강등하지 않고 스토어 만료일로 늘린다(B8).
+     * 예전에는 돈을 낸 밴드가 FREE 로 내려갔다.
+     */
+    @Test
+    void store_says_still_active_so_it_is_extended_not_downgraded() {
+        String leader = signup("exp-store-live@band.app", "리더");
+        long bandId = createBand(leader, "갱신늦은밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        expirePlan(bandId, Instant.now().minus(1, ChronoUnit.DAYS), "tok-live-" + bandId);   // no-op: ACTIVE
+
+        assertThat(planService.expireOverdue(Instant.now())).isZero();
+        assertThat(tierOf(bandId)).isEqualTo(PlanTier.PREMIUM);
+        assertThat(planExpiresAt(bandId)).isAfter(Instant.now().plus(300, ChronoUnit.DAYS));
+    }
+
+    /** 스토어가 잠깐 답하지 않으면 며칠은 강등을 미룬다. */
+    @Test
+    void store_unavailable_briefly_postpones_the_downgrade() {
+        String leader = signup("exp-store-down@band.app", "리더");
+        long bandId = createBand(leader, "장애밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        expirePlan(bandId, Instant.now().minus(1, ChronoUnit.DAYS), "unavailable-" + bandId);
+
+        assertThat(planService.expireOverdue(Instant.now())).isZero();
+        assertThat(tierOf(bandId)).isEqualTo(PlanTier.PREMIUM);
+    }
+
+    /** 스토어 장애가 길어져도 무기한 PREMIUM 이 되지는 않는다. */
+    @Test
+    void store_unavailable_for_days_still_downgrades() {
+        String leader = signup("exp-store-long@band.app", "리더");
+        long bandId = createBand(leader, "긴장애밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        expirePlan(bandId, Instant.now().minus(5, ChronoUnit.DAYS), "unavailable-" + bandId);
+
+        assertThat(planService.expireOverdue(Instant.now())).isEqualTo(1);
+        assertThat(tierOf(bandId)).isEqualTo(PlanTier.FREE);
+    }
+
     @Test
     void premium_within_its_period_is_untouched() {
         String leader = signup("exp-b@band.app", "리더");
@@ -132,9 +175,23 @@ class PlanExpirationIntegrationTest extends PlanApiSupport {
         assertThat(tierOf(healthy)).isEqualTo(PlanTier.PREMIUM);
     }
 
-    /** 구독기간 종료를 원하는 시각으로 옮긴다(시간이 흐른 것처럼). */
+    /**
+     * 구독기간 종료를 원하는 시각으로 옮긴다(시간이 흐른 것처럼). 스토어도 "끝났다" 고 답하도록 구매 토큰을
+     * no-op 게이트웨이의 {@code expired-} 로 바꾼다 — 배치가 강등 전에 스토어에 다시 묻기 때문이다(B8).
+     */
     private void expirePlan(long bandId, Instant when) {
-        jdbc.update("update band_plans set expires_at = ? where band_id = ?", Timestamp.from(when), bandId);
+        expirePlan(bandId, when, "expired-" + bandId);
+    }
+
+    /** 만료일과 스토어가 답할 구매 토큰을 함께 정한다. */
+    private void expirePlan(long bandId, Instant when, String storeToken) {
+        jdbc.update("update band_plans set expires_at = ?, purchase_token = ? where band_id = ?",
+                Timestamp.from(when), storeToken, bandId);
+    }
+
+    private Instant planExpiresAt(long bandId) {
+        return jdbc.queryForObject("select expires_at from band_plans where band_id = ?", Timestamp.class, bandId)
+                .toInstant();
     }
 
     private PlanTier tierOf(long bandId) {

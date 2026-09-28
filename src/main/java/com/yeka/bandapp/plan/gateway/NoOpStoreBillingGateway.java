@@ -21,6 +21,7 @@ import java.util.Optional;
  * <p>토큰 접두사로 상태를 고른다(테스트 편의): {@code revoked-…}→REVOKED, {@code expired-…}→EXPIRED,
  * {@code canceled-…}→CANCELED, {@code hold-…}→ON_HOLD, {@code invalid-…}→조회 실패(empty),
  * 그 밖에는 ACTIVE. 만료 시각은 {@code now + premiumPeriodDays}(1년).
+ * {@code unavailable-…} 은 스토어가 일시적으로 답하지 않는 상황({@link StoreBillingUnavailableException})을 흉내낸다.
  * 토큰 끝에 {@code @band-7} 처럼 붙이면 그 값이 구매의 밴드 표시(obfuscatedAccountId)가 된다.
  *
  * <p><b>운영({@code prod} 프로파일)에서는 아무것도 통과시키지 않는다.</b> 이 빈이 운영에 떴다는 건
@@ -62,6 +63,8 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
         }
         String prefix = purchaseToken.contains("-") ? purchaseToken.substring(0, purchaseToken.indexOf('-')) : "";
         StoreSubscriptionState state = switch (prefix) {
+            case "unavailable" -> throw new StoreBillingUnavailableException(
+                    "[no-op billing] 스토어 일시 장애 흉내 token=" + purchaseToken, null);
             case "invalid" -> null;
             case "revoked" -> StoreSubscriptionState.REVOKED;
             case "expired" -> StoreSubscriptionState.EXPIRED;

@@ -21,8 +21,8 @@ import java.util.List;
  * <p>구독 시작·갱신·해지는 스토어(Play Billing)에서 일어나고 {@link StoreSubscriptionService} 가
  * 검증·웹훅으로 반영한다 — 이 서비스는 더 이상 결제를 건드리지 않는다.
  *
- * <p>{@link #expireOverdue(Instant)} 는 스토어 연동과 무관하게 DB 상태만 정리한다(웹훅이 늦거나
- * 빠졌을 때의 안전망). 요청자가 없어 {@code accessGuard} 를 타지 않는다.
+ * <p>{@link #expireOverdue(Instant)} 는 웹훅이 늦거나 빠졌을 때의 안전망이다. 스토어 결제 밴드는 강등 전에 스토어에
+ * 다시 묻는다. 요청자가 없어 {@code accessGuard} 를 타지 않는다.
  */
 @Service
 public class PlanService {
@@ -38,16 +38,19 @@ public class PlanService {
     private final PlanMutationService planMutationService;
     private final PlanProperties planProperties;
     private final ApplicationEventPublisher eventPublisher;
+    private final StoreSubscriptionService storeSubscriptionService;
 
     public PlanService(BandAccessGuard accessGuard, BandPlanRepository bandPlanRepository,
                        PlanDirectoryService planDirectory, PlanMutationService planMutationService,
-                       PlanProperties planProperties, ApplicationEventPublisher eventPublisher) {
+                       PlanProperties planProperties, ApplicationEventPublisher eventPublisher,
+                       StoreSubscriptionService storeSubscriptionService) {
         this.accessGuard = accessGuard;
         this.bandPlanRepository = bandPlanRepository;
         this.planDirectory = planDirectory;
         this.planMutationService = planMutationService;
         this.planProperties = planProperties;
         this.eventPublisher = eventPublisher;
+        this.storeSubscriptionService = storeSubscriptionService;
     }
 
     /** 현재 요금제 조회. 밴드 멤버면 누구나. */
@@ -60,8 +63,9 @@ public class PlanService {
      * 구독기간이 지난 PREMIUM 밴드를 FREE 로 되돌린다. <b>배치 전용</b> — 요청자가 없어
      * {@code accessGuard} 를 타지 않는다({@code PlanExpirationJob} 만 호출한다).
      *
-     * <p>스토어 웹훅(EXPIRED)이 정상이면 이 배치가 할 일이 없다. 웹훅이 늦거나 빠진 경우를 위한
-     * 안전망이라 스토어를 호출하지 않고 {@code expires_at} 만 보고 정리한다.
+     * <p>스토어 웹훅(EXPIRED)이 정상이면 이 배치가 할 일이 없다. 웹훅이 늦거나 빠진 경우를 위한 안전망이다.
+     * <b>스토어 결제 밴드는 강등 전에 스토어에 다시 묻는다</b>({@link StoreSubscriptionService#recheckBeforeExpiry}) —
+     * 예전에는 {@code expires_at} 만 보고 내려서, 갱신 알림이 늦거나 결제 유예 중인 밴드가 돈을 내고도 FREE 가 됐다(B8).
      *
      * <p>유예기간은 수동 해지와 같다({@code downgradeGraceDays}, 기본 30일) — 사용자에게
      * "해지든 만료든 30일" 로 설명이 단순해진다.
@@ -78,6 +82,14 @@ public class PlanService {
         int done = 0;
         for (Long bandId : bandIds) {
             try {
+                // 스토어 결제 밴드는 강등 전에 스토어에 다시 묻는다(B8). 갱신 알림이 늦었거나 결제 유예 중이면
+                // 아직 돈을 낸 밴드다 — 만료일만 늘리고 넘어간다. 스토어가 잠깐 답하지 않으면 며칠은 기다린다.
+                StoreSubscriptionService.ExpiryRecheck recheck =
+                        storeSubscriptionService.recheckBeforeExpiry(bandId, now);
+                if (recheck == StoreSubscriptionService.ExpiryRecheck.STILL_ACTIVE
+                        || recheck == StoreSubscriptionService.ExpiryRecheck.UNKNOWN) {
+                    continue;
+                }
                 planMutationService.applyDowngrade(bandId, now, graceUntil);
                 // 구독이 조용히 끝나면 유예 뒤 사진·영상이 예고 없이 사라진다. 밴드장에게 알린다.
                 eventPublisher.publishEvent(new NotificationEvents.PlanExpired(

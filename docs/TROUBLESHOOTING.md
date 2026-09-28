@@ -1,5 +1,26 @@
 # 문제 기록
 
+## 2026-09-28 — 야간 만료 배치가 스토어에 묻지 않고 결제한 밴드를 FREE 로 내렸다
+
+**증상** — (코드 검토로 발견) 연 구독 갱신 알림(RTDN RENEWED)이 늦게 오거나 빠지면, 또는 카드 결제가 실패해 Google 이
+유예 기간(IN_GRACE) 동안 접근을 유지하는 중이면, DB 만료일이 지나 야간 배치가 밴드를 FREE 로 내렸다. 돈을 낸
+밴드가 무료로 보이고 사진·영상 유예 카운트가 시작됐다(LAUNCH_REVIEW B8). B1 수정 뒤로는 늦은 알림이 오면 되살아나지만
+그 사이는 FREE 였다.
+
+**원인** — 만료 배치(`PlanService.expireOverdue`)는 결제 수단이 없던 시절의 안전망이라 `expires_at` 만 봤다. 스토어 구독의
+진짜 상태는 Google 에 있고, DB 만료일은 알림이 와야 늘어나는 **사본**일 뿐인데 사본만 믿었다.
+
+**해결** — 강등 전에 `StoreSubscriptionService.recheckBeforeExpiry` 로 스토어에 다시 묻는다. 스토어 결제 밴드면
+`subscriptionsv2.get` → PREMIUM 을 줄 수 있는 상태(ACTIVE·IN_GRACE·CANCELED)이고 스토어 만료일이 미래면 그 날짜로 연장
+(CANCELED 면 해지 예약 표시도 맞춤)하고 강등하지 않는다. 끝났으면 강등. 스토어가 일시 장애(`StoreBillingUnavailableException`)
+면 DB 만료 뒤 3일까지는 건너뛰고, 그 뒤엔 답이 없어도 강등한다 — 장애가 길어져 무기한 PREMIUM 이 되지 않게.
+쿠폰 밴드(스토어 없음)는 예전처럼 바로 강등. 외부 호출은 트랜잭션 밖, 연장·강등은 각각 짧은 트랜잭션(CLAUDE.md).
+
+**확인법** — `./gradlew test --tests '*PlanExpirationIntegrationTest'`. 운영 로그의 `만료 배치: 스토어에선 아직 유효 — 강등 대신 연장`
+(매일 04:45 KST 배치). no-op 게이트웨이 토큰 접두사로 흉내낸다: `expired-`(끝남), `unavailable-`(장애), 그 밖(유효).
+
+---
+
 ## 2026-09-28 — 자동 갱신 중인 구독자에게 "프리미엄이 끝나요, 사진·영상이 사라져요" 경고가 갔다
 
 **증상** — (코드 검토로 발견) 연 구독은 Google Play 가 매년 자동 갱신하는데, 만료일 30·7·1일 전에 밴드장에게
