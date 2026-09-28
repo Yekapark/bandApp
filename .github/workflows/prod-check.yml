@@ -66,6 +66,23 @@ jobs:
               -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" \
               'QUIET=1 sh -s' < deploy/prod-check.sh
 
+      # 어떤 메일 업체로 보내고 있는지 — 문서끼리 엇갈린 적이 있어서(Resend / Gmail SMTP) 서버 값을 주석으로 남긴다.
+      # 호스트 이름만 뽑는다(비밀번호·계정은 출력하지 않는다). 개인정보처리방침의 위탁 업체와 맞는지 볼 때 쓴다.
+      - name: 메일 발신 설정
+        if: env.DEPLOY_HOST != ''
+        continue-on-error: true
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > deploy_key
+          host=$(ssh -i deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 \
+              -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" \
+              "grep -m1 -E '^MAIL_SMTP_HOST=' /opt/bandapp/.env.prod | cut -d= -f2- | tr -d '\"' | tr -cd 'A-Za-z0-9.-'")
+          echo "::notice title=메일 발신 호스트::${host:-비어 있음(기본값 사용)}"
+
       - name: 배포 대상 없음 — 건너뜀
         if: env.DEPLOY_HOST == ''
         run: echo "::notice title=점검 건너뜀::DEPLOY_HOST 시크릿이 비어 있다."
