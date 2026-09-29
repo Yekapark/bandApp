@@ -5,8 +5,10 @@ import 'package:intl/intl.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../routing/app_router.dart';
 import '../../band/application/band_providers.dart';
 import '../application/notification_providers.dart';
+import '../application/notification_route.dart';
 import '../data/notification_models.dart';
 import '../data/notification_repository.dart';
 import '../data/notification_seen_storage.dart';
@@ -140,7 +142,12 @@ class _NotificationListScreenState
                 return _NotificationTile(
                   item: n,
                   isNew: _seenBefore == null || n.sentAt.isAfter(_seenBefore!),
-                  onTap: () => context.push('/reservations/${n.reservationId}'),
+                  onTap: () {
+                    final route = notificationRoute(n.type, n.reservationId);
+                    if (route != null && route != Routes.notifications) {
+                      context.push(route);
+                    }
+                  },
                 );
               },
             ),
