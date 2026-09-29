@@ -43,6 +43,31 @@ class RecurringExtensionJobTest extends RecurringApiSupport {
         reservationRepository.deleteAll(occurrences);
     }
 
+    @Autowired
+    com.yeka.bandapp.plan.service.PlanMutationService planMutationService;
+
+    @Test
+    void extend_pauses_while_the_band_is_free_and_resumes_without_backfilling() {
+        // LAUNCH_REVIEW B11 — 무료로 내려가면 새 회차를 안 만들고, 프리미엄으로 돌아오면 오늘부터 이어 간다.
+        String leader = signup("rec-pause@band.app", "리더");
+        long bandId = createBand(leader, "쉬는밴드");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        LocalDate firstDate = today().plusDays(1);
+        long ruleId = createRule(leader, bandId, ruleBody(
+                roomId, "WEEKLY", firstDate.getDayOfWeek(), "15:00", "18:00", firstDate, null));
+        List<Reservation> occ = reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId);
+        int full = occ.size();
+        hardDeleteOccurrences(occ.subList(full - 2, full)); // "아직 안 만든 미래분" 2건
+
+        planMutationService.applyRevoke(bandId, java.time.Instant.now()); // FREE 로
+        assertThat(recurringRuleService.extendRule(ruleId)).isZero();
+        assertThat(reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId)).hasSize(full - 2);
+
+        makePremium(leader, bandId); // 다시 PREMIUM
+        assertThat(recurringRuleService.extendRule(ruleId)).isEqualTo(2);
+        assertThat(reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId)).hasSize(full);
+    }
+
     @Test
     void extend_fills_missing_future_occurrences_and_is_idempotent() {
         String leader = signup("rec-job-l@band.app", "리더");

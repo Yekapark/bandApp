@@ -176,6 +176,11 @@ public class RecurringRuleService {
      * 규칙 하나의 회차를 지평선까지 이어서 만든다. 이미 만든 마지막 회차 <b>다음</b>부터 계산하므로
      * 여러 번 호출해도 회차 수가 늘지 않는다(멱등). 규칙이 그 사이 삭제됐으면 0.
      *
+     * <p><b>밴드가 FREE 면 일시정지</b> — 새 회차를 만들지 않는다(0). 정기 일정은 PREMIUM 기능인데, 한 달만
+     * 구독해 규칙을 만들고 해지해도 규칙이 계속 회차를 만들었다(LAUNCH_REVIEW B11, 사용자 결정: 일시정지).
+     * 규칙과 이미 만든 회차는 그대로 두고, PREMIUM 으로 돌아오면 다음 배치부터 이어 간다. 그때 멈춰 있던
+     * 기간(오늘 이전)은 채우지 않는다 — 지난 날짜에 합주 기록이 새로 생기면 안 된다.
+     *
      * <p>규칙 행을 {@code FOR UPDATE}로 잠근다 — 연장 도중 사용자가 같은 규칙을 삭제하면,
      * 소프트 삭제된 규칙에 새 {@code CONFIRMED} 회차가 붙어 고아가 되는 레이스를 막는다.
      *
@@ -187,8 +192,14 @@ public class RecurringRuleService {
         if (rule == null || rule.isDeleted()) {
             return 0;
         }
+        if (!planDirectory.isPremium(rule.getBandId())) {
+            return 0;
+        }
+        LocalDate yesterday = LocalDate.now(properties.zoneId()).minusDays(1);
         LocalDate exclusiveAfter = reservationDirectory.lastOccurrenceStartOf(ruleId)
                 .map(last -> LocalDate.ofInstant(last, properties.zoneId()))
+                // 일시정지에서 돌아온 규칙은 마지막 회차가 과거다 — 멈춰 있던 날짜를 뒤늦게 채우지 않고 오늘부터.
+                .map(last -> last.isBefore(yesterday) ? yesterday : last)
                 .orElse(null);
         List<OccurrenceSlot> slots = freshSlots(rule, exclusiveAfter);
         return reservationDirectory.createOccurrences(

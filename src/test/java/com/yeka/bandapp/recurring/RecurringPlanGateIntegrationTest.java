@@ -18,10 +18,12 @@ import java.time.temporal.ChronoUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 정기 일정이 PREMIUM 전용이라는 것과, <b>요금제가 내려가도 이미 만든 규칙은 계속 돈다</b>는 것.
+ * 정기 일정이 PREMIUM 전용이라는 것과, <b>요금제가 내려가면 규칙이 새 회차를 만들지 않는다(일시정지)</b>는 것.
  *
- * <p>뒤쪽이 더 중요하다. 구독이 끝났다고 회차 생성까지 멈추면 사용자가 모르는 사이 다음 주 합주가
- * 사라진다 — 미디어가 예고 없이 지워지는 것과 같은 종류의 사고다.
+ * <p>2026-09-28 까지는 "내려가도 계속 돈다" 였다 — 멈추면 사용자가 모르는 사이 다음 주 합주가 사라질까 봐서.
+ * 그런데 그러면 한 달만 구독해 규칙을 만들고 해지해도 기능을 영영 쓰게 된다(LAUNCH_REVIEW B11). 사용자 결정으로
+ * 일시정지로 바꿨다. <b>이미 만든 회차(앞으로 8주분)는 그대로 남아</b> 다음 주 합주는 사라지지 않고, 새 회차만 안 생긴다.
+ * 앱의 정기 일정 화면이 무료일 때 이 사실을 알린다.
  */
 class RecurringPlanGateIntegrationTest extends RecurringApiSupport {
 
@@ -69,8 +71,8 @@ class RecurringPlanGateIntegrationTest extends RecurringApiSupport {
     }
 
     @Test
-    @DisplayName("PREMIUM 을 해지해도 이미 만든 규칙의 회차 생성은 계속된다")
-    void existing_rule_keeps_generating_after_downgrade() {
+    @DisplayName("PREMIUM 이 끝나면 이미 만든 회차는 남고, 규칙은 새 회차를 만들지 않는다")
+    void existing_rule_pauses_after_downgrade_but_keeps_its_occurrences() {
         String leader = signup("gate-down@band.app", "해지리더");
         long bandId = createBand(leader, "해지밴드");
         long roomId = createRoom(leader, bandId, "{\"name\":\"합주실\"}");
@@ -92,10 +94,13 @@ class RecurringPlanGateIntegrationTest extends RecurringApiSupport {
                 Timestamp.from(Instant.now().minus(1, ChronoUnit.DAYS)), "expired-" + bandId, bandId);
         assertThat(planService.expireOverdue(Instant.now())).isEqualTo(1);
 
-        // 회차 이어 만들기 배치가 도는 것과 같은 경로 — FREE 로 내려가도 계속 돈다.
-        recurringRuleService.extendRule(ruleId);
+        // 회차 이어 만들기 배치가 도는 것과 같은 경로 — FREE 면 새 회차를 만들지 않는다(일시정지, B11).
+        int beforeExtend = reservationRepository.findAll().size();
+        assertThat(recurringRuleService.extendRule(ruleId)).isZero();
 
-        assertThat(reservationRepository.findAll().size()).isGreaterThanOrEqualTo(before);
+        // 이미 만든 회차는 하나도 사라지지 않는다.
+        assertThat(reservationRepository.findAll().size()).isEqualTo(beforeExtend);
+        assertThat(beforeExtend).isGreaterThanOrEqualTo(before);
 
         // 다만 새 규칙은 이제 못 만든다.
         ResponseEntity<String> denied = postRule(leader, bandId, body(roomId, today().plusDays(3)));
