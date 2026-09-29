@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app_refresh.dart';
 import 'core/config/app_config.dart';
 import 'core/deeplink/invite_link_handler.dart';
+import 'core/layout/readable_width.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/application/auth_controller.dart';
@@ -65,9 +66,13 @@ class BandApp extends ConsumerWidget {
           // 화면이 자체 SafeArea 를 갖고 있어도 문제없다: SafeArea 는 자식의 MediaQuery.padding 을
           // 지우므로 안쪽 SafeArea 는 0 을 더한다.
           // ColoredBox 는 띄운 만큼 생기는 아래 여백을 앱 배경색으로 메운다.
+          // 큰 화면(태블릿·폴더블·가로)에서는 가운데 폰 폭 기둥으로 — 화면이 폰 세로 기준이라(P11).
+          // 안전 영역보다 바깥이어야 가로 폰의 카메라 구멍 여백을 기둥 밖 여백으로 흡수한다.
           child: ColoredBox(
             color: AppColors.background,
-            child: SafeArea(top: false, child: child!),
+            child: ReadableWidth(
+              child: SafeArea(top: false, child: child!),
+            ),
           ),
         );
       },
