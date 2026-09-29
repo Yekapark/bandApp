@@ -31,6 +31,13 @@ class _ReservationDetailScreenState
   /// 참석 응답 직후엔 서버 재조회 없이 이 값으로 화면을 갱신한다.
   AttendanceBoard? _boardOverride;
   bool _savingRsvp = false;
+
+  /// 방금 누른 참석 상태. **서버 응답을 기다리지 않고 먼저 칠한다.**
+  ///
+  /// 서버 왕복에 수백 ms 가 걸리는데 그동안 버튼이 그대로면 "안 눌렸나" 싶어 다시 누르게
+  /// 된다. 눌린 것은 즉시 보여 주고, 인원수 같은 집계는 응답이 오면 맞춘다.
+  /// 실패하면 null 로 되돌려 원래 값이 다시 보이게 한다.
+  AttendanceStatus? _pendingRsvp;
   bool _busy = false;
 
   ReservationKey _key(int bandId) =>
@@ -106,10 +113,13 @@ class _ReservationDetailScreenState
                 const _SectionTitle('내 참석 여부'),
                 const SizedBox(height: 10),
                 _RsvpButtons(
-                  current: meId == null
-                      ? AttendanceStatus.pending
-                      : board.statusOf(meId),
-                  enabled: editable && meId != null && !_savingRsvp,
+                  current: _pendingRsvp ??
+                      (meId == null
+                          ? AttendanceStatus.pending
+                          : board.statusOf(meId)),
+                  // 저장 중에도 계속 누를 수 있게 둔다 — 잘못 눌렀을 때 바로 고치는 편이
+                  // 응답을 기다렸다 고치는 것보다 낫다. 마지막 요청의 응답이 이긴다.
+                  enabled: editable && meId != null,
                   onSelect: (s) => _respond(band.id, meId!, s),
                 ),
                 if (!editable)
@@ -205,7 +215,11 @@ class _ReservationDetailScreenState
   }
 
   Future<void> _respond(int bandId, int meId, AttendanceStatus status) async {
-    setState(() => _savingRsvp = true);
+    // 먼저 칠하고 나중에 보낸다.
+    setState(() {
+      _pendingRsvp = status;
+      _savingRsvp = true;
+    });
     try {
       final board =
           await ref.read(reservationRepositoryProvider).respondAttendance(
@@ -215,19 +229,32 @@ class _ReservationDetailScreenState
                 status: status,
               );
       if (!mounted) return;
-      setState(() => _boardOverride = board);
+      setState(() {
+        _boardOverride = board;
+        // 서버가 확정한 값이 왔으니 임시 표시를 거둔다. 그 사이 다른 것을 눌렀다면
+        // 그쪽 요청이 아직 날고 있으므로 건드리지 않는다.
+        if (_pendingRsvp == status) _pendingRsvp = null;
+      });
       // 로컬 갱신만으로는 부족하다. reservationDetailProvider 는 autoDispose 가 아니라
       // 캐시가 계속 남아서, 화면을 벗어났다 돌아오면(_boardOverride 가 사라진 뒤) 응답 전의
       // 옛 값이 다시 그려진다. 캐시도 함께 무효화한다 — 이미 데이터가 있는 상태의 갱신이라
       // 로딩 스피너로 깜빡이지 않는다.
       ref.invalidate(reservationDetailProvider(_key(bandId)));
     } on ApiException catch (e) {
+      _revertRsvp(status);
       _toast(e.message);
     } catch (_) {
+      _revertRsvp(status);
       _toast('참석 상태를 바꾸지 못했어요.');
     } finally {
       if (mounted) setState(() => _savingRsvp = false);
     }
+  }
+
+  /// 실패했으니 먼저 칠한 것을 거둔다 — 안 바뀐 상태가 바뀐 것처럼 남으면 안 된다.
+  void _revertRsvp(AttendanceStatus attempted) {
+    if (!mounted) return;
+    if (_pendingRsvp == attempted) setState(() => _pendingRsvp = null);
   }
 
   Future<void> _addSong(int bandId) async {

@@ -24,7 +24,7 @@
 | 서버 운영 명령 | `bandule ps` / `logs` / `errors` / `health` / `backup` / `db` — `bandule` 만 쳐도 사용법이 나온다 |
 | 배포 | **`main` 에 머지하면 자동.** CI 통과 → 이미지 빌드 → GHCR → SSH → 교체 → 바깥 주소 200 확인 |
 | 롤백 | `ssh ... 'cd /opt/bandapp && sh deploy/deploy.sh sha-<이전>'` |
-| HTTPS | Let's Encrypt 자동 갱신. Cloudflare 주황 구름 ON (실제 접속자 IP 복원 확인) |
+| HTTPS | Let's Encrypt 자동 갱신. **Cloudflare 주황 구름 OFF (DNS only)** — 켜면 한국 트래픽이 LA 로 돌아 요청당 700ms~1s(끄면 64~119ms, 2026-09-06 측정). `DEPLOY.md` §1 |
 | 백업 | 매일 03:30 KST → R2 `s3://bandule-prod/db-backups/`, 7개 보관 |
 | 감시 | UptimeRobot 등록됨 |
 

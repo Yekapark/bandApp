@@ -25,8 +25,16 @@
 
 ## 1. 사전 준비
 
-**VM** — Oracle Cloud Always Free(ARM) 또는 저가 VPS. Ubuntu 22.04+ 기준.
-메모리 2GB 이상(1GB 면 Postgres + JVM 이 빠듯하다).
+**VM** — 한국 사용자 대상이므로 **서울 리전이 있는 곳**을 고른다(Vultr·AWS Lightsail·국내 VPS).
+운영은 **Vultr 서울**이다. Oracle Cloud Always Free(ARM)는 공짜지만 가입·용량 확보가 까다롭다.
+
+- **Ubuntu 24.04 LTS** 권장. 22.04 는 2027-04 에 표준 지원이 끝나고, 26.04 는 아직
+  써드파티 지원이 덜 따라온다
+- **메모리 2GB 이상.** 1GB 면 Postgres + JVM 이 빠듯하다
+- 디스크는 **NVMe** 가 있으면 그쪽으로 — PostgreSQL 이 올라가서 체감된다
+- 업체 자동 백업(스냅샷)은 꺼도 된다. DB 는 §4 가 매일 R2 로 뜬다
+
+<!-- 2026-09-06 에 쓰고 브랜치(phase-11-deploy)에만 남아 있던 것을 2026-09-29 에 옮겼다(LAUNCH_REVIEW G2). -->
 
 ```bash
 # docker + compose plugin
@@ -44,7 +52,21 @@ git clone https://github.com/Yekapark/bandApp.git /opt/bandapp
 sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw enable
 ```
 
-**DNS / Cloudflare** — `DOMAIN` 의 A 레코드를 VM 공인 IP 로 만들고, **주황 구름(Proxied)을 켠다.**
+> ### ⚠️ 한국 서비스라면 주황 구름을 켜기 전에 **재 보라** (2026-09-06 측정)
+>
+> 무료 요금제에서 한국 트래픽이 서울(ICN)이 아니라 **LA(`colo=LAX`)** 로 가는 일이 잦다.
+> 우리 경우 요청 하나가 **700ms~1s** 였고, 끄니 **64~119ms** 가 됐다. **지금은 꺼 두었다(회색 구름)** —
+> 2026-09-29 에도 `https://api.bandule.com/cdn-cgi/trace` 가 Cloudflare 가 아니라 우리 서버의 401 로 답해 확인.
+> 끄면 서버의 진짜 IP 가 드러나는 대신, HTTPS·접속자 IP·요청 횟수 제한은 그대로 동작한다.
+>
+> ```bash
+> curl -s https://api.<도메인>/cdn-cgi/trace | grep colo     # 프록시 켜져 있을 때만 응답
+> for i in 1 2 3; do curl -s -o /dev/null -w "%{time_starttransfer}s\n" https://api.<도메인>/actuator/health; done
+> ```
+>
+> 아래 설명은 다시 켜게 될 때를 위해 남겨 둔다(켜면 realip 설정도 함께 — 아래 🔴).
+
+**DNS / Cloudflare** — `DOMAIN` 의 A 레코드를 VM 공인 IP 로 만든다. **주황 구름(Proxied)은 위 경고를 읽고 결정한다.**
 
 주황 구름을 켜면 서버의 진짜 IP 가 밖에 보이지 않는다. 무료 VM 한 대로 굴리는 구성에서
 원본 주소가 공개되면 누가 작정하고 두들길 때 막을 수단이 없으므로, 이 이점이 크다.
