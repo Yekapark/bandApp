@@ -309,7 +309,7 @@ class _CurrentCard extends StatelessWidget {
                   fontSize: 12, color: AppColors.textSecondary)),
           if (plan.isPremium && plan.expiresAt != null) ...[
             const SizedBox(height: 3),
-            Text('구독기간 종료: ${Fmt.dateKoUtc(plan.expiresAt!)}',
+            Text('구독기간 종료: ${Fmt.dateKoWithYearUtc(plan.expiresAt!)}',
                 style:
                     const TextStyle(fontSize: 11, color: AppColors.textFaint)),
           ],

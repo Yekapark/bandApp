@@ -43,6 +43,13 @@ class Fmt {
   /// UTC 를 로컬로 바꿔 "9월 10일 (목)" 로.
   static String dateKoUtc(DateTime utc) => dateKo(utc.toLocal());
 
+  /// UTC 를 로컬로 바꿔 "2027년 9월 10일 (금)" 로 — 1년 뒤처럼 올해가 아닐 수 있는 날짜(구독 종료일 등).
+  /// 연도가 없으면 연간 구독의 종료일이 "올해 9월" 로 읽힌다(LAUNCH_REVIEW U4).
+  static String dateKoWithYearUtc(DateTime utc) {
+    final d = utc.toLocal();
+    return '${d.year}년 ${dateKo(d)}';
+  }
+
   /// 로컬 날짜를 "2026-09-10" 로 (쿼리 파라미터·라우트용).
   static String ymd(DateTime local) =>
       '${local.year.toString().padLeft(4, '0')}-'
