@@ -60,7 +60,7 @@
 | 21 | L2·L3 | 중간 | 연락처 통일, 판매자 법적 요건 확인 | 🟡 2026-09-29 L3: 신고번호 Play 입력(사용자), 약관 환불 문구 완화, 판매자 정보를 사이트 모든 쪽 하단·앱 요금제 화면에 표시. L2 ✅: `notice@bandule.com` 통일·수신 확인·Play Console 연락처·설명 교체(사용자, 2026-09-29). 남은 것: L3 요금제 화면 판매자 정보는 +32 빌드에서 확인 |
 | 22 | U7 | 중간 | 카카오 SDK·video_compress 가 KGP 를 써서 향후 Flutter 에서 빌드 실패 예고 | 🟡 2026-09-29 카카오 SDK 2.0.1·영상 압축 v_video_compressor 로 교체(사용자 승인), CI 에 릴리스 APK 빌드 추가. 남은 것: +32 에서 카카오 로그인·영상 압축 확인, kakao_map_sdk 가 KGP 를 버리면 builtInKotlin=true |
 | 23 | P11 | 낮음 | Android 16 큰 화면(태블릿·폴더블) 레이아웃 확인 | 🟡 2026-09-29 큰 화면에서 앱을 가운데 720dp 기둥으로 묶음(`ReadableWidth`). 태블릿·폴더블(또는 폰 가로) 눈 확인 남음(§7) |
-| 24 | G2 | 낮음 | main 에 안 합쳐진 옛 원격 브랜치 11개 정리, dependabot(AWS SDK BOM) PR 처리 | ⬜ |
+| 24 | G2 | 낮음 | main 에 안 합쳐진 옛 원격 브랜치 11개 정리, dependabot(AWS SDK BOM) PR 처리 | 🟡 2026-09-29 dependabot #119 머지·배포(health UP). 브랜치 삭제는 이 환경에서 막혀(403) 사용자 PC 에서 스크립트로. 머지 안 된 커밋이 남은 브랜치 2개는 결정 필요 |
 | 25 | 나머지 | 낮음 | P9·P10, B9~B12, U4~U6, L4·L5·L6 | 🔧 2026-09-29 L4·L5·L6·P9 ✅. 나머지 ⬜ |
 
 P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코드 항목(G1~U1)을 고쳐 같은 트랙에 올린다.
@@ -72,7 +72,7 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | ID | 심각도 | 문제 | 해결방안 | 상태 |
 |---|---|---|---|---|
 | G1 | 높음 | 점검 1~3차 수정(약 40개 파일 — 인증 토큰 갱신 경합·한글 비밀번호 72바이트, 밴드 위임·탈퇴 경합·초대코드 2개·빈 밴드 재참여, 반복 회차 원래 슬롯·셋리스트 덮어쓰기, `V19`)이 로컬에만 있어 운영에 없다. 로컬 HEAD `5a84f31` 은 원격 main `982e528` 보다 4커밋 뒤(#94 **DB 백업 8일 멈춤 수정** 포함). main 에 안 합쳐진 원격 브랜치 12개 중 11개는 이미 반영된 옛 브랜치, dependabot(AWS SDK BOM) 하나만 새 내용 | 브랜치 → 파일 이름을 적어 커밋(`git add -A` 금지) → `git pull`(`TROUBLESHOOTING.md` 충돌은 양쪽 항목 모두 살림) → 전체 테스트 → PR → 자동 배포. **V19 는 되돌릴 수 없다** — 배포 직전 `bandule backup`, 롤백은 이미지가 아니라 DB 복원까지. 옛 브랜치 삭제, dependabot PR 은 CI 통과 시 머지 | ✅ 2026-09-27 커밋 54개 파일(수정 39·신규 15)을 PR [#98](https://github.com/Yekapark/bandApp/pull/98) 로 squash 머지 `10e5adc`. CI(rules·build·analyze-test) 통과 → Deploy 성공(배포 전 백업은 `deploy.sh` 가 수행) → `https://api.bandule.com/actuator/health` = UP. **V19 운영 적용됨.** 옛 브랜치·dependabot 은 G2 로 분리 |
-| G2 | 낮음 | 이미 main 에 더 새 버전이 들어간 옛 원격 브랜치 11개(`chore/drop-unused-plan-code` 등)가 남아 있다. dependabot `gradle-minor-patch`(AWS SDK BOM) PR 이 열려 있다 | 옛 브랜치는 삭제, dependabot 은 CI 통과 확인 후 머지 | ⬜ |
+| G2 | 낮음 | 이미 main 에 더 새 버전이 들어간 옛 원격 브랜치 11개(`chore/drop-unused-plan-code` 등)가 남아 있다. dependabot `gradle-minor-patch`(AWS SDK BOM) PR 이 열려 있다 | 옛 브랜치는 삭제, dependabot 은 CI 통과 확인 후 머지 | 🟡 2026-09-29 — ① dependabot #119(AWS SDK BOM 2.54.17→2.55.6, firebase-admin 9.10.0→9.11.0) CI 통과 확인 후 squash 머지 `d9b722e` → 배포 성공, health UP. ② 원격 브랜치 58개(main 제외)를 PR 기록과 대조: **55개는 삭제해도 되는 것**(머지된 PR 의 마지막 커밋과 같음 51 + main 보다 앞선 커밋 없음 4). 이 세션의 GitHub 토큰으로는 브랜치 삭제가 403 이라 `git push origin --delete` 스크립트를 사용자에게 전달. ③ **머지 안 된 커밋이 남은 2개** — `feat/notification-channel`(09-06 "참석·납부 체크를 서버 응답 전에 먼저 칠한다" 앱 코드 + "Cloudflare 프록시를 껐다(700ms)" 문서, 2커밋), `phase-11-deploy`(09-06 서버 선택 기준 문서 1커밋) — main 에 같은 내용이 없다. 버릴지 살릴지 사용자 결정. **남은 것: 스크립트 실행, 2개 결정, (선택) GitHub Settings › General › "Automatically delete head branches" 켜기 — 앞으로 머지하면 브랜치가 저절로 지워진다** |
 
 ---
 
@@ -176,6 +176,9 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | 환불 + 사용 권한 취소 | 즉시 FREE | B9 | ✅ 2026-09-09 확인 |
 
 **콘솔·서버 (앱 설치 없이)**
+
+- [ ] 저장소 폴더에서 `sh delete_branches.sh` — 합쳐진 원격 브랜치 55개 정리 (G2, 스크립트는 2026-09-29 대화로 전달)
+- [ ] `feat/notification-channel`·`phase-11-deploy` 에만 있는 커밋을 버릴지 살릴지 (G2)
 
 - [x] Play Console › 사용자 및 권한 › 결제 검증 서비스 계정에 **"주문 및 구독 관리"** 권한 — 2026-09-29 있음 — 없으면 결제 중 쿠폰이 "스토어가 거절" 로 실패 (B7)
 - [x] `python tools/moderate.py reports` 가 표를 출력 — 서버 접속 경로 확인, 읽기만 한다 (P7) — 2026-09-29
