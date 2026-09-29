@@ -31,7 +31,15 @@ jobs:
         run: flutter pub get
 
       - name: analyze (errors only)
-        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+        run: |
+          set -o pipefail
+          flutter analyze --no-fatal-warnings --no-fatal-infos 2>&1 | tee analyze.log
+
+      # 분석 오류도 원시 로그 없이 보이게 주석으로 올린다.
+      - name: 분석 오류를 주석으로
+        if: failure()
+        run: |
+          grep -E '^\s*error •' analyze.log | head -20 | sed 's/^\s*/::error title=analyze::/' || true
 
       - name: test
         run: mkdir -p build && flutter test --file-reporter json:build/test-report.json
