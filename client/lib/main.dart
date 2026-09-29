@@ -13,7 +13,8 @@ import 'core/config/native_abi.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (AppConfig.kakaoEnabled) {
-    KakaoSdk.init(
+    // SDK 2.x 부터 비동기다 — 끝나기 전에 로그인 버튼이 눌리지 않게 기다린다.
+    await KakaoSdk.init(
       nativeAppKey: AppConfig.kakaoNativeAppKey,
       javaScriptAppKey: AppConfig.kakaoJavaScriptAppKey,
     );
