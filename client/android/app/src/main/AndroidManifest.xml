@@ -1,5 +1,11 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 저장소 권한은 쓰지 않는다 — 사진·영상은 시스템 선택기(image_picker)가 앱 캐시로 복사해 주고, 압축본도 앱 캐시에
+         쓴다. 영상 압축 플러그인(v_video_compressor)이 제 매니페스트에 넣어 오는 것을 병합 단계에서 뺀다(LAUNCH_REVIEW P10).
+         쓰지 않는 권한은 심사에서 "왜 필요한가" 를 부르고 데이터 보안 답안과도 어긋나 보인다. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove" />
 
     <!-- 위치 권한(ACCESS_FINE/COARSE_LOCATION)은 2026-09-09 에 지웠다. 지도를 쓰지만 기기 위치는
          한 번도 읽지 않는다 — 위치 플러그인 의존성이 없고, 지도의 hasLocation 은 합주실 좌표다.

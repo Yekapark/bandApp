@@ -48,10 +48,14 @@
 
 ```
 INTERNET · ACCESS_NETWORK_STATE · WAKE_LOCK · POST_NOTIFICATIONS
-READ_EXTERNAL_STORAGE · WRITE_EXTERNAL_STORAGE · com.google.android.c2dm.permission.RECEIVE
+com.android.vending.BILLING · com.google.android.c2dm.permission.RECEIVE
+(+ 앱 내부용 DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION)
 ```
 
-(`INTERNET` 외에는 전부 Firebase·미디어 플러그인이 넣는 것이다.)
+(`INTERNET` 외에는 전부 Firebase·결제·AndroidX 가 넣는 것이다.) 2026-09-29 에 저장소 권한
+`READ/WRITE_EXTERNAL_STORAGE` 를 `tools:node="remove"` 로 뺐다(LAUNCH_REVIEW P10) — 사진·영상은 시스템 선택기가
+앱 캐시로 복사해 주므로 필요 없다. **Client CI 의 `android-build` 체크가 병합된 권한 목록을 주석으로 보여 준다** —
+플러그인을 추가하면 거기서 새 권한이 끼어드는지 본다.
 
 > **실기기에서 지도 화면만 한 번 열어 보는 게 남았다.** 카카오맵 SDK 가 자기 매니페스트에 위치
 > 권한을 선언하지 않으므로 필요 없는 게 맞지만, 지도는 실기기에서 확인하는 편이 확실하다.
