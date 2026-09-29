@@ -1,5 +1,22 @@
 # 문제 기록
 
+## 2026-09-29 — 머지 뒤 같은 브랜치에 올린 커밋이 main 에 안 들어가 3주간 묻혀 있었다
+
+**증상** — `LAUNCH_CHECKLIST.md` 에 "Cloudflare 를 왜 회색으로 되돌렸는지 아무도 모른다" 가 적혀 있었고,
+참석·납부 체크는 여전히 서버 응답을 기다렸다(정산은 화면 전체가 잠김). 둘 다 2026-09-06 에 이미 고치고 기록한
+것이었다(LAUNCH_REVIEW G2).
+
+**원인** — PR #58(`feat/notification-channel`)이 머지된 **뒤에** 같은 브랜치로 커밋 2개(먼저 칠하기, Cloudflare
+측정 기록)를 더 푸시했다. 머지된 PR 에 커밋을 더 올리면 새 PR 이 열리지 않아 아무도 모른다. `phase-11-deploy`
+도 같은 식으로 문서 커밋 1개가 남았다. 브랜치 정리 전에 "PR 마지막 커밋 = 브랜치 끝" 인지 대조하다 드러났다.
+
+**해결** — 세 커밋의 내용을 지금 코드·문서에 옮겼다(앱 두 화면, `DEPLOY.md` §1, `LAUNCH_CHECKLIST.md`, `NEXT.md`).
+**머지된 브랜치에는 더 올리지 않는다 — 새 브랜치에서 새 PR 로.** GitHub "Automatically delete head branches" 를
+켜면 머지된 브랜치가 지워져 이런 실수가 구조적으로 막힌다(LAUNCH_REVIEW G2 남은 것).
+
+**확인법** — 원격 브랜치마다 `compare/main...브랜치` 의 `ahead_by` 가 0 이거나, 브랜치 끝 커밋이 머지된 PR 의
+마지막 커밋과 같은지 본다. 앱: 참석 버튼·납부 체크가 누르자마자 바뀌고, 비행기 모드면 되돌아가며 안내가 뜬다.
+
 ## 2026-09-29 — Built-in Kotlin 전환: 플러그인이 KGP 를 적용해 향후 Flutter 에서 빌드 실패 예고
 
 **증상** — 릴리스 빌드마다 "Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP):

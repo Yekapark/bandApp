@@ -27,6 +27,12 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
   Settlement? _override;
   bool _busy = false;
 
+  /// 눌렀지만 서버 응답이 아직인 납부 체크. userId → 눌러서 바뀐 값.
+  ///
+  /// **서버 왕복을 기다렸다 칠하면 수백 ms 동안 아무 반응이 없다.** 사용자는 안 눌렸다고
+  /// 여겨 다시 누른다. 먼저 칠하고, 응답이 오면 서버 값으로 맞춘다. 실패하면 거둔다.
+  final Map<int, bool> _pendingPaid = {};
+
   SettlementKey _key(int bandId) =>
       (bandId: bandId, reservationId: widget.reservationId);
 
@@ -87,6 +93,7 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
             meId: meId,
             canManage: canManage,
             busy: _busy,
+            pendingPaid: _pendingPaid,
             onTogglePaid: (share) => _togglePaid(band.id, share),
             onRecalculate: () => _recalculate(band.id),
           );
@@ -116,24 +123,38 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
   }
 
   Future<void> _togglePaid(int bandId, SettlementShare share) async {
-    setState(() => _busy = true);
+    // 같은 항목이 이미 날고 있으면 무시한다 — 연타로 상태가 뒤집히는 것을 막는다.
+    if (_pendingPaid.containsKey(share.userId)) return;
+
+    final next = !(_pendingPaid[share.userId] ?? share.paid);
+    // 먼저 칠한다. `_busy` 는 켜지 않는다 — 켜면 화면 전체가 잠겨 다른 사람 항목도 못 누른다.
+    setState(() => _pendingPaid[share.userId] = next);
     try {
       final s = await ref.read(settlementRepositoryProvider).markPaid(
             bandId: bandId,
             reservationId: widget.reservationId,
             userId: share.userId,
-            paid: !share.paid,
+            paid: next,
           );
       if (!mounted) return;
-      setState(() => _override = s);
+      // 서버가 확정한 값이 왔으니 임시 표시를 거둔다(합계·남은 금액도 여기서 맞춰진다).
+      setState(() {
+        _override = s;
+        _pendingPaid.remove(share.userId);
+      });
       _refreshCaches(bandId);
     } on ApiException catch (e) {
+      _revertPaid(share.userId);
       _toast(e.message);
     } catch (_) {
+      _revertPaid(share.userId);
       _toast('납부 상태를 바꾸지 못했어요.');
-    } finally {
-      if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 실패했으니 먼저 칠한 것을 거둔다 — 안 바뀐 상태가 바뀐 것처럼 남으면 안 된다.
+  void _revertPaid(int userId) {
+    if (mounted) setState(() => _pendingPaid.remove(userId));
   }
 
   Future<void> _recalculate(int bandId) async {
@@ -364,12 +385,16 @@ class _Board extends StatelessWidget {
     required this.busy,
     required this.onTogglePaid,
     required this.onRecalculate,
+    this.pendingPaid = const {},
   });
 
   final Settlement settlement;
   final int? meId;
   final bool canManage;
   final bool busy;
+
+  /// 눌렀지만 서버 응답이 아직인 납부 체크. userId → 눌러서 바뀐 값.
+  final Map<int, bool> pendingPaid;
   final ValueChanged<SettlementShare> onTogglePaid;
   final VoidCallback onRecalculate;
 
@@ -460,6 +485,7 @@ class _Board extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 7),
             child: _ShareRow(
               share: share,
+              paid: pendingPaid[share.userId] ?? share.paid,
               isMe: meId != null && share.userId == meId,
               busy: busy,
               onTap: () => onTogglePaid(share),
@@ -481,12 +507,17 @@ class _Board extends StatelessWidget {
 class _ShareRow extends StatelessWidget {
   const _ShareRow({
     required this.share,
+    required this.paid,
     required this.isMe,
     required this.busy,
     required this.onTap,
   });
 
   final SettlementShare share;
+
+  /// 화면에 그릴 납부 여부. **`paid` 가 아니라 이 값을 쓴다** — 방금 누른 것은
+  /// 서버 응답 전에도 체크된 것으로 보여야 한다.
+  final bool paid;
   final bool isMe;
   final bool busy;
   final VoidCallback onTap;
@@ -499,7 +530,7 @@ class _ShareRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: share.paid
+          color: paid
               ? AppColors.success.withValues(alpha: 0.08)
               : AppColors.surface,
           borderRadius: BorderRadius.circular(13),
@@ -515,15 +546,14 @@ class _ShareRow extends StatelessWidget {
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color: share.paid ? AppColors.success : Colors.transparent,
+                color: paid ? AppColors.success : Colors.transparent,
                 borderRadius: BorderRadius.circular(7),
                 border: Border.all(
-                  color:
-                      share.paid ? AppColors.success : AppColors.borderStrong,
+                  color: paid ? AppColors.success : AppColors.borderStrong,
                   width: 1.5,
                 ),
               ),
-              child: share.paid
+              child: paid
                   ? const Icon(
                       Icons.check,
                       size: 14,
@@ -565,7 +595,7 @@ class _ShareRow extends StatelessWidget {
               Fmt.won(share.amount),
               style: AppTypography.mono(
                 fontSize: 12.5,
-                color: share.paid ? AppColors.success : AppColors.textSecondary,
+                color: paid ? AppColors.success : AppColors.textSecondary,
               ),
             ),
           ],
