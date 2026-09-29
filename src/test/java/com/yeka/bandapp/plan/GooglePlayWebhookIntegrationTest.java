@@ -168,6 +168,35 @@ class GooglePlayWebhookIntegrationTest extends PlanApiSupport {
     }
 
     @Test
+    void a_purchase_the_app_never_verified_is_granted_from_its_band_tag() {
+        // LAUNCH_REVIEW B12 — 결제 직후 앱이 꺼지고 다시 안 열려도, 구매에 적힌 밴드로 웹훅이 올리고 확인 처리한다.
+        // (예전에는 verify 를 기다리다 포기했고, 3일 뒤 Google 이 자동 환불했다.)
+        String leader = signup("wh-b12@band.app", "리더");
+        long bandId = createBand(leader, "앱안연밴드");
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("FREE");
+
+        assertThat(googlePlayWebhook(RTDN_PURCHASED, "tok-b12@band-" + bandId).getStatusCode().value())
+                .isEqualTo(200);
+
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("PREMIUM");
+        Integer marked = jdbc.queryForObject("select count(*) from processed_store_events", Integer.class);
+        assertThat(marked).isEqualTo(1);
+    }
+
+    @Test
+    void a_tagged_purchase_for_a_band_that_no_longer_exists_is_not_retried() {
+        // 적힌 밴드가 없어졌으면 재전송해도 같다 — 200 으로 끝내고(재전송 폭풍 없음) 자동 환불에 맡긴다.
+        assertThat(googlePlayWebhook(RTDN_PURCHASED, "tok-gone@band-987654321").getStatusCode().value())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void a_tagged_purchase_waits_for_the_store_when_it_is_briefly_down() {
+        assertThat(googlePlayWebhook(RTDN_PURCHASED, "unavailable-b12@band-1").getStatusCode().value())
+                .isEqualTo(503);
+    }
+
+    @Test
     void wrong_secret_is_rejected_without_touching_state() {
         String leader = signup("wh-sec@band.app", "리더");
         long bandId = createBand(leader, "시크릿밴드");

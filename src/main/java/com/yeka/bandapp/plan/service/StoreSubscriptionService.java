@@ -217,6 +217,11 @@ public class StoreSubscriptionService {
             return;
         }
         Long bandId = bandPlanRepository.findBandIdByPurchaseToken(purchaseToken).orElse(null);
+        if (bandId == null && isGrantType(notificationType)
+                && grantByPurchaseTag(notificationType, purchaseToken, publishTime)) {
+            markProcessed(messageId, notificationType, purchaseToken);
+            return;
+        }
         if (bandId == null) {
             // 갱신·구매 알림인데 아직 밴드에 토큰이 안 붙었다 = 클라이언트 verify 가 곧 온다(경합).
             // 재전송받아 두면, 그 사이 verify 가 토큰을 붙였을 때 다음 재시도가 밴드를 찾는다.
@@ -225,7 +230,8 @@ public class StoreSubscriptionService {
             // Pub/Sub 보존기간(기본 7일) 내내 초당 한 번꼴로 503 을 받아가며 재전송된다. 2026-09-09 에
             // 실제로 이 폭풍이 났다(10분에 600건). 경합은 초 단위라 한 시간이면 넉넉하고, 그 뒤엔
             // 포기해도 잃는 게 없다 — PREMIUM 부여는 클라이언트 verify 가 하고, 늦게라도 verify 가
-            // 오면 그쪽이 스토어에 직접 물어 등급을 올린다.
+            // 오면 그쪽이 스토어에 직접 물어 등급을 올린다. (여기까지 오는 건 밴드가 안 적힌 옛 구매뿐이다 —
+            // 적힌 구매는 위 grantByPurchaseTag 가 먼저 처리한다, B12.)
             if (isGrantType(notificationType) && withinGrantRetryWindow(publishTime)) {
                 throw new StoreWebhookRetryException(
                         "type=" + notificationType + " 인데 아직 밴드에 안 붙은 토큰 — 재전송 대기");
@@ -365,6 +371,49 @@ public class StoreSubscriptionService {
         log.info("만료 배치: 스토어에선 아직 유효 — 강등 대신 연장 bandId={} state={} expiry={}",
                 bandId, alive.state(), alive.expiryTime());
         return ExpiryRecheck.STILL_ACTIVE;
+    }
+
+    /**
+     * 아직 어느 밴드에도 안 붙은 구매를 <b>구매에 적힌 밴드</b>({@link PurchaseBandTag})로 반영한다(LAUNCH_REVIEW B12).
+     *
+     * <p>예전에는 여기서 클라이언트 verify 를 기다리기만 했다. 결제 직후 앱이 꺼지고 사용자가 3일 동안 앱을 안 열면
+     * verify 도 복구(B2)도 안 와서 확인 처리(acknowledge)가 안 되고, <b>Google 이 자동 환불</b>했다 — 돈은 냈는데 PREMIUM 도
+     * 못 받고 환불된다. 웹훅은 앱과 무관하게 오므로, 구매에 밴드가 적혀 있으면 여기서 바로 올리고 확인 처리한다.
+     * 클라이언트 verify 가 동시에 와도 {@link #grantPremium} 이 "이미 PREMIUM → 연장" 으로 이어 간다.
+     *
+     * @return 처리했으면(반영했거나, 적힌 밴드가 없어져 반영할 곳이 없으면) {@code true}. 밴드가 안 적힌 옛 구매거나
+     *         스토어가 유효하다고 하지 않으면 {@code false} — 호출한 쪽이 예전처럼 verify 를 기다린다.
+     */
+    private boolean grantByPurchaseTag(int notificationType, String purchaseToken, String publishTime) {
+        StoreSubscription sub;
+        try {
+            sub = billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken).filter(this::grantable).orElse(null);
+        } catch (StoreBillingUnavailableException transientFailure) {
+            if (withinGrantRetryWindow(publishTime)) {
+                throw new StoreWebhookRetryException(
+                        "type=" + notificationType + " 밴드 미연결 구매 — 스토어 조회 일시 실패, 재전송 대기");
+            }
+            log.warn("RTDN: 밴드 미연결 구매의 스토어 조회 실패(오래된 메시지) — 포기", transientFailure);
+            return false;
+        }
+        if (sub == null) {
+            return false;
+        }
+        OptionalLong tagged = PurchaseBandTag.parse(sub.obfuscatedAccountId());
+        if (tagged.isEmpty()) {
+            return false;
+        }
+        long bandId = tagged.getAsLong();
+        try {
+            grantAndAcknowledge(bandId, sub);
+            log.info("RTDN: 앱 확인 없이 구매에 적힌 밴드로 반영 type={} bandId={}", notificationType, bandId);
+        } catch (BusinessException unusable) {
+            // 적힌 밴드가 그 사이 삭제됐다(PLAN_NOT_FOUND) 등 — 재전송해도 같다. 확인 처리를 안 했으니
+            // Google 이 3일 뒤 자동 환불한다(돈을 받을 밴드가 없으니 그게 맞다).
+            log.warn("RTDN: 구매에 적힌 밴드에 반영 불가 bandId={} code={} — 자동 환불로 둔다",
+                    bandId, unusable.errorCode());
+        }
+        return true;
     }
 
     /**
