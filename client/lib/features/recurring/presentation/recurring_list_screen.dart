@@ -34,8 +34,9 @@ class RecurringListScreen extends ConsumerWidget {
     final rulesAsync = ref.watch(recurringRulesProvider(band.id));
 
     // 정기 일정 *등록*은 PREMIUM 기능이다(서버 RecurringRuleService.create 가 막는다).
-    // 목록은 FREE 에서도 보여준다 — PREMIUM 을 쓰다 내려온 밴드의 기존 규칙은 계속 회차를
-    // 만들기 때문에, 감추면 그 일정이 어디서 생겼는지 알 길이 없다.
+    // 목록은 FREE 에서도 보여준다 — PREMIUM 을 쓰다 내려온 밴드의 기존 규칙과 이미 만든 회차가
+    // 남아 있어서, 감추면 그 일정이 어디서 생겼는지 알 길이 없다. FREE 동안에는 서버가 새 회차를
+    // 만들지 않고(일시정지), PREMIUM 으로 돌아오면 이어서 만든다(LAUNCH_REVIEW B11).
     //
     // 아직 못 불러왔거나 조회에 실패했으면(null) 잠그지 않는다. 서버가 최종 방어선이라
     // 최악이라도 예전과 같은 동작(저장 시 403)이고, 반대로 잠가 버리면 통신이 잠깐 불안한
@@ -323,6 +324,13 @@ class _PremiumLock extends StatelessWidget {
           const SizedBox(height: 5),
           const Text(
             '한 번만 등록해 두면 앞으로 8주분 합주가 캘린더에 자동으로 생겨요.',
+            style:
+                TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            '무료 요금제에서는 등록돼 있던 정기 일정도 새 회차를 만들지 않아요. '
+            '이미 캘린더에 있는 합주는 그대로고, 프리미엄으로 돌아오면 다시 이어져요.',
             style:
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
           ),

@@ -55,6 +55,14 @@ public class PlanDirectoryService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.PLAN_NOT_FOUND));
     }
 
+    /** 지금 PREMIUM 인가. 요금제 행이 없으면 FREE 로 본다(배치가 예외로 멈추지 않게). */
+    @Transactional(readOnly = true)
+    public boolean isPremium(long bandId) {
+        return bandPlanRepository.findByBandId(bandId)
+                .map(plan -> plan.getTier() == PlanTier.PREMIUM)
+                .orElse(false);
+    }
+
     /**
      * PREMIUM 전용 기능의 문지기. FREE 이거나 요금제 행이 없으면 {@code PLAN_REQUIRED}(403).
      *
