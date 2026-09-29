@@ -562,10 +562,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       // medium = 720p·1.8Mbps. 결과가 원본보다 크면(이미 작은 영상) 원본을 쓴다.
       final result = await _compressor.compressVideo(
         file.path,
-        VVideoCompressionConfig(
-          quality: VVideoCompressQuality.medium,
-          fallbackToOriginalIfNotSmaller: true,
-        ),
+        const VVideoCompressionConfig.medium(),
         onProgress: (progress) {
           final pct = progress * 100; // 라이브러리는 0~1, 화면은 0~100
           if (pct != lastPct) {
@@ -576,7 +573,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
         },
       );
       if (stalled || result == null) return file;
-      return XFile(result.outputPath);
+      return XFile(result.compressedFilePath);
     } catch (_) {
       return file;
     } finally {
