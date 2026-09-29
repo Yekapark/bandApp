@@ -1,5 +1,27 @@
 # 문제 기록
 
+## 2026-09-29 — Built-in Kotlin 전환: 플러그인이 KGP 를 적용해 향후 Flutter 에서 빌드 실패 예고
+
+**증상** — 릴리스 빌드마다 "Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP):
+kakao_flutter_sdk_common, video_compress … future versions of Flutter will fail" 경고(LAUNCH_REVIEW U7).
+`android.builtInKotlin=true` 로 켜 보면 이번엔 **경고에 없던** `kakao_map_sdk` 에서 멈춘다:
+"Failed to apply plugin 'org.jetbrains.kotlin.android' … no longer required for Kotlin support since AGP 9.0".
+
+**원인** — AGP 9 부터 Kotlin 이 AGP 에 내장됐고(Built-in Kotlin), 따로 KGP 를 적용하는 플러그인은 지원이 끊긴다.
+Flutter 3.44~3.47 은 템플릿이 `builtInKotlin=false` 를 넣어 옛 방식으로 버텨 주지만 다음 버전에서 없앤다.
+kakao_flutter_sdk 1.x·video_compress 는 KGP 를 직접 적용하고, kakao_map_sdk 는 **무조건** 적용한다. 경고 목록은
+조건부로 적용하는 플러그인만 잡아서 kakao_map_sdk 는 켜 봐야 드러났다.
+
+**해결** — 카카오 SDK 를 2.0.1 로(`builtInKotlin` 값을 보고 KGP 를 조건부로 적용), video_compress 는 방치돼
+`v_video_compressor` 로 교체(사용자 승인). 카카오 2.x 로 바뀐 것: `KakaoSdk.init` 이 async, 리다이렉트 액티비티 이름이
+`com.kakao.sdk.flutter.auth.AuthCodeHandlerActivity`(옛 이름이 남으면 **빌드는 되는데** 로그인 뒤 앱으로 못 돌아온다),
+`KakaoSdk.origin` 삭제. **kakao_map_sdk 때문에 `builtInKotlin` 은 아직 false** — 고치지 못하고 둔 것이다. Flutter 3.47.2
+에서는 문제없고, Flutter 를 올리기 전에 kakao_map_sdk 새 버전을 확인해야 한다(최신 main 도 Kotlin 1.9·AGP 8.5).
+Client CI 에 릴리스 APK 빌드 잡을 넣었다 — 전에는 analyze·test 만 돌아 Gradle 쪽 문제는 스토어 빌드 때에야 드러났다.
+
+**확인법** — PR 의 `android-build` 체크가 초록이면 Gradle·R8 까지 된다. `builtInKotlin=true` 로 바꿔 올려 보면
+KGP 를 쓰는 플러그인이 있을 때 이 체크가 "What went wrong" 주석과 함께 빨개진다. 로그인·압축은 +32 실기기(§7).
+
 ## 2026-09-29 — 가입자의 약관 동의 기록이 옛 약관 버전을 가리켰다
 
 **증상** — (점검에서 발견) 회원가입 때 남기는 동의 기록(`terms_agreements.terms_version`·`privacy_version`)이
