@@ -99,6 +99,15 @@ jobs:
           set -o pipefail
           flutter build apk --release --flavor prod 2>&1 | tee build-apk.log
 
+      # 병합된 릴리스 매니페스트의 권한 목록 — 플러그인이 몰래 넣는 권한(위치·저장소 등)이 보이게(LAUNCH_REVIEW P10).
+      - name: 병합 매니페스트 권한
+        if: success()
+        run: |
+          f=$(find build/app/intermediates -path '*prodRelease*' -name AndroidManifest.xml 2>/dev/null | grep -i merged | head -1)
+          if [ -z "$f" ]; then echo "::warning title=권한::병합 매니페스트를 못 찾았다"; exit 0; fi
+          perms=$(grep -o 'uses-permission[^>]*android:name="[^"]*"' "$f" | sed 's/.*android:name="\([^"]*\)"/\1/' | sed 's/android.permission.//' | sort -u | tr '\n' ' ')
+          echo "::notice title=병합 매니페스트 권한::$perms"
+
       # 로그를 못 여는 곳에서도 원인이 보이게 Gradle 의 "What went wrong" 과 KGP 경고를 주석으로 올린다.
       - name: 빌드 실패·경고 요약
         if: always()
