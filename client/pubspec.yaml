@@ -23,7 +23,9 @@ dependencies:
   dio: ^5.7.0
 
   # 카카오 로그인 (user 모듈만 — 로그인 + 사용자 조회). 네이티브 앱 키 필요.
-  kakao_flutter_sdk_user: ^1.9.6
+  # 2.x: AGP 9 Built-in Kotlin 지원(1.x 는 KGP 를 직접 적용해 향후 Flutter 에서 빌드 실패 — LAUNCH_REVIEW U7).
+  # v1→v2 변경: KakaoSdk.init 이 async, 로그인 리다이렉트 액티비티 이름(AndroidManifest).
+  kakao_flutter_sdk_user: ^2.0.1
 
   # 게시판 첨부: 사진/영상 선택 → R2 presigned URL 로 직접 업로드.
   image_picker: ^1.1.2
@@ -34,7 +36,10 @@ dependencies:
 
   # 업로드 전 영상 압축. 폰 기본 촬영(1080p 17Mbps)은 6분이면 700MB 를 넘어 상한(200MB)에
   # 들어가지 않는다. 720p 로 줄이면 6분이 대략 90MB. Android/iOS 전용이라 웹은 원본 그대로.
-  video_compress: ^3.1.2
+  # 2026-09-29 video_compress 에서 교체(사용자 승인, LAUNCH_REVIEW U7) — video_compress 는 2025-02 이후
+  # 방치돼 KGP 를 직접 적용하고(향후 Flutter 빌드 실패), 트랜스코더가 특정 영상에서 교착했다(U6).
+  # 이건 Android Media3 Transformer(하드웨어 인코더)·iOS AVFoundation 을 쓰고 Built-in Kotlin 을 지원한다. MIT.
+  v_video_compressor: ^2.2.3
 
   # 푸시 알림 수신 (FCM 디바이스 토큰 등록). 설정 파일(google-services.json /
   # firebase_options.dart)이 없으면 초기화가 조용히 실패하고 no-op — 카카오 SDK 와 같은 방식.

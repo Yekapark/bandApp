@@ -1,5 +1,3 @@
-import 'dart:async' show unawaited;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:kakao_map_sdk/kakao_map_sdk.dart';
@@ -13,21 +11,14 @@ import 'core/config/native_abi.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (AppConfig.kakaoEnabled) {
-    KakaoSdk.init(
+    // SDK 2.x 부터 비동기다 — 끝나기 전에 로그인 버튼이 눌리지 않게 기다린다.
+    await KakaoSdk.init(
       nativeAppKey: AppConfig.kakaoNativeAppKey,
       javaScriptAppKey: AppConfig.kakaoJavaScriptAppKey,
     );
-    // 카카오 로그인이 "keyHash validation failed" 로 막히는 일이 잦은데, 원인은 거의 항상
-    // 콘솔에 등록한 키 해시가 이 빌드의 서명과 다른 것이다(디버그/릴리스 키스토어가 다르거나
-    // 오타). SDK 가 실제로 서버에 보내는 값을 그대로 찍어 두면 콘솔에 붙여넣기만 하면 된다.
-    if (kDebugMode) {
-      unawaited(KakaoSdk.origin
-          .then((v) => debugPrint('kakao keyHash (콘솔에 등록할 값): $v'))
-          .catchError((Object e) {
-        debugPrint('kakao keyHash 조회 실패: $e');
-        return '';
-      }));
-    }
+    // 예전에는 디버그 빌드에서 KakaoSdk.origin 으로 키 해시를 찍었는데 SDK 2.x 에서 없어졌다.
+    // "keyHash validation failed" 가 나면 콘솔에 등록한 키 해시가 이 빌드의 서명과 다른 것이다 —
+    // 키 해시 구하는 법은 docs/TROUBLESHOOTING.md 의 카카오 키 해시 항목(keytool / Play 앱 서명 SHA-1 변환).
   }
   // 카카오맵은 Android/iOS 전용이고, 로그인과 같은 네이티브 앱 키를 쓴다.
   //

@@ -12,6 +12,5 @@
 -keepattributes *Annotation*
 -keepattributes Exceptions
 
-# video_compress 가 쓰는 트랜스코더 — 리플렉션으로 코덱을 고르므로 클래스명이 유지돼야 한다.
--keep class com.otaliastudios.transcoder.** { *; }
--dontwarn com.otaliastudios.transcoder.**
+# 영상 압축(v_video_compressor)은 AndroidX Media3 를 쓰고, Media3 가 자기 소비자 규칙을 싣고 온다 — 따로 둘 것 없음.
+# (예전 video_compress 의 트랜스코더 keep 규칙은 2026-09-29 교체 때 뺐다.)

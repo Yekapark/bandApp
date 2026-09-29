@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:video_compress/video_compress.dart';
+import 'package:v_video_compressor/v_video_compressor.dart';
 
 import '../../../routing/app_router.dart';
 import '../../plan/application/plan_providers.dart';
@@ -60,6 +60,9 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   /// 영상 압축 진행률(0~100). 압축 중이 아니면 null. 6분짜리는 30초 넘게 걸려서
   /// 스피너만 돌리면 멈춘 줄 안다.
   double? _compressPct;
+
+  /// 영상 압축기. 상태가 없는 얇은 래퍼라 화면마다 하나 둔다.
+  final _compressor = VVideoCompressor();
 
   /// 첨부 업로드 진행 상태. 영상은 수백 MB 라 한참 걸린다 — 아무 표시가 없으면
   /// 사용자가 앱이 멈춘 줄 안다. 몇 번째/전체와 퍼센트를 함께 보여준다.
@@ -299,7 +302,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
       ref.read(boardFeedProvider(bandId).notifier).refresh();
       // 압축본은 앱 캐시에 쌓인다 — 다 올렸으면 치운다.
-      unawaited(VideoCompress.deleteAllCache());
+      unawaited(_compressor.cleanupFiles(deleteCompressedVideos: true));
       if (!mounted) return;
 
       if (failed.isEmpty) {
@@ -537,11 +540,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   /// 압축은 30초 넘게 걸릴 수 있어 진행률을 보여준다. 실패하면 원본으로 진행하고,
   /// 상한을 넘으면 호출한 쪽의 크기 검사에서 걸린다.
   ///
-  /// **진행률이 멈추면 취소한다.** video_compress 가 쓰는 트랜스코더가 특정 영상에서
-  /// 교착에 빠진다 — 오디오 디코더가 출력 버퍼를 다 쥔 채 못 비워서 리더가 멈추고,
-  /// 그 상태로 초당 수십 번씩 헛도는 루프에 갇힌다(실기기 확인: 131MB 영상이 33% 에서
-  /// 정지, 4분간 출력 파일 크기 변화 없음, CPU 만 태움). 라이브러리 안에서 나는 일이라
-  /// 여기서는 감시만 하고 원본으로 넘어간다. 원본이 상한을 넘으면 호출한 쪽에서 걸린다.
+  /// **진행률이 멈추면 취소한다.** 예전 라이브러리(video_compress)의 트랜스코더는 특정 영상에서
+  /// 교착에 빠졌다(실기기: 131MB 영상이 33% 에서 4분간 정지, U6). 2026-09-29 Media3 기반
+  /// v_video_compressor 로 바꿨지만 감시는 남긴다 — 기기 인코더에 따라 멈추는 경우가 없다고 장담할 수 없고,
+  /// 멈추면 원본으로 넘어가는 게 사용자에게 가장 낫다. 원본이 상한을 넘으면 호출한 쪽에서 걸린다.
   Future<XFile> _compressIfVideo(XFile file, String contentType) async {
     if (kIsWeb || !contentType.startsWith('video/')) return file;
 
@@ -549,32 +551,33 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     var lastMoved = DateTime.now();
     var stalled = false;
 
-    final sub = VideoCompress.compressProgress$.subscribe((p) {
-      if (p != lastPct) {
-        lastPct = p;
-        lastMoved = DateTime.now();
-      }
-      if (mounted) setState(() => _compressPct = p);
-    });
     final watchdog = Timer.periodic(const Duration(seconds: 15), (_) {
       if (DateTime.now().difference(lastMoved) < _compressStall) return;
       stalled = true;
-      VideoCompress.cancelCompression();
+      unawaited(_compressor.cancelCompression());
     });
 
     setState(() => _compressPct = 0);
     try {
-      final info = await VideoCompress.compressVideo(
+      // medium = 720p·1.8Mbps. 결과가 원본보다 크면(이미 작은 영상) 원본을 쓴다.
+      final result = await _compressor.compressVideo(
         file.path,
-        quality: VideoQuality.Res1280x720Quality,
+        const VVideoCompressionConfig.medium(),
+        onProgress: (progress) {
+          final pct = progress * 100; // 라이브러리는 0~1, 화면은 0~100
+          if (pct != lastPct) {
+            lastPct = pct;
+            lastMoved = DateTime.now();
+          }
+          if (mounted) setState(() => _compressPct = pct);
+        },
       );
-      final path = info?.path;
-      return path == null ? file : XFile(path);
+      if (stalled || result == null) return file;
+      return XFile(result.compressedFilePath);
     } catch (_) {
       return file;
     } finally {
       watchdog.cancel();
-      sub.unsubscribe();
       if (mounted) {
         setState(() => _compressPct = null);
         if (stalled) {

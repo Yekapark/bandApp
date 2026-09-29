@@ -58,7 +58,7 @@
 | 19 | U2 | 중간 | 미디어 URL 10분 만료 + 상세 캐시 | 🟡 2026-09-28 실패 시 새 주소로 재조회·1회 재시도, 상세 autoDispose. 실기기 확인 남음 |
 | 20 | P7·P8 | 중간 | UGC 운영 수단·스토어 카테고리 | ✅ P8: 카테고리 "도구"(2026-09-27). P7: 2026-09-28 계정 정지·글 숨김 운영 스크립트 + 약관 제14조(시행 10-06), 2026-09-29 사용자가 운영 서버에서 `moderate.py reports` 실행 확인 |
 | 21 | L2·L3 | 중간 | 연락처 통일, 판매자 법적 요건 확인 | 🟡 2026-09-29 L3: 신고번호 Play 입력(사용자), 약관 환불 문구 완화, 판매자 정보를 사이트 모든 쪽 하단·앱 요금제 화면에 표시. L2 ✅: `notice@bandule.com` 통일·수신 확인·Play Console 연락처·설명 교체(사용자, 2026-09-29). 남은 것: L3 요금제 화면 판매자 정보는 +32 빌드에서 확인 |
-| 22 | U7 | 중간 | 카카오 SDK·video_compress 가 KGP 를 써서 향후 Flutter 에서 빌드 실패 예고 | ⬜ |
+| 22 | U7 | 중간 | 카카오 SDK·video_compress 가 KGP 를 써서 향후 Flutter 에서 빌드 실패 예고 | 🟡 2026-09-29 카카오 SDK 2.0.1·영상 압축 v_video_compressor 로 교체(사용자 승인), CI 에 릴리스 APK 빌드 추가. 남은 것: +32 에서 카카오 로그인·영상 압축 확인, kakao_map_sdk 가 KGP 를 버리면 builtInKotlin=true |
 | 23 | P11 | 낮음 | Android 16 큰 화면(태블릿·폴더블) 레이아웃 확인 | ⬜ |
 | 24 | G2 | 낮음 | main 에 안 합쳐진 옛 원격 브랜치 11개 정리, dependabot(AWS SDK BOM) PR 처리 | ⬜ |
 | 25 | 나머지 | 낮음 | P9·P10, B9~B12, U4~U6, L4·L5·L6 | 🔧 2026-09-29 L4·L5·L6·P9 ✅. 나머지 ⬜ |
@@ -128,8 +128,8 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | U3 | 중간 | 스토어 AAB 를 손 명령으로 만든다. `dart_defines.json` 의 `API_BASE_URL` 이 localhost 라 옵션 하나 빠뜨리면 아무 데도 못 붙는 앱이 올라간다. `BUILD_LABEL` 이 없으면 "개발 빌드" 표시 | AAB 용 스크립트 없음 | `client/tools/release_store.py` | ✅ 2026-09-27 첫 실행 통과(서버 주소·16KB·targetSdk·업로드 키 서명 OK), AAB 0.1.0+30 생성 |
 | U4 | 낮음 | 구독 종료일이 "9월 10일 (목)" 처럼 연도 없이 나옴 | `Fmt.dateKoUtc` | 연도 포함 포매터 | ⬜ |
 | U5 | 낮음 | 첫 실행이 오프라인이면 기본 폰트, 매번 Google 폰트 서버 접속 | `google_fonts` 런타임 다운로드 | 폰트를 assets 에 넣고 `allowRuntimeFetching = false` | ⬜ |
-| U6 | 낮음 | 알림 눌러도 해당 화면으로 안 감, 지도가 첫 합주실에 고정, 특정 영상 압축 멈춤 | `NEXT.md` §3·§1-E | 출시 후 업데이트 후보 | ⬜ |
-| U7 | 중간 | 빌드 경고: `kakao_flutter_sdk_common`·`video_compress` 가 Kotlin Gradle Plugin 을 직접 적용한다 — "향후 Flutter 버전은 이런 플러그인이 있으면 빌드 실패". 지금 빌드는 된다 | Flutter 가 Built-in Kotlin 으로 옮겨 가는 중 | 두 플러그인 새 버전 확인 후 올리기. `video_compress` 는 압축 교착(U6)도 있어 교체 후보(`NEXT.md` §1-E). **Flutter 업그레이드 전에 처리** | ⬜ |
+| U6 | 낮음 | 알림 눌러도 해당 화면으로 안 감, 지도가 첫 합주실에 고정, 특정 영상 압축 멈춤 | `NEXT.md` §3·§1-E | 출시 후 업데이트 후보 | 🔧 2026-09-29 영상 압축 멈춤은 U7 에서 라이브러리 교체로 대응(실기기 확인 남음). 알림 이동·지도는 ⬜ |
+| U7 | 중간 | 빌드 경고: `kakao_flutter_sdk_common`·`video_compress` 가 Kotlin Gradle Plugin 을 직접 적용한다 — "향후 Flutter 버전은 이런 플러그인이 있으면 빌드 실패". 지금 빌드는 된다 | Flutter 가 Built-in Kotlin 으로 옮겨 가는 중 | 두 플러그인 새 버전 확인 후 올리기. `video_compress` 는 압축 교착(U6)도 있어 교체 후보(`NEXT.md` §1-E). **Flutter 업그레이드 전에 처리** | 🟡 2026-09-29 — **사용자 승인(라이브러리 교체).** ① `kakao_flutter_sdk_user` ^1.9.6 → ^2.0.1(AGP 9 지원): `await KakaoSdk.init`, 매니페스트 리다이렉트 액티비티 `com.kakao.sdk.flutter.auth.AuthCodeHandlerActivity`(옛 이름이면 빌드는 되고 로그인 뒤 앱으로 못 돌아옴), 2.x 에서 없어진 `KakaoSdk.origin`(디버그 키 해시 출력) 제거. ② `video_compress` → `v_video_compressor` ^2.2.3(MIT, Media3 Transformer, 720p·1.8Mbps `medium`, 원본보다 크면 원본). 90초 멈춤 감시 유지, 트랜스코더 proguard 규칙 제거. 권한은 기존과 같은 READ/WRITE_EXTERNAL_STORAGE 뿐(READ_MEDIA_* 없음 — P10 영향 없음). ③ Client CI 에 `android-build` 잡(`flutter build apk --release --flavor prod` — Gradle·R8 까지, 실패하면 "What went wrong" 을 주석으로)과 analyze 오류 주석. **`android.builtInKotlin=true` 는 못 켰다** — `kakao_map_sdk` 1.3.x 가 KGP 를 무조건 적용해 CI 에서 "Failed to apply plugin 'org.jetbrains.kotlin.android'"(최신 main 도 Kotlin 1.9·AGP 8.5). 지금 Flutter 3.47.2 에선 false 로 문제없다. **남은 것: +32 에서 카카오 로그인(카카오톡·카카오계정 둘 다)·영상 첨부 압축(예전에 멈추던 131MB HEVC 영상 포함) 확인, `pubspec.lock` 은 +32 빌드 때 갱신·커밋, kakao_map_sdk 가 Built-in Kotlin 을 지원하면 true 로 켜고 CI android-build 확인** |
 | U8 | 낮음 | 빌드 경고 "CupertinoIcons 폰트를 찾지 못함" | 앱 코드는 `CupertinoIcons` 를 쓰지 않는다 — 의존성 쪽 참조 | 화면에 빈 아이콘이 보이면 `cupertino_icons` 추가, 아니면 무시 | ➖ 앱 코드 미사용 (2026-09-27) |
 
 릴리스 빌드(ProGuard)로 지도·로그인·푸시를 실기기에서 본 기록도 없다 — P2 와 같은 설치본으로 함께 확인한다.
@@ -159,6 +159,8 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 - [ ] 로그아웃 → 다른 폰에서 그 밴드에 일정 등록 → 로그아웃한 폰에 푸시가 **안 옴** (U1)
 - [ ] 사진·영상 있는 글을 연 채 11분 → 사진·영상 정상 표시·재생, 피드도 11분 띄운 뒤 썸네일 다시 보임 (U2)
 - [ ] 요금제 화면 구독 안내 맨 아래에 판매자 정보 한 줄 (L3)
+- [ ] 카카오 로그인 — 카카오톡 앱으로 한 번, 카카오계정(브라우저)으로 한 번. 로그인 뒤 앱으로 돌아와야 한다 (U7, SDK 2.x)
+- [ ] 영상 첨부 — 몇 분짜리 영상을 올려 "압축 N%" 가 오르고 끝나는지, 예전에 33% 에서 멈추던 영상도 (U7·U6)
 
 | 시나리오 | 기대 결과 | 관련 | 결과 |
 |---|---|---|---|

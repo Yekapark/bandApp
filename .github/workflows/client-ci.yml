@@ -31,7 +31,15 @@ jobs:
         run: flutter pub get
 
       - name: analyze (errors only)
-        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+        run: |
+          set -o pipefail
+          flutter analyze --no-fatal-warnings --no-fatal-infos 2>&1 | tee analyze.log
+
+      # 분석 오류도 원시 로그 없이 보이게 주석으로 올린다.
+      - name: 분석 오류를 주석으로
+        if: failure()
+        run: |
+          grep -E '^\s*error •' analyze.log | head -20 | sed 's/^\s*/::error title=analyze::/' || true
 
       - name: test
         run: mkdir -p build && flutter test --file-reporter json:build/test-report.json
@@ -58,4 +66,51 @@ jobs:
           for tid, errs in list(errors.items())[:10]:
               msg = ' | '.join(errs).replace('\n', ' ')[:800]
               print(f"::error title={names.get(tid, tid)}::{msg}")
+          PY
+
+  # Android 빌드 자체(Gradle·AGP·R8)를 확인한다 — analyze·test 는 Dart 만 봐서 플러그인의 Gradle 설정이나
+  # 난독화 규칙이 깨져도 통과한다. Built-in Kotlin 전환(LAUNCH_REVIEW U7) 뒤로 KGP 를 쓰는 플러그인이 들어오면
+  # 여기서 멈춘다. 서명 키·google-services.json·카카오 키가 없는 채로 빌드한다(디버그 키 서명, 푸시·카카오 꺼짐).
+  android-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: pub get
+        run: flutter pub get
+
+      - name: build apk (release, prod)
+        run: |
+          set -o pipefail
+          flutter build apk --release --flavor prod 2>&1 | tee build-apk.log
+
+      # 로그를 못 여는 곳에서도 원인이 보이게 Gradle 의 "What went wrong" 과 KGP 경고를 주석으로 올린다.
+      - name: 빌드 실패·경고 요약
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, re
+          if not os.path.exists('build-apk.log'):
+              raise SystemExit(0)
+          text = open('build-apk.log', encoding='utf-8', errors='replace').read()
+          for m in re.finditer(r"What went wrong:\n(.{0,900})", text, re.S):
+              print("::error title=Gradle::" + m.group(1).replace('\n', ' ')[:900])
+          for line in text.splitlines():
+              if 'Kotlin Gradle Plugin' in line or 'built-in kotlin' in line.lower() or 'builtInKotlin' in line:
+                  print("::warning title=Kotlin::" + line.strip()[:500])
           PY
