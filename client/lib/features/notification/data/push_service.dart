@@ -7,7 +7,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../routing/app_router.dart';
+import '../../band/application/band_providers.dart';
 import '../application/notification_providers.dart';
+import '../application/notification_route.dart';
 import 'notification_repository.dart';
 
 /// 앱 전역 SnackBar 를 띄우기 위한 키 (app.dart 의 MaterialApp 에 연결).
@@ -114,6 +117,11 @@ class PushService {
           _register(t).then((ok) => _registered = ok);
         });
         FirebaseMessaging.onMessage.listen(_onForegroundMessage);
+        // 알림을 눌러 앱이 열렸을 때 그 화면으로 보낸다(U6). 백그라운드에서 누른 것은 스트림으로,
+        // 앱이 꺼져 있다가 알림으로 켜진 것은 getInitialMessage 로 한 번 온다.
+        FirebaseMessaging.onMessageOpenedApp.listen(_openFromPush);
+        final initial = await messaging.getInitialMessage();
+        if (initial != null) _openFromPush(initial);
       }
     } catch (e) {
       debugPrint('PushService: 초기화 건너뜀 ($e)');
@@ -151,6 +159,26 @@ class PushService {
   /// 어느 밴드인지 몰라도 되게 family 전체를 무효화한다.
   void _refreshNotifications() {
     _ref.invalidate(notificationFeedProvider);
+  }
+
+  /// 푸시를 눌렀을 때 — 그 알림의 밴드로 바꾸고 해당 화면을 연다(U6). 서버가 싣는 data:
+  /// `type`·`bandId`·(일정 알림이면) `reservationId` (`NotificationMessages`).
+  void _openFromPush(RemoteMessage message) {
+    if (!_active) return;
+    final data = message.data;
+    final bandId = int.tryParse('${data['bandId'] ?? ''}');
+    final route = notificationRoute(
+      data['type']?.toString(),
+      int.tryParse('${data['reservationId'] ?? ''}'),
+    );
+    // 밴드를 여러 개 가진 사람은 지금 보고 있는 밴드가 알림의 밴드가 아닐 수 있다. 화면들이 "현재 밴드" 로
+    // 데이터를 읽으므로 먼저 바꾼다(멤버가 아닌 밴드면 목록의 첫 밴드로 돌아간다).
+    if (bandId != null) _ref.read(selectedBandIdProvider.notifier).select(bandId);
+    if (route == null) return;
+    // 콜드 스타트면 라우터가 아직 스플래시·홈으로 가는 중이다 — 한 프레임 뒤에 얹는다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ref.read(routerProvider).push(route);
+    });
   }
 
   void _onForegroundMessage(RemoteMessage message) {

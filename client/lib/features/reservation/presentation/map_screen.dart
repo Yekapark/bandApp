@@ -145,6 +145,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         text: r.name,
       ));
     }
+
+    // 모든 핀이 한 화면에 들어오게(U6). 예전에는 첫 합주실에 고정돼 멀리 있는 핀은 화면 밖이었다.
+    // 합주실이 하나면 그 자리를 가운데로 둔 처음 위치가 이미 맞다.
+    if (located.length >= 2 && mounted) {
+      try {
+        await map.moveCamera(CameraUpdate.fitMapPoints(
+          [for (final r in located) LatLng(r.lat!, r.lng!)],
+          padding: 80,
+        ));
+      } catch (_) {
+        // 카메라 이동 실패는 치명적이지 않다 — 첫 합주실 위치 그대로 둔다.
+      }
+    }
   }
 
   Future<void> _deleteRoom(int bandId, Room room) async {
