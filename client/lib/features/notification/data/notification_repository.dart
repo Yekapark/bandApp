@@ -50,10 +50,10 @@ class NotificationRepository {
     required String platform,
   }) async {
     try {
-      await _dio.post<dynamic>(
+      ensureSuccess(await _dio.post<dynamic>(
         _deviceTokens,
         data: {'token': token, 'platform': platform},
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -62,10 +62,10 @@ class NotificationRepository {
   /// 디바이스 토큰 해제 (로그아웃 시).
   Future<void> unregisterDeviceToken(String token) async {
     try {
-      await _dio.delete<dynamic>(
+      ensureSuccess(await _dio.delete<dynamic>(
         _deviceTokens,
         queryParameters: {'token': token},
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

@@ -65,10 +65,10 @@ class AuthRepository {
   /// 계정 존재 여부를 드러내지 않는다.
   Future<void> requestPasswordReset({required String email}) async {
     try {
-      await _dio.post<dynamic>(
+      ensureSuccess(await _dio.post<dynamic>(
         '/auth/password-reset/request',
         data: {'email': email},
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -82,10 +82,10 @@ class AuthRepository {
     required String newPassword,
   }) async {
     try {
-      await _dio.post<dynamic>(
+      ensureSuccess(await _dio.post<dynamic>(
         '/auth/password-reset/confirm',
         data: {'email': email, 'code': code, 'newPassword': newPassword},
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -117,10 +117,10 @@ class AuthRepository {
   /// 탈퇴 즉시 기존 토큰이 막히고 소속 밴드에서 자동 탈퇴한다.
   Future<void> withdraw({String? password}) async {
     try {
-      await _dio.post<dynamic>(
+      ensureSuccess(await _dio.post<dynamic>(
         '/users/me/withdraw',
         data: password == null ? <String, dynamic>{} : {'password': password},
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

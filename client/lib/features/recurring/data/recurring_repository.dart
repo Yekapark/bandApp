@@ -86,7 +86,7 @@ class RecurringRepository {
   /// 규칙 삭제 — 아직 시작하지 않은 회차만 취소된다(과거 회차는 유지).
   Future<void> delete({required int bandId, required int ruleId}) async {
     try {
-      await _dio.delete<dynamic>('/bands/$bandId/recurring-rules/$ruleId');
+      ensureSuccess(await _dio.delete<dynamic>('/bands/$bandId/recurring-rules/$ruleId'));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
