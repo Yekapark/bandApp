@@ -63,4 +63,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: 저장소 규칙 검사 (엔티티 Lombok · 비밀 파일)
-        run: sh tools/check-repo-rules.sh
+        run: |
+          # 검사 도구가 없어 실행하지 못한 경우를 통과로 보고하지 않아야 한다.
+          if PATH=/nonexistent /bin/sh tools/check-repo-rules.sh; then
+            echo "::error::검사 도구가 없는데 통과했다"
+            exit 1
+          fi
+          sh tools/check-repo-rules.sh

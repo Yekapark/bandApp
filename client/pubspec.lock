@@ -577,26 +577,26 @@ packages:
     dependency: transitive
     description:
       name: kakao_flutter_sdk_auth
-      sha256: b610ebf2a74aafc543141f1edf7d3ed82fcabcc1317181895151b1fe8f9d62d9
+      sha256: b9d982569462f6d31f97460f1d6f51acdc290f318967ee14009d20edc3006a12
       url: "https://pub.dev"
     source: hosted
-    version: "1.10.0"
+    version: "2.0.1"
   kakao_flutter_sdk_common:
     dependency: transitive
     description:
       name: kakao_flutter_sdk_common
-      sha256: e00122b2a6158853adfbb8d51f71f11f7c2cbbbe21f29b0d7494b0de5ec5e4fd
+      sha256: "6a89e80ef6c080f434b05df87d9dd83323ff6d10ea34d9e0a6cd90d2015f7e48"
       url: "https://pub.dev"
     source: hosted
-    version: "1.10.0"
+    version: "2.0.1"
   kakao_flutter_sdk_user:
     dependency: "direct main"
     description:
       name: kakao_flutter_sdk_user
-      sha256: "33d44bd2c25ea922078c6ab3eb33d978745d8f9c1920927f4745141e08ea5e57"
+      sha256: "047ff5a82f52a7e1558086acd87b89b941b072e6029de3eee0b96dbce4ca1e48"
       url: "https://pub.dev"
     source: hosted
-    version: "1.10.0"
+    version: "2.0.1"
   kakao_map_sdk:
     dependency: "direct main"
     description:
@@ -1010,6 +1010,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.6.0"
+  v_video_compressor:
+    dependency: "direct main"
+    description:
+      name: v_video_compressor
+      sha256: "9d3b4ac798ee5e14e489f48b5c4fa7d2e3786d1012030ffd1e120eddb40bf622"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.3"
   vector_graphics:
     dependency: transitive
     description:
@@ -1042,14 +1050,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.0"
-  video_compress:
-    dependency: "direct main"
-    description:
-      name: video_compress
-      sha256: "31bc5cdb9a02ba666456e5e1907393c28e6e0e972980d7d8d619a7beda0d4f20"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.1.4"
   video_player:
     dependency: "direct main"
     description:

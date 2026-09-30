@@ -6,7 +6,11 @@
 # 여기 없는 규칙(트랜잭션 안 외부 HTTP 호출, Controller 엔티티 노출 등)은 grep 으로
 # 판단하면 오탐이 많아 일부러 뺐다. 그건 리뷰가 본다.
 
+for tool in dirname find xargs grep sed git basename; do
+    command -v "$tool" >/dev/null 2>&1 || { echo "!! 검사 도구가 없다: $tool"; exit 1; }
+done
 cd "$(dirname "$0")/.." || exit 1
+tracked=$(git ls-files) || exit 1
 fail=0
 
 # ---------------------------------------------------------------- 1. 엔티티 Lombok
@@ -40,7 +44,7 @@ fi
 
 echo "== 비밀값 파일이 저장소에 추적되고 있는지"
 blocked=""
-for f in $(git ls-files); do
+for f in $tracked; do
     case "$(basename "$f")" in
         *.example|*.sample|*.template) continue ;;
     esac

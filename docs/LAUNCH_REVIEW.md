@@ -4,7 +4,7 @@
 > 각 항목의 **상태** 칸이 지금 어디까지 왔는지를 말한다.
 > 배경 문서: [LAUNCH_CHECKLIST.md](LAUNCH_CHECKLIST.md)(출시 순서), [legal/play-app-content.md](legal/play-app-content.md)(콘솔 선언 답안),
 > [progress/review-2026-09-1*](progress/README.md)(영역별 점검 1~3차).
-> 마지막 갱신: **2026-09-27** (G1 완료)
+> 마지막 갱신: **2026-09-30** (출시 전 마무리 U10~U16·G3~G5·P12·P13, Codex QA 116개 시나리오 Q1)
 
 ---
 
@@ -67,6 +67,11 @@
 | 28 | U12 | 중간 | 밴드에 들어간 뒤로는 새 밴드를 만들 길이 없음 | 🟡 2026-09-30 밴드 전환 시트에 "새 밴드 만들기" 추가. 남은 것: +32 에서 확인 |
 | 29 | U13 | **높음** | 갤럭시 S25+ 에서 밴드 이름·초대코드 입력칸에 키보드가 안 뜨고 반복하면 앱 종료(테스터 의견) | 🔧 2026-09-30 원인 조사 중 — 크래시 기록 대기(Play vitals 는 하루 한 번 갱신) |
 | 30 | U14 | **높음** | 서버가 거절한 요청 22곳이 앱에서 성공으로 보임(밴드장 나가기·틀린 비밀번호 탈퇴·재설정 등) | 🟡 2026-09-30 전부 `ensureSuccess` 로 감쌈 + 재발 막는 테스트. 남은 것: +32 확인 |
+| 31 | Q1 | 높음 | 전체 기능 QA·실기기 회귀 | 🟡 2026-09-30 (Codex) [QA_CHECKLIST.md](QA_CHECKLIST.md) 116개 시나리오 작성. 백엔드 484·Flutter 97 통과(#130~#134 이전 코드 기준), APK/AAB 빌드·공개 운영 확인. 실기기·Play 결제·운영 내부 조회 남음 |
+| 32 | G4 | 중간 | 규칙 검사 도구·Git 실패를 통과로 표시 | ✅ 2026-09-30 (Codex) `tools/check-repo-rules.sh` 필수 도구·Git 실패 거절, CI 회귀 검사 추가 |
+| 33 | U15 | 낮음 | SDK 교체 뒤 잠금 파일 정합화 | ✅ 2026-09-30 (Codex) U7에서 예정했던 `client/pubspec.lock` 갱신. 전체 앱 테스트·APK/AAB 빌드 확인 |
+| 34 | U16 | 중간 | Windows 출시 스크립트가 정상 빌드 후 실패 | ✅ 2026-09-30 (Codex) `release_store.py` UTF-8 출력. 재실행 거절은 수정 시각 검사 대신 **빌드 전 옛 AAB 삭제**로 |
+| 35 | G5 | 낮음 | Codex 훅이 Windows 에서 `sh` 를 못 찾아 code 1 | ➖ 2026-09-30 사용자 결정으로 `.codex/hooks.json` 제거(내용 비움) |
 
 P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코드 항목(G1~U1)을 고쳐 같은 트랙에 올린다.
 
@@ -79,6 +84,8 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | G1 | 높음 | 점검 1~3차 수정(약 40개 파일 — 인증 토큰 갱신 경합·한글 비밀번호 72바이트, 밴드 위임·탈퇴 경합·초대코드 2개·빈 밴드 재참여, 반복 회차 원래 슬롯·셋리스트 덮어쓰기, `V19`)이 로컬에만 있어 운영에 없다. 로컬 HEAD `5a84f31` 은 원격 main `982e528` 보다 4커밋 뒤(#94 **DB 백업 8일 멈춤 수정** 포함). main 에 안 합쳐진 원격 브랜치 12개 중 11개는 이미 반영된 옛 브랜치, dependabot(AWS SDK BOM) 하나만 새 내용 | 브랜치 → 파일 이름을 적어 커밋(`git add -A` 금지) → `git pull`(`TROUBLESHOOTING.md` 충돌은 양쪽 항목 모두 살림) → 전체 테스트 → PR → 자동 배포. **V19 는 되돌릴 수 없다** — 배포 직전 `bandule backup`, 롤백은 이미지가 아니라 DB 복원까지. 옛 브랜치 삭제, dependabot PR 은 CI 통과 시 머지 | ✅ 2026-09-27 커밋 54개 파일(수정 39·신규 15)을 PR [#98](https://github.com/Yekapark/bandApp/pull/98) 로 squash 머지 `10e5adc`. CI(rules·build·analyze-test) 통과 → Deploy 성공(배포 전 백업은 `deploy.sh` 가 수행) → `https://api.bandule.com/actuator/health` = UP. **V19 운영 적용됨.** 옛 브랜치·dependabot 은 G2 로 분리 |
 | G2 | 낮음 | 이미 main 에 더 새 버전이 들어간 옛 원격 브랜치 11개(`chore/drop-unused-plan-code` 등)가 남아 있다. dependabot `gradle-minor-patch`(AWS SDK BOM) PR 이 열려 있다 | 옛 브랜치는 삭제, dependabot 은 CI 통과 확인 후 머지 | 🟡 2026-09-29 — ① dependabot #119(AWS SDK BOM 2.54.17→2.55.6, firebase-admin 9.10.0→9.11.0) CI 통과 확인 후 squash 머지 `d9b722e` → 배포 성공, health UP. ② 원격 브랜치 58개(main 제외)를 PR 기록과 대조: **55개는 삭제해도 되는 것**(머지된 PR 의 마지막 커밋과 같음 51 + main 보다 앞선 커밋 없음 4). 이 세션의 GitHub 토큰으로는 브랜치 삭제가 403 이라 `git push origin --delete` 스크립트를 사용자에게 전달. ③ **머지 안 된 커밋이 남은 2개**는 사용자가 판단을 맡겨 **살렸다**: `feat/notification-channel` 의 참석·납부 체크 먼저 칠하기(정산은 화면 전체 잠금도 풀림)를 지금 코드에 옮기고, "Cloudflare 프록시를 껐다 — LA 경유 700ms" 기록은 `DEPLOY.md`·`LAUNCH_CHECKLIST.md`("왜 되돌렸는지 아무도 모른다" 해소)·`NEXT.md` 에, `phase-11-deploy` 의 서버 선택 기준(서울 리전·Ubuntu 24.04·NVMe)은 `DEPLOY.md` §1 에. 이제 두 브랜치도 지워도 된다. **남은 것: 스크립트 실행(두 브랜치 포함), (선택) GitHub Settings › General › "Automatically delete head branches" 켜기 — 앞으로 머지하면 브랜치가 저절로 지워진다** |
 | G3 | 중간 | HTTPS 인증서 만료를 지켜보는 장치가 없었다 — certbot 갱신이나 nginx reload 가 조용히 멈추면 90일째에 앱 접속이 전부 끊긴다 | 매일 점검에 인증서 남은 일수 | ✅ 2026-09-30 — `deploy/prod-check.sh` 7번: 서버가 **실제로 내보내는** 인증서(`openssl s_client` → 127.0.0.1:443, SNI=DOMAIN)의 남은 일수, 21일 미만이면 실패(certbot 은 30일 전부터 갱신). 매일 07:00 자동 점검에 포함. **남은 것: 다음 날 점검 주석에 "인증서 N일 남음" 이 찍히는지** |
+| G4 | 중간 | 실행 도구가 없거나 Git 조회가 실패해도 규칙 검사가 통과로 끝난다(Codex QA 발견) | 필수 명령 확인·Git 조회 실패 즉시 종료 | ✅ 2026-09-30 — `tools/check-repo-rules.sh`: 필수 도구·`git ls-files` 실패 거절. 정상/명령 없음/비저장소 3조건 확인, `.github/workflows/ci.yml` 에 명령 없는 경우의 회귀 검사 추가 |
+| G5 | 낮음 | `.codex/hooks.json`(사용자 PC 에만 있는 Codex 설정, git 미추적)의 PreToolUse 명령이 PowerShell 에서 `sh` 를 못 찾아 매번 code 1 | Claude 형식 훅을 Windows Codex 에 그대로 가져온 것 | ➖ 2026-09-30 — **사용자 결정: 훅 제거.** 파일 내용을 빈 설정(`{"hooks": {}}`)으로 바꿨다(이 세션은 PC 파일을 지울 수 없다 — 지워도 된다). `git add -A` 막는 역할은 어차피 Windows 에서 못 하고 있었고, 커밋 직전 비밀 파일 검사는 `.githooks/pre-commit` 이 계속 한다 |
 
 ---
 
@@ -137,13 +144,15 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | U4 | 낮음 | 구독 종료일이 "9월 10일 (목)" 처럼 연도 없이 나옴 | `Fmt.dateKoUtc` | 연도 포함 포매터 | ✅ 2026-09-29 — `Fmt.dateKoWithYearUtc`("2027년 9월 10일 (금)")를 만들어 요금제 화면 "구독기간 종료" 에 씀. 초대 만료(며칠 뒤)·일정 날짜는 올해라 그대로. 테스트 `formatters_test.dart` |
 | U5 | 낮음 | 첫 실행이 오프라인이면 기본 폰트, 매번 Google 폰트 서버 접속 | `google_fonts` 런타임 다운로드 | 폰트를 assets 에 넣고 `allowRuntimeFetching = false` | ➖ 2026-09-29 **사용자 결정: 그대로.** 굵기마다 첫 사용 때 한 번 받고 기기에 캐시된다 — 영향은 "오프라인으로 처음 켠 그 한 번만 기본 글꼴" 뿐. 본문 Noto Sans KR 을 굵기 5종(500~900) 넣으면 앱이 크게 는다 |
 | U6 | 낮음 | 알림 눌러도 해당 화면으로 안 감, 지도가 첫 합주실에 고정, 특정 영상 압축 멈춤 | `NEXT.md` §3·§1-E | 출시 후 업데이트 후보 | 🟡 2026-09-30 — 세 가지 모두 손봤다. ① **알림 이동**: 푸시를 누르면(백그라운드·앱 꺼짐 둘 다) 그 알림의 밴드로 바꾸고 해당 화면으로 — 일정 알림은 일정 상세, 정산 요청은 정산, 요금제 알림은 요금제, 취소 알림은 달력(`notification_route.dart`, 서버 push data 의 `type`·`bandId`·`reservationId`). 앱 안 알림 목록도 같은 규칙으로 — 예전에는 요금제 알림을 눌러도 `/reservations/0` 으로 갔다. ② **지도**: 합주실이 둘 이상이면 모든 핀이 화면에 들어오게(`CameraUpdate.fitMapPoints`). ③ 영상 압축 멈춤은 U7 에서 라이브러리 교체. 테스트 `notification_route_test.dart` 5건. **남은 것: +32 실기기(§7)** |
-| U7 | 중간 | 빌드 경고: `kakao_flutter_sdk_common`·`video_compress` 가 Kotlin Gradle Plugin 을 직접 적용한다 — "향후 Flutter 버전은 이런 플러그인이 있으면 빌드 실패". 지금 빌드는 된다 | Flutter 가 Built-in Kotlin 으로 옮겨 가는 중 | 두 플러그인 새 버전 확인 후 올리기. `video_compress` 는 압축 교착(U6)도 있어 교체 후보(`NEXT.md` §1-E). **Flutter 업그레이드 전에 처리** | 🟡 2026-09-29 — **사용자 승인(라이브러리 교체).** ① `kakao_flutter_sdk_user` ^1.9.6 → ^2.0.1(AGP 9 지원): `await KakaoSdk.init`, 매니페스트 리다이렉트 액티비티 `com.kakao.sdk.flutter.auth.AuthCodeHandlerActivity`(옛 이름이면 빌드는 되고 로그인 뒤 앱으로 못 돌아옴), 2.x 에서 없어진 `KakaoSdk.origin`(디버그 키 해시 출력) 제거. ② `video_compress` → `v_video_compressor` ^2.2.3(MIT, Media3 Transformer, 720p·1.8Mbps `medium`, 원본보다 크면 원본). 90초 멈춤 감시 유지, 트랜스코더 proguard 규칙 제거. 권한은 기존과 같은 READ/WRITE_EXTERNAL_STORAGE 뿐(READ_MEDIA_* 없음 — P10 영향 없음). ③ Client CI 에 `android-build` 잡(`flutter build apk --release --flavor prod` — Gradle·R8 까지, 실패하면 "What went wrong" 을 주석으로)과 analyze 오류 주석. **`android.builtInKotlin=true` 는 못 켰다** — `kakao_map_sdk` 1.3.x 가 KGP 를 무조건 적용해 CI 에서 "Failed to apply plugin 'org.jetbrains.kotlin.android'"(최신 main 도 Kotlin 1.9·AGP 8.5). 지금 Flutter 3.47.2 에선 false 로 문제없다. **남은 것: +32 에서 카카오 로그인(카카오톡·카카오계정 둘 다)·영상 첨부 압축(예전에 멈추던 131MB HEVC 영상 포함) 확인, `pubspec.lock` 은 +32 빌드 때 갱신·커밋, kakao_map_sdk 가 Built-in Kotlin 을 지원하면 true 로 켜고 CI android-build 확인** |
+| U7 | 중간 | 빌드 경고: `kakao_flutter_sdk_common`·`video_compress` 가 Kotlin Gradle Plugin 을 직접 적용한다 — "향후 Flutter 버전은 이런 플러그인이 있으면 빌드 실패". 지금 빌드는 된다 | Flutter 가 Built-in Kotlin 으로 옮겨 가는 중 | 두 플러그인 새 버전 확인 후 올리기. `video_compress` 는 압축 교착(U6)도 있어 교체 후보(`NEXT.md` §1-E). **Flutter 업그레이드 전에 처리** | 🟡 2026-09-29 — **사용자 승인(라이브러리 교체).** ① `kakao_flutter_sdk_user` ^1.9.6 → ^2.0.1(AGP 9 지원): `await KakaoSdk.init`, 매니페스트 리다이렉트 액티비티 `com.kakao.sdk.flutter.auth.AuthCodeHandlerActivity`(옛 이름이면 빌드는 되고 로그인 뒤 앱으로 못 돌아옴), 2.x 에서 없어진 `KakaoSdk.origin`(디버그 키 해시 출력) 제거. ② `video_compress` → `v_video_compressor` ^2.2.3(MIT, Media3 Transformer, 720p·1.8Mbps `medium`, 원본보다 크면 원본). 90초 멈춤 감시 유지, 트랜스코더 proguard 규칙 제거. 권한은 기존과 같은 READ/WRITE_EXTERNAL_STORAGE 뿐(READ_MEDIA_* 없음 — P10 영향 없음). ③ Client CI 에 `android-build` 잡(`flutter build apk --release --flavor prod` — Gradle·R8 까지, 실패하면 "What went wrong" 을 주석으로)과 analyze 오류 주석. **`android.builtInKotlin=true` 는 못 켰다** — `kakao_map_sdk` 1.3.x 가 KGP 를 무조건 적용해 CI 에서 "Failed to apply plugin 'org.jetbrains.kotlin.android'"(최신 main 도 Kotlin 1.9·AGP 8.5). 지금 Flutter 3.47.2 에선 false 로 문제없다. **남은 것: +32 에서 카카오 로그인(카카오톡·카카오계정 둘 다)·영상 첨부 압축(예전에 멈추던 131MB HEVC 영상 포함) 확인, `pubspec.lock` 은 2026-09-30 Codex QA 에서 갱신(U15), kakao_map_sdk 가 Built-in Kotlin 을 지원하면 true 로 켜고 CI android-build 확인** |
 | U8 | 낮음 | 빌드 경고 "CupertinoIcons 폰트를 찾지 못함" | 앱 코드는 `CupertinoIcons` 를 쓰지 않는다 — 의존성 쪽 참조 | 화면에 빈 아이콘이 보이면 `cupertino_icons` 추가, 아니면 무시 | ➖ 앱 코드 미사용 (2026-09-27) |
 | U10 | 중간 | 초대 링크 페이지의 "App Store에서 앱 받기" 가 가짜 주소(`apps.apple.com/app/id0000000000`)로 갔다 — iPhone 앱은 아직 없다 | `DeeplinkProperties` 기본값이 예시 주소 | 주소가 없으면 버튼 대신 준비 중 안내 | ✅ 2026-09-30 — iOS 스토어 주소가 없으면(기본) 버튼 대신 "iPhone 앱은 아직 준비 중이에요. 지금은 Android 폰에서 쓸 수 있어요", iPhone 에서는 앱 주소(`bandule://`)를 열지 않고(사파리 오류 방지) 코드를 Android 에서 입력하라고 안내. `IOS_APP_STORE_URL` 을 넣으면 예전처럼 버튼이 나온다. 테스트 `InviteDeepLinkIntegrationTest` |
 | U11 | 낮음 | 버전 이름이 `0.1.0` 이라 스토어에 "버전 0.1.0" 으로 보인다 | 개발 중 번호를 그대로 씀 | 정식 출시 번호 1.0.0 | ✅ 2026-09-30 — `pubspec.yaml` `1.0.0+31` (다음 스토어 빌드가 `1.0.0+32`). 사용자 결정 |
 | U12 | 중간 | 이미 밴드에 속해 있으면 **새 밴드를 만들 수 없다.** 첫 화면(밴드 게이트)은 "나중에 다른 밴드도 추가할 수 있어요" 라고 하는데, 밴드가 생긴 뒤 들어갈 수 있는 곳은 밴드 전환 시트뿐이고 거기엔 "초대코드로 밴드 추가" 만 있었다(**테스터 의견** 2026-09-30) | 서버(`BandService.create`)는 밴드 수를 막지 않는다 — 앱에 입구가 없었을 뿐 | 전환 시트에 만들기 버튼 | 🟡 2026-09-30 — `band_switch_sheet.dart` 하단을 "+ 새 밴드 만들기" · "+ 초대코드로 가입" 두 버튼으로. 만들면 새 밴드가 선택된 채 홈으로(기존 `CreateBandScreen` 그대로). **남은 것: +32 에서 홈 › 밴드 이름 눌러 전환 시트 › 새 밴드 만들기 → 새 밴드로 바뀌는지, 원래 밴드로 다시 전환되는지** |
 | U13 | **높음** | **갤럭시 S25+ 테스터: "밴드 이름 만들기 누르면 키패드가 안 뜨고 반복해서 누르면 앱이 튕겨요. 가입하기 초대코드 입력란도 똑같아요"** (2026-09-30, +31) | 미확인. 두 화면 모두 평범한 `TextField` 라 화면 코드에서 원인이 안 보인다 — 앱 전체 입력칸 문제인지(엔진·기기 키보드) 두 화면만의 문제인지부터 가려야 한다. 신규 사용자가 **밴드를 만들지도 가입하지도 못하는** 첫 관문이다 | 크래시 스택으로 원인 확정 후 수정 | 🔧 2026-09-30 — Play Console 비정상 종료 목록은 아직 비어 있음(데이터가 매일 07:00 갱신이라 오늘 오후 크래시는 내일 나온다). 테스터에게 물을 것: 로그인·가입 때 이메일 입력은 됐는지(카카오로만 들어왔는지), 쓰는 키보드(삼성 키보드·Gboard 등)와 One UI 버전, "튕긴다" 가 앱만 꺼지는지 폰 전체가 재시작되는지 |
 | U14 | **높음** | **밴드장이 "이 밴드에서 나가기" → 안내 뒤 "나가기" 를 누르면 나가지지 않는데 "밴드에서 나왔어요" 가 뜬다**(사용자 발견 2026-09-30). 조사해 보니 같은 구조의 요청이 22곳 — **틀린 인증번호로 비밀번호 재설정, 틀린 비밀번호로 회원 탈퇴, 이름이 다른 밴드 삭제, 멤버 내보내기, 일정 승인·거절·취소, 셋리스트 순서·삭제, 합주실·글·첨부 삭제, 신고·차단, 초대코드 폐기, 알림 설정** 등이 서버가 거절해도 성공으로 보였다 | 앱의 Dio 는 4xx 를 예외로 던지지 않고(`validateStatus: code < 500`) 실패 변환을 `unwrap()` 에 맡긴다. 결과 본문을 쓰지 않는 요청은 `unwrap()` 을 안 불러 4xx 가 그냥 지나갔다 | 응답을 버리는 호출도 상태 확인 | 🟡 2026-09-30 — `dio_client.dart` 에 `ensureSuccess(res)`(2xx 아니면 서버 코드·문구 그대로 `ApiException`) 추가, 22곳을 `ensureSuccess(await _dio...)` 로(로그아웃만 제외 — 실패해도 로컬 정리하는 멱등 요청). 밴드장의 나가기는 "나가기" 버튼 없이 "위임하거나, 혼자면 밴드 삭제" 안내만. 테스트 `ensure_success_test.dart` — 204·409·비정형 4xx, 그리고 **`lib/` 에서 감싸지 않은 `await _dio.xxx(` 문이 생기면 실패**(재발 방지). **남은 것: +32 에서 밴드장 나가기 → 안내만 뜨는지, 탈퇴 화면에 틀린 비밀번호 → 오류 문구가 뜨고 계정이 남는지** |
+| U15 | 낮음 | U7 SDK 교체 뒤 잠금 파일이 옛 카카오 1.10.0·video_compress 를 가리켰다(Codex QA 발견) | +32 빌드 때 갱신 예정이었던 파일 | 선언대로 의존성 확정 | ✅ 2026-09-30 — `client/pubspec.lock` 카카오 2.0.1·v_video_compressor 2.2.3 정합화, Flutter 97개·APK/AAB 빌드 성공(Codex). SDK 실기기 검증은 U7 그대로 🟡 |
+| U16 | 중간 | Windows 에서 AAB 검사를 마친 뒤 `›` 출력에서 CP949 오류로 실패, 같은 명령 재실행(`--no-bump`)은 "이번 빌드에서 만들어지지 않았다" 로 거절(Codex QA 발견) | stdout 기본 인코딩이 CP949. 재실행은 입력이 같아 Gradle 이 AAB 를 재사용해 수정 시각이 실행 시작보다 이전 | UTF-8 출력, 이번 빌드 산출물인지 확인하는 다른 방법 | ✅ 2026-09-30 — `client/tools/release_store.py`: stdout UTF-8(Codex). Codex 는 수정 시각 검사를 없앴는데, 그러면 출력 경로가 바뀌거나 빌드가 조용히 아무것도 안 만들 때 **지난 AAB 를 올릴 수 있어** 대신 **빌드 전에 옛 AAB 를 지운다**(없으면 "이번 빌드에서 만들어지지 않았다"). 파일이 잠겨 못 지우면 빌드 번호를 되돌리고 멈춘다. **남은 것: 다음 스토어 빌드(+32)가 이 스크립트로 끝까지 도는지** |
 
 릴리스 빌드(ProGuard)로 지도·로그인·푸시를 실기기에서 본 기록도 없다 — P2 와 같은 설치본으로 함께 확인한다.
 
@@ -213,6 +222,12 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 ---
 
 ## 8. 점검 범위와 한계
+
+| ID | 심각도 | 작업 | 상태 |
+|---|---|---|---|
+| Q1 | 높음 | 전체 기능 QA와 출시 회귀 확인 | 🟡 2026-09-30 (Codex) [QA_CHECKLIST.md](QA_CHECKLIST.md): 116개 수동 시나리오·자동 증거·재실행 명령. 백엔드 484개·Flutter 97개 실패/건너뜀 없이 통과(#130~#134 이전 코드 기준 — 이후 수정은 CI 로 통과), analyze 오류 0(안내 409개), prod APK·스토어 AAB 빌드/서명/주소/정렬/권한 검사. 공개 health UP·미인증 401·사이트 4쪽 200. 남은 것: Play 설치본 실기기, 실제 카카오·R2·FCM·결제 E2E, 운영 내부 상태(SSH 시간 초과로 못 봄) |
+
+**아래는 2026-09-27 최초 코드 점검의 한계다. 최신 실행 결과는 위 Q1 문서에 있다.**
 
 - 코드 읽기로 한 점검이다. 운영 서버·Play Console·카카오 콘솔은 보지 않았다.
 - 백엔드는 GitHub main(`982e528`), 앱·문서·설정은 PC 의 현재 파일을 읽었다. 폴더가 깊어 가져오지 못한
