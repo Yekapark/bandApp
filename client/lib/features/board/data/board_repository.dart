@@ -103,7 +103,7 @@ class BoardRepository {
 
   Future<void> delete({required int bandId, required int postId}) async {
     try {
-      await _dio.delete<dynamic>('/bands/$bandId/posts/$postId');
+      ensureSuccess(await _dio.delete<dynamic>('/bands/$bandId/posts/$postId'));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -216,9 +216,9 @@ class BoardRepository {
     required int mediaId,
   }) async {
     try {
-      await _dio.delete<dynamic>(
+      ensureSuccess(await _dio.delete<dynamic>(
         '/bands/$bandId/posts/$postId/media/$mediaId',
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -231,14 +231,14 @@ class BoardRepository {
     required String reason,
   }) async {
     try {
-      await _dio.post<dynamic>(
+      ensureSuccess(await _dio.post<dynamic>(
         '/reports',
         data: {
           'targetType': targetType,
           'targetId': targetId,
           'reason': reason,
         },
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -247,10 +247,10 @@ class BoardRepository {
   /// 사용자 차단(전역). 이후 게시판에서 서로의 글이 양방향으로 빠진다.
   Future<void> blockUser(int blockedUserId) async {
     try {
-      await _dio.post<dynamic>(
+      ensureSuccess(await _dio.post<dynamic>(
         '/users/me/blocks',
         data: {'blockedUserId': blockedUserId},
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -274,7 +274,7 @@ class BoardRepository {
   /// 차단 해제.
   Future<void> unblock(int blockedUserId) async {
     try {
-      await _dio.delete<dynamic>('/users/me/blocks/$blockedUserId');
+      ensureSuccess(await _dio.delete<dynamic>('/users/me/blocks/$blockedUserId'));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

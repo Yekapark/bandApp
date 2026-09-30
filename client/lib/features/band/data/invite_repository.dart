@@ -50,7 +50,7 @@ class InviteRepository {
   /// 현재 활성 코드 무효화 (204, 멱등). 밴드장만.
   Future<void> revoke(int bandId) async {
     try {
-      await _dio.delete<dynamic>('/bands/$bandId/invites/current');
+      ensureSuccess(await _dio.delete<dynamic>('/bands/$bandId/invites/current'));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

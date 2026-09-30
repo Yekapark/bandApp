@@ -162,6 +162,24 @@ class _AuthInterceptor extends Interceptor {
   }
 }
 
+/// 본문을 쓰지 않는 요청(삭제·나가기·확인 등)의 성공 확인. 2xx 가 아니면 [ApiException] 을 던진다.
+///
+/// 이 앱의 Dio 는 4xx 를 예외로 던지지 않고 응답으로 돌려준다(`validateStatus: code < 500`) — 실패 변환은
+/// [unwrap] 이 한다. 그래서 응답을 버리는 호출이 [unwrap] 도 이것도 안 거치면 **서버가 거절해도 성공으로 보인다**
+/// (밴드장 나가기 409 가 "밴드에서 나왔어요" 로, 틀린 비밀번호의 탈퇴가 성공으로 — LAUNCH_REVIEW U14).
+/// 응답을 버리는 호출은 반드시 이것으로 감싼다: `ensureSuccess(await _dio.delete(...))`.
+void ensureSuccess(Response<dynamic> res) {
+  final code = res.statusCode ?? 0;
+  if (code >= 200 && code < 300) return;
+  unwrap<void>(res, (_) {});
+  // 본문이 `success: true` 인 4xx 는 없지만, 있더라도 성공으로 넘기지 않는다.
+  throw ApiException(
+    code: 'UNKNOWN',
+    message: '요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
+    statusCode: res.statusCode,
+  );
+}
+
 /// `Response` → 원하는 타입으로. 실패 응답이면 [ApiException] 을 던진다.
 T unwrap<T>(Response<dynamic> res, T Function(Object? data) parse) {
   final body = res.data;

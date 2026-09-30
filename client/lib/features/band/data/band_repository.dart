@@ -109,7 +109,7 @@ class BandRepository {
     required int targetUserId,
   }) async {
     try {
-      await _dio.delete<dynamic>('/bands/$bandId/members/$targetUserId');
+      ensureSuccess(await _dio.delete<dynamic>('/bands/$bandId/members/$targetUserId'));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -118,7 +118,7 @@ class BandRepository {
   /// 밴드 나가기. 밴드장은 먼저 위임해야 한다(409 LEADER_MUST_DELEGATE_BEFORE_LEAVING).
   Future<void> leaveBand(int bandId) async {
     try {
-      await _dio.post<dynamic>('/bands/$bandId/members/leave');
+      ensureSuccess(await _dio.post<dynamic>('/bands/$bandId/members/leave'));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -130,8 +130,8 @@ class BandRepository {
   /// 확인 본문이 필요해서 DELETE 가 아니라 POST 다(본문 있는 DELETE 는 지원이 고르지 않다).
   Future<void> deleteBand(int bandId, String confirmName) async {
     try {
-      await _dio.post<dynamic>('/bands/$bandId/delete',
-          data: {'confirmName': confirmName});
+      ensureSuccess(await _dio.post<dynamic>('/bands/$bandId/delete',
+          data: {'confirmName': confirmName}));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

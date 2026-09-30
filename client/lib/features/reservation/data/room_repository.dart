@@ -113,7 +113,7 @@ class RoomRepository {
   /// 합주실 삭제(soft). 이미 등록된 일정에는 영향 없다(roomName 은 응답에 계속 채워짐).
   Future<void> delete({required int bandId, required int roomId}) async {
     try {
-      await _dio.delete<dynamic>('/bands/$bandId/rooms/$roomId');
+      ensureSuccess(await _dio.delete<dynamic>('/bands/$bandId/rooms/$roomId'));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }

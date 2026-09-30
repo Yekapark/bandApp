@@ -417,17 +417,34 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
   }
 
   Future<void> _leave(int bandId, bool isLeader) async {
+    // 밴드장은 서버가 409 로 거절한다. 누를 수 있는 "나가기" 를 보여 주지 않고 할 수 있는 일만 안내한다.
+    if (isLeader) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('밴드장은 바로 나갈 수 없어요', style: TextStyle(fontSize: 16)),
+          content: const Text(
+            '위 멤버 목록에서 다른 멤버에게 밴드장을 위임한 뒤 나갈 수 있어요.\n'
+            '혼자 있는 밴드라면 아래 "밴드 삭제" 를 이용해 주세요.',
+            style: TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('확인')),
+          ],
+        ),
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text('이 밴드에서 나갈까요?', style: TextStyle(fontSize: 16)),
-        content: Text(
-          isLeader
-              ? '밴드장은 먼저 다른 멤버에게 밴드장을 위임해야 나갈 수 있어요.'
-              : '다시 들어오려면 초대코드가 필요해요.',
-          style: const TextStyle(
-              fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+        content: const Text(
+          '다시 들어오려면 초대코드가 필요해요.',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
         ),
         actions: [
           TextButton(

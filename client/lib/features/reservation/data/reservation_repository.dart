@@ -125,9 +125,9 @@ class ReservationRepository {
     required int reservationId,
   }) async {
     try {
-      await _dio.post<dynamic>(
+      ensureSuccess(await _dio.post<dynamic>(
         '/bands/$bandId/reservations/$reservationId/approve',
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -139,9 +139,9 @@ class ReservationRepository {
     required int reservationId,
   }) async {
     try {
-      await _dio.post<dynamic>(
+      ensureSuccess(await _dio.post<dynamic>(
         '/bands/$bandId/reservations/$reservationId/reject',
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -153,9 +153,9 @@ class ReservationRepository {
     required int reservationId,
   }) async {
     try {
-      await _dio.delete<dynamic>(
+      ensureSuccess(await _dio.delete<dynamic>(
         '/bands/$bandId/reservations/$reservationId',
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -244,10 +244,10 @@ class ReservationRepository {
     required List<int> itemIds,
   }) async {
     try {
-      await _dio.put<dynamic>(
+      ensureSuccess(await _dio.put<dynamic>(
         '/bands/$bandId/reservations/$reservationId/setlist/reorder',
         data: {'itemIds': itemIds},
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -260,9 +260,9 @@ class ReservationRepository {
     required int itemId,
   }) async {
     try {
-      await _dio.delete<dynamic>(
+      ensureSuccess(await _dio.delete<dynamic>(
         '/bands/$bandId/reservations/$reservationId/setlist/$itemId',
-      );
+      ));
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
