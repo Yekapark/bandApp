@@ -28,8 +28,15 @@ class InviteDeepLinkIntegrationTest extends ApiIntegrationTest {
         // 주소라, 그대로 두면 초대 링크가 네이버 밴드 앱을 연다(실제로 그랬다).
         assertThat(res.getBody()).contains("bandule://invite/");
         assertThat(res.getBody()).doesNotContain("bandapp://");
-        assertThat(res.getBody()).contains("apps.apple.com");
         assertThat(res.getBody()).contains("play.google.com");
+    }
+
+    /** iPhone 앱이 아직 없다 — 가짜 App Store 주소(id0000000000) 대신 "준비 중" 안내(2026-09-30). */
+    @Test
+    void landing_page_says_the_iphone_app_is_not_ready_instead_of_a_fake_store_link() {
+        String body = get("/invite/ABCD2345").getBody();
+        assertThat(body).doesNotContain("apps.apple.com").doesNotContain("id0000000000");
+        assertThat(body).contains("iPhone 앱은 아직 준비 중");
     }
 
     /**

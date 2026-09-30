@@ -1,5 +1,22 @@
 # 문제 기록
 
+## 2026-09-30 — 초대 링크 페이지의 "App Store에서 앱 받기" 가 없는 앱 주소로 갔다
+
+**증상** — (출시 전 점검에서 발견) iPhone 으로 초대 링크를 열면 "App Store에서 앱 받기" 버튼이 보이고, 누르면
+`apps.apple.com/app/id0000000000` — 없는 앱 페이지. 이어서 페이지가 `bandule://` 를 열려고 해 사파리가 "주소가
+유효하지 않음" 오류를 띄웠다.
+
+**원인** — `DeeplinkProperties.iosAppStoreUrl` 의 기본값이 개발 초기에 자리만 잡아 둔 예시 주소였다. iPhone 앱을
+만들지 않기로 하면서 이 값을 아무도 다시 보지 않았고, 서버 환경변수도 없어 기본값이 운영에 그대로 나갔다. 테스트는
+"버튼에 apps.apple.com 이 있다" 를 확인하고 있어서 오히려 가짜 주소를 지켜 주고 있었다.
+
+**해결** — 기본값을 빈 값으로(`IOS_APP_STORE_URL` 이 없거나 예시 주소면 "없음"). 없으면 버튼 대신 "iPhone 앱은 아직
+준비 중이에요" 를 보여 주고, iPhone 에서는 `bandule://` 이동을 하지 않고 "Android 폰에서 코드를 입력해 달라" 고 안내한다.
+iPhone 앱이 나오면 서버 `.env.prod` 에 `IOS_APP_STORE_URL` 만 넣으면 예전처럼 버튼이 나온다.
+
+**확인법** — `curl -s https://api.bandule.com/invite/<코드> | grep -c id0000000000` → 0, "준비 중" 문구가 있어야 한다.
+테스트 `InviteDeepLinkIntegrationTest.landing_page_says_the_iphone_app_is_not_ready_instead_of_a_fake_store_link`.
+
 ## 2026-09-30 — 결제 알림 push 구독이 31일 동안 알림이 없으면 지워지게 돼 있었다
 
 **증상** — (콘솔 점검에서 발견) Pub/Sub 구독 `play-rtdn-push` 의 만료 기간이 기본값 **31일**이었다. 재시도 정책은

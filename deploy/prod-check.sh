@@ -4,7 +4,7 @@
 # 왜 있나 — 배포 직후 헬스체크 말고는 감시가 없었다. 그래서 밴드에 안 붙은 구매 알림이
 # 7일 동안 초당 한 번씩 서버를 때리는 동안 아무도 몰랐다
 # (docs/TROUBLESHOOTING.md 2026-09-09). 여기 있는 검사는 전부 "터졌는데 아무도 안 보는"
-# 종류다 — 요청 폭주, 디스크, 백업 멈춤, 에러 급증.
+# 종류다 — 요청 폭주, 디스크, 백업 멈춤, 에러 급증, HTTPS 인증서 만료.
 #
 # 서버에서 직접:              sh deploy/prod-check.sh
 # 내 PC 에서 서버로 흘려서:   ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh
@@ -16,6 +16,7 @@ ERR_MAX=${ERR_MAX:-200}        # 24시간 에러/예외 로그 줄 수
 REQ_MAX=${REQ_MAX:-2000}       # 1시간 요청 수 (초당 1회 = 3600)
 DISK_MAX=${DISK_MAX:-85}       # 루트 디스크 사용률 %
 BACKUP_MAX_H=${BACKUP_MAX_H:-36}   # 마지막 백업이 몇 시간 안이어야 하는지
+CERT_MIN_DAYS=${CERT_MIN_DAYS:-21} # HTTPS 인증서가 최소 며칠 남아 있어야 하는지 (certbot 은 30일 전부터 갱신한다)
 
 # QUIET=1 이면 숫자만 찍고 **로그 내용은 안 찍는다.**
 # 이 저장소는 공개고 GitHub Actions 로그도 공개다 — 에러 줄·요청 경로에는 이메일·구매
@@ -94,6 +95,23 @@ if [ "${reqs:-0}" -gt "$REQ_MAX" ]; then
         | awk '{print $6, $7}' | sort | uniq -c | sort -rn | head -5
 else
     echo "요청     1시간 ${reqs}건"
+fi
+
+# 7. HTTPS 인증서 만료. certbot 컨테이너가 12시간마다 갱신하고 nginx 가 6시간마다 다시 읽지만, 둘 중 하나가
+#    조용히 멈추면 90일째에 앱 접속이 전부 끊긴다. **실제로 내보내는 인증서**를 재야 갱신과 reload 를 한 번에 본다.
+#    certbot 은 30일 남았을 때부터 갱신하므로 21일 아래로 내려왔다면 갱신이 실패하고 있는 것이다(2026-09-30 추가).
+domain=$(grep -m1 '^DOMAIN=' .env.prod 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -cd 'A-Za-z0-9.-')
+end=$(echo | openssl s_client -connect 127.0.0.1:443 -servername "${domain:-localhost}" 2>/dev/null \
+      | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+if [ -z "$end" ]; then
+    bad "인증서   읽지 못했다 (DOMAIN=${domain:-없음}) — openssl 이 있는지, nginx 가 443 에 떠 있는지 본다"
+else
+    days=$(( ($(date -d "$end" +%s) - $(date +%s)) / 86400 ))
+    if [ "$days" -lt "$CERT_MIN_DAYS" ]; then
+        bad "인증서   ${days}일 남음 (기준 ${CERT_MIN_DAYS}일) — 갱신 실패 중. $C logs --tail 50 certbot 을 본다"
+    else
+        echo "인증서   ${days}일 남음"
+    fi
 fi
 
 [ "$fail" = 0 ] && echo "== 이상 없음"
