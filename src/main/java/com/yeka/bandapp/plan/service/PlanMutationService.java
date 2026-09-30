@@ -178,6 +178,16 @@ public class PlanMutationService {
         mediaDirectory.applyGracePeriodForBand(bandId, now);
     }
 
+    /**
+     * 스토어 구독의 결제자를 적는다(LAUNCH_REVIEW B13). 요청의 토큰이 지금 이 밴드의 토큰일 때만 — {@link BandPlan#recordPurchaser}.
+     * 검증 응답을 깨지 않도록 요금제가 없으면 조용히 넘어간다.
+     */
+    @Transactional
+    public void recordPurchaser(long bandId, String purchaseToken, long userId) {
+        bandPlanRepository.findByBandIdForUpdate(bandId)
+                .ifPresent(plan -> plan.recordPurchaser(purchaseToken, userId));
+    }
+
     private BandPlan requirePlan(long bandId) {
         return bandPlanRepository.findByBandIdForUpdate(bandId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PLAN_NOT_FOUND));

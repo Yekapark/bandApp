@@ -149,7 +149,10 @@ public class StoreSubscriptionService {
             log.warn("구매 검증: 다른 밴드의 구매 bandId={} tagged={}", bandId, taggedBand.getAsLong());
             throw new BusinessException(ErrorCode.PURCHASE_BAND_MISMATCH);
         }
-        return grantAndAcknowledge(bandId, sub);
+        PlanResponse response = grantAndAcknowledge(bandId, sub);
+        // 결제 뒤 검증을 보낸 사람 = 결제자. 탈퇴하면 이 구독의 자동 갱신을 해지한다(B13).
+        planMutationService.recordPurchaser(bandId, sub.purchaseToken(), userId);
+        return response;
     }
 
     /**
@@ -168,7 +171,9 @@ public class StoreSubscriptionService {
         long bandId = PurchaseBandTag.parse(sub.obfuscatedAccountId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.PURCHASE_BAND_UNKNOWN));
         accessGuard.requireLeader(bandId, userId);
-        return RestoredPurchaseResponse.of(bandId, grantAndAcknowledge(bandId, sub));
+        RestoredPurchaseResponse response = RestoredPurchaseResponse.of(bandId, grantAndAcknowledge(bandId, sub));
+        planMutationService.recordPurchaser(bandId, sub.purchaseToken(), userId);
+        return response;
     }
 
     private static void requireToken(String purchaseToken) {

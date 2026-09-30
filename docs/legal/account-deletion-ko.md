@@ -53,8 +53,9 @@
 
 ## Google Play 구독 확인
 
-밴듈 계정 삭제만으로 Google Play의 자동갱신 구독이 취소되지는 않습니다. 유료 구독이 있다면
-계정을 삭제하기 전에 [Google Play 구독 관리](https://play.google.com/store/account/subscriptions)에서
-별도로 해지해 주세요.
+계정을 삭제하면 **본인이 밴듈 앱에서 결제한 Google Play 구독의 자동 결제 해지를 Google Play에 요청합니다.**
+이미 결제한 기간은 환불되지 않으며, 그 기간이 끝날 때까지 해당 밴드는 유료 요금제로 유지됩니다.
+해지가 반영됐는지는 [Google Play 구독 관리](https://play.google.com/store/account/subscriptions)에서
+확인할 수 있고, 계정을 삭제하기 전에 직접 해지해도 됩니다.
 
 문의: notice@bandule.com

@@ -7,6 +7,7 @@ import com.yeka.bandapp.common.security.AccessTokenBlocklist;
 import com.yeka.bandapp.common.security.JwtProperties;
 import com.yeka.bandapp.common.security.RefreshTokenStore;
 import com.yeka.bandapp.notification.service.DeviceTokenService;
+import com.yeka.bandapp.plan.service.WithdrawnPurchaserSubscriptions;
 import com.yeka.bandapp.user.dto.UserResponse;
 import com.yeka.bandapp.user.entity.User;
 import com.yeka.bandapp.user.kakao.KakaoClient;
@@ -42,11 +43,13 @@ public class UserAccountService {
     private final KakaoClient kakaoClient;
     private final BandMemberService bandMemberService;
     private final DeviceTokenService deviceTokenService;
+    private final WithdrawnPurchaserSubscriptions withdrawnPurchaserSubscriptions;
 
     public UserAccountService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                               RefreshTokenStore refreshTokenStore, AccessTokenBlocklist accessTokenBlocklist,
                               JwtProperties jwtProperties, KakaoClient kakaoClient,
-                              BandMemberService bandMemberService, DeviceTokenService deviceTokenService) {
+                              BandMemberService bandMemberService, DeviceTokenService deviceTokenService,
+                              WithdrawnPurchaserSubscriptions withdrawnPurchaserSubscriptions) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokenStore = refreshTokenStore;
@@ -55,6 +58,7 @@ public class UserAccountService {
         this.kakaoClient = kakaoClient;
         this.bandMemberService = bandMemberService;
         this.deviceTokenService = deviceTokenService;
+        this.withdrawnPurchaserSubscriptions = withdrawnPurchaserSubscriptions;
     }
 
     @Transactional(readOnly = true)
@@ -64,7 +68,7 @@ public class UserAccountService {
 
     /**
      * 탈퇴. 즉시 {@code deletedAt} 기록 + 소속 밴드 정리 + Redis 세션 전삭제 + access 차단목록 등재
-     * + (소셜) 카카오 unlink.
+     * + (소셜) 카카오 unlink + 이 사람이 결제한 스토어 구독의 자동 갱신 해지(LAUNCH_REVIEW B13, 커밋 뒤).
      * <p>unlink 실패는 탈퇴를 막지 않는다 — 계정 삭제 불가는 스토어 심사 거절 사유다.
      * <p>밴드 정리({@link BandMemberService#handleAccountWithdrawal})는 같은 트랜잭션이라 실패 시 탈퇴 전체가 롤백된다.
      */
@@ -84,6 +88,7 @@ public class UserAccountService {
         user.withdraw(now);
         bandMemberService.handleAccountWithdrawal(userId, now);
         deviceTokenService.deleteAllOf(userId);
+        withdrawnPurchaserSubscriptions.cancelRenewalsAfterWithdrawal(userId);
         refreshTokenStore.removeAll(userId);
         accessTokenBlocklist.block(userId, jwtProperties.accessTokenTtl());
 
