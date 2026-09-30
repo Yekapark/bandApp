@@ -34,15 +34,16 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
         long payerId = myUserId(payer);
         long bandId = createBand(payer, "해지밴드");
         join(member, issueInvite(payer, bandId, null));
-        assertThat(subscribe(payer, bandId).getStatusCode().value()).isEqualTo(200);
+        String purchase = "wcs-a-" + System.nanoTime();
+        assertThat(verifyGoogle(payer, bandId, purchase).getStatusCode().value()).isEqualTo(200);
         assertThat(planRow(bandId).get("purchased_by_user_id")).isEqualTo(payerId);
 
         withdraw(payer);
 
-        assertThat(gateway.cancelledRenewals()).contains(tokenFor(bandId));
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
         Map<String, Object> row = planRow(bandId);
-        assertThat(row.get("tier")).isEqualTo("PREMIUM");            // 결제한 기간은 그대로
-        assertThat(row.get("purchase_token")).isEqualTo(tokenFor(bandId)); // 웹훅이 밴드를 찾을 수 있게 남긴다
+        assertThat(row.get("tier")).isEqualTo("PREMIUM");             // 결제한 기간은 그대로
+        assertThat(row.get("purchase_token")).isEqualTo(purchase);    // 웹훅이 밴드를 찾을 수 있게 남긴다
         assertThat(row.get("purchased_by_user_id")).isNull();       // 탈퇴자와의 연결은 끊는다
     }
 
@@ -53,31 +54,33 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
         long nextId = myUserId(next);
         long bandId = createBand(payer, "위임밴드");
         join(next, issueInvite(payer, bandId, null));
-        assertThat(subscribe(payer, bandId).getStatusCode().value()).isEqualTo(200);
+        String purchase = "wcs-b-" + System.nanoTime();
+        assertThat(verifyGoogle(payer, bandId, purchase).getStatusCode().value()).isEqualTo(200);
         ResponseEntity<String> delegated = post("/api/v1/bands/" + bandId + "/leader",
                 "{\"newLeaderUserId\":" + nextId + "}", payer);
         assertThat(delegated.getStatusCode().value()).isEqualTo(200);
 
         withdraw(next);   // 지금 밴드장이지만 결제자는 아니다
 
-        assertThat(gateway.cancelledRenewals()).doesNotContain(tokenFor(bandId));
+        assertThat(gateway.cancelledRenewals()).doesNotContain(purchase);
         assertThat(planRow(bandId).get("purchased_by_user_id")).isNotNull();
 
         withdraw(payer);  // 결제자가 탈퇴하면 그때 해지
 
-        assertThat(gateway.cancelledRenewals()).contains(tokenFor(bandId));
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
     }
 
     @Test
     void 이미_해지_예약한_구독은_다시_해지하지_않는다() {
         String payer = signup("wcs-payer3@band.app", "결제자");
         long bandId = createBand(payer, "해지예약밴드");
-        assertThat(subscribe(payer, bandId).getStatusCode().value()).isEqualTo(200);
-        cancel(payer, bandId);   // Play 스토어에서 해지 → CANCELED 웹훅
+        String purchase = "wcs-c-" + System.nanoTime();
+        assertThat(verifyGoogle(payer, bandId, purchase).getStatusCode().value()).isEqualTo(200);
+        googlePlayWebhook(RTDN_CANCELED, purchase);   // Play 스토어에서 해지 → CANCELED 웹훅
 
         withdraw(payer);
 
-        assertThat(gateway.cancelledRenewals()).doesNotContain(tokenFor(bandId));
+        assertThat(gateway.cancelledRenewals()).doesNotContain(purchase);
         assertThat(planRow(bandId).get("purchased_by_user_id")).isNull();
     }
 
@@ -85,7 +88,7 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
     void 해지_호출이_실패해도_탈퇴는_끝난다() {
         String payer = signup("wcs-payer4@band.app", "결제자");
         long bandId = createBand(payer, "실패밴드");
-        String purchaseToken = "nocancel-" + bandId;
+        String purchaseToken = "nocancel-" + System.nanoTime();
         assertThat(verifyGoogle(payer, bandId, purchaseToken).getStatusCode().value()).isEqualTo(200);
 
         withdraw(payer);   // 204 가 아니면 withdraw() 가 예외를 던진다
