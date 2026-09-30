@@ -3,6 +3,11 @@
 > 개인 개발자 계정은 **테스터 12명 이상이 14일 연속 참여한 비공개 테스트** 뒤에 프로덕션을 신청한다
 > (LAUNCH_REVIEW P1). 신청서는 Play Console › 대시보드 › "프로덕션 신청" 에 있고, 심사는 보통 7일 이내다.
 > 이 문서는 그 신청서의 답을 미리 써 둔 것이다. `⟨⟩` 는 신청 직전에 사실대로 채운다.
+>
+> **답의 근거는 출시 전 점검(`docs/LAUNCH_REVIEW.md`)이다.** 테스터는 지인에게 부탁해 모았고 사용량이 많지 않다.
+> 기능 검증은 비공개 테스트 기간에 개발자가 실기기·라이선스 테스트 계정으로 직접 했다. 신청서 답변은 Google 에
+> 내는 진술이라 **있었던 일만 쓴다** — 테스터 사용량·의견을 부풀리지 않는다. 사실과 다른 답은 거절 사유가 되고
+> 개발자 계정 정책(허위 정보 제공)에도 걸릴 수 있다. 대신 "무엇을 찾아 어떻게 고쳤는지" 를 구체적으로 쓴다.
 > 질문 출처: [비공개 테스트 요건](https://support.google.com/googleplay/android-developer/answer/14151465) (2026-09-30 확인).
 >
 > 마지막 갱신: 2026-09-30
@@ -14,9 +19,10 @@
 - [ ] 테스터 **12명 이상이 14일 연속** 참여 중인가 — 대시보드의 "현재 참여를 선택한 테스터" 숫자.
       **중간에 참여를 취소한 사람은 세지 않고, 다시 들어오면 그 사람의 14일이 처음부터다.** 테스터에게 "앱을
       지우거나 테스트에서 나가지 말아 달라" 고 미리 말해 둔다.
-- [ ] 비공개 테스트 트랙에 **+32(1.0.0)** 이 올라가 있고, 테스터 몇 명이 실제로 써 봤는가 — 신청서가 "모든 기능을
-      써 봤는지" 를 묻는다. 결제는 라이선스 테스터만 공짜로 할 수 있으니, 결제 시나리오는 직접 한다(LAUNCH_REVIEW §7).
-- [ ] **테스터 의견을 모아 둔다** — 아래 "의견 모으기". 신청서가 "어떤 방법으로 모았는지" 를 묻는다.
+- [ ] 비공개 테스트 트랙에 **+32(1.0.0)** 이 올라가 있고, **LAUNCH_REVIEW §7 실기기 확인을 끝냈는가** — 이것이
+      "모든 기능을 써 봤다" 의 실제 근거다. 결제는 라이선스 테스트 계정으로 직접 한다.
+- [ ] 테스터 몇 명에게라도 +32 로 업데이트해 한두 번 써 봐 달라고 부탁했는가 — 필수는 아니지만, 받은 의견이
+      한 건이라도 있으면 Part 1-3 에 "있었던 일" 로 쓸 수 있다. 없으면 없다고 쓴다.
 - [ ] 심사자 계정(앱 콘텐츠 › 로그인 세부정보, 2026-09-10 입력)이 **지금도 로그인되고, 밴드에 속해 있고,
       일정·게시글이 있는지.** 심사자는 카카오 로그인을 못 쓴다.
 - [ ] 프로덕션 액세스가 열리면 **출시 국가는 대한민국만** — 약관·개인정보처리방침·통신판매업 신고가 한국 기준이다
@@ -31,8 +37,8 @@
 3. 있었으면 하는 것
 4. 계속 쓸 생각이 있는지 (예 / 아니요 / 모르겠음)
 
-받은 의견과 그걸로 고친 것을 아래 Part 3 에 적는다. 의견이 적어도 괜찮다 — "받은 의견이 없다" 보다
-"받은 의견 N건, 그중 이것을 고쳤다" 가 낫다.
+받은 의견은 Part 1-3 에 **받은 그대로의 건수로** 적는다. 적으면 적다고 쓰고, 개발자가 직접 점검한 내용(Part 3)으로
+보강한다.
 
 ---
 
@@ -40,24 +46,42 @@
 
 **1. 테스터를 얼마나 쉽게 모집했나요?** (보기 중 선택)
 
-⟨실제대로. 지인·밴드 동료로 모았다면 "쉬움~보통"⟩
+⟨실제대로 고른다 — 지인에게 부탁해 모았다⟩
 
 **2. 테스터가 앱의 모든 기능을 사용했나요? / 사용 방식이 실제 사용자와 비슷했나요?**
 
-> 테스터는 실제로 밴드 활동을 하는 사람들이라 실제 사용자와 같은 방식으로 썼습니다. 밴드를 만들고 초대 링크로
-> 멤버를 모은 뒤 합주 일정 등록·참석 응답·비용 정산·게시판 사진/영상 공유를 했습니다. 유료 구독은 라이선스
-> 테스트 계정으로 결제·해지·복구·쿠폰 적용까지 확인했습니다. ⟨안 써 본 기능이 있으면 솔직히 적는다⟩
+보기에서 "일부" 쪽을 고른다(테스터 대부분은 설치·가입 정도). 설명 칸:
+
+> 테스터는 지인들이라 사용량이 많지 않았습니다. 그래서 비공개 테스트 기간 동안 개발자가 직접 실기기에서 전체
+> 기능을 체크리스트로 점검했습니다 — 가입·카카오 로그인, 밴드 생성과 초대 링크 참여, 합주 일정 등록·참석 응답,
+> 비용 정산, 게시판 사진/영상 업로드, 합주실 지도, 푸시 알림, 계정 삭제. 유료 구독은 라이선스 테스트 계정으로
+> 결제·해지·복구·쿠폰 적용까지 확인했습니다. 점검 항목은 ⟨N⟩개였고, 찾은 문제는 모두 고쳐 1.0.0(+32)에 넣었습니다.
+> ⟨테스터가 실제로 써 본 것이 있으면 한 줄 덧붙인다⟩
 
 (영문)
-> Our testers are real amateur band members, so they used the app the way production users will: creating a band,
-> inviting members by link, scheduling rehearsals, responding to attendance, splitting rehearsal costs, and sharing
-> photos/videos on the band board. We tested the paid subscription with license-tester accounts, including purchase,
-> cancellation, recovery and coupons.
+> Our testers were friends and acquaintances, so their usage was light. To cover this, the developer tested every
+> feature on real devices during the closed test using a written checklist: sign-up and Kakao login, creating a band
+> and joining via invite link, scheduling rehearsals and responding to attendance, cost splitting, photo/video posts,
+> the studio map, push notifications, and account deletion. The paid subscription was tested with license-tester
+> accounts, including purchase, cancellation, recovery and coupons. The checklist had ⟨N⟩ items, and every issue found
+> is fixed in version 1.0.0 (+32).
 
 **3. 받은 의견과 모은 방법**
 
-> ⟨방법: 테스터 단톡방 / 구글 폼 / 직접 대화⟩로 의견을 받았습니다. 주요 의견: ⟨예: 참석 체크가 늦게 반영된다,
-> 오래 열어 둔 글의 사진이 깨진다, 알림을 눌러도 해당 화면으로 안 간다⟩.
+받은 의견이 있을 때:
+
+> ⟨방법: 단톡방 / 구글 폼 / 직접 대화⟩로 의견 ⟨N⟩건을 받았습니다: ⟨받은 그대로 요약⟩. 이와 별도로 개발자가
+> 출시 전 점검에서 문제 ⟨M⟩건을 찾아 고쳤습니다(Part 3).
+
+받은 의견이 없을 때:
+
+> 테스터에게서 받은 의견은 거의 없었습니다. 대신 개발자가 비공개 테스트 기간에 출시 전 점검을 하며 사용성·결제·
+> 정책·안정성 문제 ⟨M⟩건을 찾아 고쳤습니다(Part 3).
+
+(영문) We received few comments from testers. Instead, the developer ran a pre-launch review during the closed test
+and found and fixed ⟨M⟩ usability, billing, policy and stability issues (see Part 3).
+
+`⟨N⟩`·`⟨M⟩` 세는 법: `docs/LAUNCH_REVIEW.md` 영역별 표의 행 수(N)와 그중 ✅·🟡(M). 2026-09-30 기준 44행, ✅ 20·🟡 19.
 
 ---
 
@@ -92,8 +116,8 @@
 
 **1. 비공개 테스트에서 알게 된 것으로 바꾼 점**
 
-비공개 테스트(2026-09-27~)와 출시 전 점검(`docs/LAUNCH_REVIEW.md`)에서 찾아 고친 것. 테스터 의견으로 고친 것이
-있으면 맨 앞에 둔다.
+비공개 테스트 기간(2026-09-27~)의 출시 전 점검(`docs/LAUNCH_REVIEW.md`)에서 개발자가 찾아 고친 것. 모두 실제로
+고친 것이고 근거(PR·테스트)가 LAUNCH_REVIEW 각 행에 있다. 테스터 의견으로 고친 것이 생기면 맨 앞에 둔다.
 
 > - 결제 직후 앱이 꺼지거나 네트워크가 끊겨도, 앱을 다시 열거나 앱을 열지 않아도 결제가 해당 밴드에 반영되게 했습니다.
 > - 한 사람이 밴드 여러 개를 각각 구독할 수 있게 했습니다.
@@ -124,14 +148,14 @@
 
 **2. 프로덕션 준비가 됐다고 판단한 근거**
 
-> 테스터 ⟨N⟩명이 14일 이상 실제 밴드 활동에 사용했고, 그 기간에 나온 문제는 모두 고쳐 +32(1.0.0)로 다시
+> 14일 이상의 비공개 테스트 기간에 전체 기능을 실기기에서 점검했고, 찾은 문제는 모두 고쳐 1.0.0(+32)으로 다시
 > 배포했습니다. 서버는 자동 테스트·배포와 매일 상태 점검(백업·디스크·오류·인증서)을 돌리고 있고, 결제는 Play 결제
 > 알림으로 갱신·해지·환불을 반영합니다. 개인정보처리방침·이용약관·계정 삭제 안내를 웹에 게시했고, 앱 안에 신고·차단과
 > 운영자 조치 절차가 있습니다.
 
 (영문)
-> ⟨N⟩ testers used the app for their real band activities for more than 14 days, and every issue found in that
-> period is fixed in the 1.0.0 (+32) build now on the test track. The backend runs automated tests and deployment plus
+> Every feature was checked on real devices during the 14+ day closed test, and every issue found in that period is
+> fixed in the 1.0.0 (+32) build now on the test track. The backend runs automated tests and deployment plus
 > a daily health check (backups, disk, errors, TLS certificate), and subscriptions are kept in sync through Play
 > real-time developer notifications (renewals, cancellations, refunds). The privacy policy, terms of service and
 > account-deletion page are published on the web, and the app has in-app reporting, blocking and an operator
