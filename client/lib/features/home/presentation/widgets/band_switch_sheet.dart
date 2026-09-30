@@ -113,26 +113,30 @@ Future<void> showBandSwitchSheet(BuildContext context, WidgetRef ref) {
                   ),
                 ),
               const SizedBox(height: 6),
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  context.push(Routes.joinBand);
-                },
-                child: Container(
-                  height: 48,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(
-                        color: AppColors.primary.withOpacity(0.45),
-                        style: BorderStyle.solid),
+              // 밴드가 이미 있어도 새 밴드를 만들 수 있어야 한다 — 서버는 막지 않는데 예전엔 이 시트에 가입만 있어
+              // 첫 밴드 이후로는 만들 길이 없었다(LAUNCH_REVIEW U12).
+              Row(
+                children: [
+                  Expanded(
+                    child: _SheetAction(
+                      label: '+ 새 밴드 만들기',
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        context.push(Routes.createBand);
+                      },
+                    ),
                   ),
-                  child: const Text('+ 초대코드로 밴드 추가',
-                      style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary)),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _SheetAction(
+                      label: '+ 초대코드로 가입',
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        context.push(Routes.joinBand);
+                      },
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -163,6 +167,32 @@ class _RoleBadge extends StatelessWidget {
           fontWeight: FontWeight.w800,
           color: isLeader ? AppColors.primary : AppColors.textDim,
         ),
+      ),
+    );
+  }
+}
+
+class _SheetAction extends StatelessWidget {
+  const _SheetAction({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: AppColors.primary.withOpacity(0.45)),
+        ),
+        child: Text(label,
+            style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary)),
       ),
     );
   }
