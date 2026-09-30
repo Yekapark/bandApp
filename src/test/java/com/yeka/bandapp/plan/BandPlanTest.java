@@ -111,4 +111,26 @@ class BandPlanTest {
         BandPlan free = BandPlan.freePlan(2L, NOW);
         assertThatThrownBy(() -> free.renew(NOW, newEnd)).isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void purchaser_is_recorded_only_for_the_current_token_and_dropped_when_the_token_changes() {
+        BandPlan plan = BandPlan.freePlan(3L, NOW);
+        Instant end = NOW.plus(365, ChronoUnit.DAYS);
+        plan.upgradeToPremium(NOW, end, "GPA.1", Store.GOOGLE_PLAY, "tok-a");
+
+        plan.recordPurchaser("tok-other", 7L);        // 이 밴드의 토큰이 아니다
+        assertThat(plan.getPurchasedByUserId()).isNull();
+        plan.recordPurchaser("tok-a", 7L);
+        assertThat(plan.getPurchasedByUserId()).isEqualTo(7L);
+
+        plan.renewFromStore(NOW, end, "GPA.1", Store.GOOGLE_PLAY, "tok-a");   // 같은 구매의 갱신
+        assertThat(plan.getPurchasedByUserId()).isEqualTo(7L);
+
+        plan.renewFromStore(NOW, end, "GPA.2", Store.GOOGLE_PLAY, "tok-b");   // 다른 결제로 바뀜
+        assertThat(plan.getPurchasedByUserId()).isNull();
+
+        plan.recordPurchaser("tok-b", 8L);
+        plan.revokeToFree(NOW);                                              // 환불
+        assertThat(plan.getPurchasedByUserId()).isNull();
+    }
 }

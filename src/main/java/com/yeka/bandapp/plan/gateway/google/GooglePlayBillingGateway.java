@@ -5,6 +5,8 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.androidpublisher.AndroidPublisher;
 import com.google.api.services.androidpublisher.AndroidPublisherScopes;
+import com.google.api.services.androidpublisher.model.CancelSubscriptionPurchaseRequest;
+import com.google.api.services.androidpublisher.model.CancellationContext;
 import com.google.api.services.androidpublisher.model.DeferSubscriptionPurchaseRequest;
 import com.google.api.services.androidpublisher.model.DeferSubscriptionPurchaseResponse;
 import com.google.api.services.androidpublisher.model.DeferralContext;
@@ -136,6 +138,29 @@ public class GooglePlayBillingGateway implements StoreBillingGateway {
                     + " " + messageOf(e), e);
         } catch (IOException e) {
             throw new StoreBillingUnavailableException("Play 결제일 연기 중 네트워크 오류", e);
+        }
+    }
+
+    /**
+     * {@code purchases.subscriptionsv2.cancel} — 다음 결제를 멈춘다(결제한 기간은 유지, 환불 없음).
+     * {@code DEVELOPER_REQUESTED_STOP_PAYMENTS}: 결제자가 탈퇴해서 개발자가 멈추는 것이라 Play 스토어에서 "복원" 을 막는다
+     * (다시 쓰려면 앱에서 새로 결제). 이미 해지·만료된 구독의 4xx 는 할 일이 없는 것이라 삼킨다.
+     */
+    @Override
+    public void cancelRenewal(Store store, String purchaseToken) {
+        try {
+            CancelSubscriptionPurchaseRequest request = new CancelSubscriptionPurchaseRequest()
+                    .setCancellationContext(new CancellationContext()
+                            .setCancellationType("DEVELOPER_REQUESTED_STOP_PAYMENTS"));
+            publisher.purchases().subscriptionsv2().cancel(packageName, purchaseToken, request).execute();
+            log.info("Play 구독 자동 갱신 해지");
+        } catch (GoogleJsonResponseException e) {
+            if (e.getStatusCode() >= 500 || e.getStatusCode() == 429) {
+                throw new StoreBillingUnavailableException("Play 구독 해지 일시 실패 status=" + e.getStatusCode(), e);
+            }
+            log.warn("Play 가 구독 해지를 거절(이미 해지·만료로 보고 넘어간다) status={} {}", e.getStatusCode(), messageOf(e));
+        } catch (IOException e) {
+            throw new StoreBillingUnavailableException("Play 구독 해지 중 네트워크 오류", e);
         }
     }
 

@@ -75,6 +75,11 @@ public interface BandPlanRepository extends JpaRepository<BandPlan, Long> {
     @Query("select p.bandId from BandPlan p where p.purchaseToken = :token")
     Optional<Long> findBandIdByPurchaseToken(@Param("token") String token);
 
+    /** 이 회원이 결제자로 적힌 요금제(탈퇴 때 자동 갱신 해지 대상 찾기 — LAUNCH_REVIEW B13). 잠근다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from BandPlan p where p.purchasedByUserId = :userId")
+    List<BandPlan> findByPurchaserForUpdate(@Param("userId") long userId);
+
     /** 밴드 삭제 정리. */
     @Modifying
     @Query("delete from BandPlan p where p.bandId = :bandId")

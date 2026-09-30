@@ -14,6 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * 밴드별 요금제. 밴드당 한 행이며(band_id 유니크), 티어 변경은 새 행이 아니라 이 행을 제자리 수정한다.
@@ -66,6 +67,14 @@ public class BandPlan extends BaseTimeEntity {
     @Column(name = "purchase_token")
     private String purchaseToken;
 
+    /**
+     * 지금 {@link #purchaseToken} 의 구독을 결제한 회원 — 결제 뒤 검증을 보낸 사람. 모르면 null(웹훅만으로 반영된 구매,
+     * 이 칼럼 이전의 구매). 결제자가 탈퇴하면 서버가 자동 갱신을 해지하는 데 쓴다(LAUNCH_REVIEW B13). 토큰이 바뀌면 비운다 —
+     * 다른 결제의 결제자로 남으면 엉뚱한 사람이 탈퇴할 때 남의 구독을 해지하게 된다.
+     */
+    @Column(name = "purchased_by_user_id")
+    private Long purchasedByUserId;
+
     @Column(name = "started_at", nullable = false)
     private Instant startedAt;
 
@@ -98,6 +107,7 @@ public class BandPlan extends BaseTimeEntity {
      */
     public void upgradeToPremium(Instant now, Instant periodEnd, String subscriptionRef,
                                  Store store, String purchaseToken) {
+        forgetPurchaserIfTokenChanges(purchaseToken);
         this.tier = PlanTier.PREMIUM;
         this.mediaRetentionDays = null;
         this.subscriptionRef = subscriptionRef;
@@ -133,6 +143,7 @@ public class BandPlan extends BaseTimeEntity {
         downgradeToFree(now);
         this.store = null;
         this.purchaseToken = null;
+        this.purchasedByUserId = null;
     }
 
     /**
@@ -176,11 +187,33 @@ public class BandPlan extends BaseTimeEntity {
         if (tier != PlanTier.PREMIUM) {
             throw new IllegalStateException("PREMIUM 이 아닌 플랜은 갱신할 수 없습니다: bandId=" + bandId);
         }
+        forgetPurchaserIfTokenChanges(purchaseToken);
         this.expiresAt = newPeriodEnd;
         this.subscriptionRef = subscriptionRef;
         this.store = store;
         this.purchaseToken = purchaseToken;
         this.updatedAt = now;
+    }
+
+    /**
+     * 결제한 회원을 적는다 — 그 회원이 보낸 구매 토큰이 <b>지금 이 밴드의 토큰일 때만</b>. 검증 사이에 다른 결제·환불로 토큰이
+     * 바뀌었으면 적지 않는다(엉뚱한 구독에 결제자가 붙지 않게).
+     */
+    public void recordPurchaser(String purchaseToken, long userId) {
+        if (purchaseToken != null && purchaseToken.equals(this.purchaseToken)) {
+            this.purchasedByUserId = userId;
+        }
+    }
+
+    /** 결제자 연결을 끊는다 — 결제자가 탈퇴해 자동 갱신 해지를 마쳤을 때. 구독 자체는 건드리지 않는다. */
+    public void forgetPurchaser() {
+        this.purchasedByUserId = null;
+    }
+
+    private void forgetPurchaserIfTokenChanges(String newToken) {
+        if (!Objects.equals(this.purchaseToken, newToken)) {
+            this.purchasedByUserId = null;
+        }
     }
 
     public boolean isPremium() {

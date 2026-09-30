@@ -47,12 +47,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.6),
           ),
           const SizedBox(height: 10),
-          // 탈퇴는 막으면 안 된다(Play 계정 삭제 정책) — 대신 결제가 이어진다는 것을 먼저 알린다(B5).
+          // 결제한 사람이 탈퇴하면 서버가 Play 에 자동 결제 해지를 요청한다(B13). 이미 낸 기간은 환불되지 않고
+          // 밴드는 그 기간 끝까지 프리미엄이다 — 그 두 가지를 먼저 알린다.
           const Text(
-            'Google Play 로 결제한 프리미엄 구독은 탈퇴해도 자동으로 해지되지 않아요. '
-            '결제했다면 먼저 Play 스토어에서 해지해 주세요.',
+            '내가 Google Play 로 결제한 프리미엄 구독은 탈퇴하면 자동 결제가 해지돼요. '
+            '이미 결제한 기간은 환불되지 않고, 그 기간이 끝날 때까지 밴드는 프리미엄으로 유지돼요.',
             style:
-                TextStyle(fontSize: 12, color: AppColors.danger, height: 1.6),
+                TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.6),
           ),
           Align(
             alignment: Alignment.centerLeft,
@@ -101,9 +102,9 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Play 스토어 구독은 탈퇴와 별개예요. 해지하지 않으면 계속 청구돼요.',
+              '내가 결제한 Play 스토어 구독은 자동 결제가 해지돼요. 남은 기간은 환불되지 않아요.',
               style: TextStyle(
-                  fontSize: 12.5, color: AppColors.danger, height: 1.5),
+                  fontSize: 12.5, color: AppColors.textDim, height: 1.5),
             ),
             if (isEmail) ...[
               const SizedBox(height: 14),

@@ -13,6 +13,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 스토어 붙이기 전(그리고 로컬·CI)용 게이트웨이. 실제 Play 조회 없이 토큰만 보고 상태를 흉내낸다.
@@ -42,6 +44,7 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
     private final PlanProperties planProperties;
     /** 운영에 이 빈이 떴다 = 설정 사고. 검증을 흉내내지 않고 전부 거부한다. */
     private final boolean refuseEverything;
+    private final Set<String> cancelledRenewals = ConcurrentHashMap.newKeySet();
 
     public NoOpStoreBillingGateway(PlanProperties planProperties, StoreBillingProperties billingProperties,
                                    Environment environment) {
@@ -97,6 +100,27 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
             throw new StoreBillingUnavailableException("[no-op billing] 스토어 일시 장애 흉내 token=" + purchaseToken, null);
         }
         return Instant.now().plus(planProperties.premiumPeriodDays(), ChronoUnit.DAYS).plus(by);
+    }
+
+    /**
+     * 해지 흉내 — 해지한 토큰을 기억해 둔다({@link #cancelledRenewals}, 테스트가 확인한다).
+     * {@code unavailable-…}·{@code nocancel-…}(조회는 ACTIVE, 해지만 실패) 은 일시 장애를 흉내낸다.
+     */
+    @Override
+    public void cancelRenewal(Store store, String purchaseToken) {
+        if (refuseEverything || purchaseToken == null) {
+            throw new StoreBillingUnavailableException("[no-op billing] 해지할 수 없음 token=" + purchaseToken, null);
+        }
+        if (purchaseToken.startsWith("unavailable-") || purchaseToken.startsWith("nocancel-")) {
+            throw new StoreBillingUnavailableException("[no-op billing] 스토어 일시 장애 흉내 token=" + purchaseToken, null);
+        }
+        cancelledRenewals.add(purchaseToken);
+        log.info("[no-op billing] cancelRenewal store={} token={}", store, purchaseToken);
+    }
+
+    /** 지금까지 {@link #cancelRenewal} 로 해지한 토큰(테스트용). */
+    public Set<String> cancelledRenewals() {
+        return Set.copyOf(cancelledRenewals);
     }
 
     @Override
