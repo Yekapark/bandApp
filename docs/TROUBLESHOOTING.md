@@ -10,8 +10,8 @@
 그 명령이 없다. Git Bash의 sh.exe는 별도로 설치돼 있다. 따라서 훅 본문 실행 이전에 실패한다.
 SessionStart에도 `$CLAUDE_PROJECT_DIR`가 남아 있지만 이것이 이번 20건의 직접 원인인지는 확인하지 않았다.
 
-**해결** — 처음엔 사용자 지시로 그대로 뒀다가, 같은 날 사용자 결정으로 **훅을 없앴다** — `.codex/hooks.json` 을
-빈 설정 `{"hooks": {}}` 로 바꿨다(git 에 없는 PC 전용 파일이다. 지워도 된다). 이 훅이 막으려던 `git add -A` 는
+**해결** — 처음엔 사용자 지시로 그대로 뒀다가, 같은 날 사용자 결정으로 **훅을 없앴다** — `.codex/hooks.json`(git 에 없는
+PC 전용 파일)을 지웠다. 이 훅이 막으려던 `git add -A` 는
 Windows 에서 어차피 막지 못하고 있었고, 비밀 파일 커밋은 `.githooks/pre-commit` 이 계속 막는다(LAUNCH_REVIEW G5).
 
 **확인법** — Codex 에서 명령을 실행해도 `hook exited with code 1` 이 더 나오지 않아야 한다. 다시 훅을 쓰려면
