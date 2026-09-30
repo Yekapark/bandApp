@@ -71,7 +71,7 @@
 | 32 | G4 | 중간 | 규칙 검사 도구·Git 실패를 통과로 표시 | ✅ 2026-09-30 (Codex) `tools/check-repo-rules.sh` 필수 도구·Git 실패 거절, CI 회귀 검사 추가 |
 | 33 | U15 | 낮음 | SDK 교체 뒤 잠금 파일 정합화 | ✅ 2026-09-30 (Codex) U7에서 예정했던 `client/pubspec.lock` 갱신. 전체 앱 테스트·APK/AAB 빌드 확인 |
 | 34 | U16 | 중간 | Windows 출시 스크립트가 정상 빌드 후 실패 | ✅ 2026-09-30 (Codex) `release_store.py` UTF-8 출력. 재실행 거절은 수정 시각 검사 대신 **빌드 전 옛 AAB 삭제**로 |
-| 35 | G5 | 낮음 | Codex 훅이 Windows 에서 `sh` 를 못 찾아 code 1 | ➖ 2026-09-30 사용자 결정으로 `.codex/hooks.json` 제거(내용 비움) |
+| 35 | G5 | 낮음 | Codex 훅이 Windows 에서 `sh` 를 못 찾아 code 1 | ➖ 2026-09-30 사용자 결정으로 `.codex/hooks.json` 삭제 |
 
 P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코드 항목(G1~U1)을 고쳐 같은 트랙에 올린다.
 
@@ -85,7 +85,7 @@ P1(14일)이 가장 오래 걸리므로 먼저 시작하고, 그 기간에 코�
 | G2 | 낮음 | 이미 main 에 더 새 버전이 들어간 옛 원격 브랜치 11개(`chore/drop-unused-plan-code` 등)가 남아 있다. dependabot `gradle-minor-patch`(AWS SDK BOM) PR 이 열려 있다 | 옛 브랜치는 삭제, dependabot 은 CI 통과 확인 후 머지 | 🟡 2026-09-29 — ① dependabot #119(AWS SDK BOM 2.54.17→2.55.6, firebase-admin 9.10.0→9.11.0) CI 통과 확인 후 squash 머지 `d9b722e` → 배포 성공, health UP. ② 원격 브랜치 58개(main 제외)를 PR 기록과 대조: **55개는 삭제해도 되는 것**(머지된 PR 의 마지막 커밋과 같음 51 + main 보다 앞선 커밋 없음 4). 이 세션의 GitHub 토큰으로는 브랜치 삭제가 403 이라 `git push origin --delete` 스크립트를 사용자에게 전달. ③ **머지 안 된 커밋이 남은 2개**는 사용자가 판단을 맡겨 **살렸다**: `feat/notification-channel` 의 참석·납부 체크 먼저 칠하기(정산은 화면 전체 잠금도 풀림)를 지금 코드에 옮기고, "Cloudflare 프록시를 껐다 — LA 경유 700ms" 기록은 `DEPLOY.md`·`LAUNCH_CHECKLIST.md`("왜 되돌렸는지 아무도 모른다" 해소)·`NEXT.md` 에, `phase-11-deploy` 의 서버 선택 기준(서울 리전·Ubuntu 24.04·NVMe)은 `DEPLOY.md` §1 에. 이제 두 브랜치도 지워도 된다. **남은 것: 스크립트 실행(두 브랜치 포함), (선택) GitHub Settings › General › "Automatically delete head branches" 켜기 — 앞으로 머지하면 브랜치가 저절로 지워진다** |
 | G3 | 중간 | HTTPS 인증서 만료를 지켜보는 장치가 없었다 — certbot 갱신이나 nginx reload 가 조용히 멈추면 90일째에 앱 접속이 전부 끊긴다 | 매일 점검에 인증서 남은 일수 | ✅ 2026-09-30 — `deploy/prod-check.sh` 7번: 서버가 **실제로 내보내는** 인증서(`openssl s_client` → 127.0.0.1:443, SNI=DOMAIN)의 남은 일수, 21일 미만이면 실패(certbot 은 30일 전부터 갱신). 매일 07:00 자동 점검에 포함. **남은 것: 다음 날 점검 주석에 "인증서 N일 남음" 이 찍히는지** |
 | G4 | 중간 | 실행 도구가 없거나 Git 조회가 실패해도 규칙 검사가 통과로 끝난다(Codex QA 발견) | 필수 명령 확인·Git 조회 실패 즉시 종료 | ✅ 2026-09-30 — `tools/check-repo-rules.sh`: 필수 도구·`git ls-files` 실패 거절. 정상/명령 없음/비저장소 3조건 확인, `.github/workflows/ci.yml` 에 명령 없는 경우의 회귀 검사 추가 |
-| G5 | 낮음 | `.codex/hooks.json`(사용자 PC 에만 있는 Codex 설정, git 미추적)의 PreToolUse 명령이 PowerShell 에서 `sh` 를 못 찾아 매번 code 1 | Claude 형식 훅을 Windows Codex 에 그대로 가져온 것 | ➖ 2026-09-30 — **사용자 결정: 훅 제거.** 파일 내용을 빈 설정(`{"hooks": {}}`)으로 바꿨다(이 세션은 PC 파일을 지울 수 없다 — 지워도 된다). `git add -A` 막는 역할은 어차피 Windows 에서 못 하고 있었고, 커밋 직전 비밀 파일 검사는 `.githooks/pre-commit` 이 계속 한다 |
+| G5 | 낮음 | `.codex/hooks.json`(사용자 PC 에만 있는 Codex 설정, git 미추적)의 PreToolUse 명령이 PowerShell 에서 `sh` 를 못 찾아 매번 code 1 | Claude 형식 훅을 Windows Codex 에 그대로 가져온 것 | ➖ 2026-09-30 — **사용자 결정: 훅 제거.** 파일을 빈 설정으로 바꾼 뒤 사용자가 삭제했다(2026-10-01). `git add -A` 막는 역할은 어차피 Windows 에서 못 하고 있었고, 커밋 직전 비밀 파일 검사는 `.githooks/pre-commit` 이 계속 한다 |
 
 ---
 
