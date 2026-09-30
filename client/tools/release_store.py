@@ -32,9 +32,11 @@ import shutil
 import struct
 import subprocess
 import sys
-import time
 import zipfile
 from pathlib import Path
+
+# Windows CP949 콘솔에서도 출시 안내의 › 같은 문자를 출력한다.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 CLIENT = Path(__file__).resolve().parent.parent
 PUBSPEC = CLIENT / "pubspec.yaml"
@@ -244,8 +246,14 @@ def main():
             PUBSPEC.write_text(original_pubspec, encoding="utf-8", newline="\n")
             print("   (빌드 번호를 되돌렸다)")
 
-    started = time.time()
     try:
+        # 지난번 AAB 를 먼저 지운다 — 빌드 뒤 "파일이 있다" 가 곧 "이번 빌드가 만들었다" 가 되게. 옛 파일이 남아 있으면
+        # 출력 경로가 바뀌거나 빌드가 조용히 아무것도 안 만들었을 때 지난 빌드를 검사·업로드하게 된다. 수정 시각으로
+        # 확인하던 방식은 입력이 같은 재실행(--no-bump)에서 Gradle 이 파일을 재사용해 정상 빌드를 거절했다(U16).
+        try:
+            AAB.unlink(missing_ok=True)
+        except OSError as e:  # Windows 에서 다른 창이 파일을 잡고 있으면 — 빌드 번호를 되돌리고 멈춘다
+            raise RuntimeError(f"지난 AAB 를 지우지 못했다 ({e}) — 파일을 연 창을 닫고 다시 실행") from e
         run(
             [
                 "flutter", "build", "appbundle", "--release",
@@ -258,7 +266,7 @@ def main():
             ],
             "스토어용 AAB 빌드",
         )
-        if not AAB.exists() or AAB.stat().st_mtime < started:
+        if not AAB.exists():
             raise AssertionError(f"{AAB.name} 이 이번 빌드에서 만들어지지 않았다")
         check_all(args.api_url)
     except (AssertionError, RuntimeError) as e:

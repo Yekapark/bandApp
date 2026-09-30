@@ -1,5 +1,77 @@
 # 문제 기록
 
+## 2026-09-30 — Codex 훅에 `hook exited with code 1`이 반복 표시됐다 (훅 제거)
+
+**증상** — 사용자가 훅 실패 20건을 보고했다. `.codex/hooks.json`의 PreToolUse 명령을 PowerShell에서
+그대로 실행하면 종료 코드 1과 `The term 'sh' is not recognized`가 재현된다. 20건 각각의 훅 원문 로그는
+조회한 Codex 세션·앱 로그에서 찾지 못해 모두 같은 원인인지는 확정하지 않았다.
+
+**원인** — Claude에서 가져온 형태의 훅 설정이 `sh`를 PATH에서 찾도록 돼 있는데 현재 PowerShell에는
+그 명령이 없다. Git Bash의 sh.exe는 별도로 설치돼 있다. 따라서 훅 본문 실행 이전에 실패한다.
+SessionStart에도 `$CLAUDE_PROJECT_DIR`가 남아 있지만 이것이 이번 20건의 직접 원인인지는 확인하지 않았다.
+
+**해결** — 처음엔 사용자 지시로 그대로 뒀다가, 같은 날 사용자 결정으로 **훅을 없앴다** — `.codex/hooks.json` 을
+빈 설정 `{"hooks": {}}` 로 바꿨다(git 에 없는 PC 전용 파일이다. 지워도 된다). 이 훅이 막으려던 `git add -A` 는
+Windows 에서 어차피 막지 못하고 있었고, 비밀 파일 커밋은 `.githooks/pre-commit` 이 계속 막는다(LAUNCH_REVIEW G5).
+
+**확인법** — Codex 에서 명령을 실행해도 `hook exited with code 1` 이 더 나오지 않아야 한다. 다시 훅을 쓰려면
+Windows 에서는 `sh` 대신 Git Bash 의 `sh.exe` 전체 경로를 적어야 한다(PowerShell 의 `Get-Command sh` 가 비어 있음).
+
+---
+
+## 2026-09-30 — 스토어 AAB가 정상인데 Windows 출시 명령이 실패했다
+
+**증상** — QA에서 `python tools/release_store.py --no-bump`로 AAB의 운영 주소·서명·targetSdk·16KB 검사를 모두
+마쳤지만 마지막 안내의 `›` 출력에서 `UnicodeEncodeError: cp949`로 끝났다. 다시 실행하면 Flutter가 빌드 성공을
+표시한 뒤에도 "이번 빌드에서 만들어지지 않았다"고 거절했다(LAUNCH_REVIEW U16).
+
+**원인** — Python stdout이 Windows 기본 CP949여서 안내 문자를 표현하지 못했다. 재실행 오류는 별개로,
+Gradle이 입력이 같은 AAB를 정상 재사용하는데 스크립트가 수정 시각이 실행 시작보다 오래됐다는 이유로 거절해서 생겼다.
+
+**해결** — 기존 캐시 검사 스크립트처럼 stdout을 UTF-8로 설정했다(Codex). 수정 시각 검사는 Codex 가 지웠는데,
+그러면 빌드가 조용히 새 파일을 안 만들었을 때 **지난 AAB 를 검사·업로드할 수 있어서** 리뷰에서 **빌드 전에 옛 AAB 를
+지우는** 방식으로 바꿨다 — 빌드 뒤 파일이 있으면 곧 이번 빌드 산출물이다. 파일이 잠겨 못 지우면 빌드 번호를 되돌리고 멈춘다.
+
+**확인법** — client에서 `python tools/release_store.py --no-bump`를 재실행해 마지막 "끝" 안내와 종료 코드 0 확인.
+이미 만든 파일만 보려면 `--check-only build/app/outputs/bundle/prodRelease/app-prod-release.aab`.
+
+---
+
+## 2026-09-30 — 저장소 규칙 검사를 실행하지 못했는데 통과로 표시됐다
+
+**증상** — 제한된 Windows Git Bash 실행에서 `dirname: command not found`, `fatal: not a git repository`가 나왔는데도
+엔티티·비밀 파일 검사가 모두 "통과", 종료 코드 0이었다(LAUNCH_REVIEW G4).
+
+**원인** — 필요한 명령을 확인하지 않았고 `$(git ls-files)` 실패가 for 문의 빈 목록으로 바뀌었다. 그래서
+"검사를 못 함"이 "위반 파일 없음"과 같은 경로로 흘렀다. dirname 실패 때는 검사할 폴더로 이동하지 못한 것도 가려졌다.
+
+**해결** — 필수 명령이 없으면 먼저 종료하고 `git ls-files` 실패도 즉시 종료한다. Git Bash 실행은
+`/mingw64/bin:/usr/bin:/bin`을 PATH에 넣어 정상 도구를 쓰게 했다. CI rules에도 명령 없는 실행이 실패하는 회귀 검사를 넣었다.
+
+**확인법** — 정상 저장소에서 `sh tools/check-repo-rules.sh`는 0. Git Bash에서
+`PATH=/nonexistent /bin/sh tools/check-repo-rules.sh`는 0이 아닌 값. Git 없는 임시 폴더로 복사해 실행해도 거절돼야 한다.
+QA에서 세 조건을 확인했으며 명령 없는 회귀 검사는 [QA_CHECKLIST.md](QA_CHECKLIST.md) §16에도 있다.
+
+---
+
+## 2026-09-30 — QA가 Docker·캐시 접근 때문에 연쇄 실패했다 (제품 실패와 구분)
+
+**증상** — 제한 실행에서 Gradle wrapper 잠금 파일 생성이 거절되고 Flutter 분석은 출력 없이 머물렀다.
+권한을 조정한 첫 백엔드 테스트에서는 Docker 초기화 실패로 484개 중 376개가 연쇄 실패했다.
+
+**원인** — 실행 샌드박스가 SDK·Gradle 사용자 캐시 경로에 쓸 수 없었고, Docker Desktop 엔진 자체도 꺼져 있었다.
+Testcontainers 공통 초기화가 실패하면 모든 통합 테스트가 같은 원인으로 실패하므로 기능 376개가 각각 고장난 뜻이 아니다.
+
+**해결** — 캐시를 사용할 수 있는 실행 권한으로 다시 실행하고 `docker desktop start` 후 전체 빌드·테스트를 재실행했다.
+최종 백엔드 484개·Flutter 97개 모두 통과. U7에서 예정했던 SDK 교체 잠금 파일 갱신도 수행했다(U15):
+카카오 2.0.1·v_video_compressor 2.2.3으로 현재 선언에 맞추고 APK/AAB까지 확인했다. 새 라이브러리를 추가한 것은 아니다.
+
+**확인법** — `docker version`에 Server 버전이 나오고 `gradlew.bat build --no-daemon --console=plain` 성공.
+`build/test-results/test/TEST-*.xml` 합계 tests=484, failures/errors/skipped=0.
+클라이언트 `flutter test`는 97개 통과. 자세한 실행 증거는 [QA_CHECKLIST.md](QA_CHECKLIST.md) §1.
+
+---
+
 ## 2026-09-30 — 서버가 거절한 요청이 앱에서 "성공" 으로 보였다 (밴드장 나가기 등 22곳)
 
 **증상** — 밴드장이 밴드 설정 › 이 밴드에서 나가기 › 나가기를 누르면 밴드에 그대로 남아 있는데 "밴드에서 나왔어요"
@@ -19,6 +91,8 @@
 **확인법** — `flutter test test/ensure_success_test.dart`. 실기기: 밴드장 계정으로 나가기 → "밴드장은 바로 나갈 수
 없어요" 안내만 뜨고 밴드에 남아 있어야 한다. 회원 탈퇴 화면에서 틀린 비밀번호 → 오류 문구, 계정은 그대로.
 
+---
+
 ## 2026-09-30 — 밴드에 들어간 뒤로는 새 밴드를 만들 수 없었다
 
 **증상** — 초대로 밴드에 가입한 사람(또는 밴드를 하나 만든 사람)이 두 번째 밴드를 만들려고 해도 버튼이 없다.
@@ -32,6 +106,8 @@ API 테스트로는 드러나지 않았다 — 앱 화면 흐름을 따라가 �
 
 **확인법** — 밴드가 있는 계정으로 홈 › 밴드 이름 › 전환 시트 › 새 밴드 만들기 → 만든 밴드가 선택된 채 홈이 뜨고,
 시트에서 원래 밴드로 돌아갈 수 있어야 한다.
+
+---
 
 ## 2026-09-30 — 초대 링크 페이지의 "App Store에서 앱 받기" 가 없는 앱 주소로 갔다
 
@@ -49,6 +125,8 @@ iPhone 앱이 나오면 서버 `.env.prod` 에 `IOS_APP_STORE_URL` 만 넣으면
 
 **확인법** — `curl -s https://api.bandule.com/invite/<코드> | grep -c id0000000000` → 0, "준비 중" 문구가 있어야 한다.
 테스트 `InviteDeepLinkIntegrationTest.landing_page_says_the_iphone_app_is_not_ready_instead_of_a_fake_store_link`.
+
+---
 
 ## 2026-09-30 — 결제 알림 push 구독이 31일 동안 알림이 없으면 지워지게 돼 있었다
 
