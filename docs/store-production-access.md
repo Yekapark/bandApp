@@ -4,8 +4,8 @@
 > (LAUNCH_REVIEW P1). 신청서는 Play Console › 대시보드 › "프로덕션 신청" 에 있고, 심사는 보통 7일 이내다.
 > 이 문서는 그 신청서의 답을 미리 써 둔 것이다. `⟨⟩` 는 신청 직전에 사실대로 채운다.
 >
-> **답의 근거는 출시 전 점검(`docs/LAUNCH_REVIEW.md`)이다.** 테스터는 지인에게 부탁해 모았고 사용량이 많지 않다.
-> 기능 검증은 비공개 테스트 기간에 개발자가 실기기·라이선스 테스트 계정으로 직접 했다. 신청서 답변은 Google 에
+> **답의 근거는 테스터 의견과 출시 전 점검(`docs/LAUNCH_REVIEW.md`) 두 가지다.** 테스터들이 밴드를 만들고 초대코드로
+> 가입하며 써 보고 의견을 줬고(아래 "받은 의견"), 전체 기능 검증은 개발자가 실기기·라이선스 테스트 계정으로 직접 했다. 신청서 답변은 Google 에
 > 내는 진술이라 **있었던 일만 쓴다** — 테스터 사용량·의견을 부풀리지 않는다. 사실과 다른 답은 거절 사유가 되고
 > 개발자 계정 정책(허위 정보 제공)에도 걸릴 수 있다. 대신 "무엇을 찾아 어떻게 고쳤는지" 를 구체적으로 쓴다.
 > 질문 출처: [비공개 테스트 요건](https://support.google.com/googleplay/android-developer/answer/14151465) (2026-09-30 확인).
@@ -37,8 +37,14 @@
 3. 있었으면 하는 것
 4. 계속 쓸 생각이 있는지 (예 / 아니요 / 모르겠음)
 
-받은 의견은 Part 1-3 에 **받은 그대로의 건수로** 적는다. 적으면 적다고 쓰고, 개발자가 직접 점검한 내용(Part 3)으로
-보강한다.
+받은 의견은 Part 1-3 에 **받은 그대로** 적는다. 개발자가 직접 점검한 내용(Part 3)으로 보강한다.
+
+### 받은 의견 (받는 대로 추가)
+
+| 날짜 | 기기 | 의견(받은 그대로) | 처리 |
+|---|---|---|---|
+| 2026-09-30 | — | 밴드에 들어가 있으면 새 밴드를 만들 방법이 없다 | 밴드 전환 화면에 "새 밴드 만들기" 추가 (LAUNCH_REVIEW U12, +32) |
+| 2026-09-30 | 갤럭시 S25+ | "밴드 이름 만들기 누르면 키패드가 안 뜨고 반복해서 누르면 앱이 튕겨요. 가입하기의 초대코드 입력란도 똑같아요" | 원인 조사 중 (LAUNCH_REVIEW U13) |
 
 ---
 
@@ -50,16 +56,16 @@
 
 **2. 테스터가 앱의 모든 기능을 사용했나요? / 사용 방식이 실제 사용자와 비슷했나요?**
 
-보기에서 "일부" 쪽을 고른다(테스터 대부분은 설치·가입 정도). 설명 칸:
+보기는 실제대로 고른다. 설명 칸:
 
-> 테스터는 지인들이라 사용량이 많지 않았습니다. 그래서 비공개 테스트 기간 동안 개발자가 직접 실기기에서 전체
-> 기능을 체크리스트로 점검했습니다 — 가입·카카오 로그인, 밴드 생성과 초대 링크 참여, 합주 일정 등록·참석 응답,
+> 테스터들은 밴드를 만들고 초대코드로 가입하는 등 실제 사용 흐름대로 써 보고 문제를 알려 줬습니다(Part 1-3).
+> 이와 함께 비공개 테스트 기간 동안 개발자가 직접 실기기에서 전체 기능을 체크리스트로 점검했습니다 — 가입·카카오 로그인, 밴드 생성과 초대 링크 참여, 합주 일정 등록·참석 응답,
 > 비용 정산, 게시판 사진/영상 업로드, 합주실 지도, 푸시 알림, 계정 삭제. 유료 구독은 라이선스 테스트 계정으로
 > 결제·해지·복구·쿠폰 적용까지 확인했습니다. 점검 항목은 ⟨N⟩개였고, 찾은 문제는 모두 고쳐 1.0.0(+32)에 넣었습니다.
-> ⟨테스터가 실제로 써 본 것이 있으면 한 줄 덧붙인다⟩
 
 (영문)
-> Our testers were friends and acquaintances, so their usage was light. To cover this, the developer tested every
+> Testers used the app through the real flow — creating a band and joining with an invite code — and reported the
+> problems they hit (see question 3). In addition, the developer tested every
 > feature on real devices during the closed test using a written checklist: sign-up and Kakao login, creating a band
 > and joining via invite link, scheduling rehearsals and responding to attendance, cost splitting, photo/video posts,
 > the studio map, push notifications, and account deletion. The paid subscription was tested with license-tester
@@ -68,18 +74,17 @@
 
 **3. 받은 의견과 모은 방법**
 
-받은 의견이 있을 때:
+위 "받은 의견" 표에서 채운다:
 
-> ⟨방법: 단톡방 / 구글 폼 / 직접 대화⟩로 의견 ⟨N⟩건을 받았습니다: ⟨받은 그대로 요약⟩. 이와 별도로 개발자가
-> 출시 전 점검에서 문제 ⟨M⟩건을 찾아 고쳤습니다(Part 3).
+> ⟨방법: 단톡방 / 직접 대화⟩로 테스터 의견을 받았습니다. 예를 들어 "이미 밴드에 들어가 있으면 새 밴드를 만들 수
+> 없다" 는 의견으로 밴드 전환 화면에 밴드 만들기를 추가했고, 갤럭시 S25+ 에서 입력칸에 키보드가 뜨지 않는다는
+> 의견으로 ⟨고친 내용⟩. ⟨그 밖의 의견⟩. 이와 별도로 개발자가 출시 전 점검에서 문제 ⟨M⟩건을 찾아 고쳤습니다(Part 3).
 
-받은 의견이 없을 때:
-
-> 테스터에게서 받은 의견은 거의 없었습니다. 대신 개발자가 비공개 테스트 기간에 출시 전 점검을 하며 사용성·결제·
-> 정책·안정성 문제 ⟨M⟩건을 찾아 고쳤습니다(Part 3).
-
-(영문) We received few comments from testers. Instead, the developer ran a pre-launch review during the closed test
-and found and fixed ⟨M⟩ usability, billing, policy and stability issues (see Part 3).
+(영문)
+> We collected tester feedback through ⟨group chat / direct conversation⟩. For example, a tester pointed out that there
+> was no way to create a new band once you had joined one, so we added "Create a band" to the band switcher; another
+> reported that the keyboard did not appear in text fields on a Galaxy S25+, which we ⟨fixed by …⟩. Separately, the
+> developer ran a pre-launch review and found and fixed ⟨M⟩ usability, billing, policy and stability issues (Part 3).
 
 `⟨N⟩`·`⟨M⟩` 세는 법: `docs/LAUNCH_REVIEW.md` 영역별 표의 행 수(N)와 그중 ✅·🟡(M). 2026-09-30 기준 44행, ✅ 20·🟡 19.
 
@@ -117,8 +122,10 @@ and found and fixed ⟨M⟩ usability, billing, policy and stability issues (see
 **1. 비공개 테스트에서 알게 된 것으로 바꾼 점**
 
 비공개 테스트 기간(2026-09-27~)의 출시 전 점검(`docs/LAUNCH_REVIEW.md`)에서 개발자가 찾아 고친 것. 모두 실제로
-고친 것이고 근거(PR·테스트)가 LAUNCH_REVIEW 각 행에 있다. 테스터 의견으로 고친 것이 생기면 맨 앞에 둔다.
+고친 것이고 근거(PR·테스트)가 LAUNCH_REVIEW 각 행에 있다. 테스터 의견으로 고친 것을 맨 앞에 둔다.
 
+> - (테스터 의견) 이미 밴드에 속해 있어도 새 밴드를 만들 수 있게 했습니다.
+> - (테스터 의견) ⟨갤럭시 S25+ 입력칸 키보드 문제 — 고친 뒤 적는다⟩
 > - 결제 직후 앱이 꺼지거나 네트워크가 끊겨도, 앱을 다시 열거나 앱을 열지 않아도 결제가 해당 밴드에 반영되게 했습니다.
 > - 한 사람이 밴드 여러 개를 각각 구독할 수 있게 했습니다.
 > - 구독 중인 밴드를 삭제하거나 탈퇴할 때 구독 해지를 안내하고, 자동 갱신 중인 구독자에게는 만료 경고를 보내지 않습니다.
@@ -133,6 +140,8 @@ and found and fixed ⟨M⟩ usability, billing, policy and stability issues (see
 > - 구독 화면에 가격·자동 갱신·해지 방법과 판매자 정보를 표시했습니다.
 
 (영문)
+> - (Tester feedback) You can now create a new band even if you already belong to one.
+> - (Tester feedback) ⟨Galaxy S25+ keyboard issue — fill in after the fix⟩
 > - Purchases are now credited to the right band even if the app is closed or offline right after paying, or never reopened.
 > - One user can subscribe separately for several bands.
 > - Deleting or leaving a band with an active subscription now explains how to cancel; auto-renewing subscribers no longer get expiry warnings.
@@ -148,13 +157,13 @@ and found and fixed ⟨M⟩ usability, billing, policy and stability issues (see
 
 **2. 프로덕션 준비가 됐다고 판단한 근거**
 
-> 14일 이상의 비공개 테스트 기간에 전체 기능을 실기기에서 점검했고, 찾은 문제는 모두 고쳐 1.0.0(+32)으로 다시
+> 14일 이상의 비공개 테스트 기간에 테스터 의견을 받고 전체 기능을 실기기에서 점검했으며, 찾은 문제는 모두 고쳐 1.0.0(+32)으로 다시
 > 배포했습니다. 서버는 자동 테스트·배포와 매일 상태 점검(백업·디스크·오류·인증서)을 돌리고 있고, 결제는 Play 결제
 > 알림으로 갱신·해지·환불을 반영합니다. 개인정보처리방침·이용약관·계정 삭제 안내를 웹에 게시했고, 앱 안에 신고·차단과
 > 운영자 조치 절차가 있습니다.
 
 (영문)
-> Every feature was checked on real devices during the 14+ day closed test, and every issue found in that period is
+> During the 14+ day closed test we collected tester feedback and checked every feature on real devices, and every issue found in that period is
 > fixed in the 1.0.0 (+32) build now on the test track. The backend runs automated tests and deployment plus
 > a daily health check (backups, disk, errors, TLS certificate), and subscriptions are kept in sync through Play
 > real-time developer notifications (renewals, cancellations, refunds). The privacy policy, terms of service and
