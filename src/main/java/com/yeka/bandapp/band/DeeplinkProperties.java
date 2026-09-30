@@ -34,8 +34,10 @@ public record DeeplinkProperties(
         if (iosAppId == null) {
             iosAppId = "";
         }
-        if (iosAppStoreUrl == null || iosAppStoreUrl.isBlank()) {
-            iosAppStoreUrl = "https://apps.apple.com/app/id0000000000";
+        // iPhone 앱이 아직 없다(2026-09-30). 예전 기본값은 가짜 주소(id0000000000)라 초대 페이지의
+        // "App Store에서 앱 받기" 가 없는 앱으로 갔다. 비워 두면 랜딩 페이지가 "준비 중" 안내를 대신 보여 준다.
+        if (iosAppStoreUrl == null || iosAppStoreUrl.isBlank() || iosAppStoreUrl.contains("id0000000000")) {
+            iosAppStoreUrl = "";
         }
         if (androidPackage == null || androidPackage.isBlank()) {
             androidPackage = "com.yeka.bandule";
@@ -45,6 +47,11 @@ public record DeeplinkProperties(
         }
         androidSha256CertFingerprints =
                 androidSha256CertFingerprints == null ? List.of() : List.copyOf(androidSha256CertFingerprints);
+    }
+
+    /** iPhone 앱이 스토어에 있는가(주소가 설정됐는가). 없으면 초대 페이지가 설치 버튼 대신 안내를 띄운다. */
+    public boolean iosAppAvailable() {
+        return !iosAppStoreUrl.isBlank();
     }
 
     /** 공유용 초대 링크. 앱 미설치 시 {@code GET /invite/{code}} 랜딩 페이지가 응답한다. */

@@ -87,8 +87,11 @@ public class InviteLandingController {
 
     private String renderLanding(String code) {
         String scheme = properties.scheme();
-        String iosStore = properties.iosAppStoreUrl();
         String androidStore = properties.androidPlayStoreUrl();
+        // iPhone 앱이 없으면 설치 버튼 대신 안내 — 가짜 App Store 주소로 보내지 않는다(2026-09-30).
+        String iosBlock = properties.iosAppAvailable()
+                ? "<a class=\"btn\" id=\"ios\" href=\"" + properties.iosAppStoreUrl() + "\">App Store에서 앱 받기</a>"
+                : "<p class=\"note\" id=\"ios\">iPhone 앱은 아직 준비 중이에요.<br>지금은 Android 폰에서 쓸 수 있어요.</p>";
         // code 는 [A-Z2-9]{8} 로 검증돼 인젝션 여지가 없다. 나머지 값은 서버 설정이라 신뢰한다.
         return """
                 <!doctype html>
@@ -104,6 +107,7 @@ public class InviteLandingController {
                     a.btn { display: block; margin: .6rem 0; padding: .9rem 1rem; border-radius: 12px;
                             background: #2b2b2b; color: #fff; text-decoration: none; font-weight: 600; }
                     p.hint { color: #666; font-size: .9rem; margin-top: 2rem; }
+                    p.note { background: #f3f3f3; border-radius: 12px; padding: .9rem 1rem; line-height: 1.6; }
                   </style>
                 </head>
                 <body>
@@ -111,7 +115,7 @@ public class InviteLandingController {
                   <p>초대 코드</p>
                   <div class="code">%CODE%</div>
                   <p id="status">앱에서 초대를 여는 중…</p>
-                  <a class="btn" id="ios" href="%IOS_STORE%">App Store에서 앱 받기</a>
+                  %IOS_BLOCK%
                   <a class="btn" id="android" href="%ANDROID_STORE%">Google Play에서 앱 받기</a>
                   <p class="hint">앱이 열리지 않으면 위 버튼으로 설치한 뒤 코드를 입력하세요.</p>
                   <script>
@@ -122,6 +126,12 @@ public class InviteLandingController {
                       var isAndroid = /Android/.test(ua);
                       if (isIOS) { var a = document.getElementById("android"); if (a) a.hidden = true; }
                       if (isAndroid) { var i = document.getElementById("ios"); if (i) i.hidden = true; }
+                      // iPhone 앱이 없는데 앱 주소를 열면 사파리가 "주소가 유효하지 않음" 경고를 띄운다 — 열지 않고 안내만.
+                      if (isIOS && !%IOS_READY%) {
+                        var st = document.getElementById("status");
+                        if (st) st.textContent = "초대 코드를 받아 두었다가 Android 폰에서 입력해 주세요.";
+                        return;
+                      }
                       // 앱이 설치돼 있으면 커스텀 스킴이 앱을 연다.
                       //
                       // **스토어로 자동 전송하지 않는다.** 예전에는 1.2초 뒤 스토어로 보냈는데,
@@ -150,7 +160,8 @@ public class InviteLandingController {
                 """
                 .replace("%CODE%", code)
                 .replace("%SCHEME%", scheme)
-                .replace("%IOS_STORE%", iosStore)
+                .replace("%IOS_BLOCK%", iosBlock)
+                .replace("%IOS_READY%", Boolean.toString(properties.iosAppAvailable()))
                 .replace("%ANDROID_STORE%", androidStore);
     }
 }
