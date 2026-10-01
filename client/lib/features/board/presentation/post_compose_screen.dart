@@ -90,8 +90,15 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     super.dispose();
   }
 
+  /// 영상 압축 중에는 등록·저장을 막는다. 예전에는 압축 도중 등록을 누르면 영상 없이 글이 올라가고 화면이 닫힌 뒤,
+  /// 압축이 끝난 영상은 버려졌다(닫힌 화면에 setState 오류까지).
   bool get _canSubmit =>
-      _title.text.trim().isNotEmpty && _content.text.trim().isNotEmpty;
+      _compressPct == null &&
+      _title.text.trim().isNotEmpty &&
+      _content.text.trim().isNotEmpty;
+
+  /// 글은 만들어졌는데 첨부 일부를 못 올린 상태(새 글 → "사진 추가" 모드).
+  bool get _hasFailedPending => _isEdit && _pending.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -138,10 +145,12 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
   Widget _form(int bandId) {
     return PopScope(
-      canPop: !_dirty,
+      // 올리는 중·압축 중에 나가면 남은 첨부가 조용히 버려진다 — 확인을 받는다.
+      canPop: !_dirty && !_busy && _compressPct == null,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        final leave = await _confirmDiscard();
+        final leave = await _confirmDiscard(
+            midUpload: _busy || _compressPct != null || _hasFailedPending);
         if (leave && mounted) Navigator.of(context).pop(_isEdit ? true : false);
       },
       child: Scaffold(
@@ -190,10 +199,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             // 무료 밴드는 첨부가 30일 뒤 사라진다. 요금제 화면과 홈 배너에만 적혀 있어서
             // 정작 올리는 순간에는 모르고 올렸다 — 사진이 사라지는 건 되돌릴 수 없으니
             // 올리기 전에 알린다. 요금제를 못 불러왔으면 아무 말도 하지 않는다(단정 금지).
-            if (ref
-                    .watch(bandPlanProvider(bandId))
-                    .valueOrNull
-                    ?.isPremium ==
+            if (ref.watch(bandPlanProvider(bandId)).valueOrNull?.isPremium ==
                 false) ...[
               const SizedBox(height: 3),
               const Text(
@@ -207,6 +213,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               pending: _pending,
               busy: _busy,
               compressPct: _compressPct,
+              pendingFailed: _isEdit,
               onAdd: () => _addAttachment(bandId),
               onRemove: (m) => _removeMedia(bandId, m),
               onRemovePending: _removePending,
@@ -220,6 +227,16 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               ),
             ],
             const SizedBox(height: 24),
+            // 수정 중 첨부를 못 올렸으면 여기서 다시 올린다("저장" 은 글만 저장하고 닫는다).
+            if (widget.postId != null && _pending.isNotEmpty && !_busy) ...[
+              TextButton(
+                onPressed: _compressPct == null
+                    ? () => _uploadQueue(bandId, List.of(_pending))
+                    : null,
+                child: Text('못 올린 첨부 ${_pending.length}개 다시 올리기'),
+              ),
+              const SizedBox(height: 8),
+            ],
             if (widget.postId != null)
               PrimaryButton(
                 label: '저장',
@@ -228,10 +245,15 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
                 onPressed: () => _saveEdit(bandId),
               )
             else if (_isEdit)
+              // 못 올린 첨부가 남았으면 "완료" 대신 다시 올리기 — 예전에는 "다시 시도해 주세요" 라고만 하고
+              // 다시 올릴 방법이 없었다("완료" 는 그냥 닫혀서 남은 첨부가 버려졌다).
               PrimaryButton(
-                label: '완료',
+                label: _hasFailedPending ? '남은 첨부 다시 올리기' : '완료',
                 loading: _busy,
-                onPressed: () => Navigator.of(context).pop(true),
+                enabled: _compressPct == null,
+                onPressed: _hasFailedPending
+                    ? () => _uploadQueue(bandId, List.of(_pending))
+                    : () => Navigator.of(context).pop(true),
               )
             else
               PrimaryButton(
@@ -246,15 +268,15 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     );
   }
 
-  Future<bool> _confirmDiscard() async {
+  Future<bool> _confirmDiscard({bool midUpload = false}) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         title: const Text('작성을 취소할까요?', style: TextStyle(fontSize: 16)),
-        content: const Text(
-          '입력한 내용은 저장되지 않아요.',
-          style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
+        content: Text(
+          midUpload ? '아직 올리지 못한 사진·영상은 저장되지 않아요.' : '입력한 내용은 저장되지 않아요.',
+          style: const TextStyle(fontSize: 12.5, color: AppColors.textDim),
         ),
         actions: [
           TextButton(
@@ -298,11 +320,17 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
         if (!ok) failed.add(queue[i]);
         if (!mounted) return;
       }
-      setState(() => _pending = failed);
+      setState(() {
+        _pending = failed;
+        // 못 올린 첨부가 남았으면 뒤로 가기 전에 묻는다.
+        _dirty = failed.isNotEmpty;
+      });
 
       ref.read(boardFeedProvider(bandId).notifier).refresh();
-      // 압축본은 앱 캐시에 쌓인다 — 다 올렸으면 치운다.
-      unawaited(_compressor.cleanupFiles(deleteCompressedVideos: true));
+      // 압축본은 앱 캐시에 쌓인다 — 다 올렸으면 치운다. 못 올린 게 남았으면 두어야 다시 올릴 수 있다.
+      if (failed.isEmpty) {
+        unawaited(_compressor.cleanupFiles(deleteCompressedVideos: true));
+      }
       if (!mounted) return;
 
       if (failed.isEmpty) {
@@ -411,9 +439,8 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             ),
             ListTile(
               enabled: !videoLocked,
-              leading: Icon(videoLocked
-                  ? Icons.lock_outline
-                  : Icons.videocam_outlined),
+              leading: Icon(
+                  videoLocked ? Icons.lock_outline : Icons.videocam_outlined),
               title: const Text('영상'),
               subtitle: videoLocked
                   ? const Text('프리미엄 밴드만 올릴 수 있어요',
@@ -475,8 +502,8 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       }
 
       // 영상은 압축한 뒤에 재야 한다 — 폰 기본 촬영은 6분이면 700MB 를 넘지만 압축하면 들어온다.
-      final item = _PendingMedia(
-          await _compressIfVideo(file, contentType), contentType);
+      final item =
+          _PendingMedia(await _compressIfVideo(file, contentType), contentType);
 
       // 길이만 확인한다 — 상한 검사하려고 파일을 통째로 메모리에 올릴 이유가 없다.
       final limit =
@@ -489,7 +516,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       }
       items.add(item);
     }
-    if (items.isEmpty) return;
+    if (items.isEmpty || !mounted) return;
 
     // 새 글: 아직 글이 없어 매달 곳이 없다. 등록할 때 함께 올린다.
     if (!_isEdit) {
@@ -501,17 +528,38 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       return;
     }
 
+    await _uploadQueue(bandId, items);
+  }
+
+  /// 이미 있는 글에 첨부를 차례로 올린다. 못 올린 것은 [_pending] 에 남겨 다시 올릴 수 있게 한다.
+  Future<void> _uploadQueue(int bandId, List<_PendingMedia> items) async {
     setState(() {
       _busy = true;
       _uploadTotal = items.length;
+      _pending = _pending.where((p) => !items.contains(p)).toList();
     });
     try {
       var uploaded = 0;
+      final failed = <_PendingMedia>[];
       for (var i = 0; i < items.length; i++) {
         if (await _uploadOne(bandId, _postId!, items[i], index: i + 1)) {
           uploaded++;
+        } else {
+          failed.add(items[i]);
         }
+        if (!mounted) return;
       }
+      if (_pending.isEmpty && failed.isEmpty) {
+        unawaited(_compressor.cleanupFiles(deleteCompressedVideos: true));
+      }
+      setState(() {
+        _pending = [..._pending, ...failed];
+        if (failed.isNotEmpty) {
+          _dirty = true;
+        } else if (widget.postId == null) {
+          _dirty = false; // 글은 이미 저장됐고 남은 첨부도 없다
+        }
+      });
       if (uploaded > 0) {
         ref.invalidate(
           postDetailProvider((bandId: bandId, postId: _postId!)),
@@ -656,6 +704,7 @@ class _MediaStrip extends StatelessWidget {
     required this.pending,
     required this.busy,
     required this.compressPct,
+    required this.pendingFailed,
     required this.onAdd,
     required this.onRemove,
     required this.onRemovePending,
@@ -669,6 +718,9 @@ class _MediaStrip extends StatelessWidget {
 
   /// 영상 압축 진행률(0~100). 압축 중이 아니면 null.
   final double? compressPct;
+
+  /// 글이 이미 있는데 남은 대기 첨부 = 올리기에 실패한 것.
+  final bool pendingFailed;
   final VoidCallback onAdd;
   final void Function(PostMedia) onRemove;
   final void Function(_PendingMedia) onRemovePending;
@@ -690,6 +742,7 @@ class _MediaStrip extends StatelessWidget {
               padding: const EdgeInsets.only(right: 8),
               child: _PendingThumb(
                 item: p,
+                failed: pendingFailed,
                 onRemove: () => onRemovePending(p),
               ),
             ),
@@ -745,9 +798,14 @@ class _MediaStrip extends StatelessWidget {
 
 /// 대기 중인 첨부 미리보기. 아직 서버에 없으므로 "등록 시 올라감"을 알 수 있게 표시한다.
 class _PendingThumb extends StatelessWidget {
-  const _PendingThumb({required this.item, required this.onRemove});
+  const _PendingThumb({
+    required this.item,
+    required this.onRemove,
+    this.failed = false,
+  });
 
   final _PendingMedia item;
+  final bool failed;
   final VoidCallback onRemove;
 
   @override
@@ -786,9 +844,9 @@ class _PendingThumb extends StatelessWidget {
               ),
               alignment: Alignment.bottomCenter,
               padding: const EdgeInsets.only(bottom: 6),
-              child: const Text(
-                '등록 시 업로드',
-                style: TextStyle(fontSize: 9.5, color: Colors.white),
+              child: Text(
+                failed ? '올리지 못함' : '등록 시 업로드',
+                style: const TextStyle(fontSize: 9.5, color: Colors.white),
               ),
             ),
           ),

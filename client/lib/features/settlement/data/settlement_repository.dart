@@ -52,7 +52,9 @@ class SettlementRepository {
         (d) => Settlement.fromJson(d! as Map<String, dynamic>),
       );
     } on ApiException catch (e) {
-      if (e.statusCode == 404) return null;
+      // 정산이 없을 때만 null. 일정이 지워졌거나(RESERVATION_NOT_FOUND) 다른 밴드 것이면 "아직 정산이 없어요" 와
+      // 만들기 폼이 아니라 그 오류를 보여 준다.
+      if (e.code == 'SETTLEMENT_NOT_FOUND') return null;
       rethrow;
     } on DioException catch (e) {
       throw ApiException.fromDio(e);

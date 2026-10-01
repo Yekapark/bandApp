@@ -6,6 +6,12 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import 'board_models.dart';
 
+/// 저장소 PUT 의 전송 제한 시간. dio 의 sendTimeout 은 "본문 **전체**를 보내는 데" 걸리는 시간이라,
+/// 60초 고정이면 200MB 영상은 초당 3.4MB(27Mbps) 이상 올라가는 회선에서만 성공한다 — 보통 LTE 업로드에서는
+/// 매번 "서버에 연결하지 못했어요" 로 끝났다. 크기에 비례해 늘린다(초당 64KB 를 하한으로 잡고 60초 여유).
+Duration uploadSendTimeout(int sizeBytes) =>
+    Duration(seconds: 60 + sizeBytes ~/ (64 * 1024));
+
 final boardRepositoryProvider = Provider<BoardRepository>((ref) {
   return BoardRepository(ref.watch(dioProvider));
 });
@@ -171,6 +177,7 @@ class BoardRepository {
         onSendProgress:
             onProgress == null ? null : (sent, _) => onProgress(sent, sizeBytes),
         options: Options(
+          sendTimeout: uploadSendTimeout(sizeBytes),
           headers: {
             ...ticket.requiredHeaders,
             // 스트림 업로드라 dio 가 길이를 알 수 없다 — 직접 알려줘야 R2 가 받는다.

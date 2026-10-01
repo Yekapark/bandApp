@@ -40,6 +40,10 @@ class _ReservationDetailScreenState
   /// 된다. 눌린 것은 즉시 보여 주고, 인원수 같은 집계는 응답이 오면 맞춘다.
   /// 실패하면 null 로 되돌려 원래 값이 다시 보이게 한다.
   AttendanceStatus? _pendingRsvp;
+
+  /// 참석 응답 순번. 연달아 누르면 응답이 보낸 순서와 다르게 올 수 있다 — 늦게 온 옛 응답이 화면을
+  /// 덮어 서버(마지막으로 누른 값)와 다른 상태가 남지 않게, 마지막 요청의 응답만 화면에 반영한다.
+  int _rsvpSeq = 0;
   bool _busy = false;
 
   ReservationKey _key(int bandId) =>
@@ -155,6 +159,7 @@ class _ReservationDetailScreenState
                 _SetlistBlock(
                   items: detail.setlist.items,
                   editable: editable,
+                  busy: _busy,
                   onAdd: () => _addSong(band.id),
                   onEdit: (item) => _editSong(band.id, item),
                   onDelete: (item) => _deleteSong(band.id, item),
@@ -218,6 +223,7 @@ class _ReservationDetailScreenState
 
   Future<void> _respond(int bandId, int meId, AttendanceStatus status) async {
     // 먼저 칠하고 나중에 보낸다.
+    final seq = ++_rsvpSeq;
     setState(() {
       _pendingRsvp = status;
       _savingRsvp = true;
@@ -231,6 +237,7 @@ class _ReservationDetailScreenState
                 status: status,
               );
       if (!mounted) return;
+      if (seq != _rsvpSeq) return; // 더 나중에 누른 요청이 아직 날고 있거나 이미 반영됐다
       setState(() {
         _boardOverride = board;
         // 서버가 확정한 값이 왔으니 임시 표시를 거둔다. 그 사이 다른 것을 눌렀다면
@@ -243,10 +250,10 @@ class _ReservationDetailScreenState
       // 로딩 스피너로 깜빡이지 않는다.
       ref.invalidate(reservationDetailProvider(_key(bandId)));
     } on ApiException catch (e) {
-      _revertRsvp(status);
+      _revertRsvp(bandId, status);
       _toast(e.message);
     } catch (_) {
-      _revertRsvp(status);
+      _revertRsvp(bandId, status);
       _toast('참석 상태를 바꾸지 못했어요.');
     } finally {
       if (mounted) setState(() => _savingRsvp = false);
@@ -254,9 +261,17 @@ class _ReservationDetailScreenState
   }
 
   /// 실패했으니 먼저 칠한 것을 거둔다 — 안 바뀐 상태가 바뀐 것처럼 남으면 안 된다.
-  void _revertRsvp(AttendanceStatus attempted) {
+  ///
+  /// 앞서 누른 요청이 성공했는데 그 응답은 버렸을 수 있다(순번) — 서버 값을 다시 받아 맞춘다.
+  void _revertRsvp(int bandId, AttendanceStatus attempted) {
     if (!mounted) return;
-    if (_pendingRsvp == attempted) setState(() => _pendingRsvp = null);
+    if (_pendingRsvp == attempted) {
+      setState(() {
+        _pendingRsvp = null;
+        _boardOverride = null;
+      });
+    }
+    ref.invalidate(reservationDetailProvider(_key(bandId)));
   }
 
   Future<void> _addSong(int bandId) async {
@@ -716,6 +731,7 @@ class _SetlistBlock extends StatefulWidget {
   const _SetlistBlock({
     required this.items,
     required this.editable,
+    this.busy = false,
     required this.onAdd,
     required this.onEdit,
     required this.onDelete,
@@ -724,6 +740,9 @@ class _SetlistBlock extends StatefulWidget {
 
   final List<SetlistItem> items;
   final bool editable;
+
+  /// 곡 추가·삭제 요청이 날고 있는 중. 그동안 ✕·추가를 막는다(연타하면 같은 곡 삭제가 두 번 가서 "곡을 찾을 수 없어요").
+  final bool busy;
   final VoidCallback onAdd;
   final ValueChanged<SetlistItem> onEdit;
   final ValueChanged<SetlistItem> onDelete;
@@ -769,10 +788,11 @@ class _SetlistBlockState extends State<_SetlistBlock> {
   Future<void> _openLink(String raw) async {
     final uri = Uri.tryParse(raw.contains('://') ? raw : 'https://$raw');
     final ok = uri != null &&
-        await launchUrl(uri, mode: LaunchMode.externalApplication).catchError((_) => false);
+        await launchUrl(uri, mode: LaunchMode.externalApplication)
+            .catchError((_) => false);
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('링크를 열지 못했어요. 주소를 확인해 주세요.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('링크를 열지 못했어요. 주소를 확인해 주세요.')));
     }
   }
 
@@ -844,7 +864,7 @@ class _SetlistBlockState extends State<_SetlistBlock> {
           ],
           if (widget.editable) ...[
             GestureDetector(
-              onTap: () => widget.onDelete(item),
+              onTap: widget.busy ? null : () => widget.onDelete(item),
               child: const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 6),
                 child: Icon(Icons.close, size: 16, color: AppColors.textFaint),
@@ -887,7 +907,7 @@ class _SetlistBlockState extends State<_SetlistBlock> {
             _row(_local[i], i, draggable: false),
         if (widget.editable)
           GestureDetector(
-            onTap: widget.onAdd,
+            onTap: widget.busy ? null : widget.onAdd,
             child: Container(
               height: 46,
               alignment: Alignment.center,
@@ -1189,7 +1209,8 @@ class _SongDialogState extends State<_SongDialog> {
 }
 
 class _LinkIcon extends StatelessWidget {
-  const _LinkIcon({required this.icon, required this.tooltip, required this.onTap});
+  const _LinkIcon(
+      {required this.icon, required this.tooltip, required this.onTap});
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;

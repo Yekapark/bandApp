@@ -88,14 +88,28 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
               onCreate: (amount, type) => _create(band.id, amount, type),
             );
           }
-          return _Board(
-            settlement: settlement,
-            meId: meId,
-            canManage: canManage,
-            busy: _busy,
-            pendingPaid: _pendingPaid,
-            onTogglePaid: (share) => _togglePaid(band.id, share),
-            onRecalculate: () => _recalculate(band.id),
+          return RefreshIndicator(
+            color: AppColors.primary,
+            backgroundColor: AppColors.surface,
+            // 다른 멤버가 낸 것은 이 화면을 다시 열어야만 보였다(당겨서 새로고침이 없었다).
+            onRefresh: () async {
+              setState(() => _override = null);
+              ref.invalidate(settlementProvider(key));
+              try {
+                await ref.read(settlementProvider(key).future);
+              } catch (_) {
+                // 실패는 화면의 오류 상태(다시 시도)로 보인다.
+              }
+            },
+            child: _Board(
+              settlement: settlement,
+              meId: meId,
+              canManage: canManage,
+              busy: _busy,
+              pendingPaid: _pendingPaid,
+              onTogglePaid: (share) => _togglePaid(band.id, share),
+              onRecalculate: () => _recalculate(band.id),
+            ),
           );
         },
       ),
@@ -275,7 +289,7 @@ class _CreateFormState extends State<_CreateForm> {
         const SizedBox(height: 6),
         const Text(
           '합주 총비용을 입력하면 멤버별 몫으로 나눠 드려요. '
-          '딱 나눠지지 않는 나머지는 밴드장이 먼저 내요.',
+          '딱 나눠지지 않는 몇 원은 밴드장부터 한 명에 1원씩 더 내요.',
           style: TextStyle(fontSize: 12, height: 1.6, color: AppColors.textDim),
         ),
         const SizedBox(height: 22),
@@ -293,8 +307,12 @@ class _CreateFormState extends State<_CreateForm> {
           ],
           enabled: widget.canManage && !widget.busy,
           onChanged: (_) => setState(() {}),
-          decoration:
-              const InputDecoration(hintText: '예: 90000', prefixText: '₩ '),
+          // 자릿수를 틀리기 쉬워(9000 / 90000) 쉼표 넣은 금액을 바로 아래에 보여 준다.
+          decoration: InputDecoration(
+            hintText: '예: 90000',
+            prefixText: '₩ ',
+            helperText: amount == null ? null : Fmt.won(amount),
+          ),
         ),
         const SizedBox(height: 18),
         const Text(
@@ -405,6 +423,7 @@ class _Board extends StatelessWidget {
     final hasRemainder = s.shareCount != 0 && s.totalAmount % s.shareCount != 0;
 
     return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 30),
       children: [
         Container(

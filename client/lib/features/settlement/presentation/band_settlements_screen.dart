@@ -28,18 +28,31 @@ class _BandSettlementsScreenState extends ConsumerState<BandSettlementsScreen> {
   int? _cursor;
   bool _loadingMore = false;
   bool _exhausted = false;
+  bool _moreFailed = false;
+
+  /// [_more] 를 이어 붙인 기준 첫 페이지. 첫 페이지가 새로 오면(당겨서 새로고침, 정산 화면에서 납부 체크 뒤 무효화,
+  /// **밴드 전환**) 이어 붙인 것은 옛 기준이라 버린다 — 예전에는 그대로 남아 다른 밴드의 정산이 목록에 섞이고
+  /// "내가 아직 안 낸 돈" 에 더해졌다.
+  BandSettlementPage? _base;
 
   /// 이어 붙인 페이지들의 미납 합계. 첫 페이지 합계와 더해 화면 상단에 보여준다.
   int _moreOutstanding = 0;
 
   Future<void> _loadMore(int bandId) async {
-    if (_loadingMore || _exhausted || _cursor == null) return;
+    if (!mounted ||
+        _loadingMore ||
+        _exhausted ||
+        _moreFailed ||
+        _cursor == null) {
+      return;
+    }
+    final base = _base;
     setState(() => _loadingMore = true);
     try {
       final page = await ref
           .read(settlementRepositoryProvider)
           .listForBand(bandId: bandId, cursor: _cursor);
-      if (!mounted) return;
+      if (!mounted || !identical(base, _base)) return; // 그새 첫 페이지가 바뀌었다
       setState(() {
         _more.addAll(page.items);
         _moreOutstanding += page.myOutstandingTotal;
@@ -47,8 +60,8 @@ class _BandSettlementsScreenState extends ConsumerState<BandSettlementsScreen> {
         _exhausted = page.nextCursor == null;
       });
     } catch (_) {
-      // 더 못 불러오면 조용히 멈춘다 — 이미 보여 준 목록은 그대로 쓴다.
-      if (mounted) setState(() => _exhausted = true);
+      // 예전에는 조용히 "끝" 으로 처리해, 나머지 정산이 빠진 합계가 "내가 아직 안 낸 돈" 으로 보였다.
+      if (mounted && identical(base, _base)) setState(() => _moreFailed = true);
     } finally {
       if (mounted) setState(() => _loadingMore = false);
     }
@@ -59,6 +72,7 @@ class _BandSettlementsScreenState extends ConsumerState<BandSettlementsScreen> {
     _moreOutstanding = 0;
     _cursor = null;
     _exhausted = false;
+    _moreFailed = false;
   }
 
   @override
@@ -84,15 +98,32 @@ class _BandSettlementsScreenState extends ConsumerState<BandSettlementsScreen> {
       ),
       body: pageAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
+        // 예전에는 문구만 있고 다시 시도할 길이 없었다(탭을 벗어났다 와야 했다).
         error: (e, _) => Center(
-          child: Text(
-            e is ApiException ? e.message : '정산을 불러오지 못했어요.',
-            style: const TextStyle(color: AppColors.textDim),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                e is ApiException ? e.message : '정산을 불러오지 못했어요.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.textDim),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () =>
+                    ref.invalidate(bandSettlementsProvider(band.id)),
+                child: const Text('다시 시도'),
+              ),
+            ],
           ),
         ),
         data: (page) {
-          _cursor ??= page.nextCursor;
-          if (page.nextCursor == null && _more.isEmpty) _exhausted = true;
+          if (!identical(page, _base)) {
+            _reset();
+            _base = page;
+            _cursor = page.nextCursor;
+            _exhausted = page.nextCursor == null;
+          }
 
           final items = [...page.items, ..._more];
           final outstanding = page.myOutstandingTotal + _moreOutstanding;
@@ -100,14 +131,24 @@ class _BandSettlementsScreenState extends ConsumerState<BandSettlementsScreen> {
           return RefreshIndicator(
             color: AppColors.primary,
             backgroundColor: AppColors.surface,
+            // 새 첫 페이지가 오면 위의 identical 비교가 이어 붙인 것을 버린다.
             onRefresh: () async {
-              setState(_reset);
               ref.invalidate(bandSettlementsProvider(band.id));
+              try {
+                await ref.read(bandSettlementsProvider(band.id).future);
+              } catch (_) {}
             },
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
               children: [
                 _OutstandingCard(amount: outstanding, hasAny: items.isNotEmpty),
+                if (_moreFailed) ...[
+                  const SizedBox(height: 6),
+                  const Text(
+                    '아직 못 불러온 정산이 있어 위 금액에 빠져 있을 수 있어요.',
+                    style: TextStyle(fontSize: 11, color: AppColors.textFaint),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 if (items.isEmpty)
                   const _Empty()
@@ -121,9 +162,19 @@ class _BandSettlementsScreenState extends ConsumerState<BandSettlementsScreen> {
                     ),
                     const SizedBox(height: 8),
                   ],
-                  if (!_exhausted)
+                  if (_moreFailed)
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _moreFailed = false);
+                        _loadMore(band.id);
+                      },
+                      child: const Text('나머지 정산 불러오기 · 다시 시도'),
+                    )
+                  else if (!_exhausted)
                     Builder(builder: (_) {
-                      _loadMore(band.id);
+                      // build 중에 setState 를 부르면 안 된다 — 다음 프레임에 불러온다.
+                      WidgetsBinding.instance
+                          .addPostFrameCallback((_) => _loadMore(band.id));
                       return const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
                         child: Center(
@@ -176,9 +227,7 @@ class _OutstandingCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            settled
-                ? (hasAny ? '없어요' : '정산 없음')
-                : '${_won.format(amount)}원',
+            settled ? (hasAny ? '없어요' : '정산 없음') : '${_won.format(amount)}원',
             style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w900,
@@ -311,8 +360,7 @@ class _Empty extends StatelessWidget {
       child: Text(
         '아직 정산이 없어요.\n합주 일정 상세에서 정산을 만들면 여기에 모여요.',
         textAlign: TextAlign.center,
-        style:
-            TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.6),
+        style: TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.6),
       ),
     );
   }
