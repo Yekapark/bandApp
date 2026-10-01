@@ -145,6 +145,28 @@ class NotificationTriggerIntegrationTest extends NotificationApiSupport {
         assertThat(tokensFor("SETTLEMENT_REQUESTED")).containsExactly("member-dev");
     }
 
+    /** 재계산으로 총액이 바뀌면 다시 알린다. 예전에는 variant 0 고정이라 "이미 보냄" 으로 걸러져 아무도 몰랐다. */
+    @Test
+    void recalculating_with_a_new_total_notifies_again_but_same_total_does_not() {
+        String leader = signup("trg-rc-l@band.app", "리더");
+        String member = signup("trg-rc-m@band.app", "멤버");
+        long bandId = createBand(leader, "혁오셋");
+        join(member, issueInvite(leader, bandId, null));
+        registerToken(member, "member-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        String path = "/api/v1/bands/" + bandId + "/reservations/" + reservationId + "/settlement";
+        post(path, "{\"totalAmount\":30000,\"splitType\":\"EQUAL\"}", leader);
+        push.reset();
+
+        post(path + "/recalculate", "{}", leader);   // 같은 총액 — 다시 보낼 필요 없음
+        assertThat(tokensFor("SETTLEMENT_REQUESTED")).isEmpty();
+
+        post(path + "/recalculate", "{\"totalAmount\":40000}", leader);
+        assertThat(tokensFor("SETTLEMENT_REQUESTED")).containsExactly("member-dev");
+        assertThat(push.sent().get(0).message().body()).contains("40,000원");
+    }
+
     // --- helpers ---------------------------------------------------------
 
     private long createReservationExpectPending(String token, long bandId, long roomId) {

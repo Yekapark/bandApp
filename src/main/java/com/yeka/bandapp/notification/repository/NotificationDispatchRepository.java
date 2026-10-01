@@ -48,18 +48,21 @@ public interface NotificationDispatchRepository extends JpaRepository<Notificati
     List<NotificationDispatch> findFeed(@Param("userId") long userId, @Param("bandId") long bandId,
                                         @Param("cursorId") Long cursorId, Pageable pageable);
 
-    /**
-     * 보관기한이 지난 발송 이력 정리. 리마인더 배치가 실행 끝에 호출한다(별도 배치를 늘리지 않는다).
-     *
-     * @return 지운 행 수
-     */
-    @Transactional
     /** 한 대상의 한 종류 발송 기록을 지운다 — 일정 시각이 바뀌면 리마인더를 새 시각 기준으로 다시 보내려고. */
+    @Transactional
     @Modifying
     @Query("delete from NotificationDispatch d where d.type = :type and d.targetId = :targetId")
     int deleteByTypeAndTargetId(@Param("type") NotificationType type,
                                 @Param("targetId") long targetId);
 
+    /**
+     * 보관기한이 지난 발송 이력 정리. 리마인더 배치가 실행 끝에 호출한다(별도 배치를 늘리지 않는다).
+     *
+     * <p>{@code @Transactional} 필수 — 호출 측(배치)이 트랜잭션 없이 부른다. 빠지면 매 실행마다 삭제가 실패한다.
+     *
+     * @return 지운 행 수
+     */
+    @Transactional
     @Modifying
     @Query("delete from NotificationDispatch d where d.createdAt < :threshold")
     int deleteOlderThan(@Param("threshold") Instant threshold);

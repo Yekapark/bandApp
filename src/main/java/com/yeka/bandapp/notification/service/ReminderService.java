@@ -104,8 +104,17 @@ public class ReminderService {
             sent += sender.notify(NotificationType.RESERVATION_REMINDER, reservation.reservationId(), offset,
                     entry.getValue(),
                     NotificationMessages.reminder(reservation.bandId(), reservation.reservationId(),
-                            reservation.startAt(), offset));
+                            reservation.startAt(), leadMinutes(offset, reservation.startAt(), now)));
         }
         return sent;
+    }
+
+    /**
+     * 문구에 쓸 "몇 분 뒤". 시점(offset)이 아니라 실제 남은 시간이다 — 시작 5분 전에 만든 일정에 "1시간 뒤 시작해요" 가
+     * 가면 안 된다. 정시 발송이면 offset 과 같다(배치 지연 몇 초는 반올림으로 흡수). 최소 1분.
+     */
+    static int leadMinutes(int offset, Instant startAt, Instant now) {
+        long remaining = Math.round(Duration.between(now, startAt).toSeconds() / 60.0);
+        return (int) Math.max(1, Math.min(offset, remaining));
     }
 }
