@@ -215,6 +215,16 @@ class BandDeletionIntegrationTest extends PlanApiSupport {
         assertThat(storage.objectExists(f.mediaKey)).isTrue();
     }
 
+    /** 한글 키보드의 전각 공백(U+3000)은 trim() 이 못 지운다 — 보이지 않는 공백 때문에 삭제가 막히면 안 된다. */
+    @Test
+    void full_width_spaces_around_the_name_do_not_block_deletion() {
+        String leader = signup("bd-ws@band.app", "리더");
+        long bandId = createBand(leader, "　공백밴드　");
+        assertThat(data(get("/api/v1/bands/" + bandId, leader)).get("name").asText()).isEqualTo("공백밴드");
+
+        assertThat(deleteBand(leader, bandId, "공백밴드　").getStatusCode().value()).isEqualTo(204);
+    }
+
     /**
      * 가장 중요한 케이스 — R2 삭제가 실패하면 <b>DB 를 전혀 건드리지 않고</b> 502 로 끝나야 한다.
      * 반대 순서였다면 키를 잃어버려 R2 에 영구 고아가 남는다.

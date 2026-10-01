@@ -58,7 +58,7 @@ public class BandDeletionService {
         accessGuard.requireLeader(bandId, userId);
         Band band = bandRepository.findById(bandId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAND_NOT_FOUND));
-        if (confirmName == null || !band.getName().equals(confirmName.trim())) {
+        if (confirmName == null || !band.getName().strip().equals(confirmName.strip())) {
             throw new BusinessException(ErrorCode.BAND_NAME_MISMATCH);
         }
         // 자동 갱신 중인 Play 구독이 있으면 막는다. 지워도 Google 은 매년 계속 청구하는데, 갱신 알림이
