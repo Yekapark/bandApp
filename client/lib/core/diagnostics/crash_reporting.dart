@@ -50,6 +50,12 @@ class CrashReporting {
   static bool get enabled =>
       available && FirebaseCrashlytics.instance.isCrashlyticsCollectionEnabled;
 
-  static Future<void> setEnabled(bool value) =>
-      FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(value);
+  /// 끌 때는 기기에 쌓여 아직 안 보낸 기록도 지운다. 수집을 꺼도 SDK 는 비정상 종료를 기기에 적어 두고,
+  /// 나중에 다시 켜면 그것까지 보낸다 — 끈 동안의 기록이 나가면 안 된다.
+  static Future<void> setEnabled(bool value) async {
+    final crashlytics = FirebaseCrashlytics.instance;
+    if (value) await crashlytics.deleteUnsentReports(); // 꺼져 있던 동안 쌓인 것
+    await crashlytics.setCrashlyticsCollectionEnabled(value);
+    if (!value) await crashlytics.deleteUnsentReports();
+  }
 }

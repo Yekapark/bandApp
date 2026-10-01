@@ -24,6 +24,13 @@ class BandInvite {
   bool get isUnlimited => maxUses == null;
   int? get remainingUses => maxUses == null ? null : (maxUses! - usedCount);
 
+  /// 지금 이 코드로 들어올 수 있는가. 서버의 "현재 코드" 는 무효화만 안 됐으면 **만료·소진된 것도** 돌려준다 —
+  /// 그대로 보여 주면 밴드장이 못 쓰는 코드를 공유하고, 받은 사람은 "만료된 초대코드" 를 본다.
+  bool isUsableAt(DateTime now) =>
+      !revoked &&
+      (expiresAt == null || expiresAt!.isAfter(now)) &&
+      (remainingUses == null || remainingUses! > 0);
+
   factory BandInvite.fromJson(Map<String, dynamic> json) {
     return BandInvite(
       code: json['code'] as String? ?? '',

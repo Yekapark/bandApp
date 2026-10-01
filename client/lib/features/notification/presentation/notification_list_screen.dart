@@ -38,12 +38,18 @@ class _NotificationListScreenState
   DateTime? _seenBefore;
   bool _marked = false;
 
+  /// 위 상태들이 어느 밴드 것인지. 화면이 열린 채로 밴드가 바뀌면(알림을 눌러 다른 밴드로 전환) 비운다 —
+  /// 안 비우면 앞 밴드의 알림이 뒤에 붙고, 앞 밴드 커서로 새 밴드를 이어 읽고, 새 밴드는 읽음 처리가 안 됐다.
+  int? _bandId;
+
   Future<void> _markSeen(int bandId) async {
     if (_marked) return;
     _marked = true;
     final storage = ref.read(notificationSeenStorageProvider);
-    _seenBefore = await storage.lastSeen(bandId);
+    final before = await storage.lastSeen(bandId);
     await storage.markSeen(bandId, DateTime.now());
+    if (bandId != _bandId) return; // 그 사이 다른 밴드로 바뀌었다
+    _seenBefore = before;
     if (!mounted) return;
     setState(() {});
     // 배지는 다음에 다시 셀 때 0 이 된다.
@@ -57,7 +63,7 @@ class _NotificationListScreenState
       final page = await ref
           .read(notificationRepositoryProvider)
           .feed(bandId: bandId, cursor: _cursor);
-      if (!mounted) return;
+      if (!mounted || bandId != _bandId) return;
       setState(() {
         _more.addAll(page.items);
         _cursor = page.nextCursor;
@@ -65,9 +71,9 @@ class _NotificationListScreenState
       });
     } catch (_) {
       // 더 못 불러오면 조용히 멈춘다 — 이미 보여 준 목록은 그대로 쓴다.
-      if (mounted) setState(() => _exhausted = true);
+      if (mounted && bandId == _bandId) setState(() => _exhausted = true);
     } finally {
-      if (mounted) setState(() => _loadingMore = false);
+      if (mounted && bandId == _bandId) setState(() => _loadingMore = false);
     }
   }
 
@@ -83,6 +89,15 @@ class _NotificationListScreenState
       );
     }
 
+    if (_bandId != band.id) {
+      _bandId = band.id;
+      _more.clear();
+      _cursor = null;
+      _loadingMore = false;
+      _exhausted = false;
+      _seenBefore = null;
+      _marked = false;
+    }
     final feedAsync = ref.watch(notificationFeedProvider(band.id));
 
     return Scaffold(
