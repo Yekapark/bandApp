@@ -38,10 +38,10 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   void initState() {
     super.initState();
     // 결제 결과는 앱 전역 PurchaseSync 가 받아 서버에 반영하고 안내도 띄운다(LAUNCH_REVIEW B2).
-    // 이 화면은 버튼 잠금만 따라간다.
-    _eventSub = ref.read(purchaseSyncProvider).events.listen((e) {
-      if (!mounted) return;
-      setState(() => _busy = e.kind == PurchaseEventKind.pending);
+    // 이 화면은 버튼 잠금만 따라간다. 결과가 오면(승인 대기 포함) 푼다 — 승인 대기 중인 밴드를 또 결제하는 것은
+    // PurchaseSync 가 막는다. 예전엔 승인 대기면 안내 없이 버튼이 계속 돌았다.
+    _eventSub = ref.read(purchaseSyncProvider).events.listen((_) {
+      if (mounted) setState(() => _busy = false);
     });
     _initStore();
   }
@@ -53,9 +53,14 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   }
 
   Future<void> _initStore() async {
-    final available = await _iap.isAvailable();
-    final products =
-        available ? await _iap.loadProducts() : <String, ProductDetails>{};
+    var available = false;
+    var products = <String, ProductDetails>{};
+    try {
+      available = await _iap.isAvailable();
+      if (available) products = await _iap.loadProducts();
+    } catch (_) {
+      // 스토어 연결 실패 — 아래에서 "지금은 스토어 결제를 쓸 수 없어요" 로 보인다.
+    }
     if (!mounted) return;
     setState(() {
       _storeReady = available && products.isNotEmpty;
@@ -78,13 +83,25 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       return;
     }
     final band = ref.read(currentBandProvider);
-    if (band == null) return;
+    // 두 번 빨리 누르면 화면이 다시 그려지기 전에 두 번째 탭도 들어온다.
+    if (band == null || _busy) return;
     setState(() => _busy = true);
     try {
+      // 화면의 요금제는 처음 열 때 받은 것이다. 그 사이 다른 기기·다른 밴드장이 결제했으면 같은 밴드에 구독이
+      // 하나 더 생겨 두 번 청구되므로, 결제 창을 띄우기 직전에 새로 받아 본다.
+      final plan = await ref.refresh(bandPlanProvider(band.id).future);
+      if (plan.isPremium && (plan.autoRenewing || plan.canceled)) {
+        if (mounted) setState(() => _busy = false);
+        _toast('이 밴드는 이미 프리미엄이에요.');
+        return;
+      }
       await ref.read(purchaseSyncProvider).buy(_products, bandId: band.id);
     } on NoPremiumSlotException {
       if (mounted) setState(() => _busy = false);
       _toast(NoPremiumSlotException.message);
+    } on PurchaseInProgressException {
+      if (mounted) setState(() => _busy = false);
+      _toast(PurchaseInProgressException.message);
     } catch (_) {
       if (mounted) setState(() => _busy = false);
       _toast('결제를 시작하지 못했어요.');

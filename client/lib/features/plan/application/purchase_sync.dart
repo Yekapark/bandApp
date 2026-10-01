@@ -22,6 +22,18 @@ class NoPremiumSlotException implements Exception {
   String toString() => message;
 }
 
+/// 이 밴드의 결제가 스토어에 이미 있고 아직 확인 처리되지 않았다 — 결제 승인 대기(느린 카드 등)이거나 검증이
+/// 아직 안 끝난 구매. 또 결제하면 같은 밴드에 구독이 두 개 생겨 두 번 청구된다.
+class PurchaseInProgressException implements Exception {
+  const PurchaseInProgressException();
+
+  static const String message = '이 밴드의 결제가 아직 처리 중이에요. 승인되면 프리미엄이 자동으로 시작돼요. '
+      '잠시 후 요금제 화면을 다시 열어 확인해 주세요.';
+
+  @override
+  String toString() => message;
+}
+
 /// 결제 흐름의 상태 — 요금제 화면이 버튼을 잠그고 풀 때 쓴다. 안내 문구는 [PurchaseSync] 가 직접 띄운다.
 enum PurchaseEventKind { pending, verified, failed, canceled }
 
@@ -80,6 +92,9 @@ class PurchaseSync {
   /// 같은 상품은 다시 살 수 없으므로 결제할 때 이걸 빼고 고른다(B4).
   final _owned = <String>{};
 
+  /// 스토어에 있지만 아직 확인 처리되지 않은 구매가 적힌 밴드들(승인 대기·검증 전). 이 밴드는 다시 결제하지 않는다.
+  final _unackedBands = <int>{};
+
   /// 방금 결제 창을 띄운 상품과 고를 수 있던 상품들 — "이미 보유" 로 실패하면 다음 상품으로 다시 띄운다.
   String? _buyingProductId;
   Map<String, ProductDetails> _buyingCandidates = const {};
@@ -119,18 +134,43 @@ class PurchaseSync {
       {required int bandId}) async {
     start(); // 로그인 이벤트보다 먼저 화면이 열린 경우에도 결과를 놓치지 않게.
     await _refreshOwned();
+    if (_unackedBands.contains(bandId)) throw const PurchaseInProgressException();
     final product = _nextSlot(products);
     if (product == null) throw const NoPremiumSlotException();
     _buyingBandId = bandId;
     _buyingCandidates = products;
-    _buyingProductId = product.id;
     try {
-      await _iap.buy(product, bandId: bandId);
+      await _launch(product, bandId);
     } catch (_) {
       _clearBuying();
       rethrow;
     }
   }
+
+  /// 결제 창을 못 띄웠을 때 결제 스트림의 실패 결과를 기다리는 시간. 시험 때 줄인다.
+  @visibleForTesting
+  static Duration launchFailGrace = const Duration(seconds: 2);
+
+  /// 결제 창을 띄운다. Play 는 창을 못 띄운 실패를 보통 결제 스트림으로도 보내 거기서 처리되지만, 안 보낼 때가
+  /// 있다 — 그러면 아무 결과도 안 와서 요금제 화면 버튼이 돌기만 하며 잠겨 있었다. 잠깐 기다려도 이 시도가
+  /// 그대로면 실패로 끝낸다.
+  Future<void> _launch(ProductDetails product, int bandId) async {
+    _buyingProductId = product.id;
+    final attempt = ++_attempt;
+    if (await _iap.buy(product, bandId: bandId)) return;
+    Future<void>.delayed(launchFailGrace, () {
+      // 그 사이 결과가 왔거나 새로 결제를 시작했으면(같은 밴드·상품이어도) 손대지 않는다.
+      if (attempt != _attempt || _buyingBandId == null) return;
+      _clearBuying();
+      _emit(const PurchaseEvent(PurchaseEventKind.failed));
+      _toast(_genericFailure);
+    });
+  }
+
+  /// 결제 창을 띄운 횟수 — 늦게 도는 실패 타이머가 다음 시도를 건드리지 않게 시도를 구분한다.
+  int _attempt = 0;
+
+  static const _genericFailure = '결제를 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
 
   ProductDetails? _nextSlot(Map<String, ProductDetails> products) {
     for (final id in IapService.productIds) {
@@ -141,6 +181,7 @@ class PurchaseSync {
   }
 
   void _clearBuying() {
+    _attempt++;
     _buyingBandId = null;
     _buyingProductId = null;
     _buyingCandidates = const {};
@@ -149,6 +190,9 @@ class PurchaseSync {
   /// 가진 상품 목록을 지금 새로 받는다(간격 제한 없이). 스토어가 구매를 스트림으로 흘려보내면
   /// [_onUpdates] 가 [_owned] 를 채운다 — 스트림 전달은 한 박자 늦어서 한 번 양보한다.
   Future<void> _refreshOwned() async {
+    // 지난 목록은 버린다 — 만료된 구독·다른 Google 계정의 구독이 남아 있으면 상품을 헛되이 건너뛴다.
+    _owned.clear();
+    _unackedBands.clear();
     _lastRestore = null;
     await _restore();
     await Future<void>.delayed(Duration.zero);
@@ -172,29 +216,38 @@ class PurchaseSync {
     for (final p in purchases) {
       if (!IapService.productIds.contains(p.productID)) continue;
       if (p.status == PurchaseStatus.purchased ||
-          p.status == PurchaseStatus.restored) {
+          p.status == PurchaseStatus.restored ||
+          p.status == PurchaseStatus.pending) {
         _owned.add(p.productID);
+        final band = IapService.taggedBand(p);
+        if (p.pendingCompletePurchase && band != null) _unackedBands.add(band);
       }
     }
     for (final p in purchases) {
       if (!_isOurs(p)) continue;
       switch (p.status) {
         case PurchaseStatus.pending:
-          _emit(const PurchaseEvent(PurchaseEventKind.pending));
+          // 결제 승인 대기(느린 카드 등). 승인되면 다음 시작·복귀 때 복구로 반영된다. 예전엔 안내 없이 버튼이
+          // 계속 돌았다. 버튼은 풀고, 이 밴드는 [_unackedBands] 로 다시 결제하지 못하게 막는다.
+          if (_isCurrent(p)) {
+            _clearBuying();
+            _emit(const PurchaseEvent(PurchaseEventKind.pending));
+            _toast('결제 승인을 기다리고 있어요. 승인되면 프리미엄이 자동으로 시작돼요.');
+          }
         case PurchaseStatus.canceled:
           _clearBuying();
           _emit(const PurchaseEvent(PurchaseEventKind.canceled));
-          if (p.pendingCompletePurchase) await _iap.complete(p);
+          if (p.pendingCompletePurchase) await _completeQuietly(p);
         case PurchaseStatus.error:
-          if (p.pendingCompletePurchase) await _iap.complete(p);
+          if (p.pendingCompletePurchase) await _completeQuietly(p);
           // 가진 줄 몰랐던 상품이었다(다른 기기에서 샀거나 목록이 늦게 옴) — 다음 상품으로 다시 띄운다.
-          final retried = _isAlreadyOwned(p) && await _retryWithNextSlot();
-          if (!retried) {
+          // Play 오류 원문은 "BillingResponse.serviceUnavailable" 같은 영문 코드라 보여 주지 않는다.
+          final failure =
+              _isAlreadyOwned(p) ? await _retryWithNextSlot() : _genericFailure;
+          if (failure != null) {
             _clearBuying();
             _emit(const PurchaseEvent(PurchaseEventKind.failed));
-            _toast(_isAlreadyOwned(p)
-                ? NoPremiumSlotException.message
-                : (p.error?.message ?? '결제에 실패했어요.'));
+            _toast(failure);
           }
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
@@ -210,26 +263,34 @@ class PurchaseSync {
     final token = _iap.purchaseToken(p);
     if (token == null || !_inFlight.add(token)) return;
     final buyingBand = _buyingBandId;
+    final tag = IapService.taggedBand(p);
+    final mine = _isCurrent(p);
     final repo = _ref.read(planRepositoryProvider);
     try {
       int bandId;
       try {
         bandId = (await repo.restoreGooglePurchase(token)).bandId;
       } on ApiException catch (e) {
-        // 밴드 표시가 없는 옛 구매 — 이 앱에서 방금 결제한 밴드가 있을 때만 그 밴드로 검증한다.
-        if (e.code != 'PURCHASE_BAND_UNKNOWN' || buyingBand == null) rethrow;
+        // 밴드 표시가 없는 구매 — 이 앱에서 방금 결제한 그 구매일 때만 결제 중인 밴드로 검증한다.
+        if (e.code != 'PURCHASE_BAND_UNKNOWN' || !mine || buyingBand == null) {
+          rethrow;
+        }
         await repo.verifyGooglePurchase(buyingBand, token);
         bandId = buyingBand;
       }
       _ref.invalidate(bandPlanProvider(bandId));
-      await _iap.complete(p);
-      _clearBuying();
-      _emit(PurchaseEvent(PurchaseEventKind.verified, bandId: bandId));
+      if (tag != null) _unackedBands.remove(tag);
+      // 서버가 검증하면서 이미 확인 처리(acknowledge)했다. 여기서 실패해도 결제는 끝났으니 실패로 알리지 않는다.
+      await _completeQuietly(p);
+      if (mine) {
+        _clearBuying();
+        _emit(PurchaseEvent(PurchaseEventKind.verified, bandId: bandId));
+      }
       _toast('결제가 확인돼 프리미엄이 시작됐어요.');
     } on ApiException catch (e) {
-      _failed(buyingBand, e.message);
+      _failed(mine, e.message);
     } catch (_) {
-      _failed(buyingBand, '구매를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      _failed(mine, '구매를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       _inFlight.remove(token);
     }
@@ -237,11 +298,22 @@ class PurchaseSync {
 
   /// 방금 결제한 사람에게만 알린다. 앱 시작 때 조용히 복구하다 실패한 것은 다음에 다시 시도하므로
   /// 매번 안내를 띄우지 않는다.
-  void _failed(int? buyingBand, String message) {
-    if (buyingBand == null) return;
+  void _failed(bool mine, String message) {
+    if (!mine) return;
     _clearBuying();
     _emit(const PurchaseEvent(PurchaseEventKind.failed));
     _toast(message);
+  }
+
+  /// 지금 결제 창을 띄운 그 결제의 결과인가. 결제를 시작·복귀할 때 스토어가 다른(옛) 미완료 구매를 같이
+  /// 흘려보내면 그건 남의 결과다 — 예전엔 그 결과로 진행 중인 결제 상태를 지우고 버튼을 풀었고(다시 눌러 같은
+  /// 밴드를 두 번 결제할 수 있었다), 밴드 표시 없는 옛 구매를 지금 결제 중인 밴드로 검증할 수 있었다(B3 재발).
+  bool _isCurrent(PurchaseDetails p) {
+    final buying = _buyingBandId;
+    if (buying == null) return false;
+    final tag = IapService.taggedBand(p);
+    return tag == buying ||
+        (tag == null && p.status != PurchaseStatus.restored);
   }
 
   /// 우리 상품의 이벤트인가. Play 는 **취소·오류 결과에 상품 id 를 비워** 보낸다 — 예전엔 id 로만 걸러서
@@ -254,21 +326,35 @@ class PurchaseSync {
   static bool _isAlreadyOwned(PurchaseDetails p) =>
       (p.error?.message ?? '').contains('itemAlreadyOwned');
 
-  /// 방금 띄운 상품을 "가진 것" 으로 적고, 남은 상품이 있으면 결제 창을 다시 띄운다.
-  Future<bool> _retryWithNextSlot() async {
+  /// 방금 띄운 상품을 "가진 것" 으로 적고, 남은 상품이 있으면 결제 창을 다시 띄운다. 다시 띄우기 전에 스토어
+  /// 목록을 새로 받는다 — "이미 보유" 한 상품이 **이 밴드의** 승인 대기 결제면, 다음 상품으로 또 결제해 같은
+  /// 밴드에 두 번 청구된다.
+  /// 다시 띄웠으면 null, 아니면 사용자에게 보일 안내.
+  Future<String?> _retryWithNextSlot() async {
     final bandId = _buyingBandId;
     final tried = _buyingProductId;
-    if (bandId == null || tried == null) return false;
-    _owned.add(tried);
+    if (bandId == null || tried == null) return _genericFailure;
+    // 이번 결제에서 "이미 보유" 로 확인한 상품은 새 목록에 없어도 다시 고르지 않는다(안 그러면 둘 사이를 맴돈다).
+    final known = {..._owned, tried};
+    await _refreshOwned();
+    _owned.addAll(known);
+    if (_unackedBands.contains(bandId)) return PurchaseInProgressException.message;
     final next = _nextSlot(_buyingCandidates);
-    if (next == null) return false;
-    _buyingProductId = next.id;
+    if (next == null) return NoPremiumSlotException.message;
     try {
-      await _iap.buy(next, bandId: bandId);
-      return true;
+      await _launch(next, bandId);
+      return null;
     } catch (_) {
-      return false;
+      return _genericFailure;
     }
+  }
+
+  /// 스토어에 처리 끝을 알린다. 실패해도 흐름을 멈추지 않는다 — 확인 처리는 서버도 하고, 안 됐으면 다음 복구 때
+  /// 다시 온다.
+  Future<void> _completeQuietly(PurchaseDetails p) async {
+    try {
+      await _iap.complete(p);
+    } catch (_) {}
   }
 
   void _emit(PurchaseEvent e) {
