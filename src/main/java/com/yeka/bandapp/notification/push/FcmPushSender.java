@@ -107,9 +107,17 @@ public class FcmPushSender implements PushSender {
                     // 앱 매니페스트에도 같은 값을 기본 채널로 적어 뒀지만(앱이 꺼져 있을 때를
                     // 위해) 여기서도 실어 보낸다. 채널을 만들지 않은 옛 버전 앱에서는 이 값이
                     // 무시되고 예전처럼 기본 채널로 뜬다 — 앱을 새로 깔면 맞춰진다.
+                    //
+                    // 우선순위 HIGH — 기본(normal)은 화면이 꺼져 절전 중인 폰에 늦게 닿고, 알림 우선순위도 기본이라
+                    // 상단 팝업(헤드업)으로 안 뜰 수 있다. 합주 시작 알림은 바로 보여야 한다. 잠금화면 공개 — 내용이 합주
+                    // 일정·정산 안내라 가릴 이유가 없다(테스터 의견 2026-10-01: 상단바·잠금화면에 팝업이 안 뜬다).
                     .setAndroidConfig(AndroidConfig.builder()
+                            .setPriority(AndroidConfig.Priority.HIGH)
                             .setNotification(AndroidNotification.builder()
                                     .setChannelId(ANDROID_CHANNEL_ID)
+                                    .setPriority(AndroidNotification.Priority.HIGH)
+                                    .setVisibility(AndroidNotification.Visibility.PUBLIC)
+                                    .setDefaultSound(true)
                                     .build())
                             .build())
                     .putAllData(message.data())

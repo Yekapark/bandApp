@@ -2,15 +2,48 @@ package com.yeka.bandule
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
+    }
+
+    /**
+     * `bandule/system` 채널 — 앱(Dart)이 휴대폰의 이 앱 알림 설정 화면을 열 때 쓴다(`SystemSettings`).
+     * 알림 권한을 두 번 거절하면 권한 창이 더 뜨지 않아서, 켜려면 설정 화면으로 보내야 한다.
+     */
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "bandule/system")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "openNotificationSettings" -> result.success(openNotificationSettings())
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun openNotificationSettings(): Boolean = try {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+        }
+        startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (e: Exception) {
+        false
     }
 
     /**

@@ -54,7 +54,17 @@ public final class NotificationMessages {
 
     public static PushMessage reminder(long bandId, long reservationId, Instant startAt, int offsetMinutes) {
         return message(NotificationType.RESERVATION_REMINDER, bandId, reservationId,
-                "합주 리마인더", when(startAt) + " 합주가 " + offsetMinutes + "분 뒤 시작해요.");
+                "합주 리마인더", when(startAt) + " 합주가 " + lead(offsetMinutes) + " 뒤 시작해요.");
+    }
+
+    /** 리마인더 시점을 읽기 쉽게 — 360 → "6시간", 90 → "1시간 30분", 30 → "30분". */
+    static String lead(int minutes) {
+        if (minutes < 60) {
+            return minutes + "분";
+        }
+        int h = minutes / 60;
+        int m = minutes % 60;
+        return m == 0 ? h + "시간" : h + "시간 " + m + "분";
     }
 
     public static PushMessage attendanceNudge(long bandId, long reservationId, Instant startAt) {
