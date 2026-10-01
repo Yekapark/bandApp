@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/diagnostics/crash_reporting.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../routing/app_router.dart';
@@ -82,6 +83,8 @@ class SettingsHomeScreen extends ConsumerWidget {
             sub: '내 정보 · 회원 탈퇴',
             onTap: () => context.push(Routes.account),
           ),
+          // 오류 기록은 국외(Google, 미국)로 보내므로 거부할 수 있어야 한다 — 개인정보처리방침 7. 릴리스 빌드에만 보인다.
+          if (CrashReporting.available) const _CrashReportSwitch(),
           const SizedBox(height: 12),
           const Divider(height: 1, color: AppColors.border),
           _Tile(
@@ -170,6 +173,37 @@ class _Tile extends StatelessWidget {
           ? null
           : const Icon(Icons.chevron_right,
               size: 18, color: AppColors.textFaint),
+    );
+  }
+}
+
+/// 앱 오류 기록 보내기 켜기·끄기(U17). 값은 Crashlytics 가 기기에 저장한다.
+class _CrashReportSwitch extends StatefulWidget {
+  const _CrashReportSwitch();
+
+  @override
+  State<_CrashReportSwitch> createState() => _CrashReportSwitchState();
+}
+
+class _CrashReportSwitchState extends State<_CrashReportSwitch> {
+  late bool _on = CrashReporting.enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      value: _on,
+      onChanged: (v) async {
+        setState(() => _on = v);
+        await CrashReporting.setEnabled(v);
+      },
+      secondary: const Icon(Icons.bug_report_outlined,
+          size: 20, color: AppColors.textSecondary),
+      title: const Text('앱 오류 기록 보내기',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+      subtitle: const Text(
+        '앱이 꺼지거나 오류가 나면 원인을 찾을 수 있게 기기·앱 정보와 오류 내용을 보내요. 계정 정보는 보내지 않아요.',
+        style: TextStyle(fontSize: 11.5, color: AppColors.textDim),
+      ),
     );
   }
 }

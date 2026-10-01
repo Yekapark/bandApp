@@ -70,7 +70,7 @@ jobs:
 
   # Android 빌드 자체(Gradle·AGP·R8)를 확인한다 — analyze·test 는 Dart 만 봐서 플러그인의 Gradle 설정이나
   # 난독화 규칙이 깨져도 통과한다. Built-in Kotlin 전환(LAUNCH_REVIEW U7) 뒤로 KGP 를 쓰는 플러그인이 들어오면
-  # 여기서 멈춘다. 서명 키·google-services.json·카카오 키가 없는 채로 빌드한다(디버그 키 서명, 푸시·카카오 꺼짐).
+  # 여기서 멈춘다. 서명 키·카카오 키가 없는 채로 빌드한다(디버그 키 서명, 카카오 꺼짐). google-services.json 은 가짜를 만들어 넣는다.
   android-build:
     runs-on: ubuntu-latest
     defaults:
@@ -94,7 +94,27 @@ jobs:
       - name: pub get
         run: flutter pub get
 
+      # Firebase Gradle 플러그인(google-services·Crashlytics)이 이 AGP 에서 적용되는지 보려면 json 이 있어야 한다.
+      # 실제 값은 비밀이라 없고, 형식만 맞춘 가짜를 이 실행에서만 만든다(커밋되지 않는다 — .gitignore).
+      - name: 가짜 google-services.json
+        run: |
+          mkdir -p android/app/src/prod
+          cat > android/app/src/prod/google-services.json <<'JSON'
+          {
+            "project_info": {"project_number": "000000000000", "project_id": "bandule-ci-fake", "storage_bucket": "bandule-ci-fake.appspot.com"},
+            "client": [{
+              "client_info": {"mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": {"package_name": "com.yeka.bandule"}},
+              "oauth_client": [],
+              "api_key": [{"current_key": "ci-fake-key"}],
+              "services": {"appinvite_service": {"other_platform_oauth_client": []}}
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+
       - name: build apk (release, prod)
+        env:
+          BANDULE_CI_FAKE_FIREBASE: "1"
         run: |
           set -o pipefail
           flutter build apk --release --flavor prod 2>&1 | tee build-apk.log

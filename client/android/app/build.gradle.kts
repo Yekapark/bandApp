@@ -69,6 +69,7 @@ val hasAnyGoogleServices = listOf("dev", "prod")
     .any { file("src/$it/google-services.json").exists() }
 if (hasAnyGoogleServices) {
     apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 } else {
     logger.lifecycle(
         "[bandule] google-services.json 이 없다 — FCM 푸시 비활성화 상태로 빌드한다. " +
@@ -163,6 +164,14 @@ android {
             )
         }
     }
+}
+
+// CI 는 가짜 google-services.json 으로 두 Firebase 플러그인이 AGP 와 맞는지까지만 본다(client-ci.yml android-build).
+// 가짜 프로젝트라 난독화 매핑 업로드는 실패하므로 끈다. 실제 빌드(release_store.py)는 업로드한다 —
+// 그래야 Crashlytics 의 Java 스택이 난독화된 이름 대신 원래 이름으로 보인다.
+if (hasAnyGoogleServices && System.getenv("BANDULE_CI_FAKE_FIREBASE") != null) {
+    android.buildTypes.getByName("release").extensions.getByName("firebaseCrashlytics")
+        .withGroovyBuilder { setProperty("mappingFileUploadEnabled", false) }
 }
 
 kotlin {

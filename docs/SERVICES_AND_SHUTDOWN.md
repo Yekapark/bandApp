@@ -29,7 +29,7 @@
 | 🆓 **Cloudflare Pages** | `bandule.com` 약관·개인정보처리방침·계정 삭제 안내 페이지 (`site/`) | 무료 | Cloudflare › Workers & Pages |
 | 🆓 **Cloudflare Email Routing** | `notice@bandule.com` 등 수신 → 개인 메일로 전달 | 무료 | Cloudflare › Email |
 | 🆓 **Resend** (메일 발송 SMTP) | 가입 인증·비밀번호 재설정·신고 알림 | 무료(일 100통·월 3,000통). 넘으면 유료 플랜 필요 — 서버 `smtp.resend.com` 확인(2026-09-28) | Resend 대시보드 · `docs/EMAIL.md` |
-| 🆓 **Firebase** — 운영 `bandule-b94d2`, 개발 `bandapp-dev-67c6f` | 푸시(FCM), 테스터 배포(App Distribution) | 무료(Spark) ❓ | Firebase 콘솔 |
+| 🆓 **Firebase** — 운영 `bandule-b94d2`, 개발 `bandapp-dev-67c6f` | 푸시(FCM), 테스터 배포(App Distribution), 앱 오류 기록(Crashlytics, 2026-10-01~ — 무료) | 무료(Spark) ❓ | Firebase 콘솔 |
 | 🆓 **Google Cloud 프로젝트** | Play Developer API 서비스 계정(구매 검증), Pub/Sub 토픽·push 구독(결제 알림 RTDN) | Pub/Sub 무료 한도 안 ❓ 결제 계정 연결 여부 확인 | Google Cloud 콘솔 › 결제 |
 | 🆓 **카카오 개발자 앱** | 카카오 로그인, 장소 검색, 지도 | 무료 한도 안 | developers.kakao.com |
 | 🆓 **GitHub** (`Yekapark/bandApp`, 공개) | 코드, CI/CD(Actions), 컨테이너 이미지(GHCR) | 공개 저장소라 무료 | GitHub |
@@ -81,7 +81,7 @@
 - [ ] 운영 DB 전체 삭제(서버 인스턴스를 지우면 함께 사라진다 — 스냅샷·백업 옵션이 켜져 있으면 그것도 지운다).
 - [ ] **R2 `bandule-prod` 버킷 전체 삭제** — 사진·영상뿐 아니라 **`db-backups/` 의 DB 덤프(회원정보 포함)** 가 들어 있다.
 - [ ] Redis(세션) — 서버와 함께 사라진다.
-- [ ] Firebase 프로젝트(`bandule-b94d2`, `bandapp-dev-67c6f`) 삭제 — 기기 푸시 토큰.
+- [ ] Firebase 프로젝트(`bandule-b94d2`, `bandapp-dev-67c6f`) 삭제 — 기기 푸시 토큰, Crashlytics 오류 기록.
 - [ ] 로컬 PC·노트북에 내려받은 덤프·`.env.prod` 사본이 있으면 지운다.
 - [ ] 파기한 날짜와 범위를 기록해 둔다(문의 대응용).
 
