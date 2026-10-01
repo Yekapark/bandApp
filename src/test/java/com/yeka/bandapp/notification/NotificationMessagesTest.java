@@ -40,7 +40,10 @@ class NotificationMessagesTest {
     void reminder_message_mentions_the_offset() {
         PushMessage reminder = NotificationMessages.reminder(1, 2, START, 30);
         assertThat(reminder.data()).containsEntry("type", NotificationType.RESERVATION_REMINDER.name());
-        assertThat(reminder.body()).contains("30");
+        assertThat(reminder.body()).contains("30분 뒤");
+        // 한 시간 이상은 시간으로 — "360분 뒤" 는 읽기 어렵다(테스터 화면 2026-10-01).
+        assertThat(NotificationMessages.reminder(1, 2, START, 360).body()).contains("6시간 뒤").doesNotContain("360");
+        assertThat(NotificationMessages.reminder(1, 2, START, 90).body()).contains("1시간 30분 뒤");
     }
 
     @Test

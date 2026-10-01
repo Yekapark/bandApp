@@ -31,6 +31,13 @@ public final class NotificationEvents {
                                      long requesterUserId, boolean approved) {
     }
 
+    /**
+     * 일정 시작 시각이 바뀜. 알림을 보내지는 않는다 — 이미 보낸 리마인더 기록을 지워 새 시각 기준으로 다시 나가게 한다.
+     * 예전에는 시각을 바꿔도 "이 일정의 6시간 전 알림은 보냈다" 기록이 남아 바뀐 시각의 알림이 오지 않았다(테스터 의견 2026-10-01).
+     */
+    public record ReservationRescheduled(long reservationId) {
+    }
+
     /** 일정이 취소됨. 취소자를 뺀 밴드 멤버 전원에게. */
     public record ReservationCancelled(long bandId, long reservationId, Instant startAt,
                                        List<Long> recipientUserIds) {

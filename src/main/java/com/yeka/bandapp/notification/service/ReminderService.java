@@ -80,13 +80,21 @@ public class ReminderService {
         Map<Long, int[]> offsetsByUser = settingService.reminderOffsetsFor(memberIds);
 
         // 발송 시점이 도래한 (offset -> 수신자) 묶음. offset 이 곧 dispatch variant 다.
+        //
+        // 사람마다 **도래한 시점 중 시작에 가장 가까운 것 하나만** 보낸다. 예전에는 도래한 시점을 전부 보내서, 시작 10분 전에
+        // 일정을 만들거나(또는 시점을 새로 켜거나) 하면 6시간·3시간·1시간·30분·10분 전 알림이 한꺼번에 쏟아졌다(테스터 의견
+        // 2026-10-01). 지나간 먼 시점은 이제 의미가 없다. 서버가 잠깐 멈췄다 돌아와도 가장 가까운 것 하나는 나간다.
         Map<Integer, List<Long>> dueByOffset = new HashMap<>();
         for (Long userId : memberIds) {
+            int nearest = Integer.MAX_VALUE;
             for (int offset : offsetsByUser.getOrDefault(userId, properties.defaultReminderOffsetsParsed())) {
                 Instant fireAt = reservation.startAt().minus(Duration.ofMinutes(offset));
-                if (!fireAt.isAfter(now)) {
-                    dueByOffset.computeIfAbsent(offset, key -> new ArrayList<>()).add(userId);
+                if (!fireAt.isAfter(now) && offset < nearest) {
+                    nearest = offset;
                 }
+            }
+            if (nearest != Integer.MAX_VALUE) {
+                dueByOffset.computeIfAbsent(nearest, key -> new ArrayList<>()).add(userId);
             }
         }
 

@@ -1,6 +1,7 @@
 package com.yeka.bandapp.notification.repository;
 
 import com.yeka.bandapp.notification.entity.NotificationDispatch;
+import com.yeka.bandapp.notification.entity.NotificationType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -53,6 +54,12 @@ public interface NotificationDispatchRepository extends JpaRepository<Notificati
      * @return 지운 행 수
      */
     @Transactional
+    /** 한 대상의 한 종류 발송 기록을 지운다 — 일정 시각이 바뀌면 리마인더를 새 시각 기준으로 다시 보내려고. */
+    @Modifying
+    @Query("delete from NotificationDispatch d where d.type = :type and d.targetId = :targetId")
+    int deleteByTypeAndTargetId(@Param("type") NotificationType type,
+                                @Param("targetId") long targetId);
+
     @Modifying
     @Query("delete from NotificationDispatch d where d.createdAt < :threshold")
     int deleteOlderThan(@Param("threshold") Instant threshold);

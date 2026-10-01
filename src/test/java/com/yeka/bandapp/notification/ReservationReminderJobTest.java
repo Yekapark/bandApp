@@ -50,21 +50,49 @@ class ReservationReminderJobTest extends NotificationApiSupport {
         assertThat(push.sentCount()).isEqualTo(1);
     }
 
+    /**
+     * 여러 시점이 한꺼번에 도래하면 시작에 가장 가까운 것 하나만 보낸다(테스터 의견 2026-10-01 — 10분 전에 만든 일정에
+     * 6시간·3시간·1시간·30분·10분 전 알림이 한꺼번에 왔다).
+     */
     @Test
-    void each_configured_offset_fires_once() {
+    void only_the_nearest_due_offset_fires_when_several_are_due_at_once() {
         String leader = signup("rmd-multi-l@band.app", "리더");
         long bandId = createBand(leader, "잔나비");
         registerToken(leader, "leader-dev", "ANDROID");
-        putSettings(leader, true, 10, 30);
+        putSettings(leader, true, 10, 30, 60, 180, 360);
         long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
-        // 5분 뒤 시작 → 10분 전·30분 전 시점이 모두 도래.
+        // 5분 뒤 시작 → 다섯 시점이 모두 도래.
         createReservation(leader, bandId, roomId,
                 isoFromNow(Duration.ofMinutes(5)), isoFromNow(Duration.ofMinutes(65)));
+        push.reset();
 
-        int sent = reminderService.runOnce(Instant.now());
-        assertThat(sent).isEqualTo(2);
+        assertThat(reminderService.runOnce(Instant.now())).isEqualTo(1);
+        assertThat(push.sentCount()).isEqualTo(1);
+        assertThat(reminderService.runOnce(Instant.now())).isZero();   // 지나간 먼 시점이 나중에 나가지도 않는다
+        assertThat(push.sentCount()).isEqualTo(1);
+    }
+
+    /** 일정 시각을 바꾸면 리마인더가 바뀐 시각 기준으로 다시 나간다(테스터 의견 2026-10-01 — 수정하면 알림이 안 왔다). */
+    @Test
+    void rescheduling_sends_the_reminder_again_for_the_new_time() {
+        String leader = signup("rmd-move-l@band.app", "리더");
+        long bandId = createBand(leader, "검정치마");
+        registerToken(leader, "leader-dev", "ANDROID");
+        putSettings(leader, true, 60);
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId,
+                isoFromNow(Duration.ofMinutes(30)), isoFromNow(Duration.ofMinutes(90)));
+        push.reset();
+        assertThat(reminderService.runOnce(Instant.now())).isEqualTo(1);   // 옛 시각의 60분 전 알림
+
+        // 40분 뒤로 옮김 → 60분 전 시점이 다시 도래 상태. 예전에는 "이미 보냄" 으로 건너뛰었다.
+        assertThat(put("/api/v1/bands/" + bandId + "/reservations/" + reservationId,
+                "{\"roomId\":" + roomId + ",\"startAt\":\"" + isoFromNow(Duration.ofMinutes(40))
+                        + "\",\"endAt\":\"" + isoFromNow(Duration.ofMinutes(100)) + "\"}", leader)
+                .getStatusCode().value()).isEqualTo(200);
+
+        assertThat(reminderService.runOnce(Instant.now())).isEqualTo(1);
         assertThat(push.sentCount()).isEqualTo(2);
-        assertThat(reminderService.runOnce(Instant.now())).isZero();
     }
 
     @Test

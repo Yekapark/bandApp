@@ -7,6 +7,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../application/notification_providers.dart';
 import '../data/notification_models.dart';
 import '../data/notification_repository.dart';
+import 'os_permission_card.dart';
 
 /// 알림 설정 — 푸시 on/off 와 "일정 시작 N분 전" 리마인더 시점.
 /// 백엔드: `GET/PUT /api/v1/notifications/settings`. 실제 푸시 발송/수신은 별도(§FCM).
@@ -151,6 +152,7 @@ class _Body extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             children: [
+              const OsPermissionCard(),
               _Card(
                 child: SwitchListTile(
                   contentPadding: EdgeInsets.zero,

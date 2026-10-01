@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/format/formatters.dart';
 import '../../../core/network/api_exception.dart';
@@ -763,6 +765,25 @@ class _SetlistBlockState extends State<_SetlistBlock> {
     widget.onReorder(_local.map((e) => e.id).toList());
   }
 
+  /// 유튜브 링크면 유튜브 앱이, 아니면 브라우저가 연다. 주소에 http(s) 가 없으면 붙인다.
+  Future<void> _openLink(String raw) async {
+    final uri = Uri.tryParse(raw.contains('://') ? raw : 'https://$raw');
+    final ok = uri != null &&
+        await launchUrl(uri, mode: LaunchMode.externalApplication).catchError((_) => false);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('링크를 열지 못했어요. 주소를 확인해 주세요.')));
+    }
+  }
+
+  Future<void> _copyLink(String raw) async {
+    await Clipboard.setData(ClipboardData(text: raw));
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('링크를 복사했어요.')));
+    }
+  }
+
   Widget _row(SetlistItem item, int index, {required bool draggable}) {
     return Container(
       key: ValueKey(item.id),
@@ -808,6 +829,19 @@ class _SetlistBlockState extends State<_SetlistBlock> {
               ),
             ),
           ),
+          // 참고 링크(유튜브 등) — 바로 열기·복사(테스터 의견 2026-10-01). 예전에는 수정 창에서만 보였다.
+          if ((item.referenceUrl ?? '').trim().isNotEmpty) ...[
+            _LinkIcon(
+              icon: Icons.play_circle_outline,
+              tooltip: '링크 열기',
+              onTap: () => _openLink(item.referenceUrl!.trim()),
+            ),
+            _LinkIcon(
+              icon: Icons.copy_rounded,
+              tooltip: '링크 복사',
+              onTap: () => _copyLink(item.referenceUrl!.trim()),
+            ),
+          ],
           if (widget.editable) ...[
             GestureDetector(
               onTap: () => widget.onDelete(item),
@@ -1150,6 +1184,28 @@ class _SongDialogState extends State<_SongDialog> {
           child: Text(_isEdit ? '저장' : '추가'),
         ),
       ],
+    );
+  }
+}
+
+class _LinkIcon extends StatelessWidget {
+  const _LinkIcon({required this.icon, required this.tooltip, required this.onTap});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 19, color: AppColors.primary),
+        ),
+      ),
     );
   }
 }

@@ -172,7 +172,11 @@ public class ReservationService {
             roomDirectory.requireActiveRoom(bandId, request.roomId());
         }
 
+        boolean startChanged = !request.startAt().equals(r.getStartAt());
         r.reschedule(request.roomId(), request.startAt(), request.endAt());
+        if (startChanged) {
+            eventPublisher.publishEvent(new NotificationEvents.ReservationRescheduled(r.getId()));
+        }
         r.changeDetails(request.cost(), trimToNull(request.note()));
 
         if (roomChanged) {
