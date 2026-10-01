@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/token_storage.dart';
 import '../../notification/data/push_service.dart';
@@ -58,13 +59,42 @@ class AuthController extends Notifier<AuthState> {
       }
       final user = await _repo.me();
       state = AuthState(status: AuthStatus.authenticated, user: user);
-    } catch (_) {
+    } catch (e) {
+      if (e is ApiException && _isTransient(e)) {
+        // 인터넷이 없거나 서버가 잠깐 안 받는 것 — 토큰이 틀렸다는 뜻이 아니다. 예전에는 여기서도
+        // 토큰을 지워서, 지하철에서 앱을 열기만 해도 로그아웃됐다. 토큰이 정말 무효면 인터셉터가
+        // 401 → refresh 실패로 세션 만료를 따로 알린다. 사용자 정보는 나중에 채운다.
+        state = const AuthState(status: AuthStatus.authenticated);
+        unawaited(_fillUserLater());
+        return;
+      }
       // 토큰 만료/무효(인터셉터의 refresh 도 실패) 또는 저장소 자체가 깨진 경우.
       // clear() 마저 던질 수 있으므로 여기서 한 번 더 삼킨다 — 상태 전환이 최우선이다.
       try {
         await _storage.clear();
       } catch (_) {}
       state = const AuthState.signedOut();
+    }
+  }
+
+  static bool _isTransient(ApiException e) =>
+      e.isNetwork || (e.statusCode ?? 0) >= 500;
+
+  /// 오프라인으로 시작했을 때 사용자 정보(내 id·이름)를 뒤늦게 채운다. 없으면 "내 글" 표시 등이
+  /// 앱을 다시 켤 때까지 빠진다. 그사이 로그아웃했거나 다른 계정으로 들어왔으면 손대지 않는다.
+  Future<void> _fillUserLater() async {
+    for (var wait = 5; wait <= 320; wait *= 2) {
+      await Future<void>.delayed(Duration(seconds: wait));
+      try {
+        if (!state.isAuthenticated || state.user != null) return;
+        final user = await _repo.me();
+        if (state.isAuthenticated && state.user == null) {
+          state = AuthState(status: AuthStatus.authenticated, user: user);
+        }
+        return;
+      } catch (_) {
+        // 아직 오프라인이거나, 컨트롤러가 이미 버려졌다(state 접근이 던진다) — 다음 차례에.
+      }
     }
   }
 
@@ -134,7 +164,9 @@ class AuthController extends Notifier<AuthState> {
       unawaited(_repo.logout(refreshToken: stale ?? '-', deviceToken: deviceToken));
     }
     unawaited(push.stop(unregister: false));
-    _storage.clear();
+    // 안전 저장소가 깨져 있으면 지우기도 던진다 — 아무도 기다리지 않는 Future 라 처리 안 된
+    // 오류로 남는다. 캐시는 clear() 첫 줄에서 이미 비워져 이 기기에서는 로그아웃이다.
+    unawaited(_storage.clear().catchError((_) {}));
     state = const AuthState.signedOut();
   }
 }
