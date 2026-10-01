@@ -1,7 +1,7 @@
 # 개인정보처리방침에 넣을 사실
 
 > 값은 전부 코드에서 확인한 것이고, 근거 파일을 함께 적었다.
-> 마지막 확인: **2026-09-28** (무료 전환 후에도 구매 토큰 보관 — LAUNCH_REVIEW B1)
+> 마지막 확인: **2026-10-01** (앱 오류 기록 — Crashlytics. 그 전: 무료 전환 후에도 구매 토큰 보관 — LAUNCH_REVIEW B1)
 
 ---
 
@@ -35,6 +35,7 @@
 | 신고 내역 | 신고 대상, 사유, 신고한 사람 (`reports`) |
 | 구독 결제 기록 | 스토어 종류, **구매 토큰**, 주문 ID, 구독 만료일, **결제한 회원**(결제 뒤 검증을 보낸 회원 — 탈퇴 때 자동 결제 해지용, LAUNCH_REVIEW B13) (`band_plans.store`/`purchase_token`/`subscription_ref`/`expires_at`/`purchased_by_user_id`). **카드번호 같은 결제수단 정보는 받지도 저장하지도 않는다** — 결제는 Google Play 가 처리한다 |
 | 결제 알림 처리 이력 | Google 이 보낸 알림의 메시지 ID·종류·구매 토큰 (`processed_store_events`). 같은 알림을 두 번 반영하지 않으려고 남긴다 |
+| 앱 오류 기록 | 기기 모델·OS·앱 버전, 오류 내용(스택), 발생 시각, Crashlytics 설치 식별자. **서버 DB 가 아니라 Firebase Crashlytics 로 바로 간다.** 릴리스 빌드만, 계정 정보는 안 붙인다(`setUserIdentifier` 안 씀), 설정에서 끌 수 있다 (`core/diagnostics/crash_reporting.dart`, 2026-10-01) |
 | 차단 목록 | 서로 글이 보이지 않게 한 상대 (`user_blocks`) |
 
 ### 자동으로 처리되는 것
@@ -53,6 +54,7 @@
 | 무료 밴드의 사진·영상 | **올린 지 30일**이 지나면 삭제 | `app.plan` — 유료 밴드는 무제한 |
 | 유료가 끝난 밴드의 사진·영상 | 무료로 바뀐 뒤 **30일** | 구독 주기와 무관한 유예 (`PlanProperties`) |
 | 알림 발송 이력 | **30일** | `app.notification.dispatch-retention-days` |
+| 앱 오류 기록 | **90일** (Crashlytics 보관 기간, 자동 삭제) | Firebase 쪽 정책 |
 | 로그인 유지 정보 | 최대 **14일** (쓰는 동안 연장) | `app.jwt.refresh-token-ttl` |
 | 구독 결제 기록 | 밴드가 삭제될 때까지. 무료로 내려와도 **구매 토큰과 스토어 표시는 남는다**(보류·만료 뒤 RECOVERED·RESTARTED 로 되살아나는 구독을 받으려고). **환불·취소(REVOKED)면 그 자리에서 지워진다.** 결제한 회원 연결은 구매 토큰이 바뀌거나 그 회원이 탈퇴하면 지운다 | `BandPlan.downgradeToFree` / `revokeToFree` / `forgetPurchaser` |
 | 결제 알림 처리 이력 | **지우지 않는다 — 정리 배치가 없다** (`processed_store_events`) | 알려진 이슈, `docs/BACKLOG.md` §1.12 |

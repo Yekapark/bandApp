@@ -7,9 +7,12 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'app.dart';
 import 'core/config/app_config.dart';
 import 'core/config/native_abi.dart';
+import 'core/diagnostics/crash_reporting.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 오류 기록이 가장 먼저 — 아래 SDK 초기화에서 앱이 꺼져도 남게(U17).
+  await CrashReporting.init();
   if (AppConfig.kakaoEnabled) {
     // SDK 2.x 부터 비동기다 — 끝나기 전에 로그인 버튼이 눌리지 않게 기다린다.
     await KakaoSdk.init(
