@@ -128,12 +128,25 @@ class AuthController extends Notifier<AuthState> {
     final refresh = _storage.current?.refreshToken;
     final push = ref.read(pushServiceProvider);
     final deviceToken = push.currentToken;
-    if (refresh != null || deviceToken != null) {
-      await _repo.logout(refreshToken: refresh ?? '-', deviceToken: deviceToken);
+    // 서버 정리·푸시 해제는 최선을 다할 뿐이다. 오프라인이면 실패하거나 한참 걸리는데, 그렇다고
+    // 로그아웃 버튼이 안 먹으면 안 된다 — 이 기기에서의 로그아웃(아래 finally)은 무조건 한다.
+    try {
+      if (refresh != null || deviceToken != null) {
+        await _repo
+            .logout(refreshToken: refresh ?? '-', deviceToken: deviceToken)
+            .timeout(const Duration(seconds: 8));
+      }
+      await push.stop(unregister: false).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // 서버 쪽 기기 토큰 정리는 못 했을 수 있다(U1 은 최선 노력). 로컬 로그아웃이 우선이다.
+    } finally {
+      try {
+        await _storage.clear();
+      } catch (_) {
+        // 저장소가 깨졌어도 캐시는 clear() 첫 줄에서 비워졌다 — 이 실행 동안은 로그아웃이다.
+      }
+      state = const AuthState.signedOut();
     }
-    await push.stop(unregister: false);
-    await _storage.clear();
-    state = const AuthState.signedOut();
   }
 
   /// 회원 탈퇴. 성공하면 로그아웃과 같은 로컬 정리를 한다. 실패 시 예외를 던진다.
