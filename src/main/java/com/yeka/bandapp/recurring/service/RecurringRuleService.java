@@ -83,9 +83,8 @@ public class RecurringRuleService {
     public RecurringRuleWriteResponse create(long bandId, long userId, CreateRecurringRuleRequest request) {
         BandMember member = accessGuard.requireActiveMember(bandId, userId);
         requireRuleCreationAllowed(bandId, member);
-        // 정기 일정은 PREMIUM 기능이다. 새 규칙을 만드는 것만 막는다 — 이미 있는 규칙의 회차 생성은
-        // 요금제가 FREE 로 내려가도 계속된다(RecurringExtensionJob). 배치까지 멈추면 사용자가
-        // 모르는 사이 다음 주 합주가 안 생긴다.
+        // 정기 일정은 PREMIUM 기능이다. FREE 밴드는 새 규칙을 못 만들고, 이미 있는 규칙도 FREE 동안은
+        // 회차 연장이 멈춘다(extendRule — LAUNCH_REVIEW B11 사용자 결정: 일시정지).
         planDirectory.requirePremium(bandId);
         validate(request);
         roomDirectory.requireActiveRoom(bandId, request.roomId());
