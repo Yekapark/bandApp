@@ -44,11 +44,20 @@ public final class GooglePlaySubscriptionMapper {
         String obfuscatedAccountId = purchase.getExternalAccountIdentifiers() == null
                 ? null : purchase.getExternalAccountIdentifiers().getObfuscatedExternalAccountId();
 
+        // 주문 번호는 요금제에 "자동 갱신 중" 표시로 저장된다(없으면 해지 예약으로 보인다 — BandPlan.isCanceled).
+        // 최상위 latestOrderId 는 Play 가 지원 중단(deprecated)한 값이라, 비어 오기 시작하면 결제 직후 밴드가
+        // "해지 예약" 이 돼 삭제 차단·탈퇴 해지(B5·B13)에서 빠진다. 라인 아이템의 값을 먼저 쓴다.
+        String orderId = lineItems.stream()
+                .map(SubscriptionPurchaseLineItem::getLatestSuccessfulOrderId)
+                .filter(o -> o != null && !o.isBlank())
+                .findFirst()
+                .orElse(purchase.getLatestOrderId());
+
         return new StoreSubscription(
                 Store.GOOGLE_PLAY,
                 purchaseToken,
                 productId,
-                purchase.getLatestOrderId(),
+                orderId,
                 mapState(purchase.getSubscriptionState()),
                 expiry,
                 acknowledged,

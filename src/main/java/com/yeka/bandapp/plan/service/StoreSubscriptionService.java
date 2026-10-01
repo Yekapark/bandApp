@@ -253,15 +253,32 @@ public class StoreSubscriptionService {
             case SUB_PURCHASED, SUB_RENEWED, SUB_RECOVERED, SUB_RESTARTED, SUB_IN_GRACE_PERIOD -> {  // = isGrantType
                 // 결제한 밴드의 만료일을 연장하는 경로 — 조회가 실패하면 삼키지 말고 재전송받는다.
                 // (만료일이 안 늘어나면 결제한 밴드가 만료 배치에 강등된다.)
-                StoreSubscription sub = billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken)
+                StoreSubscription sub = fetchForWebhook(notificationType, purchaseToken)
                         .filter(this::grantable)
                         .orElseThrow(() -> new StoreWebhookRetryException(
                                 "type=" + notificationType + " 인데 스토어 조회 실패/무효 bandId=" + bandId));
                 carryCouponDays(bandId, sub, grantPremium(bandId, now, sub));
             }
-            case SUB_CANCELED -> planMutationService.applyCancelAtPeriodEndIfPremium(bandId, now);
+            case SUB_CANCELED, SUB_EXPIRED, SUB_ON_HOLD -> {
+                // 알림 종류만 믿고 내리지 않는다 — Pub/Sub 는 순서를 보장하지 않아, 해지 뒤 복원(RESTARTED)·보류 뒤
+                // 복구(RECOVERED)보다 늦게 도착한 해지·보류 알림이 결제 중인 밴드를 FREE 나 "해지 예약" 으로 만들었다.
+                // 그러면 돈을 내는 밴드가 다음 갱신까지 FREE 로 남거나(사진·영상 삭제), 자동 결제가 이어지는데도
+                // 밴드 삭제·탈퇴 해지 대상에서 빠졌다. 스토어의 지금 상태가 아직 유효하면 그 상태로 맞춘다.
+                StoreSubscription live = fetchForWebhook(notificationType, purchaseToken)
+                        .filter(this::grantable)
+                        .filter(sub -> sub.expiryTime().isAfter(now))
+                        .orElse(null);
+                if (live != null && live.state() != StoreBillingGateway.StoreSubscriptionState.CANCELED) {
+                    // 아직 자동 갱신 중(ACTIVE·IN_GRACE) — 늦게 온 알림이다. 결제 중인 상태로 맞춘다.
+                    carryCouponDays(bandId, live, grantPremium(bandId, now, live));
+                } else if (live != null || notificationType == SUB_CANCELED) {
+                    // 해지 예약됐지만 결제한 기간이 남았다 — 내리지 않고 해지 예약만(쿠폰 기간이면 그대로 둔다).
+                    planMutationService.applyCancelAtPeriodEndIfPremium(bandId, now);
+                } else {
+                    planMutationService.applyDowngradeIfPremium(bandId, now, graceUntil);
+                }
+            }
             case SUB_REVOKED -> planMutationService.applyRevoke(bandId, now);
-            case SUB_EXPIRED, SUB_ON_HOLD -> planMutationService.applyDowngradeIfPremium(bandId, now, graceUntil);
             default -> log.info("RTDN: 처리하지 않는 type={} bandId={}", notificationType, bandId);
         }
 
@@ -271,13 +288,6 @@ public class StoreSubscriptionService {
         markProcessed(messageId, notificationType, purchaseToken);
     }
 
-    /**
-     * FREE 면 업그레이드, 이미 PREMIUM 이면 만료일 연장(스토어 토큰도 함께 기록).
-     *
-     * <p>한 구매 토큰은 <b>한 밴드</b>에만 붙는다 — 같은 토큰이 다른 밴드에 이미 연결돼 있으면
-     * {@code PURCHASE_ALREADY_LINKED}(409). 한 번 산 구독으로 여러 밴드를 PREMIUM 만드는 것을 막는다.
-     * (Play 의 obfuscatedAccountId 대조는 슬라이스 2에서 더한다.)
-     */
     /** 스토어 결제 반영 결과. {@code couponLeft} 는 그 직전까지 남아 있던 쿠폰 기간(B7). */
     private record Granted(BandPlan plan, Duration couponLeft) {
     }
@@ -303,7 +313,26 @@ public class StoreSubscriptionService {
         }
     }
 
+    /**
+     * FREE 면 업그레이드, 이미 PREMIUM 이면 만료일 연장(스토어 토큰도 함께 기록).
+     *
+     * <p>한 구매 토큰은 <b>한 밴드</b>에만 붙는다 — 같은 토큰이 다른 밴드에 이미 연결돼 있으면
+     * {@code PURCHASE_ALREADY_LINKED}(409). 한 번 산 구독으로 여러 밴드를 PREMIUM 만드는 것을 막는다.
+     *
+     * <p>스토어가 "해지 예약(CANCELED)" 이라고 하면 해지 예약 표시도 맞춘다. 반영이 주문 번호를 다시 붙여 해지 표시를
+     * 지우므로, 이게 없으면 이미 해지한 구독이 검증·복구·늦은 알림 한 번에 "자동 갱신 중" 으로 되돌아갔다 — 밴드
+     * 삭제가 "먼저 해지하세요" 로 막히고, 끝나기 전 만료 예고도 안 나갔다.
+     */
     private Granted grantPremium(long bandId, Instant now, StoreSubscription sub) {
+        Granted granted = applyGrant(bandId, now, sub);
+        if (sub.state() != StoreBillingGateway.StoreSubscriptionState.CANCELED) {
+            return granted;
+        }
+        BandPlan canceled = planMutationService.applyCancelAtPeriodEndIfPremium(bandId, now);
+        return new Granted(canceled == null ? granted.plan() : canceled, granted.couponLeft());
+    }
+
+    private Granted applyGrant(long bandId, Instant now, StoreSubscription sub) {
         Long linkedBand = bandPlanRepository.findBandIdByPurchaseToken(sub.purchaseToken()).orElse(null);
         if (linkedBand != null && linkedBand != bandId) {
             throw new BusinessException(ErrorCode.PURCHASE_ALREADY_LINKED);
@@ -437,6 +466,19 @@ public class StoreSubscriptionService {
         } catch (DateTimeParseException unreadable) {
             log.warn("RTDN: publishTime 을 못 읽었다 ({}) — 재전송 요청으로 둔다", publishTime);
             return true;
+        }
+    }
+
+    /**
+     * 웹훅용 스토어 조회. 일시 장애는 삼키지 않고 재전송받는다 — 예전에는 이 예외가 컨트롤러에서 "처리 실패" 로
+     * 200 이 돼, Play 가 잠깐 안 될 때 온 복구(RECOVERED)·재시작 알림이 사라지고 돈을 낸 밴드가 FREE 로 남았다.
+     */
+    private Optional<StoreSubscription> fetchForWebhook(int notificationType, String purchaseToken) {
+        try {
+            return billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken);
+        } catch (StoreBillingUnavailableException transientFailure) {
+            log.warn("RTDN: 스토어 조회 일시 실패 type={} — 재전송 대기", notificationType, transientFailure);
+            throw new StoreWebhookRetryException("type=" + notificationType + " 스토어 조회 일시 실패 — 재전송 대기");
         }
     }
 
