@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show Completer, Timer, unawaited;
 import 'dart:io' show Platform;
 
 import 'package:firebase_core/firebase_core.dart';
@@ -7,11 +7,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/system/system_settings.dart';
 import '../../../routing/app_router.dart';
 import '../../band/application/band_providers.dart';
 import '../application/notification_providers.dart';
 import '../application/notification_route.dart';
+import '../application/push_permission_flow.dart';
+import '../presentation/push_primer_sheet.dart';
 import 'notification_repository.dart';
+import 'push_primer_storage.dart';
 
 /// 앱 전역 SnackBar 를 띄우기 위한 키 (app.dart 의 MaterialApp 에 연결).
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -100,8 +104,21 @@ class PushService {
       if (!await _ensureFirebase()) return;
 
       final messaging = FirebaseMessaging.instance;
-      final settings = await messaging.requestPermission();
-      if (settings.authorizationStatus == AuthorizationStatus.denied) return;
+      // 권한 창은 앱 안내 시트를 거쳐서만 띄운다(U21). 이미 허용됐으면 바로 지나간다. 안내에서 [나중에] 를
+      // 골랐으면 여기서 멈추고, 사용자가 휴대폰 설정이나 "알림 켜기" 카드로 켜고 돌아오면 _onResume 이 다시 온다.
+      final flow = PushPermissionFlow(
+        isGranted: () async =>
+            _granted((await messaging.getNotificationSettings()).authorizationStatus),
+        alreadyAsked: _ref.read(pushPrimerStorageProvider).shown,
+        markAsked: _ref.read(pushPrimerStorageProvider).markShown,
+        showPrimer: _showPrimerWhenSettled,
+        request: () async =>
+            _granted((await messaging.requestPermission()).authorizationStatus),
+        openSettings: () async {
+          await SystemSettings.openNotificationSettings();
+        },
+      );
+      if (!await flow.run()) return;
 
       // 웹은 VAPID 키가 없으면 getToken 이 던진다 → catch 되어 no-op.
       final token = await messaging.getToken();
@@ -129,6 +146,50 @@ class PushService {
       _busy = false;
     }
   }
+
+  static bool _granted(AuthorizationStatus s) =>
+      s == AuthorizationStatus.authorized || s == AuthorizationStatus.provisional;
+
+  /// 로그인한 뒤 첫 화면이 자리를 잡으면 안내 시트를 띄운다. 로그인 직후에는 라우터가 로그인 → 홈 → (밴드가 없으면)
+  /// 밴드 고르기로 연달아 화면을 바꾸는데, 그 사이에 띄우면 시트가 화면과 함께 사라진다. 그래서 로그인 전 화면이 아니고
+  /// 주소가 [_settle] 동안 바뀌지 않을 때까지 기다린다. [_settleTimeout] 안에 자리를 못 잡으면 null — 다음 기회에.
+  Future<bool?> _showPrimerWhenSettled() async {
+    final router = _ref.read(routerProvider);
+    final delegate = router.routerDelegate;
+    final settled = Completer<bool>();
+    Timer? quiet;
+
+    void arm() {
+      quiet?.cancel();
+      if (_beforeSignIn.contains(delegate.currentConfiguration.uri.path)) return;
+      quiet = Timer(_settle, () {
+        if (!settled.isCompleted) settled.complete(true);
+      });
+    }
+
+    delegate.addListener(arm);
+    arm();
+    final ok = await settled.future
+        .timeout(_settleTimeout, onTimeout: () => false)
+        .whenComplete(() {
+      quiet?.cancel();
+      delegate.removeListener(arm);
+    });
+    if (!ok || !_active) return null;
+    final context = delegate.navigatorKey.currentContext;
+    if (context == null || !context.mounted) return null;
+    return showPushPrimerSheet(context);
+  }
+
+  static const _settle = Duration(milliseconds: 900);
+  static const _settleTimeout = Duration(seconds: 30);
+  static const _beforeSignIn = {
+    Routes.splash,
+    Routes.login,
+    Routes.signup,
+    Routes.terms,
+    Routes.passwordReset,
+  };
 
   Future<bool> _ensureFirebase() async {
     if (_available) return true;
