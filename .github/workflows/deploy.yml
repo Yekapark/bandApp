@@ -23,7 +23,16 @@ concurrency:
 jobs:
   deploy:
     # 수동 실행이 아니면 CI 가 성공했을 때만 돈다.
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    #
+    # workflow_run 의 branches: [main] 은 "CI 를 돌린 브랜치 이름" 만 본다. 남의 포크에서 이름이 main 인
+    # 브랜치로 PR 을 열면 그 PR 의 CI 도 head_branch=main 으로 이 조건을 통과해, **포크의 코드로 이미지를
+    # 만들어 운영에 배포**하게 된다(시크릿·SSH 키를 쥔 채로). 그래서 이 저장소에 push 된 CI 만 받는다.
+    # 수동 실행도 main 에서만 — 다른 브랜치에서 누르면 머지 안 된 코드가 운영에 나간다.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,21 +47,40 @@ jobs:
           # workflow_run 은 기본적으로 기본 브랜치 HEAD 를 본다. CI 가 통과한 그 커밋을 쓴다.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      # 머지가 연달아 들어오면 CI 가 순서 없이 끝난다. 뒤 커밋이 먼저 배포된 다음 앞 커밋의 CI 가 끝나면
+      # 옛 코드가 덮어써져 방금 고친 것이 운영에서 사라진다(latest 태그도 옛 이미지로 바뀐다).
+      # 지금 main 의 끝이 아니면 이번 실행은 건너뛴다 — 끝 커밋의 실행이 배포한다.
+      - id: fresh
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          tip=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ -n "$tip" ] && [ "$tip" != "$SHA" ]; then
+            echo "::notice title=배포 건너뜀::$SHA 는 main 의 끝($tip)이 아니다. 더 새 커밋의 실행이 배포한다."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - id: vars
+        if: steps.fresh.outputs.ok == 'true'
         run: |
           echo "sha=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           # GHCR 경로는 소문자만 받는다 (리포 이름이 bandApp 이라 그대로 쓰면 거부된다).
           echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v4
+        if: steps.fresh.outputs.ok == 'true'
 
       - uses: docker/login-action@v4
+        if: steps.fresh.outputs.ok == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/build-push-action@v7
+        if: steps.fresh.outputs.ok == 'true'
         with:
           context: .
           push: true
@@ -65,27 +93,29 @@ jobs:
       # 서버가 생기기 전까지는 여기서 멈춘다. 이미지는 이미 GHCR 에 올라갔으므로
       # 서버를 잡은 뒤 시크릿만 채우면 그때부터 자동으로 배포된다.
       - name: 배포 대상 없음 — SSH 단계 건너뜀
-        if: env.DEPLOY_HOST == ''
+        if: steps.fresh.outputs.ok == 'true' && env.DEPLOY_HOST == ''
         run: |
           echo "::notice title=배포 건너뜀::DEPLOY_HOST 시크릿이 비어 있다. 이미지 ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.sha }} 는 GHCR 에 올라갔다. 서버를 잡고 DEPLOY_HOST/DEPLOY_USER/DEPLOY_KEY 를 넣으면 이 단계부터 자동으로 이어진다 (docs/LAUNCH_CHECKLIST.md 6단계)."
 
       - name: SSH 배포
-        if: env.DEPLOY_HOST != ''
+        if: steps.fresh.outputs.ok == 'true' && env.DEPLOY_HOST != ''
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
-          envs: GHCR_TOKEN,GHCR_USER,IMAGE_TAG
+          envs: GHCR_TOKEN,GHCR_USER,IMAGE_TAG,GIT_SHA
           script: |
             set -eu
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             cd /opt/bandapp
-            git fetch --quiet origin main && git checkout --quiet -f origin/main
+            # 이미지와 같은 커밋의 compose·nginx·스크립트를 쓴다(origin/main 이면 그사이 들어온 커밋이 섞인다).
+            git fetch --quiet origin main && git checkout --quiet -f "$GIT_SHA"
             sh deploy/deploy.sh "$IMAGE_TAG"
         env:
           # 워크플로 실행 동안만 유효한 토큰이라 VM 에 PAT 를 심어 둘 필요가 없다.
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
           IMAGE_TAG: ${{ steps.vars.outputs.sha }}
+          GIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
