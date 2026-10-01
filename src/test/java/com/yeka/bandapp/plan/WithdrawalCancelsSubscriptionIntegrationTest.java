@@ -1,6 +1,7 @@
 package com.yeka.bandapp.plan;
 
 import com.yeka.bandapp.plan.gateway.NoOpStoreBillingGateway;
+import com.yeka.bandapp.plan.service.WithdrawnPurchaserSubscriptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,9 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private WithdrawnPurchaserSubscriptions withdrawnPurchaserSubscriptions;
 
     private Map<String, Object> planRow(long bandId) {
         return jdbc.queryForMap(
@@ -71,7 +75,8 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
     }
 
     @Test
-    void 이미_해지_예약한_구독은_다시_해지하지_않는다() {
+    void 이미_해지_예약한_구독도_해지를_보내_확인되면_연결을_끊는다() {
+        // 요금제의 "해지 예약" 표시가 아니라 스토어가 판단한다 — 이미 끝났으면 게이트웨이가 성공으로 돌려준다(B14·B15).
         String payer = signup("wcs-payer3@band.app", "결제자");
         long bandId = createBand(payer, "해지예약밴드");
         String purchase = "wcs-c-" + System.nanoTime();
@@ -80,13 +85,31 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
 
         withdraw(payer);
 
-        assertThat(gateway.cancelledRenewals()).doesNotContain(purchase);
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
         assertThat(planRow(bandId).get("purchased_by_user_id")).isNull();
     }
 
     @Test
-    void 해지_호출이_실패해도_탈퇴는_끝난다() {
+    void 결제_보류로_FREE_가_된_구독도_탈퇴하면_해지한다() {
+        // B15: 보류(ON_HOLD) 중엔 요금제가 FREE 지만 토큰은 남고, 결제가 복구되면 청구가 이어진다.
+        String payer = signup("wcs-payer5@band.app", "결제자");
+        long bandId = createBand(payer, "보류밴드");
+        String purchase = "wcs-d-" + System.nanoTime();
+        assertThat(verifyGoogle(payer, bandId, purchase).getStatusCode().value()).isEqualTo(200);
+        jdbc.update("update band_plans set tier = 'FREE', media_retention_days = 30, subscription_ref = null, "
+                + "expires_at = null where band_id = ?", bandId);   // downgradeToFree 와 같은 모양
+
+        withdraw(payer);
+
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
+        assertThat(planRow(bandId).get("purchase_token")).isEqualTo(purchase);
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isNull();
+    }
+
+    @Test
+    void 해지_호출이_실패해도_탈퇴는_끝나고_재시도를_위해_결제자_연결은_남긴다() {
         String payer = signup("wcs-payer4@band.app", "결제자");
+        long payerId = myUserId(payer);
         long bandId = createBand(payer, "실패밴드");
         String purchaseToken = "nocancel-" + System.nanoTime();
         assertThat(verifyGoogle(payer, bandId, purchaseToken).getStatusCode().value()).isEqualTo(200);
@@ -95,5 +118,30 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
 
         assertThat(gateway.cancelledRenewals()).doesNotContain(purchaseToken);
         assertThat(get("/api/v1/users/me", payer).getStatusCode().value()).isEqualTo(401);
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isEqualTo(payerId);   // B17: 재시도 대상
+
+        withdrawnPurchaserSubscriptions.retryPending();   // 여전히 실패 — 연결이 남아 다음에 또 시도
+
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isEqualTo(payerId);
+    }
+
+    @Test
+    void 탈퇴_뒤에_결제자로_적힌_구독은_재시도_배치가_해지한다() {
+        // B16: 검증과 탈퇴가 겹쳐 탈퇴가 먼저 커밋되고 결제자 기록이 뒤에 들어온 경우.
+        String payer = signup("wcs-payer6@band.app", "결제자");
+        long payerId = myUserId(payer);
+        long bandId = createBand(payer, "경합밴드");
+        String purchase = "wcs-e-" + System.nanoTime();
+        assertThat(verifyGoogle(payer, bandId, purchase).getStatusCode().value()).isEqualTo(200);
+        jdbc.update("update band_plans set purchased_by_user_id = null where band_id = ?", bandId);
+
+        withdraw(payer);   // 이때는 결제자가 아직 안 적혀 해지할 게 없다
+        assertThat(gateway.cancelledRenewals()).doesNotContain(purchase);
+        jdbc.update("update band_plans set purchased_by_user_id = ? where band_id = ?", payerId, bandId);   // 늦게 적힘
+
+        withdrawnPurchaserSubscriptions.retryPending();
+
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isNull();
     }
 }

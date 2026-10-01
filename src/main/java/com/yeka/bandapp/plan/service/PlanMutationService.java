@@ -7,6 +7,7 @@ import com.yeka.bandapp.plan.entity.BandPlan;
 import com.yeka.bandapp.plan.entity.Store;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -186,6 +187,19 @@ public class PlanMutationService {
     public void recordPurchaser(long bandId, String purchaseToken, long userId) {
         bandPlanRepository.findByBandIdForUpdate(bandId)
                 .ifPresent(plan -> plan.recordPurchaser(purchaseToken, userId));
+    }
+
+    /**
+     * 탈퇴한 결제자의 구독 해지를 마친 뒤 결제자 연결을 끊는다 — 그 사이 토큰·결제자가 바뀌지 않았을 때만.
+     * 커밋이 끝난 탈퇴 트랜잭션의 {@code afterCommit} 에서도 부르므로 새 트랜잭션으로 연다(이미 커밋된
+     * 트랜잭션에 참여하면 쓰기가 반영되지 않는다).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void forgetCanceledPurchaser(long bandId, String purchaseToken, long userId) {
+        bandPlanRepository.findByBandIdForUpdate(bandId)
+                .filter(p -> purchaseToken.equals(p.getPurchaseToken())
+                        && Long.valueOf(userId).equals(p.getPurchasedByUserId()))
+                .ifPresent(BandPlan::forgetPurchaser);
     }
 
     private BandPlan requirePlan(long bandId) {
