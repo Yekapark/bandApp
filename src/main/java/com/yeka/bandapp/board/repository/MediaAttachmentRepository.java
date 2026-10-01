@@ -30,7 +30,8 @@ public interface MediaAttachmentRepository extends JpaRepository<MediaAttachment
 
     /**
      * {@code PENDING → READY} 조건부 원자 전이. 동시 complete 호출 중 한 번만 1을 받는다(락 불필요).
-     * 0이면 그 사이 삭제됐거나 이미 READY 다.
+     * 0이면 그 사이 삭제됐거나 이미 READY 거나, <b>글이 그 사이 삭제됐다</b> — 글 삭제는 PENDING 을 고아 배치에
+     * 맡기므로, 삭제된 글의 첨부가 여기서 READY(PREMIUM 이면 보관기한 NULL)가 되면 영영 안 지워진다.
      */
     @Transactional
     @Modifying(clearAutomatically = true)
@@ -39,6 +40,7 @@ public interface MediaAttachmentRepository extends JpaRepository<MediaAttachment
                set m.status = com.yeka.bandapp.board.entity.MediaStatus.READY,
                    m.uploadedAt = :uploadedAt, m.expiresAt = :expiresAt
              where m.id = :id and m.status = com.yeka.bandapp.board.entity.MediaStatus.PENDING
+               and m.boardPostId in (select p.id from BoardPost p where p.deletedAt is null)
             """)
     int markReady(@Param("id") long id, @Param("uploadedAt") Instant uploadedAt,
                   @Param("expiresAt") Instant expiresAt);
@@ -56,13 +58,20 @@ public interface MediaAttachmentRepository extends JpaRepository<MediaAttachment
     @Query("delete from MediaAttachment m where m.id = :id and m.boardPostId = :boardPostId")
     int deleteByIdAndBoardPostId(@Param("id") long id, @Param("boardPostId") long boardPostId);
 
-    /** 게시글 삭제 시 — 남은 첨부를 EXPIRED 로. R2 객체 삭제는 호출 측이 트랜잭션 밖에서 best-effort 로 한다. */
+    /**
+     * 게시글 삭제 시 — READY 첨부의 보관기한을 지금으로 당긴다(상태는 READY 그대로). 호출 측이 곧바로
+     * R2 삭제 → {@link #markExpired} 를 시도하고, 실패한 건은 만료 배치가 다음 실행에서 다시 지운다.
+     *
+     * <p><b>바로 EXPIRED 로 바꾸면 안 된다</b> — 만료 배치는 READY 만 보므로, R2 삭제가 실패한 객체가
+     * 영구 고아가 된다. 운영 스크립트 {@code tools/moderate.py hide-post} 도 같은 방식이다.
+     * PENDING 은 건드리지 않는다 — 고아 PENDING 배치가 R2 객체와 함께 정리한다.
+     */
     @Transactional
     @Modifying
-    @Query("update MediaAttachment m set m.status = com.yeka.bandapp.board.entity.MediaStatus.EXPIRED "
+    @Query("update MediaAttachment m set m.expiresAt = :now "
             + "where m.boardPostId = :boardPostId "
-            + "and m.status <> com.yeka.bandapp.board.entity.MediaStatus.EXPIRED")
-    int expireAllOfPost(@Param("boardPostId") long boardPostId);
+            + "and m.status = com.yeka.bandapp.board.entity.MediaStatus.READY")
+    int expireReadyOfPostNow(@Param("boardPostId") long boardPostId, @Param("now") Instant now);
 
     long countByBoardPostIdAndStatusIn(Long boardPostId, Collection<MediaStatus> statuses);
 
@@ -72,6 +81,8 @@ public interface MediaAttachmentRepository extends JpaRepository<MediaAttachment
      * 밴드가 PREMIUM 으로 올라갈 때 — 그 밴드의 READY 미디어 보관기한을 모두 무제한(NULL)으로.
      * {@code MediaAttachment} 는 {@code boardPostId} 만 갖고 밴드는 {@code BoardPost} 에 있어 서브쿼리로 건다.
      * READY 만 대상 — EXPIRED(이미 R2 삭제됨)·PENDING(완료 콜백이 현재 요금제로 계산)은 건드리지 않는다.
+     * <b>삭제·숨김된 글의 첨부도 제외한다</b> — 그 첨부는 보관기한을 지금으로 당겨 둔 삭제 대기분이라,
+     * 여기서 무제한(NULL)으로 바꾸면 만료 배치가 영영 안 지운다(숨긴 신고 콘텐츠가 저장소에 남고 비용도 남는다).
      */
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -79,13 +90,14 @@ public interface MediaAttachmentRepository extends JpaRepository<MediaAttachment
             update MediaAttachment m
                set m.expiresAt = null
              where m.status = com.yeka.bandapp.board.entity.MediaStatus.READY
-               and m.boardPostId in (select p.id from BoardPost p where p.bandId = :bandId)
+               and m.boardPostId in (select p.id from BoardPost p where p.bandId = :bandId
+                                        and p.deletedAt is null)
             """)
     int clearExpiryForBandReadyMedia(@Param("bandId") long bandId);
 
     /**
      * 밴드가 FREE 로 내려올 때 — 그 밴드의 READY 미디어 보관기한을 유예 종료 시각으로 덮어쓴다(교체).
-     * 대상은 {@link #clearExpiryForBandReadyMedia} 와 같다(READY 만).
+     * 대상은 {@link #clearExpiryForBandReadyMedia} 와 같다(READY 만, 삭제된 글 제외 — 당겨 둔 삭제를 유예까지 미루지 않게).
      */
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -93,7 +105,8 @@ public interface MediaAttachmentRepository extends JpaRepository<MediaAttachment
             update MediaAttachment m
                set m.expiresAt = :expiresAt
              where m.status = com.yeka.bandapp.board.entity.MediaStatus.READY
-               and m.boardPostId in (select p.id from BoardPost p where p.bandId = :bandId)
+               and m.boardPostId in (select p.id from BoardPost p where p.bandId = :bandId
+                                        and p.deletedAt is null)
             """)
     int setExpiryForBandReadyMedia(@Param("bandId") long bandId, @Param("expiresAt") Instant expiresAt);
 
