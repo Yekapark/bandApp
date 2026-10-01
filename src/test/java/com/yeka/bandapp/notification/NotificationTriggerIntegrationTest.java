@@ -74,6 +74,30 @@ class NotificationTriggerIntegrationTest extends NotificationApiSupport {
         assertThat(tokensFor("RESERVATION_APPROVED")).containsExactly("member-dev");
     }
 
+    /** 승인제 밴드에서 확정 일정을 고쳐 다시 대기로 돌아가면, 재승인 요청과 재승인 알림이 다시 나간다. */
+    @Test
+    void editing_a_confirmed_reservation_in_approval_mode_requests_and_announces_approval_again() {
+        String leader = signup("trg-reap-l@band.app", "리더");
+        String member = signup("trg-reap-m@band.app", "멤버");
+        long bandId = createBand(leader, "재승인");
+        join(member, issueInvite(leader, bandId, null));
+        setPermission(leader, bandId, "APPROVAL_REQUIRED");
+        registerToken(leader, "leader-dev", "ANDROID");
+        registerToken(member, "member-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservationExpectPending(member, bandId, roomId);
+        String base = "/api/v1/bands/" + bandId + "/reservations/" + reservationId;
+        post(base + "/approve", "{}", leader);
+        push.reset();
+
+        assertThat(put(base, "{\"roomId\":" + roomId + ",\"startAt\":\"" + T13 + "\",\"endAt\":\"" + T16 + "\"}",
+                member).getStatusCode().value()).isEqualTo(200);
+        assertThat(tokensFor("RESERVATION_APPROVAL_REQUESTED")).containsExactly("leader-dev");
+
+        post(base + "/approve", "{}", leader);
+        assertThat(tokensFor("RESERVATION_APPROVED")).containsExactly("member-dev");
+    }
+
     @Test
     void reject_notifies_the_requester() {
         String leader = signup("trg-rj-l@band.app", "리더");
