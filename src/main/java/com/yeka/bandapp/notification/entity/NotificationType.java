@@ -21,6 +21,12 @@ public enum NotificationType {
     PLAN_EXPIRED,
 
     /**
+     * 결제한 회원이 밴드를 나가(탈퇴·추방·계정 탈퇴) 서버가 그 구독의 자동 결제를 해지했다. 밴드장에게.
+     * {@code variant} 는 결제자 id — 결제자마다 한 번.
+     */
+    PLAN_PURCHASER_LEFT,
+
+    /**
      * 신고가 접수됐다. <b>운영자에게만</b> 간다({@code app.report.notify-user-ids}).
      *
      * <p>이게 없으면 신고는 표에 한 줄 쌓일 뿐 아무도 모른다. 약관에 "신고를 검토한다" 고

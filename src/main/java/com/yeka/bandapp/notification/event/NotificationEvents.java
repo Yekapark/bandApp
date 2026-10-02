@@ -49,6 +49,17 @@ public final class NotificationEvents {
     }
 
     /**
+     * 재계산으로 내 몫이 바뀌어 납부 체크가 풀림. 그 멤버에게 바뀐 금액을 알린다(재계산한 사람 제외).
+     * 이 멤버들은 같은 재계산의 {@link SettlementRequested} 수신자에서 빠진다 — 알림이 두 개 겹치지 않게.
+     */
+    public record SettlementShareChanged(long bandId, long reservationId, List<ShareChange> changes) {
+    }
+
+    /** 한 멤버의 몫 변화. */
+    public record ShareChange(long userId, int before, int after) {
+    }
+
+    /**
      * PREMIUM 구독기간이 끝나 FREE 로 내려감. 밴드장에게.
      *
      * <p>{@code graceDays} 뒤 첨부 사진·영상이 사라지므로 이 알림이 사실상 마지막 경고다.

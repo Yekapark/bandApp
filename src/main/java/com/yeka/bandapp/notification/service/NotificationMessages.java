@@ -52,6 +52,17 @@ public final class NotificationMessages {
                 "정산 요청", "합주 비용 " + String.format(Locale.KOREA, "%,d", totalAmount) + "원 정산이 등록됐어요. 납부를 확인해 주세요.");
     }
 
+    /** 재계산으로 몫이 바뀌어 납부 체크가 풀림. 유형은 정산 요청과 같다(눌렀을 때 같은 정산 화면으로). */
+    public static PushMessage settlementShareChanged(long bandId, long reservationId, int before, int after) {
+        return message(NotificationType.SETTLEMENT_REQUESTED, bandId, reservationId,
+                "정산 금액 변경", "정산 금액이 바뀌었어요 (" + won(before) + " → " + won(after)
+                        + "). 납부 체크가 풀렸으니 차액을 확인해 주세요.");
+    }
+
+    private static String won(int amount) {
+        return String.format(Locale.KOREA, "%,d", amount) + "원";
+    }
+
     public static PushMessage reminder(long bandId, long reservationId, Instant startAt, int offsetMinutes) {
         return message(NotificationType.RESERVATION_REMINDER, bandId, reservationId,
                 "합주 리마인더", when(startAt) + " 합주가 " + lead(offsetMinutes) + " 뒤 시작해요.");
@@ -83,6 +94,19 @@ public final class NotificationMessages {
                 "프리미엄이 끝났어요",
                 "지금부터 " + graceDays + "일 뒤에 올려 둔 사진·영상이 차례로 사라져요. "
                         + "계속 보관하려면 다시 시작해 주세요.");
+    }
+
+    /**
+     * 결제한 회원이 밴드를 나가 자동 결제를 해지했다. {@code premiumUntil} 은 결제한 기간의 끝 — 이미 FREE(결제 보류 중)면 null.
+     */
+    public static PushMessage planPurchaserLeft(long bandId, Instant premiumUntil) {
+        String next = premiumUntil == null
+                ? "프리미엄을 쓰려면 누군가 다시 결제해 주세요."
+                : DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN).format(premiumUntil.atZone(SEOUL))
+                        + "까지는 프리미엄이 유지돼요. 그 뒤에도 쓰려면 기간이 끝난 다음 누군가 다시 결제해 주세요.";
+        return planMessage(NotificationType.PLAN_PURCHASER_LEFT, bandId,
+                "프리미엄 자동 결제가 해지됐어요",
+                "결제한 멤버가 밴드를 나가 다음 결제가 멈췄어요. " + next);
     }
 
     /**

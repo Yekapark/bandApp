@@ -30,16 +30,21 @@ public record PlanResponse(
         @Schema(description = "Google Play 자동 갱신 구독 중(PREMIUM·스토어 결제·해지 예약 아님). 이 밴드는 다음 주기에 "
                 + "또 청구되므로 삭제할 수 없고(409 BAND_HAS_ACTIVE_SUBSCRIPTION), 앱은 탈퇴·위임 창에서 안내한다. "
                 + "쿠폰 PREMIUM 은 false.")
-        boolean autoRenewing
+        boolean autoRenewing,
+
+        @Schema(description = "결제 보류 중. FREE 인데 Google Play 구독이 결제 실패로 계정 보류(ON_HOLD)에 들어가 있다 — 결제 수단을 "
+                + "고치면 같은 구독이 되살아나 PREMIUM 으로 돌아온다. 이때 새로 결제하면 이중 청구라 서버가 409 "
+                + "BAND_ALREADY_SUBSCRIBED 로 거절한다. 쿠폰·환불·보통 FREE 는 false.")
+        boolean onHold
 ) {
 
     public static PlanResponse from(PlanView view) {
         return new PlanResponse(view.tier().name(), view.mediaRetentionDays(), view.startedAt(),
-                view.expiresAt(), view.canceled(), view.autoRenewing());
+                view.expiresAt(), view.canceled(), view.autoRenewing(), view.onHold());
     }
 
     public static PlanResponse from(BandPlan plan) {
         return new PlanResponse(plan.getTier().name(), plan.retentionDaysOrNull(), plan.getStartedAt(),
-                plan.getExpiresAt(), plan.isCanceled(), plan.isAutoRenewingStoreSubscription());
+                plan.getExpiresAt(), plan.isCanceled(), plan.isAutoRenewingStoreSubscription(), plan.isOnHold());
     }
 }

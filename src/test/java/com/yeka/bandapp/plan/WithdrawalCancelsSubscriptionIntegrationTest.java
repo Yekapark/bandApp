@@ -144,4 +144,91 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
         assertThat(gateway.cancelledRenewals()).contains(purchase);
         assertThat(planRow(bandId).get("purchased_by_user_id")).isNull();
     }
+
+    private int purchaserLeftNotices(long leaderId, long bandId) {
+        return jdbc.queryForObject("select count(*) from notification_dispatches "
+                + "where type = 'PLAN_PURCHASER_LEFT' and user_id = ? and target_id = ?", Integer.class, leaderId, bandId);
+    }
+
+    /** 결제자가 밴드장을 넘긴 밴드 — 결제자는 이제 일반 멤버다. 돌려주는 값: [bandId, 새 밴드장 id]. */
+    private long[] bandPaidByMemberWhoHandedOver(String payer, String next, String purchase) {
+        long nextId = myUserId(next);
+        long bandId = createBand(payer, "넘긴밴드");
+        join(next, issueInvite(payer, bandId, null));
+        assertThat(verifyGoogle(payer, bandId, purchase).getStatusCode().value()).isEqualTo(200);
+        assertThat(post("/api/v1/bands/" + bandId + "/leader", "{\"newLeaderUserId\":" + nextId + "}", payer)
+                .getStatusCode().value()).isEqualTo(200);
+        return new long[]{bandId, nextId};
+    }
+
+    @Test
+    void 결제자가_밴드를_나가면_자동_갱신을_해지하고_밴드장에게_알린다() {
+        String payer = signup("wcs-leave-payer@band.app", "결제자");
+        String next = signup("wcs-leave-next@band.app", "밴드장");
+        String purchase = "wcs-f-" + System.nanoTime();
+        long[] band = bandPaidByMemberWhoHandedOver(payer, next, purchase);
+
+        assertThat(post("/api/v1/bands/" + band[0] + "/members/leave", null, payer).getStatusCode().is2xxSuccessful())
+                .isTrue();
+
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
+        Map<String, Object> row = planRow(band[0]);
+        assertThat(row.get("tier")).isEqualTo("PREMIUM");             // 결제한 기간은 그대로
+        assertThat(row.get("purchased_by_user_id")).isNull();
+        assertThat(purchaserLeftNotices(band[1], band[0])).isEqualTo(1);
+    }
+
+    @Test
+    void 결제자가_추방되면_자동_갱신을_해지한다() {
+        String payer = signup("wcs-kick-payer@band.app", "결제자");
+        String next = signup("wcs-kick-next@band.app", "밴드장");
+        long payerId = myUserId(payer);
+        String purchase = "wcs-g-" + System.nanoTime();
+        long[] band = bandPaidByMemberWhoHandedOver(payer, next, purchase);
+
+        assertThat(delete("/api/v1/bands/" + band[0] + "/members/" + payerId, next).getStatusCode().is2xxSuccessful())
+                .isTrue();
+
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
+        assertThat(planRow(band[0]).get("purchased_by_user_id")).isNull();
+        assertThat(purchaserLeftNotices(band[1], band[0])).isEqualTo(1);
+    }
+
+    @Test
+    void 결제자가_아닌_멤버가_나가면_해지하지_않는다() {
+        String payer = signup("wcs-stay-payer@band.app", "결제자");
+        String member = signup("wcs-stay-member@band.app", "멤버");
+        long bandId = createBand(payer, "남는밴드");
+        join(member, issueInvite(payer, bandId, null));
+        String purchase = "wcs-h-" + System.nanoTime();
+        assertThat(verifyGoogle(payer, bandId, purchase).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(post("/api/v1/bands/" + bandId + "/members/leave", null, member).getStatusCode().is2xxSuccessful())
+                .isTrue();
+        withdrawnPurchaserSubscriptions.retryPending();   // 결제자는 아직 멤버 — 재시도 대상도 아니다
+
+        assertThat(gateway.cancelledRenewals()).doesNotContain(purchase);
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isEqualTo(myUserId(payer));
+    }
+
+    @Test
+    void 밴드를_나간_결제자의_구독도_재시도_배치가_해지한다() {
+        // 나갈 때 해지가 안 됐으면(Play 일시 장애·결제자 기록이 늦게 들어옴) 연결이 남고, 매시 배치가 다시 해지한다.
+        String payer = signup("wcs-retry-payer@band.app", "결제자");
+        String next = signup("wcs-retry-next@band.app", "밴드장");
+        long payerId = myUserId(payer);
+        String purchase = "wcs-i-" + System.nanoTime();
+        long[] band = bandPaidByMemberWhoHandedOver(payer, next, purchase);
+        jdbc.update("update band_plans set purchased_by_user_id = null where band_id = ?", band[0]);
+        assertThat(post("/api/v1/bands/" + band[0] + "/members/leave", null, payer).getStatusCode().is2xxSuccessful())
+                .isTrue();
+        assertThat(gateway.cancelledRenewals()).doesNotContain(purchase);
+        jdbc.update("update band_plans set purchased_by_user_id = ? where band_id = ?", payerId, band[0]);
+
+        withdrawnPurchaserSubscriptions.retryPending();
+
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
+        assertThat(planRow(band[0]).get("purchased_by_user_id")).isNull();
+        assertThat(purchaserLeftNotices(band[1], band[0])).isEqualTo(1);
+    }
 }

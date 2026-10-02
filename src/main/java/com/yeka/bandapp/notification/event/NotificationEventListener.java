@@ -1,11 +1,14 @@
 package com.yeka.bandapp.notification.event;
 
+import com.yeka.bandapp.band.service.BandDirectoryService;
 import com.yeka.bandapp.notification.entity.NotificationType;
 import com.yeka.bandapp.notification.service.NotificationMessages;
 import com.yeka.bandapp.notification.service.NotificationSender;
 import com.yeka.bandapp.notification.service.PlanExpiryReminderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.event.EventListener;
+import com.yeka.bandapp.plan.service.WithdrawnPurchaserSubscriptions.PurchaserSubscriptionCanceled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -33,11 +36,14 @@ public class NotificationEventListener {
 
     private final NotificationSender sender;
     private final PlanExpiryReminderService planExpiryReminderService;
+    private final BandDirectoryService bandDirectory;
 
     public NotificationEventListener(NotificationSender sender,
-                                     PlanExpiryReminderService planExpiryReminderService) {
+                                     PlanExpiryReminderService planExpiryReminderService,
+                                     BandDirectoryService bandDirectory) {
         this.sender = sender;
         this.planExpiryReminderService = planExpiryReminderService;
+        this.bandDirectory = bandDirectory;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
@@ -79,12 +85,34 @@ public class NotificationEventListener {
                 NotificationMessages.settlementRequested(e.bandId(), e.reservationId(), e.totalAmount())));
     }
 
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onSettlementShareChanged(NotificationEvents.SettlementShareChanged e) {
+        for (NotificationEvents.ShareChange c : e.changes()) {
+            // variant = -1 - 새 몫 — 음수라 정산 요청(variant = 총액, 양수)·옛 기록(0)과 겹치지 않고, 몫이 또 바뀌면 다시 간다.
+            // ponytail: 같은 금액으로 되돌아왔다 다시 바뀌는 경우(10,000→15,000→10,000→15,000)의 두 번째 15,000 은 걸러진다.
+            safely(() -> sender.notify(NotificationType.SETTLEMENT_REQUESTED, e.reservationId(), -1 - c.after(),
+                    List.of(c.userId()),
+                    NotificationMessages.settlementShareChanged(e.bandId(), e.reservationId(), c.before(), c.after())));
+        }
+    }
+
     private void safely(Runnable action) {
         try {
             action.run();
         } catch (RuntimeException e) {
             log.error("알림 발송 실패", e);
         }
+    }
+
+    /**
+     * 결제자가 나가 자동 결제를 해지함 — 밴드장에게. 해지 확인 뒤(이미 커밋된 뒤 또는 재시도 배치)에 발행되므로 바로 받는다
+     * ({@code AFTER_COMMIT} 이 아니다 — 끝난 트랜잭션의 afterCommit 안에서 발행되면 다시 등록한 동기화가 불리지 않는다).
+     */
+    @EventListener
+    public void onPurchaserSubscriptionCanceled(PurchaserSubscriptionCanceled e) {
+        safely(() -> sender.notify(NotificationType.PLAN_PURCHASER_LEFT, e.bandId(), (int) e.purchaserUserId(),
+                bandDirectory.leaderUserIds(e.bandId()),
+                NotificationMessages.planPurchaserLeft(e.bandId(), e.premiumUntil())));
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
