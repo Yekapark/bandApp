@@ -119,11 +119,6 @@ class AuthInterceptor extends Interceptor {
         await _ensureRefreshed();
         final retried = await _retry(response.requestOptions);
         return handler.resolve(retried);
-      } on DioException catch (e) {
-        // `_refreshDio` 는 4xx 를 응답으로 돌려주므로 여기 오는 것은 네트워크 끊김·타임아웃·5xx(배포 중 502)뿐이다.
-        // 세션이 끝난 게 아니다 — 예전에는 이것도 만료로 보고 로그아웃시켰다(지하철·배포 40초 동안 앱을 연 사람이
-        // 로그인 화면으로 튕기고 refresh 토큰까지 폐기됐다). 이 요청만 "연결 실패" 로 끝낸다.
-        return handler.reject(e);
       } catch (e) {
         // 갱신(또는 재시도) 요청이 **서버에 닿지 못했거나**(인터넷 끊김·시간 초과) 서버가 5xx 를
         // 냈으면 토큰이 틀렸다는 뜻이 아니다. 예전에는 이것도 세션 만료로 쳐서, 배포 중(502)이나
