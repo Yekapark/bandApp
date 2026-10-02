@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # 활성 구독의 사용 권한을 취소한다 (Play Developer API) — 서버에서 돌린다.
 #
-#   ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bash -s 4' < deploy/play-revoke.sh
+#   ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bash -s 4' < deploy/play-revoke.sh          # 상태만 본다
+#   ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bash -s 4 revoke' < deploy/play-revoke.sh   # 실제 취소·환불
+#
+# 돈이 나가는 동작이라 두 번째 인자 `revoke` 가 없으면 상태만 보여 주고 멈춘다. 스크립트를 표준입력으로
+# 흘려 넣는 방식이라 yes 를 물어볼 수 없다 — 밴드 번호를 잘못 치면 남의 구독이 환불·해지된다.
 #
 # Play Console 에서 환불할 때 "사용 권한 취소" 를 안 눌렀으면 구독이 그대로 살아 있어
 # RTDN type=12(REVOKED) 가 오지 않는다. 이 스크립트가 그 취소를 대신 쏜다.
@@ -9,7 +13,9 @@
 #
 # 구매 토큰은 band_plans 에서 읽는다 — 밴드가 PREMIUM 이고 store=GOOGLE_PLAY 여야 한다.
 set -euo pipefail
-BAND=${1:?사용법: play-revoke.sh <밴드ID>}
+BAND=${1:?사용법: play-revoke.sh <밴드ID> [revoke]}
+[[ $BAND =~ ^[0-9]+$ ]] || { echo "밴드 ID 는 숫자다: $BAND"; exit 1; }
+ACTION=${2:-}
 REFUND=${REFUND_TYPE:-fullRefund}   # fullRefund | proratedRefund
 KEY=${PLAY_SA_KEY:-/opt/bandapp/secrets/play-developer-sa.json}
 PKG=${PLAY_PACKAGE:-com.yeka.bandule}
@@ -43,6 +49,13 @@ curl -s -H "Authorization: Bearer $AT" \
   "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$PKG/purchases/subscriptionsv2/tokens/$TOKEN" \
   | python3 -c "import json,sys;d=json.load(sys.stdin);print(json.dumps({k:d.get(k) for k in ('subscriptionState','latestOrderId','acknowledgementState')},indent=2,ensure_ascii=False))" \
   || echo "(조회 실패 — 아래 revoke 응답을 본다)"
+
+if [ "$ACTION" != "revoke" ]; then
+  echo
+  echo "위 상태를 확인했으면 두 번째 인자 revoke 를 붙여 다시 실행한다 ($REFUND 로 환불·취소된다):"
+  echo "  ssh ... 'bash -s $BAND revoke' < deploy/play-revoke.sh"
+  exit 0
+fi
 
 echo "--- 사용 권한 취소 ($REFUND) ---"
 curl -s -w "\nHTTP %{http_code}\n" -X POST \

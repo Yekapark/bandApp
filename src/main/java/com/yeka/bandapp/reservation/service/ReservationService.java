@@ -200,6 +200,13 @@ public class ReservationService {
         r.approve();
         eventPublisher.publishEvent(new NotificationEvents.ReservationDecided(
                 bandId, r.getId(), r.getStartAt(), r.getRequestedBy(), true));
+        // 승인 대기 일정은 등록 때 밴드장에게만 알렸다 — 확정된 지금 나머지 멤버에게 "새 일정"을 알린다.
+        // (등록자는 위 승인 알림을, 승인한 밴드장은 본인이 눌렀으니 뺀다. 재승인은 발송 이력 중복 방지로 한 번만 간다.)
+        List<Long> others = bandDirectory.activeMemberUserIds(bandId).stream()
+                .filter(id -> id != userId && !r.isRequestedBy(id))
+                .toList();
+        eventPublisher.publishEvent(new NotificationEvents.ReservationCreated(
+                bandId, r.getId(), r.getStartAt(), others));
         return ReservationResponse.from(r, roomName(r.getRoomId()));
     }
 
@@ -230,10 +237,14 @@ public class ReservationService {
         if (r.getStatus() == ReservationStatus.REJECTED) {
             throw new BusinessException(ErrorCode.RESERVATION_NOT_EDITABLE);
         }
+        boolean wasPending = r.getStatus() == ReservationStatus.PENDING;
         if (r.cancel()) {
             roomDirectory.decreaseUsage(r.getRoomId());
+            // 승인 대기 일정은 멤버들이 알림을 받은 적이 없다 — 알고 있던 밴드장·등록자에게만 취소를 알린다.
+            List<Long> leaders = wasPending ? bandDirectory.leaderUserIds(bandId) : List.of();
             List<Long> others = bandDirectory.activeMemberUserIds(bandId).stream()
                     .filter(id -> id != userId)
+                    .filter(id -> !wasPending || leaders.contains(id) || r.isRequestedBy(id))
                     .toList();
             eventPublisher.publishEvent(new NotificationEvents.ReservationCancelled(
                     bandId, r.getId(), r.getStartAt(), others));

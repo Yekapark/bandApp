@@ -17,8 +17,13 @@ import java.util.Optional;
  */
 public interface StorageClient {
 
-    /** 업로드용 서명 URL. 서명은 네트워크를 타지 않는다. {@code contentType}이 서명에 포함돼 다른 타입으로 올리면 R2 가 거부한다. */
-    URI presignPut(String storageKey, String contentType, Duration ttl);
+    /**
+     * 업로드용 서명 URL. 서명은 네트워크를 타지 않는다. {@code contentType}과 {@code sizeBytes}
+     * (Content-Length)가 서명에 포함돼, 다른 형식이나 다른 크기로 올리면 R2 가 거부한다 — 신고 크기만
+     * 검사하고 실제 PUT 크기를 묶지 않으면 같은 URL 로 수 GB 를 올리거나, 완료 확인 뒤 URL 만료 전에
+     * 더 큰 파일로 덮어쓸 수 있다.
+     */
+    URI presignPut(String storageKey, String contentType, long sizeBytes, Duration ttl);
 
     /**
      * 조회용 서명 URL. 응답 {@code Content-Type}을 저장된 값으로, {@code Content-Disposition}을

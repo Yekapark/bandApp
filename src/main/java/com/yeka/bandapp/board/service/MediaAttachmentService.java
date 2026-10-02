@@ -107,7 +107,8 @@ public class MediaAttachmentService {
         MediaAttachment media = mediaRepository.saveAndFlush(
                 MediaAttachment.pending(postId, storageKey, type, contentType, request.sizeBytes()));
 
-        URI uploadUrl = storage.presignPut(storageKey, contentType, r2Properties.uploadUrlTtl());
+        URI uploadUrl = storage.presignPut(storageKey, contentType, request.sizeBytes(),
+                r2Properties.uploadUrlTtl());
         Instant urlExpiresAt = Instant.now().plus(r2Properties.uploadUrlTtl());
         return new UploadUrlResponse(
                 media.getId(),
@@ -144,12 +145,14 @@ public class MediaAttachmentService {
         try {
             MediaPolicy.verifyUpload(media.getType(), media.getSizeBytes(), media.getContentType(), actual);
         } catch (BusinessException mismatch) {
-            // DB 를 먼저 확정하고(유령 READY 행 방지) R2 객체는 best-effort 로 지운다.
-            mediaRepository.deletePending(mediaId);
+            // R2 객체를 먼저 지우고, 성공했을 때만 PENDING 행을 지운다. 반대 순서로 R2 삭제가 실패하면
+            // 행이 없어 어떤 배치도 그 객체를 다시 찾지 못한다(영구 고아 = 저장 비용). 실패하면 행이
+            // PENDING 으로 남아 고아 정리 배치가 다시 지운다 — READY 로는 못 간다(이 콜백이 매번 거부).
             try {
                 storage.delete(media.getStorageKey());
+                mediaRepository.deletePending(mediaId);
             } catch (BusinessException storageDown) {
-                // 보관기한 배치가 최종 정리한다.
+                // 고아 PENDING 정리 배치가 재시도한다.
             }
             throw mismatch;
         }
@@ -166,7 +169,11 @@ public class MediaAttachmentService {
                 ready.getStorageKey(), ready.getContentType(), r2Properties.downloadUrlTtl()).toString());
     }
 
-    /** 첨부 삭제(작성자 또는 밴드장). DB 행을 지운 뒤 R2 객체를 best-effort 로 정리한다. */
+    /**
+     * 첨부 삭제(작성자 또는 밴드장). <b>R2 객체를 먼저 지우고</b> 그다음 DB 행을 지운다. R2 삭제가 실패하면
+     * 502 를 그대로 돌려줘 사용자가 다시 시도하게 한다 — 행을 먼저 지우면 실패한 객체를 다시 찾을 길이
+     * 없다(만료 배치는 DB 행을 보고 돈다).
+     */
     public void delete(long bandId, long postId, long mediaId, long callerId) {
         BandMember member = accessGuard.requireActiveMember(bandId, callerId);
         BoardPost post = requirePostInBand(bandId, postId);
@@ -176,14 +183,9 @@ public class MediaAttachmentService {
 
         MediaAttachment media = mediaRepository.findByIdAndBoardPostId(mediaId, postId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND));
-        String key = media.getStorageKey();
+        storage.delete(media.getStorageKey());   // 멱등 — 실패하면 502 로 끝나고 행은 그대로
         if (mediaRepository.deleteByIdAndBoardPostId(mediaId, postId) == 0) {
             throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND);
-        }
-        try {
-            storage.delete(key);
-        } catch (BusinessException storageDown) {
-            // 보관기한 배치가 최종 정리한다.
         }
     }
 

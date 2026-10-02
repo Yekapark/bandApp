@@ -49,7 +49,7 @@ public class BandService {
     public BandResponse create(long userId, CreateBandRequest request) {
         userDirectory.lockActiveUser(userId);
         Instant now = Instant.now();
-        Band band = bandRepository.save(Band.create(request.name().trim(), userId));
+        Band band = bandRepository.save(Band.create(request.name().strip(), userId));
         bandMemberRepository.save(BandMember.asLeader(band.getId(), userId, now));
         planProvisioningService.createDefaultPlan(band.getId(), now);
         return BandResponse.from(band);

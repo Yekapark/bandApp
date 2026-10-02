@@ -28,4 +28,17 @@ public class ReminderResetListener {
     public void onRescheduled(NotificationEvents.ReservationRescheduled e) {
         dispatches.deleteByTypeAndTargetId(NotificationType.RESERVATION_REMINDER, e.reservationId());
     }
+
+    /**
+     * 승인 요청이 (다시) 생기면 그 일정의 승인 요청·승인·거절 발송 기록을 지운다. 승인제 밴드에서 확정 일정의 시간·장소를
+     * 바꾸면 승인 대기로 돌아가는데, 기록이 남아 있으면 밴드장에게 재승인 요청이, 재승인 뒤 등록자에게 "승인됨" 이 가지 않았다.
+     * 같은 트랜잭션 안에서 먼저 지우고, 실제 발송은 커밋 뒤({@link NotificationEventListener})에 새로 기록된다.
+     * 처음 등록할 때는 지울 기록이 없어 아무 일도 없다.
+     */
+    @EventListener
+    public void onApprovalRequested(NotificationEvents.ReservationApprovalRequested e) {
+        dispatches.deleteByTypeAndTargetId(NotificationType.RESERVATION_APPROVAL_REQUESTED, e.reservationId());
+        dispatches.deleteByTypeAndTargetId(NotificationType.RESERVATION_APPROVED, e.reservationId());
+        dispatches.deleteByTypeAndTargetId(NotificationType.RESERVATION_REJECTED, e.reservationId());
+    }
 }
