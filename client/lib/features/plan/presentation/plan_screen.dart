@@ -87,18 +87,14 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     if (band == null || _busy) return;
     setState(() => _busy = true);
     try {
-      // 화면의 요금제는 처음 열 때 받은 것이다. 그 사이 다른 기기·다른 밴드장이 결제했으면 같은 밴드에 구독이
-      // 하나 더 생겨 두 번 청구되므로, 결제 창을 띄우기 직전에 새로 받아 본다.
-      final plan = await ref.refresh(bandPlanProvider(band.id).future);
-      if (plan.isPremium && (plan.autoRenewing || plan.canceled)) {
-        if (mounted) setState(() => _busy = false);
-        _toast('이 밴드는 이미 프리미엄이에요.');
-        return;
-      }
+      // 이미 구독 중·결제 보류 중인지는 buy 가 서버에서 새로 받아 확인한다.
       await ref.read(purchaseSyncProvider).buy(_products, bandId: band.id);
     } on NoPremiumSlotException {
       if (mounted) setState(() => _busy = false);
       _toast(NoPremiumSlotException.message);
+    } on PurchaseBlockedException catch (e) {
+      if (mounted) setState(() => _busy = false);
+      _toast(e.message);
     } on PurchaseInProgressException {
       if (mounted) setState(() => _busy = false);
       _toast(PurchaseInProgressException.message);
@@ -178,7 +174,11 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
             const SizedBox(height: 20),
             const _CompareTable(),
             const SizedBox(height: 24),
-            if (!band.isLeader)
+            // 갱신 결제가 보류된 구독 — 결제 버튼 대신 Play 에서 고치라고 안내한다. 결제한 사람이 밴드원일 수도
+            // 있어서(밴드장이 바뀐 경우) 모두에게 보인다.
+            if (plan.onHold)
+              _HoldNotice(onManage: _openSubscriptionManagement)
+            else if (!band.isLeader)
               const Text(
                 '요금제 변경은 밴드장만 할 수 있어요.',
                 textAlign: TextAlign.center,
@@ -531,6 +531,50 @@ class _ManageNotice extends StatelessWidget {
             '기간이 끝나면 Google Play 가 자동으로 1년씩 갱신해요. 해지하거나 환불받으려면 '
             '아래 버튼으로 Play 스토어 구독 화면에서 하면 돼요. 구독은 결제한 사람의 '
             'Google 계정에 있어서, 밴드장이 바뀌어도 그 계정에서만 관리할 수 있어요.',
+            style:
+                TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: onManage,
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: const Text('Google Play 에서 구독 관리'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 갱신 결제가 실패해 Google 이 구독을 보류한 밴드(서버는 FREE 로 내렸다). 결제 수단을 고치면 그 구독이 다시
+/// 이어지므로 새로 결제하게 두지 않는다 — 새 구독이 생기면 옛 것이 되살아날 때 두 번 청구된다.
+class _HoldNotice extends StatelessWidget {
+  const _HoldNotice({required this.onManage});
+
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('결제 보류 중',
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 5),
+          const Text(
+            '카드 결제가 실패해 프리미엄이 잠시 멈췄어요. Google Play 에서 결제 수단을 고치면 바로 다시 '
+            '이어져요. 구독은 결제한 사람의 Google 계정에 있어서, 밴드장이 바뀌어도 그 계정에서만 '
+            '고칠 수 있어요. 새로 결제하면 두 번 청구될 수 있으니 결제 수단만 고쳐 주세요.',
             style:
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
           ),

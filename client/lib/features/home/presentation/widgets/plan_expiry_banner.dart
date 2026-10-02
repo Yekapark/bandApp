@@ -13,6 +13,8 @@ import '../../../plan/data/plan_models.dart';
 ///
 /// **평소에는 아무것도 보여주지 않는다.** 만료 30일 안이고, 정말로 끝나는 구독(해지 예약·쿠폰)일 때만 나온다.
 /// 자동 갱신 중인 Google Play 구독은 만료일에 갱신되므로 띄우지 않는다(LAUNCH_REVIEW B6).
+/// 갱신 결제가 보류됐으면(`onHold`) 모두에게 차분한 안내를 띄우고 요금제 화면으로 보낸다 — 결제한 사람이
+/// 밴드원일 수도 있고, 밴드장이 새로 결제하면 두 번 청구되므로 화면에서 Play 로 고치라고 안내한다.
 class PlanExpiryBanner extends StatelessWidget {
   const PlanExpiryBanner({
     super.key,
@@ -52,7 +54,12 @@ class PlanExpiryBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(state.urgent ? Icons.warning_amber_rounded : Icons.schedule,
+          Icon(
+              state.hold
+                  ? Icons.credit_card
+                  : state.urgent
+                      ? Icons.warning_amber_rounded
+                      : Icons.schedule,
               size: 18,
               color: state.urgent ? AppColors.danger : AppColors.primary),
           const SizedBox(width: 10),
@@ -65,7 +72,7 @@ class PlanExpiryBanner extends StatelessWidget {
           ),
           // 멤버는 알기만 하면 된다. 요금제를 바꾸는 건 밴드장만 할 수 있어서,
           // 버튼을 모두에게 보여주면 눌러도 막히는 길이 된다.
-          if (isLeader) ...[
+          if (isLeader || state.hold) ...[
             const SizedBox(width: 6),
             TextButton(
               onPressed: () => context.push(Routes.plan),
@@ -73,7 +80,12 @@ class PlanExpiryBanner extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 minimumSize: const Size(0, 32),
               ),
-              child: Text(state.urgent ? '다시 시작' : '연장',
+              child: Text(
+                  state.hold
+                      ? '확인'
+                      : state.urgent
+                          ? '다시 시작'
+                          : '연장',
                   style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -89,6 +101,15 @@ class PlanExpiryBanner extends StatelessWidget {
   /// 배너를 띄울 상황인지, 띄운다면 뭐라고 할지. 아니면 null.
   static _BannerState? _stateAt(BandPlan? plan, DateTime now) {
     if (plan == null) return null;
+
+    if (plan.onHold) {
+      return const _BannerState(
+        message: '카드 결제가 실패해 프리미엄이 잠시 멈췄어요. 결제한 사람이 Google Play 에서 '
+            '결제 수단을 고치면 다시 이어져요.',
+        urgent: false,
+        hold: true,
+      );
+    }
 
     // 자동 갱신 중이면 만료일에 Google 이 1년 더 청구하고 서버가 연장한다 — 끝나지 않는다.
     // 예전에는 이런 밴드의 모든 멤버에게 "끝나요, 사진·영상이 사라져요" 를 보여 줬다(B6).
@@ -120,8 +141,12 @@ class PlanExpiryBanner extends StatelessWidget {
 }
 
 class _BannerState {
-  const _BannerState({required this.message, required this.urgent});
+  const _BannerState(
+      {required this.message, required this.urgent, this.hold = false});
 
   final String message;
   final bool urgent;
+
+  /// 결제 보류 안내. 밴드원에게도 요금제 화면 버튼을 보인다.
+  final bool hold;
 }

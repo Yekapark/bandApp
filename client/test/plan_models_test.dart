@@ -37,5 +37,10 @@ void main() {
           isTrue);
       expect(BandPlan.fromJson({'tier': 'PREMIUM'}).autoRenewing, isFalse);
     });
+
+    test('onHold: 서버 값을 읽고, 없으면 false (옛 서버 응답)', () {
+      expect(BandPlan.fromJson({'tier': 'FREE', 'onHold': true}).onHold, isTrue);
+      expect(BandPlan.fromJson({'tier': 'FREE'}).onHold, isFalse);
+    });
   });
 }

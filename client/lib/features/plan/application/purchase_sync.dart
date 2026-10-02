@@ -34,6 +34,21 @@ class PurchaseInProgressException implements Exception {
   String toString() => message;
 }
 
+/// 서버의 요금제로 보아 이 밴드는 지금 결제하면 안 된다 — 이미 구독 중이거나, 구독이 결제 보류 중이다.
+/// 또 결제하면 같은 밴드에 구독이 두 개 생겨 두 번 청구된다. [message] 를 그대로 보여 준다.
+class PurchaseBlockedException implements Exception {
+  const PurchaseBlockedException(this.message);
+
+  static const String alreadyPremium = '이 밴드는 이미 프리미엄이에요.';
+  static const String onHold = '카드 결제가 실패해 프리미엄이 잠시 멈췄어요. 새로 결제하지 말고 '
+      'Google Play 에서 결제 수단을 고쳐 주세요. 고치면 바로 다시 이어져요.';
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// 결제 흐름의 상태 — 요금제 화면이 버튼을 잠그고 풀 때 쓴다. 안내 문구는 [PurchaseSync] 가 직접 띄운다.
 enum PurchaseEventKind { pending, verified, failed, canceled }
 
@@ -95,6 +110,11 @@ class PurchaseSync {
   /// 스토어에 있지만 아직 확인 처리되지 않은 구매가 적힌 밴드들(승인 대기·검증 전). 이 밴드는 다시 결제하지 않는다.
   final _unackedBands = <int>{};
 
+  /// 서버가 "이 밴드는 이미 구독 중" 으로 거절한 구매 토큰(`BAND_ALREADY_SUBSCRIBED`). 서버가 확인 처리하지
+  /// 않았으니 Google 이 3일 안에 자동 환불하고, 그동안 스토어는 이 구매를 복구 때마다 다시 흘려보낸다 — 다시
+  /// 보내도 같은 답이라 이 앱이 켜져 있는 동안은 더 보내지 않는다.
+  final _rejected = <String>{};
+
   /// 방금 결제 창을 띄운 상품과 고를 수 있던 상품들 — "이미 보유" 로 실패하면 다음 상품으로 다시 띄운다.
   String? _buyingProductId;
   Map<String, ProductDetails> _buyingCandidates = const {};
@@ -133,6 +153,16 @@ class PurchaseSync {
   Future<void> buy(Map<String, ProductDetails> products,
       {required int bandId}) async {
     start(); // 로그인 이벤트보다 먼저 화면이 열린 경우에도 결과를 놓치지 않게.
+    // 화면의 요금제는 처음 열 때 받은 것이다. 그 사이 다른 기기·다른 밴드장이 결제했거나 갱신 결제가 보류됐으면
+    // 같은 밴드에 구독이 하나 더 생겨 두 번 청구되므로, 결제 창을 띄우기 직전에 서버에서 새로 받아 본다.
+    final plan = await _ref.refresh(bandPlanProvider(bandId).future);
+    if (plan.onHold) {
+      throw const PurchaseBlockedException(PurchaseBlockedException.onHold);
+    }
+    if (plan.isPremium && (plan.autoRenewing || plan.canceled)) {
+      throw const PurchaseBlockedException(
+          PurchaseBlockedException.alreadyPremium);
+    }
     await _refreshOwned();
     if (_unackedBands.contains(bandId)) throw const PurchaseInProgressException();
     final product = _nextSlot(products);
@@ -169,6 +199,11 @@ class PurchaseSync {
 
   /// 결제 창을 띄운 횟수 — 늦게 도는 실패 타이머가 다음 시도를 건드리지 않게 시도를 구분한다.
   int _attempt = 0;
+
+  static const alreadySubscribedMessage =
+      '이 밴드에는 아직 끝나지 않은 구독이 있어요(결제 보류 중이거나, 해지했지만 기간이 남았어요). '
+      '방금 결제는 3일 안에 자동으로 환불돼요. '
+      '결제 수단은 Google Play 에서 고쳐 주세요.';
 
   static const _genericFailure = '결제를 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
 
@@ -220,7 +255,11 @@ class PurchaseSync {
           p.status == PurchaseStatus.pending) {
         _owned.add(p.productID);
         final band = IapService.taggedBand(p);
-        if (p.pendingCompletePurchase && band != null) _unackedBands.add(band);
+        if (p.pendingCompletePurchase &&
+            band != null &&
+            !_rejected.contains(_iap.purchaseToken(p))) {
+          _unackedBands.add(band);
+        }
       }
     }
     for (final p in purchases) {
@@ -261,7 +300,9 @@ class PurchaseSync {
   /// 스토어에 남아 있다가 다음 시작·복귀 때 다시 온다(3일 안에 반영되면 환불되지 않는다).
   Future<void> _verify(PurchaseDetails p) async {
     final token = _iap.purchaseToken(p);
-    if (token == null || !_inFlight.add(token)) return;
+    if (token == null || _rejected.contains(token) || !_inFlight.add(token)) {
+      return;
+    }
     final buyingBand = _buyingBandId;
     final tag = IapService.taggedBand(p);
     final mine = _isCurrent(p);
@@ -288,6 +329,19 @@ class PurchaseSync {
       }
       _toast('결제가 확인돼 프리미엄이 시작됐어요.');
     } on ApiException catch (e) {
+      if (e.code == 'BAND_ALREADY_SUBSCRIBED') {
+        // 이 밴드에는 이미 다른 구독이 있다(결제 보류 포함). 완료(확인 처리)하지 않아야 Google 이 환불한다.
+        _rejected.add(token);
+        if (tag != null) _unackedBands.remove(tag);
+        if (mine) {
+          _clearBuying();
+          _emit(const PurchaseEvent(PurchaseEventKind.failed));
+        }
+        // 앱이 꺼졌다 켜져 복구로 온 경우에도 돈 이야기라 한 번은 알린다.
+        // 서버 문구가 보류·해지 후 남은 기간 두 경우를 다 설명한다. 비어 있으면 앱 문구로.
+        _toast(e.message.trim().isEmpty ? alreadySubscribedMessage : e.message);
+        return;
+      }
       _failed(mine, e.message);
     } catch (_) {
       _failed(mine, '구매를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
