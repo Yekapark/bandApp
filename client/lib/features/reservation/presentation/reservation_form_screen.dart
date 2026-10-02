@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../routing/app_router.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/discard_changes.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../band/application/band_providers.dart';
 import '../../home/application/home_providers.dart';
@@ -46,6 +47,11 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
 
   bool get _isEdit => widget.existing != null;
 
+  /// 처음 연 때의 입력값. 지금 값과 다르면 뒤로 가기 전에 묻는다(메모를 길게 쓰다 실수로 뒤로 가면 다 날아갔다).
+  late final String _initialSnapshot;
+  String _snapshot() =>
+      '$_date|$_start|$_hours|${_room?.id}|${_cost.text}|${_note.text}';
+
   @override
   void initState() {
     super.initState();
@@ -65,6 +71,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
       final d = widget.initialDate ?? DateTime.now();
       _date = DateTime(d.year, d.month, d.day);
     }
+    _initialSnapshot = _snapshot();
   }
 
   @override
@@ -165,9 +172,11 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
         context.pushReplacement(Routes.reservation(result.reservation.id));
       }
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = _isEdit ? '일정을 수정하지 못했어요.' : '일정을 등록하지 못했어요.');
+      if (mounted) {
+        setState(() => _error = _isEdit ? '일정을 수정하지 못했어요.' : '일정을 등록하지 못했어요.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -183,10 +192,10 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '등록은 완료됐어요. 아래 일정과 시간대가 겹칩니다 — '
+            Text(
+              '${_isEdit ? '저장' : '등록'}은 완료됐어요. 아래 일정과 시간대가 겹칩니다 — '
               '필요하면 상세 화면에서 시간을 조정하세요.',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12.5,
                 color: AppColors.textDim,
                 height: 1.5,
@@ -219,188 +228,205 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
     final band = ref.watch(currentBandProvider);
     final memberCount = band?.memberCount ?? 0;
     final cost = _costValue;
+    // 정산과 같은 셈: 내림한 몫, 안 나눠떨어지면 "~"(몇 명이 1원씩 더 낸다). 예전에는 올림이라 정산 화면과 금액이 달랐다.
     final perPerson =
-        (cost != null && memberCount > 0) ? (cost / memberCount).ceil() : null;
+        (cost != null && memberCount > 0) ? cost ~/ memberCount : null;
+    final hasRemainder =
+        cost != null && memberCount > 0 && cost % memberCount != 0;
+    final dirty = !_loading && _snapshot() != _initialSnapshot;
 
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              BackLink(
-                  label: _isEdit ? '합주 수정' : '합주 등록',
-                  onTap: () => context.pop()),
-              const SizedBox(height: 12),
-              Text(
-                _isEdit ? '일정 내용 고치기' : '이미 잡은 예약 기록하기',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                '합주실 예약은 전화·카톡으로 직접 하고, 확정된 내용만 여기에 남겨요.',
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.6,
-                  color: AppColors.textDim,
+    return PopScope(
+      canPop: !dirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (await confirmDiscardChanges(context) && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                BackLink(
+                    label: _isEdit ? '합주 수정' : '합주 등록',
+                    onTap: () => Navigator.of(context).maybePop()),
+                const SizedBox(height: 12),
+                Text(
+                  _isEdit ? '일정 내용 고치기' : '이미 잡은 예약 기록하기',
+                  style: Theme.of(context).textTheme.headlineMedium,
                 ),
-              ),
-              const SizedBox(height: 20),
-
-              // 합주실
-              const _FieldLabel('합주실'),
-              const SizedBox(height: 9),
-              _RoomSelector(room: _room, onTap: _pickRoom),
-
-              const SizedBox(height: 16),
-              // 날짜 / 시작 시간
-              Row(
-                children: [
-                  Expanded(
-                    child: _TapCard(
-                      label: '날짜',
-                      value: Fmt.dateKo(_date),
-                      onTap: _pickDate,
-                    ),
+                const SizedBox(height: 6),
+                const Text(
+                  '합주실 예약은 전화·카톡으로 직접 하고, 확정된 내용만 여기에 남겨요.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.6,
+                    color: AppColors.textDim,
                   ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: _TapCard(
-                      label: '시작 시간',
-                      value: _start.format(context),
-                      onTap: _pickTime,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 9),
-              // 이용 시간 스테퍼
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: AppColors.borderStrong),
                 ),
-                child: Row(
+                const SizedBox(height: 20),
+
+                // 합주실
+                const _FieldLabel('합주실'),
+                const SizedBox(height: 9),
+                _RoomSelector(room: _room, onTap: _pickRoom),
+
+                const SizedBox(height: 16),
+                // 날짜 / 시작 시간
+                Row(
                   children: [
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            '이용 시간',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textDim,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            Fmt.durationKo(_startAt, _endAt),
-                            style: AppTypography.mono(fontSize: 15),
-                          ),
-                        ],
+                      child: _TapCard(
+                        label: '날짜',
+                        value: Fmt.dateKo(_date),
+                        onTap: _pickDate,
                       ),
                     ),
-                    _StepButton(
-                      icon: Icons.remove,
-                      onTap: () => _bumpHours(-0.5),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: _TapCard(
+                        label: '시작 시간',
+                        value: _start.format(context),
+                        onTap: _pickTime,
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    _StepButton(icon: Icons.add, onTap: () => _bumpHours(0.5)),
                   ],
                 ),
-              ),
 
-              const SizedBox(height: 16),
-              const _FieldLabel('예약 메모 (선택)'),
-              const SizedBox(height: 9),
-              TextField(
-                controller: _note,
-                maxLength: 500,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: '예: 02-334-1082 전화 예약 · 예약자명 세연 · 현금 결제',
-                  counterText: '',
-                ),
-              ),
-
-              const SizedBox(height: 16),
-              const _FieldLabel('합주실 비용 (선택)'),
-              const SizedBox(height: 9),
-              TextField(
-                controller: _cost,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(9),
-                ],
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  hintText: '예: 90000',
-                  prefixText: '₩ ',
-                ),
-              ),
-              if (perPerson != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 9),
+                // 이용 시간 스테퍼
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: AppColors.purple.withValues(alpha: 0.08),
+                    color: AppColors.surface,
                     borderRadius: BorderRadius.circular(13),
-                    border: Border.all(
-                        color: AppColors.purple.withValues(alpha: 0.28)),
+                    border: Border.all(color: AppColors.borderStrong),
                   ),
                   child: Row(
                     children: [
-                      const Expanded(
-                        child: Text(
-                          '1인당 (멤버 균등)',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: AppColors.purpleSoft,
-                          ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '이용 시간',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textDim,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              Fmt.durationKo(_startAt, _endAt),
+                              style: AppTypography.mono(fontSize: 15),
+                            ),
+                          ],
                         ),
                       ),
-                      Text(
-                        Fmt.won(perPerson),
-                        style: AppTypography.mono(
-                          fontSize: 16,
-                          color: AppColors.purpleSoft,
-                        ),
+                      _StepButton(
+                        icon: Icons.remove,
+                        onTap: () => _bumpHours(-0.5),
                       ),
+                      const SizedBox(width: 8),
+                      _StepButton(
+                          icon: Icons.add, onTap: () => _bumpHours(0.5)),
                     ],
                   ),
                 ),
-              ],
 
-              if (_error != null) ...[
                 const SizedBox(height: 16),
-                Text(
-                  _error!,
-                  style: const TextStyle(fontSize: 12, color: AppColors.danger),
+                const _FieldLabel('예약 메모 (선택)'),
+                const SizedBox(height: 9),
+                TextField(
+                  controller: _note,
+                  maxLength: 500,
+                  maxLines: 3,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: '예: 02-334-1082 전화 예약 · 예약자명 세연 · 현금 결제',
+                    counterText: '',
+                  ),
                 ),
-              ],
-              const SizedBox(height: 22),
-              PrimaryButton(
-                label: _isEdit ? '수정 저장하기' : '합주 등록하기',
-                loading: _loading,
-                enabled: _room != null,
-                onPressed: _submit,
-              ),
-              if (_room == null) ...[
-                const SizedBox(height: 10),
-                const Text(
-                  '합주실을 먼저 선택해 주세요.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 11.5, color: AppColors.textFaint),
+
+                const SizedBox(height: 16),
+                const _FieldLabel('합주실 비용 (선택)'),
+                const SizedBox(height: 9),
+                TextField(
+                  controller: _cost,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(9),
+                  ],
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: '예: 90000',
+                    prefixText: '₩ ',
+                  ),
                 ),
+                if (perPerson != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.purple.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(
+                          color: AppColors.purple.withValues(alpha: 0.28)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            '1인당 (멤버 균등)',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.purpleSoft,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${Fmt.won(perPerson)}${hasRemainder ? ' ~' : ''}',
+                          style: AppTypography.mono(
+                            fontSize: 16,
+                            color: AppColors.purpleSoft,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                if (_error != null) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    _error!,
+                    style:
+                        const TextStyle(fontSize: 12, color: AppColors.danger),
+                  ),
+                ],
+                const SizedBox(height: 22),
+                PrimaryButton(
+                  label: _isEdit ? '수정 저장하기' : '합주 등록하기',
+                  loading: _loading,
+                  enabled: _room != null,
+                  onPressed: _submit,
+                ),
+                if (_room == null) ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    '합주실을 먼저 선택해 주세요.',
+                    textAlign: TextAlign.center,
+                    style:
+                        TextStyle(fontSize: 11.5, color: AppColors.textFaint),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

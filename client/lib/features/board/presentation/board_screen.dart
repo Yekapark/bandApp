@@ -23,6 +23,9 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
   final _scroll = ScrollController();
   int? _bandId;
 
+  /// 다음 페이지를 마지막으로 못 받은 때. 오프라인에서 스크롤 이벤트마다 요청이 쏟아지지 않게 잠시 쉰다.
+  DateTime? _loadMoreFailedAt;
+
   @override
   void initState() {
     super.initState();
@@ -38,8 +41,19 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
 
   void _onScroll() {
     if (_bandId == null) return;
+    final failedAt = _loadMoreFailedAt;
+    if (failedAt != null &&
+        DateTime.now().difference(failedAt) < const Duration(seconds: 5)) {
+      return;
+    }
     if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 320) {
-      ref.read(boardFeedProvider(_bandId!).notifier).loadMore();
+      // 실패해도 이미 보이는 목록은 그대로다. 몇 초 뒤 스크롤에서 다시 시도한다(던지면 처리 안 된 오류로 남는다).
+      ref
+          .read(boardFeedProvider(_bandId!).notifier)
+          .loadMore()
+          .catchError((Object _) {
+        _loadMoreFailedAt = DateTime.now();
+      });
     }
   }
 
@@ -105,6 +119,9 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
             }
             return ListView.separated(
               controller: _scroll,
+              // 컨트롤러를 넘기면 primary 가 꺼져 글이 화면보다 적을 때 스크롤이 안 된다 — 그러면 당겨서
+              // 새로고침도 안 된다(글 1~3개인 밴드에서 새 글을 못 받아 봄).
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
               itemCount: feed.posts.length + (feed.hasNext ? 1 : 0),
               separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -230,8 +247,8 @@ class _PostCard extends StatelessWidget {
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) {
                         // build 중에는 provider 를 건드릴 수 없어 다음 프레임에 알린다.
-                        WidgetsBinding.instance.addPostFrameCallback(
-                            (_) => onThumbnailExpired());
+                        WidgetsBinding.instance
+                            .addPostFrameCallback((_) => onThumbnailExpired());
                         return Container(
                           color: AppColors.surfaceAlt,
                           alignment: Alignment.center,

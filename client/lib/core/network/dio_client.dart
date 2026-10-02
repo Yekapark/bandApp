@@ -22,7 +22,7 @@ final dioProvider = Provider<Dio>((ref) {
   );
 
   dio.interceptors.add(
-    _AuthInterceptor(
+    AuthInterceptor(
       storage: storage,
       onSessionExpired: (notice) {
         // 지연 read — dio 생성 시점에는 authController 를 건드리지 않는다(순환 방지).
@@ -71,22 +71,29 @@ class AccountSuspendedException implements Exception {
   final String message;
 }
 
-class _AuthInterceptor extends Interceptor {
-  _AuthInterceptor({required this.storage, required this.onSessionExpired});
+/// 앱 밖에서는 [dioProvider] 로만 쓴다. 공개한 것은 테스트(가짜 refresh 서버 주입) 때문이다.
+@visibleForTesting
+class AuthInterceptor extends Interceptor {
+  AuthInterceptor({
+    required this.storage,
+    required this.onSessionExpired,
+    Dio? refreshDio,
+  }) : _refreshDio = refreshDio ??
+            Dio(
+              BaseOptions(
+                baseUrl: '${AppConfig.apiBaseUrl}${AppConfig.apiPrefix}',
+                connectTimeout: const Duration(seconds: 5),
+                receiveTimeout: const Duration(seconds: 10),
+                contentType: Headers.jsonContentType,
+                validateStatus: (code) => code != null && code < 500,
+              ),
+            );
 
   final TokenStorage storage;
   final void Function(String? notice) onSessionExpired;
 
   /// refresh 및 재시도 전용 Dio (인터셉터 없음 — 재귀 방지).
-  final Dio _refreshDio = Dio(
-    BaseOptions(
-      baseUrl: '${AppConfig.apiBaseUrl}${AppConfig.apiPrefix}',
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 10),
-      contentType: Headers.jsonContentType,
-      validateStatus: (code) => code != null && code < 500,
-    ),
-  );
+  final Dio _refreshDio;
 
   Future<void>? _refreshing;
 
