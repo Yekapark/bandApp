@@ -224,8 +224,17 @@ crontab -e
 ```
 
 동작: `pg_dump -Fc` → `backups/bandapp-<UTC타임스탬프>.dump` →
-**뜬 자리에서 `pg_restore --list` 로 읽히는지 검증** → R2 `s3://<버킷>/db-backups/` 업로드 →
-로컬·원격 각각 최근 `BACKUP_KEEP`(기본 7)개만 남기고 삭제.
+**뜬 자리에서 `pg_restore --list` 로 읽히는지 검증** → **공개키로 잠가 `.dump.gpg` 로 만든 사본만**
+R2 `s3://<버킷>/db-backups/` 업로드 → 로컬·원격 각각 최근 `BACKUP_KEEP`(기본 7)개만 남기고 삭제.
+
+**R2 사본은 암호화돼 있다(2026-10-02, LAUNCH_REVIEW G7).** R2 키는 사진 업로드에 쓰는 키와 같아서, 그 키가 새면
+(2026-09-08 에 실제로 샜다) 회원정보 전체가 든 덤프를 받아 갈 수 있었다. 이제 서버에는 **잠그는 열쇠**
+(`deploy/backup/backup-pubkey.asc`, 공개해도 되는 공개키)만 있고, **여는 열쇠(개인키)는 운영자 PC 와 별도 보관소에만**
+있다. 공개키 파일이 없으면 스크립트는 올리지 않고 실패한다(로컬 덤프는 남는다). 서버 안의 로컬 덤프(`backups/`)는
+빠른 복구를 위해 암호화하지 않는다 — 서버가 털리면 DB 도 함께 털리므로 잠가도 얻는 게 없다.
+
+> **개인키를 잃으면 R2 사본으로는 복구할 수 없다.** 두 곳 이상(예: 비밀번호 관리자 + USB)에 보관하고,
+> 분기마다 §5-2 의 "PC 에서 열기" 를 한 번 해 본다.
 
 검증 단계가 있는 이유: "백업은 매일 도는데 복구가 안 되는" 사고는 대개 빈 파일이나
 에러 메시지가 섞인 파일이 그대로 쌓인 경우다. 유효하지 않으면 파일을 지우고 실패로 끝나
@@ -256,17 +265,27 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres 
 
 ### 5-2. 실제 복구 (VM 이 날아갔거나 데이터가 깨졌을 때)
 
-R2 에서 받아오는 것부터:
+서버가 살아 있으면 `backups/` 의 로컬 덤프(암호화 안 됨)를 그대로 쓴다. 서버가 날아갔으면 R2 사본을 쓰는데,
+**잠겨 있으므로 개인키가 있는 PC 에서 연 다음** 새 서버로 올린다.
 
 ```bash
-cd /opt/bandapp && . ./.env.prod
+# (서버) 목록 확인 — .env.prod 는 source 하지 않는다(값의 특수문자로 깨진다). 필요한 값만 뽑는다.
+cd /opt/bandapp
+envget() { grep -m1 "^$1=" .env.prod | cut -d= -f2-; }
 docker run --rm \
-  -e AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" -e AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
+  -e AWS_ACCESS_KEY_ID="$(envget R2_ACCESS_KEY_ID)" -e AWS_SECRET_ACCESS_KEY="$(envget R2_SECRET_ACCESS_KEY)" \
   -e AWS_DEFAULT_REGION=auto -v "$PWD/backups:/backup" amazon/aws-cli \
-  --endpoint-url "https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com" \
-  s3 ls "s3://$R2_BUCKET/db-backups/"          # 목록 확인
+  --endpoint-url "https://$(envget R2_ACCOUNT_ID).r2.cloudflarestorage.com" \
+  s3 ls "s3://$(envget R2_BUCKET)/db-backups/"          # 목록 확인
+# 같은 명령의 끝을  s3 cp "s3://<버킷>/db-backups/bandapp-<타임스탬프>.dump.gpg" /backup/  로 바꿔 받는다.
+```
 
-docker run --rm ... s3 cp "s3://$R2_BUCKET/db-backups/bandapp-<타임스탬프>.dump" /backup/
+```bash
+# (운영자 PC — 개인키가 들어 있는 곳) 받은 파일을 PC 로 가져와 연다. 개인키 암호를 묻는다.
+scp -i ~/.ssh/bandule_deploy root@<서버>:/opt/bandapp/backups/bandapp-<타임스탬프>.dump.gpg .
+gpg --output bandapp-<타임스탬프>.dump --decrypt bandapp-<타임스탬프>.dump.gpg
+scp -i ~/.ssh/bandule_deploy bandapp-<타임스탬프>.dump root@<서버>:/opt/bandapp/backups/
+# 연 덤프는 회원정보 전체다 — 올린 뒤 PC 에서 바로 지운다. 저장소 폴더 안에 두지 않는다.
 ```
 
 복구:
