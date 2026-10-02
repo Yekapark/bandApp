@@ -26,6 +26,9 @@ class ReservationReminderJobTest extends NotificationApiSupport {
     @Autowired
     private FakePushSender push;
 
+    @Autowired
+    private com.yeka.bandapp.notification.service.NotificationSender notificationSender;
+
     @BeforeEach
     void resetPush() {
         push.reset();
@@ -93,6 +96,36 @@ class ReservationReminderJobTest extends NotificationApiSupport {
 
         assertThat(reminderService.runOnce(Instant.now())).isEqualTo(1);
         assertThat(push.sentCount()).isEqualTo(2);
+    }
+
+    /** 시점보다 늦게 도래하면 문구는 실제 남은 시간 — 5분 뒤 시작인데 "1시간 뒤" 라고 하면 안 된다. */
+    @Test
+    void late_reminder_says_the_real_time_left() {
+        String leader = signup("rmd-late-l@band.app", "리더");
+        long bandId = createBand(leader, "혁오넷");
+        registerToken(leader, "leader-dev", "ANDROID");
+        putSettings(leader, true, 60);
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        Instant start = Instant.now().plus(Duration.ofMinutes(30));
+        createReservation(leader, bandId, roomId, start.toString(), start.plus(Duration.ofHours(1)).toString());
+        push.reset();
+
+        assertThat(reminderService.runOnce(start.minus(Duration.ofMinutes(5)))).isEqualTo(1);
+        assertThat(push.sent().get(0).message().body()).contains("5분 뒤").doesNotContain("1시간");
+    }
+
+    /** 보관기한 지난 이력 정리는 배치가 트랜잭션 없이 부른다 — 예전엔 @Transactional 이 빠져 매번 실패했다. */
+    @Test
+    void purging_old_dispatches_works_outside_a_transaction() {
+        String leader = signup("rmd-purge-l@band.app", "리더");
+        long bandId = createBand(leader, "정리");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        createReservation(leader, bandId, roomId,
+                isoFromNow(Duration.ofMinutes(45)), isoFromNow(Duration.ofMinutes(105)));
+        assertThat(reminderService.runOnce(Instant.now())).isEqualTo(1);
+
+        assertThat(notificationSender.purgeDispatchesBefore(Instant.now().plus(Duration.ofDays(1))))
+                .isGreaterThanOrEqualTo(1);
     }
 
     @Test
