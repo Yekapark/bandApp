@@ -25,7 +25,10 @@ echo "== 이미지 받기 ($TAG)"
 $COMPOSE pull app
 
 echo "== 배포 전 백업 (되돌릴 곳을 만들어 두고 시작한다)"
-sh deploy/backup/pg-backup.sh || echo "!! 백업 실패 — 배포는 계속하지만 확인할 것"
+# 매일 백업(backups/, R2 db-backups/)과 다른 곳에 둔다. 같은 곳이면 "최근 7개만 남기기" 가 배포 횟수로
+# 세어져, 하루 여러 번 배포하면 전날 이전 백업이 전부 지워진다. 매일 점검(prod-check)의 "마지막 백업"
+# 나이도 배포 전 백업에 가려져 크론이 멈춘 것을 못 알아챈다.
+BACKUP_DIR=./backups/predeploy BACKUP_R2_PREFIX=db-backups/predeploy sh deploy/backup/pg-backup.sh || echo "!! 백업 실패 — 배포는 계속하지만 확인할 것"
 
 echo "== 교체"
 $COMPOSE up -d --remove-orphans

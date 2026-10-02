@@ -37,6 +37,12 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Flutter 자체 딥링크 처리를 끈다. 링크는 app_links(InviteLinkHandler) 하나만 받는다.
+                 켜 두면(Flutter 3.27+ 기본값) 링크 주소가 라우터의 첫 화면 주소로도 들어가서 두 군데서
+                 처리된다 — 게다가 bandule://invite/settings/account 같은 주소로 앱 안 아무 화면이나
+                 바로 열 수 있었다. 앱이 꺼진 채 초대 링크로 열릴 때 코드가 사라지던 문제(QA-F02)도
+                 이 이중 경로를 정리하면서 고쳤다. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

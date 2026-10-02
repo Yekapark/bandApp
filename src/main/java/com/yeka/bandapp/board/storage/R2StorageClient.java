@@ -86,12 +86,13 @@ public class R2StorageClient implements StorageClient {
     }
 
     @Override
-    public URI presignPut(String storageKey, String contentType, Duration ttl) {
+    public URI presignPut(String storageKey, String contentType, long sizeBytes, Duration ttl) {
         S3Presigner client = requirePresigner();
         PutObjectRequest put = PutObjectRequest.builder()
                 .bucket(properties.bucket())
                 .key(storageKey)
                 .contentType(contentType)
+                .contentLength(sizeBytes)   // 서명 헤더에 content-length 가 들어가 다른 크기의 PUT 은 403
                 .build();
         try {
             return toUri(client.presignPutObject(PutObjectPresignRequest.builder()

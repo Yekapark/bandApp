@@ -103,54 +103,17 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: Routes.splash,
     refreshListenable: refresh,
-    // 앱이 꺼져 있다가 초대 링크로 열리면, 안드로이드가 그 주소(bandule://invite/CODE)를
-    // **앱의 첫 화면 주소로** 넘겨준다. 우리 라우트에는 그런 경로가 없으므로 라우터가
-    // "Page Not Found" 를 띄운다 — 실제로 그렇게 나갔다.
+    // 알 수 없는 주소는 조용히 첫 화면으로. 사용자에게 라우터 오류("Page Not Found")를
+    // 보여 줄 이유가 없다.
     //
-    // 앱이 이미 떠 있을 때 오는 링크는 InviteLinkHandler 가 받는다. 꺼져 있다 열리는 쪽은
-    // 그보다 라우터가 먼저 보므로 여기서 받아 준다.
-    onException: (context, state, router) {
-      if (InviteLinkHandler.isInviteLink(state.uri)) {
-        // 코드를 담아 두고 첫 화면으로 보낸다. 아래 redirect 가 로그인 여부를 보고
-        // 데려간다 — 로그인이 안 돼 있으면 로그인부터 시키고, 끝나면 합류 화면으로.
-        InviteLinkHandler.pendingCode = InviteLinkHandler.codeOf(state.uri);
-        router.go(Routes.splash);
-        return;
-      }
-      // 그 밖의 알 수 없는 주소는 조용히 첫 화면으로. 사용자에게 라우터 오류를
-      // 보여 줄 이유가 없다(위 화면이 그랬다).
-      router.go(Routes.splash);
-    },
-    redirect: (context, state) {
-      final status = ref.read(authControllerProvider).status;
-      final loc = state.matchedLocation;
-
-      // 부팅 확인 전에는 스플래시에 머문다.
-      if (status == AuthStatus.unknown) {
-        return loc == Routes.splash ? null : Routes.splash;
-      }
-
-      const publicRoutes = {
-        Routes.login,
-        Routes.passwordReset,
-        Routes.terms,
-        Routes.signup,
-      };
-      final onPublic = publicRoutes.contains(loc);
-
-      if (status == AuthStatus.unauthenticated) {
-        return onPublic ? null : Routes.login;
-      }
-
-      // 초대 링크로 들어왔다면 홈보다 합류 화면이 먼저다. 로그인 전에 눌렀더라도
-      // 로그인이 끝난 이 시점에 데려간다 — 코드를 다시 받아 적게 하지 않는다.
-      final pending = InviteLinkHandler.takePendingCode();
-      if (pending != null) return '${Routes.joinBand}?code=$pending';
-
-      // 로그인 상태에서 스플래시/공개 화면에 있으면 홈으로.
-      if (loc == Routes.splash || onPublic) return Routes.home;
-      return null;
-    },
+    // 초대 링크는 여기로 오지 않는다. 안드로이드 매니페스트에서 Flutter 자체 딥링크 처리를
+    // 껐고(`flutter_deeplinking_enabled=false`), 링크는 InviteLinkHandler 하나만 받는다.
+    // 예전에는 여기서도 초대 링크를 받으려 했지만, go_router 는 redirect 를 먼저 돌리고
+    // 그 결과가 오류일 때만 이걸 부른다 — 부팅 중에는 redirect 가 스플래시로 바꿔 버려서
+    // 한 번도 불리지 않았다(QA-F02).
+    onException: (context, state, router) => router.go(Routes.splash),
+    redirect: (context, state) =>
+        appRedirect(ref.read(authControllerProvider).status, state.matchedLocation),
     routes: [
       GoRoute(path: Routes.splash, builder: (_, __) => const SplashScreen()),
       GoRoute(path: Routes.login, builder: (_, __) => const LoginScreen()),
@@ -309,6 +272,35 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// 로그인 상태에 따른 이동 규칙. 라우터 밖에서 시험할 수 있게 함수로 뺐다.
+String? appRedirect(AuthStatus status, String loc) {
+  // 부팅 확인 전에는 스플래시에 머문다.
+  if (status == AuthStatus.unknown) {
+    return loc == Routes.splash ? null : Routes.splash;
+  }
+
+  const publicRoutes = {
+    Routes.login,
+    Routes.passwordReset,
+    Routes.terms,
+    Routes.signup,
+  };
+  final onPublic = publicRoutes.contains(loc);
+
+  if (status == AuthStatus.unauthenticated) {
+    return onPublic ? null : Routes.login;
+  }
+
+  // 초대 링크로 들어왔다면 홈보다 합류 화면이 먼저다. 로그인 전·부팅 중에 눌렀더라도
+  // 로그인이 확정된 이 시점에 데려간다 — 코드를 다시 받아 적게 하지 않는다.
+  final pending = InviteLinkHandler.takePendingCode();
+  if (pending != null) return InviteLinkHandler.joinLocation(pending);
+
+  // 로그인 상태에서 스플래시/공개 화면에 있으면 홈으로.
+  if (loc == Routes.splash || onPublic) return Routes.home;
+  return null;
+}
 
 class _AuthRefresh extends ChangeNotifier {
   void bump() => notifyListeners();

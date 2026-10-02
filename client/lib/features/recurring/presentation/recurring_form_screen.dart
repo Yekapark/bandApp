@@ -8,6 +8,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/discard_changes.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../band/application/band_providers.dart';
 import '../../reservation/application/calendar_providers.dart';
@@ -42,12 +43,18 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
 
   static const _dowKo = ['월', '화', '수', '목', '금', '토', '일'];
 
+  /// 처음 연 때의 입력값. 바뀌었으면 뒤로 가기 전에 묻는다.
+  late final String _initialSnapshot;
+  String _snapshot() => '${_room?.id}|$_freq|$_weekday|$_start|$_end|'
+      '$_startDate|$_endDate|${_cost.text}|${_note.text}';
+
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _weekday = now.weekday;
     _startDate = DateTime(now.year, now.month, now.day);
+    _initialSnapshot = _snapshot();
   }
 
   @override
@@ -150,12 +157,13 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
       if (!mounted) return;
       context.pop(true);
     } on ApiException catch (e) {
+      if (!mounted) return;
       // 요금제 때문에 막힌 것은 "실패"가 아니라 안내다. 어디로 가면 되는지까지 알려준다.
       setState(() => _error = e.code == 'PLAN_REQUIRED'
           ? '정기 합주 자동 등록은 프리미엄 기능이에요. 설정 > 요금제에서 시작할 수 있어요.'
           : e.message);
     } catch (_) {
-      setState(() => _error = '정기 일정을 등록하지 못했어요.');
+      if (mounted) setState(() => _error = '정기 일정을 등록하지 못했어요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -204,177 +212,206 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
     );
   }
 
+  /// 매월 반복은 "시작일 이후 첫 그 요일" 이 그 달의 몇 째 주인지를 따른다(서버 OccurrenceGenerator).
+  /// 화면에 안 보여 주면 "매월 토요일" 이 어느 토요일인지 등록해 봐야 알았다.
+  String _monthlyHint() {
+    final anchor =
+        _startDate.add(Duration(days: (_weekday - _startDate.weekday) % 7));
+    final nth = (anchor.day - 1) ~/ 7 + 1;
+    final text = '매월 $nth째 주 ${_dowKo[_weekday - 1]}요일에 반복돼요 (시작일 기준).';
+    return nth == 5 ? '$text 5째 주가 없는 달은 건너뛰어요.' : text;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              BackLink(label: '정기 일정', onTap: () => context.pop()),
-              const SizedBox(height: 12),
-              Text('반복되는 합주 등록',
-                  style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 6),
-              const Text(
-                '등록하면 앞으로 8주분 회차가 캘린더에 자동으로 생겨요. '
-                '개별 회차는 캘린더에서 따로 수정·취소할 수 있어요.',
-                style: TextStyle(
-                    fontSize: 12, height: 1.6, color: AppColors.textDim),
-              ),
-              const SizedBox(height: 20),
-              const _Label('합주실'),
-              const SizedBox(height: 9),
-              GestureDetector(
-                onTap: _pickRoom,
-                child: Container(
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.borderStrong),
+    return PopScope(
+      canPop: _loading || _snapshot() == _initialSnapshot,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (await confirmDiscardChanges(context) && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                BackLink(
+                    label: '정기 일정',
+                    onTap: () => Navigator.of(context).maybePop()),
+                const SizedBox(height: 12),
+                Text('반복되는 합주 등록',
+                    style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 6),
+                const Text(
+                  '등록하면 앞으로 8주분 회차가 캘린더에 자동으로 생겨요. '
+                  '개별 회차는 캘린더에서 따로 수정·취소할 수 있어요.',
+                  style: TextStyle(
+                      fontSize: 12, height: 1.6, color: AppColors.textDim),
+                ),
+                const SizedBox(height: 20),
+                const _Label('합주실'),
+                const SizedBox(height: 9),
+                GestureDetector(
+                  onTap: _pickRoom,
+                  child: Container(
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.borderStrong),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _room?.name ?? '합주실 선택하기',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: _room == null
+                                  ? AppColors.textDim
+                                  : AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        const Text('변경 ›',
+                            style: TextStyle(
+                                fontSize: 11, color: AppColors.primary)),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    children: [
+                ),
+                const SizedBox(height: 16),
+                const _Label('반복 주기'),
+                const SizedBox(height: 9),
+                _FreqSelector(
+                  value: _freq,
+                  onChanged: (f) => setState(() => _freq = f),
+                ),
+                if (_freq == RecurringFrequency.monthly) ...[
+                  const SizedBox(height: 6),
+                  Text(_monthlyHint(),
+                      style: const TextStyle(
+                          fontSize: 11.5, color: AppColors.textDim)),
+                ],
+                const SizedBox(height: 16),
+                const _Label('요일'),
+                const SizedBox(height: 9),
+                Row(
+                  children: [
+                    for (var i = 1; i <= 7; i++)
                       Expanded(
-                        child: Text(
-                          _room?.name ?? '합주실 선택하기',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: _room == null
-                                ? AppColors.textDim
-                                : AppColors.textPrimary,
+                        child: Padding(
+                          padding: EdgeInsets.only(right: i == 7 ? 0 : 6),
+                          child: _DayChip(
+                            label: _dowKo[i - 1],
+                            active: _weekday == i,
+                            onTap: () => setState(() => _weekday = i),
                           ),
                         ),
                       ),
-                      const Text('변경 ›',
-                          style: TextStyle(
-                              fontSize: 11, color: AppColors.primary)),
-                    ],
-                  ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              const _Label('반복 주기'),
-              const SizedBox(height: 9),
-              _FreqSelector(
-                value: _freq,
-                onChanged: (f) => setState(() => _freq = f),
-              ),
-              const SizedBox(height: 16),
-              const _Label('요일'),
-              const SizedBox(height: 9),
-              Row(
-                children: [
-                  for (var i = 1; i <= 7; i++)
+                const SizedBox(height: 16),
+                Row(
+                  children: [
                     Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.only(right: i == 7 ? 0 : 6),
-                        child: _DayChip(
-                          label: _dowKo[i - 1],
-                          active: _weekday == i,
-                          onTap: () => setState(() => _weekday = i),
-                        ),
+                      child: _TapCard(
+                        label: '시작 시각',
+                        value: _start.format(context),
+                        onTap: () => _pickTime(start: true),
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: _TapCard(
-                      label: '시작 시각',
-                      value: _start.format(context),
-                      onTap: () => _pickTime(start: true),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: _TapCard(
+                        label: '종료 시각',
+                        value: _end.format(context),
+                        onTap: () => _pickTime(start: false),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: _TapCard(
-                      label: '종료 시각',
-                      value: _end.format(context),
-                      onTap: () => _pickTime(start: false),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 9),
-              Row(
-                children: [
-                  Expanded(
-                    child: _TapCard(
-                      label: '시작일',
-                      value: Fmt.dateKo(_startDate),
-                      onTap: () => _pickDate(start: true),
-                    ),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: _TapCard(
-                      label: '종료일 (선택)',
-                      value: _endDate == null ? '없음' : Fmt.dateKo(_endDate!),
-                      onTap: () => _pickDate(start: false),
-                      onClear: _endDate == null
-                          ? null
-                          : () => setState(() => _endDate = null),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const _Label('회차 비용 (선택)'),
-              const SizedBox(height: 9),
-              TextField(
-                controller: _cost,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(9),
-                ],
-                decoration: const InputDecoration(
-                  hintText: '예: 30000',
-                  prefixText: '₩ ',
+                  ],
                 ),
-              ),
-              const SizedBox(height: 16),
-              const _Label('회차 메모 (선택)'),
-              const SizedBox(height: 9),
-              TextField(
-                controller: _note,
-                maxLength: 500,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  hintText: '예: 정기 합주 · 예약자 홍길동',
-                  counterText: '',
+                const SizedBox(height: 9),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _TapCard(
+                        label: '시작일',
+                        value: Fmt.dateKo(_startDate),
+                        onTap: () => _pickDate(start: true),
+                      ),
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: _TapCard(
+                        label: '종료일 (선택)',
+                        value: _endDate == null ? '없음' : Fmt.dateKo(_endDate!),
+                        onTap: () => _pickDate(start: false),
+                        onClear: _endDate == null
+                            ? null
+                            : () => setState(() => _endDate = null),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              if (_error != null) ...[
                 const SizedBox(height: 16),
-                Text(_error!,
-                    style:
-                        const TextStyle(fontSize: 12, color: AppColors.danger)),
+                const _Label('회차 비용 (선택)'),
+                const SizedBox(height: 9),
+                TextField(
+                  controller: _cost,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(9),
+                  ],
+                  decoration: const InputDecoration(
+                    hintText: '예: 30000',
+                    prefixText: '₩ ',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 16),
+                const _Label('회차 메모 (선택)'),
+                const SizedBox(height: 9),
+                TextField(
+                  controller: _note,
+                  maxLength: 500,
+                  maxLines: 2,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: '예: 정기 합주 · 예약자 홍길동',
+                    counterText: '',
+                  ),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 16),
+                  Text(_error!,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.danger)),
+                ],
+                const SizedBox(height: 22),
+                PrimaryButton(
+                  label: '정기 일정 등록',
+                  loading: _loading,
+                  enabled: _room != null,
+                  onPressed: _submit,
+                ),
+                if (_room == null) ...[
+                  const SizedBox(height: 10),
+                  const Text('합주실을 먼저 선택해 주세요.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 11.5, color: AppColors.textFaint)),
+                ],
               ],
-              const SizedBox(height: 22),
-              PrimaryButton(
-                label: '정기 일정 등록',
-                loading: _loading,
-                enabled: _room != null,
-                onPressed: _submit,
-              ),
-              if (_room == null) ...[
-                const SizedBox(height: 10),
-                const Text('합주실을 먼저 선택해 주세요.',
-                    textAlign: TextAlign.center,
-                    style:
-                        TextStyle(fontSize: 11.5, color: AppColors.textFaint)),
-              ],
-            ],
+            ),
           ),
         ),
       ),

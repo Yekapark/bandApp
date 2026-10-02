@@ -50,7 +50,7 @@ class NotificationMessagesTest {
     void settlement_message_mentions_the_amount() {
         PushMessage settlement = NotificationMessages.settlementRequested(1, 2, 30000);
         assertThat(settlement.data()).containsEntry("type", NotificationType.SETTLEMENT_REQUESTED.name());
-        assertThat(settlement.body()).contains("30000");
+        assertThat(settlement.body()).contains("30,000원");
     }
 
     @Test

@@ -72,7 +72,10 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
                     mode: mode,
                     selected: detail.reservationPermission == mode,
                     enabled: band.isLeader && !_busy,
-                    onTap: () => _changePermission(band.id, mode),
+                    // 이미 고른 것을 다시 누르면 요청 없이 둔다 — 예전엔 "바꿨어요" 가 떴다.
+                    onTap: detail.reservationPermission == mode
+                        ? () {}
+                        : () => _changePermission(band.id, mode),
                   ),
                 if (!band.isLeader)
                   const Padding(

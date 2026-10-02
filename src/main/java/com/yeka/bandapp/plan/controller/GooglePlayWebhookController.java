@@ -8,9 +8,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -66,6 +69,12 @@ public class GooglePlayWebhookController {
         } catch (StoreWebhookRetryException retryable) {
             // 일시적 실패 — Pub/Sub 가 재전송하도록 5xx 를 준다(멱등 기록은 아직 안 남았다).
             log.warn("Google Play 웹훅: 재시도 요청 — {}", retryable.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        } catch (TransientDataAccessException | DataAccessResourceFailureException
+                 | CannotCreateTransactionException dbHiccup) {
+            // DB 가 잠깐 안 되는 것(커넥션 고갈·잠금 대기 초과·재시작)은 메시지 탓이 아니다 — 200 으로 받으면 그 알림
+            // (환불·보류·복구)은 영영 반영되지 않는다. 환불이 빠지면 다음 만료일까지 공짜 PREMIUM 이 된다. 재전송받는다.
+            log.warn("Google Play 웹훅: DB 일시 장애 — 재시도 요청", dbHiccup);
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         } catch (RuntimeException e) {
             // 파싱·처리 실패를 재전송으로 되돌리지 않는다 — 잘못된 메시지는 재전송해도 똑같이 실패한다.

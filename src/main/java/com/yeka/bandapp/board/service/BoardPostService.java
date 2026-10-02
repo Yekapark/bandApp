@@ -147,23 +147,23 @@ public class BoardPostService {
         BoardPost post = requirePostInBand(bandId, postId);
         requireOwnerOrLeader(post, callerId, member);
 
-        List<String> keys = mediaRepository.findByBoardPostIdOrderByIdAsc(postId).stream()
-                .filter(m -> m.getStatus() != MediaStatus.EXPIRED)
-                .map(MediaAttachment::getStorageKey)
-                .toList();
-
-        if (postRepository.softDelete(postId, Instant.now()) == 0) {
+        Instant now = Instant.now();
+        if (postRepository.softDelete(postId, now) == 0) {
             throw new BusinessException(ErrorCode.POST_NOT_FOUND); // 이미 삭제됨
         }
-        mediaRepository.expireAllOfPost(postId);
-
-        // R2 객체 정리는 트랜잭션 밖 best-effort. 실패해도 EXPIRED 표시는 유지되고,
-        // 보관기한 만료 배치(Phase 9)가 최종적으로 정리한다.
-        for (String key : keys) {
+        // READY 첨부는 보관기한을 지금으로 당겨 두고(실패분은 만료 배치가 재시도), 바로 지워 본다.
+        // R2 삭제가 성공한 것만 EXPIRED 로 — 먼저 EXPIRED 로 바꾸면 만료 배치가 건너뛰어 영구 고아가 된다.
+        // PENDING 은 고아 정리 배치 몫이다(글이 지워져 완료 콜백은 404).
+        mediaRepository.expireReadyOfPostNow(postId, now);
+        for (MediaAttachment media : mediaRepository.findByBoardPostIdOrderByIdAsc(postId)) {
+            if (!media.isReady()) {
+                continue;
+            }
             try {
-                storage.delete(key);
+                storage.delete(media.getStorageKey());
+                mediaRepository.markExpired(media.getId());
             } catch (BusinessException e) {
-                // 저장소 미설정·통신 실패 — 로깅만 하고 삭제는 진행한다.
+                log.warn("삭제된 글의 첨부 R2 삭제 실패 id={} — 만료 배치가 재시도한다", media.getId());
             }
         }
     }

@@ -7,6 +7,7 @@ import com.yeka.bandapp.plan.entity.BandPlan;
 import com.yeka.bandapp.plan.entity.Store;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -140,24 +141,34 @@ public class PlanMutationService {
     /**
      * RTDN "해지" 반영. PREMIUM 이면 해지 예약, 아니면(이미 FREE·이미 해지) 아무것도 안 한다.
      * 웹훅은 중복·재전송이 정상이라 예외를 던지지 않는다.
+     *
+     * <p><b>쿠폰 기간이면 건드리지 않는다</b> — 보류(ON_HOLD) 뒤 남은 옛 토큰 위에 쿠폰을 쓴 밴드에 그 옛 구독의 알림이
+     * 오는 경우다. 쿠폰 표시(coupon-)를 지우면 다음 쿠폰이 끝난 구독에 결제일 연기를 시도해 거절된다.
+     *
+     * @return 반영 뒤 요금제(요금제 행이 없으면 null)
      */
     @Transactional
-    public void applyCancelAtPeriodEndIfPremium(long bandId, Instant now) {
+    public BandPlan applyCancelAtPeriodEndIfPremium(long bandId, Instant now) {
         BandPlan plan = bandPlanRepository.findByBandIdForUpdate(bandId).orElse(null);
-        if (plan == null || !plan.isPremium() || plan.isCanceled()) {
-            return;
+        if (plan == null || !plan.isPremium() || plan.isCanceled() || plan.isCouponPeriod()) {
+            return plan;
         }
         plan.cancelAtPeriodEnd(now);
+        return plan;
     }
 
     /**
      * RTDN "만료·보류" 반영. PREMIUM 이면 유예기간을 주고 FREE 로, 아니면 no-op.
      * 유예 길이·의미는 {@link #applyDowngrade} 와 같다(수동 만료 배치와 동일하게 보이도록).
+     *
+     * <p><b>쿠폰 기간이면 내리지 않는다</b> — 보류 뒤 FREE 가 된 밴드가 쿠폰을 쓰면 옛 토큰이 남아 있어(B1), 그 옛
+     * 구독이 보류 끝에 만료(EXPIRED)되면 이 알림이 온다. 예전에는 받은 쿠폰 기간이 그 자리에서 사라졌다.
+     * 쿠폰 기간의 끝은 만료 배치가 맡는다.
      */
     @Transactional
     public void applyDowngradeIfPremium(long bandId, Instant now, Instant graceUntil) {
         BandPlan plan = bandPlanRepository.findByBandIdForUpdate(bandId).orElse(null);
-        if (plan == null || !plan.isPremium()) {
+        if (plan == null || !plan.isPremium() || plan.isCouponPeriod()) {
             return;
         }
         plan.downgradeToFree(now);
@@ -186,6 +197,19 @@ public class PlanMutationService {
     public void recordPurchaser(long bandId, String purchaseToken, long userId) {
         bandPlanRepository.findByBandIdForUpdate(bandId)
                 .ifPresent(plan -> plan.recordPurchaser(purchaseToken, userId));
+    }
+
+    /**
+     * 탈퇴한 결제자의 구독 해지를 마친 뒤 결제자 연결을 끊는다 — 그 사이 토큰·결제자가 바뀌지 않았을 때만.
+     * 커밋이 끝난 탈퇴 트랜잭션의 {@code afterCommit} 에서도 부르므로 새 트랜잭션으로 연다(이미 커밋된
+     * 트랜잭션에 참여하면 쓰기가 반영되지 않는다).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void forgetCanceledPurchaser(long bandId, String purchaseToken, long userId) {
+        bandPlanRepository.findByBandIdForUpdate(bandId)
+                .filter(p -> purchaseToken.equals(p.getPurchaseToken())
+                        && Long.valueOf(userId).equals(p.getPurchasedByUserId()))
+                .ifPresent(BandPlan::forgetPurchaser);
     }
 
     private BandPlan requirePlan(long bandId) {

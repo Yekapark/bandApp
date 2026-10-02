@@ -50,7 +50,9 @@ public class KakaoApiClient implements KakaoClient {
 
         JsonNode account = body.path("kakao_account");
         String email = null;
+        // is_email_verified 도 본다 — 인증 안 된 카카오 이메일을 User.ofSocial 이 "인증됨" 으로 저장하던 것을 막는다.
         if (account.path("is_email_valid").asBoolean(false)
+                && account.path("is_email_verified").asBoolean(false)
                 && !account.path("email_needs_agreement").asBoolean(false)
                 && account.hasNonNull("email")) {
             email = account.get("email").asText();

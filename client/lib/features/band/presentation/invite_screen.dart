@@ -60,8 +60,11 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   }
 
   Future<void> _issue(int bandId) async {
-    final regenerate =
-        ref.read(currentInviteProvider(bandId)).valueOrNull != null;
+    final regenerate = ref
+            .read(currentInviteProvider(bandId))
+            .valueOrNull
+            ?.isUsableAt(DateTime.now()) ??
+        false;
     if (regenerate) {
       final ok = await showDialog<bool>(
         context: context,
@@ -196,8 +199,13 @@ class _LeaderBody extends ConsumerWidget {
                 ],
               ),
             ),
-            data: (invite) => invite == null
-                ? _Empty(busy: busy, onIssue: onIssue)
+            data: (invite) => invite == null ||
+                    !invite.isUsableAt(DateTime.now())
+                ? _Empty(
+                    busy: busy,
+                    onIssue: onIssue,
+                    expired: invite != null,
+                  )
                 : _CodeCard(
                     invite: invite,
                     busy: busy,
@@ -212,9 +220,16 @@ class _LeaderBody extends ConsumerWidget {
 }
 
 class _Empty extends StatelessWidget {
-  const _Empty({required this.busy, required this.onIssue});
+  const _Empty({
+    required this.busy,
+    required this.onIssue,
+    this.expired = false,
+  });
   final bool busy;
   final VoidCallback onIssue;
+
+  /// 코드가 있었지만 기한이 지났거나 횟수를 다 썼다.
+  final bool expired;
 
   @override
   Widget build(BuildContext context) {
@@ -223,10 +238,12 @@ class _Empty extends StatelessWidget {
         const SizedBox(height: 40),
         const Icon(Icons.mail_outline, size: 40, color: AppColors.textFaint),
         const SizedBox(height: 14),
-        const Text(
-          '아직 초대코드가 없어요.\n코드를 만들어 멤버에게 공유하세요.',
+        Text(
+          expired
+              ? '초대코드 기한이 지났거나 사용 횟수를 다 썼어요.\n새 코드를 만들어 멤버에게 공유하세요.'
+              : '아직 초대코드가 없어요.\n코드를 만들어 멤버에게 공유하세요.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textDim, height: 1.6),
+          style: const TextStyle(color: AppColors.textDim, height: 1.6),
         ),
         const SizedBox(height: 20),
         SizedBox(
@@ -245,7 +262,7 @@ class _Empty extends StatelessWidget {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: AppColors.onPrimary),
                   )
-                : const Text('초대코드 만들기'),
+                : Text(expired ? '새 초대코드 만들기' : '초대코드 만들기'),
           ),
         ),
       ],
@@ -321,11 +338,9 @@ class _CodeCard extends StatelessWidget {
               child: _ActionButton(
                 icon: Icons.link,
                 label: '링크 복사',
-                onTap: () => _copy(
-                  context,
-                  invite.link.isNotEmpty ? invite.link : invite.code,
-                  '초대 링크를 복사했어요.',
-                ),
+                onTap: () => invite.link.isNotEmpty
+                    ? _copy(context, invite.link, '초대 링크를 복사했어요.')
+                    : _copy(context, invite.code, '링크가 없어 코드를 복사했어요.'),
               ),
             ),
           ],

@@ -47,7 +47,7 @@ class _JoinBandScreenState extends ConsumerState<JoinBandScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_full) return;
+    if (!_full || _loading) return;
     FocusScope.of(context).unfocus();
     setState(() {
       _loading = true;
@@ -59,9 +59,9 @@ class _JoinBandScreenState extends ConsumerState<JoinBandScreen> {
       ref.read(selectedBandIdProvider.notifier).select(band.id);
       if (mounted) context.go(Routes.home);
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = '밴드에 합류하지 못했어요.');
+      if (mounted) setState(() => _error = '밴드에 합류하지 못했어요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

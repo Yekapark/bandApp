@@ -113,10 +113,49 @@ class PasswordResetIntegrationTest extends ApiIntegrationTest {
                     "{\"email\":\"reset@band.app\",\"code\":\"" + wrong + "\",\"newPassword\":\"newpw12345\"}");
         }
 
-        // 시도 소진 후에는 원래 맞는 코드도 더 이상 통하지 않는다.
+        // 시도 소진 후에는 원래 맞는 코드도 더 이상 통하지 않고, 잠시 후 다시 하라고 답한다.
         ResponseEntity<String> confirm = post("/api/v1/auth/password-reset/confirm",
                 "{\"email\":\"reset@band.app\",\"code\":\"" + code + "\",\"newPassword\":\"newpw12345\"}");
-        assertThat(confirm.getStatusCode().value()).isEqualTo(400);
-        assertThat(errorCode(confirm)).isEqualTo("PASSWORD_RESET_CODE_INVALID");
+        assertThat(confirm.getStatusCode().value()).isEqualTo(429);
+        assertThat(errorCode(confirm)).isEqualTo("TOO_MANY_REQUESTS");
+        // 잠긴 동안 다시 요청해도 새 번호가 생기지 않는다(요청마다 시도 횟수가 리셋되던 대입 우회 차단).
+        post("/api/v1/auth/password-reset/request", "{\"email\":\"reset@band.app\"}");
+        assertThat(storedCode()).isNull();
+    }
+
+    @Test
+    void re_request_resends_same_code_and_keeps_attempt_count() {
+        post("/api/v1/auth/signup", SIGNUP);
+        post("/api/v1/auth/password-reset/request", "{\"email\":\"reset@band.app\"}");
+        String code = storedCode();
+        String wrong = "000000".equals(code) ? "111111" : "000000";
+        String wrongBody = "{\"email\":\"reset@band.app\",\"code\":\"" + wrong + "\",\"newPassword\":\"newpw12345\"}";
+
+        for (int i = 0; i < 4; i++) {
+            post("/api/v1/auth/password-reset/confirm", wrongBody);
+        }
+        // 재요청: 먼저 받은 메일의 번호가 계속 유효하고, 오답 횟수는 이어진다.
+        post("/api/v1/auth/password-reset/request", "{\"email\":\"reset@band.app\"}");
+        assertThat(storedCode()).isEqualTo(code);
+        assertThat(errorCode(post("/api/v1/auth/password-reset/confirm", wrongBody)))
+                .isEqualTo("PASSWORD_RESET_CODE_INVALID");
+        assertThat(post("/api/v1/auth/password-reset/confirm",
+                "{\"email\":\"reset@band.app\",\"code\":\"" + code + "\",\"newPassword\":\"newpw12345\"}")
+                .getStatusCode().value()).isEqualTo(429);
+    }
+
+    @Test
+    void fifth_attempt_with_right_code_still_succeeds() {
+        post("/api/v1/auth/signup", SIGNUP);
+        post("/api/v1/auth/password-reset/request", "{\"email\":\"reset@band.app\"}");
+        String code = storedCode();
+        String wrong = "000000".equals(code) ? "111111" : "000000";
+        for (int i = 0; i < 4; i++) {
+            post("/api/v1/auth/password-reset/confirm",
+                    "{\"email\":\"reset@band.app\",\"code\":\"" + wrong + "\",\"newPassword\":\"newpw12345\"}");
+        }
+        assertThat(post("/api/v1/auth/password-reset/confirm",
+                "{\"email\":\"reset@band.app\",\"code\":\"" + code + "\",\"newPassword\":\"newpw12345\"}")
+                .getStatusCode().value()).isEqualTo(204);
     }
 }

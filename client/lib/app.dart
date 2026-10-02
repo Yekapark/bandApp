@@ -9,9 +9,44 @@ import 'core/layout/readable_width.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/application/auth_controller.dart';
+import 'features/band/application/band_providers.dart';
+import 'features/band/application/invite_providers.dart';
+import 'features/board/application/board_providers.dart';
+import 'features/home/application/home_providers.dart';
+import 'features/notification/application/notification_providers.dart';
+import 'features/plan/application/plan_providers.dart';
+import 'features/recurring/application/recurring_providers.dart';
+import 'features/reservation/application/calendar_providers.dart';
+import 'features/settings/application/settings_providers.dart';
+import 'features/settlement/application/settlement_providers.dart';
 import 'features/notification/data/push_service.dart';
 import 'features/plan/application/purchase_sync.dart';
 import 'routing/app_router.dart';
+
+/// 계정에 딸린 서버 데이터·화면 상태. **새 프로바이더를 만들면 여기에도 넣는다** — 빠지면 계정을
+/// 바꿨을 때 그 화면만 앞 계정의 값이 남는다. (myBandsProvider 는 인증 상태를 직접 본다.)
+final _userData = <ProviderOrFamily>[
+  selectedBandIdProvider,
+  bandMembersProvider,
+  bandDetailProvider,
+  currentInviteProvider,
+  boardFeedProvider,
+  upcomingReservationsProvider,
+  notificationSettingProvider,
+  notificationFeedProvider,
+  unreadNotificationCountProvider,
+  bandPlanProvider,
+  recurringRulesProvider,
+  recurringRuleDetailProvider,
+  calendarMonthProvider,
+  showCancelledReservationsProvider,
+  monthReservationsProvider,
+  roomsProvider,
+  reservationDetailProvider,
+  blockedUsersProvider,
+  settlementProvider,
+  bandSettlementsProvider,
+];
 
 class BandApp extends ConsumerWidget {
   const BandApp({super.key});
@@ -25,7 +60,16 @@ class BandApp extends ConsumerWidget {
     ref.watch(foregroundRefreshProvider);
 
     // 로그인 상태에 따라 FCM 디바이스 토큰 등록/해제 (설정 없으면 조용히 no-op), 결제 스트림 열기/닫기.
-    ref.listen(authControllerProvider.select((s) => s.status), (_, status) {
+    ref.listen(authControllerProvider.select((s) => s.status), (prev, status) {
+      // 다른 계정으로 들어오면 앞 계정이 남긴 화면 데이터를 버린다. 이 프로바이더들은 autoDispose 가
+      // 아니라 앱이 사는 동안 남아서, 로그아웃 → 다른 계정 로그인이면 앞 사람의 차단 목록·알림 설정·
+      // 같은 밴드의 내 참석·정산 표시가 그대로 보였다(알림 설정은 그대로 저장하면 새 계정에 덮어써진다).
+      if (prev == AuthStatus.unauthenticated &&
+          status == AuthStatus.authenticated) {
+        for (final p in _userData) {
+          ref.invalidate(p);
+        }
+      }
       final push = ref.read(pushServiceProvider);
       // 결제 스트림도 로그인한 동안만 듣는다 — 검증 못 끝낸 구매를 서버에 보내려면 로그인이 필요하다.
       final purchases = ref.read(purchaseSyncProvider);

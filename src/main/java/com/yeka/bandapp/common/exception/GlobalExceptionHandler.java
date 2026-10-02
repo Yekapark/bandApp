@@ -4,12 +4,14 @@ import com.yeka.bandapp.common.response.ApiResponse;
 import com.yeka.bandapp.common.response.ErrorPayload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
@@ -62,8 +64,24 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ErrorPayload.of(code.name(), code.defaultMessage())));
     }
 
+    /**
+     * 위에서 못 잡은 예외. 단, 스프링이 이미 4xx 로 분류해 둔 것({@link ErrorResponse} — 없는 주소
+     * {@code NoResourceFoundException}, 안 받는 메서드 405, 지원 안 하는 Content-Type 415, 필수 헤더 누락,
+     * 파라미터 검증 실패 등)은 그 상태 그대로 돌려준다. 이 분기가 없으면 전부 500 + ERROR 로그가 되어
+     * 사용자는 "서버 오류" 를 보고, 스캐너가 긁는 없는 주소마다 에러 로그가 쌓여 진짜 장애가 묻힌다.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception e) {
+        if (e instanceof ErrorResponse er && er.getStatusCode().is4xxClientError()) {
+            HttpStatusCode status = er.getStatusCode();
+            ErrorCode code = switch (status.value()) {
+                case 404 -> ErrorCode.NOT_FOUND;
+                case 405 -> ErrorCode.METHOD_NOT_ALLOWED;
+                default -> ErrorCode.INVALID_INPUT;
+            };
+            return ResponseEntity.status(status)
+                    .body(ApiResponse.fail(ErrorPayload.of(code.name(), code.defaultMessage())));
+        }
         log.error("처리되지 않은 예외", e);
         ErrorCode code = ErrorCode.INTERNAL_ERROR;
         return ResponseEntity.status(code.status())

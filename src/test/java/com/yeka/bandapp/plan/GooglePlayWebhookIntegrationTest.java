@@ -197,6 +197,88 @@ class GooglePlayWebhookIntegrationTest extends PlanApiSupport {
     }
 
     @Test
+    void recovery_that_arrives_while_the_store_is_briefly_down_is_retried_not_dropped() {
+        // 예전에는 스토어 일시 장애 예외가 "처리 실패" 로 200 이 돼 RECOVERED 가 사라졌다 — 돈을 냈는데 FREE.
+        String leader = signup("wh-recover-down@band.app", "리더");
+        long bandId = createBand(leader, "복구장애밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        jdbc.update("update band_plans set purchase_token = 'unavailable-hold' where band_id = ?", bandId);
+        assertThat(googlePlayWebhook(RTDN_ON_HOLD, "unavailable-hold").getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("FREE");
+
+        // 이제 스토어가 잠깐 답하지 않는다("unavailable-" 접두사) — 복구 알림은 재전송받아야 한다.
+        assertThat(googlePlayWebhook(RTDN_RECOVERED, "unavailable-hold", "recover-down", webhookSecret())
+                .getStatusCode().value()).isEqualTo(503);
+        Integer marked = jdbc.queryForObject(
+                "select count(*) from processed_store_events where message_id = 'recover-down'", Integer.class);
+        assertThat(marked).isZero();
+    }
+
+    @Test
+    void a_late_on_hold_after_recovery_does_not_downgrade_a_paying_band() {
+        // Pub/Sub 는 순서를 보장하지 않는다 — 복구(RECOVERED)보다 늦게 온 보류 알림. 스토어는 이미 ACTIVE.
+        String leader = signup("wh-late-hold@band.app", "리더");
+        long bandId = createBand(leader, "늦은보류밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(googlePlayWebhookKeepingStoreState(RTDN_ON_HOLD, tokenFor(bandId), "late-hold",
+                webhookSecret(), Instant.now()).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("PREMIUM");
+    }
+
+    @Test
+    void a_late_cancel_after_resubscribing_keeps_the_band_auto_renewing() {
+        // 해지 → Play 에서 복원(RESTARTED) 뒤에 늦게 온 CANCELED. 해지 예약으로 보이면 결제가 이어지는데도
+        // 밴드를 지울 수 있고(B5), 결제자가 탈퇴해도 해지 요청 대상에서 빠진다(B13).
+        String leader = signup("wh-late-cancel@band.app", "리더");
+        long bandId = createBand(leader, "늦은해지밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(googlePlayWebhookKeepingStoreState(RTDN_CANCELED, tokenFor(bandId), "late-cancel",
+                webhookSecret(), Instant.now()).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(data(viewPlan(leader, bandId)).get("canceled").asBoolean()).isFalse();
+        assertThat(data(viewPlan(leader, bandId)).get("autoRenewing").asBoolean()).isTrue();
+    }
+
+    @Test
+    void verifying_a_canceled_subscription_again_keeps_it_canceled() {
+        // 해지한 구독을 앱이 다시 검증·복구해도 "자동 갱신 중" 으로 되돌리지 않는다.
+        String leader = signup("wh-reverify@band.app", "리더");
+        long bandId = createBand(leader, "재검증밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        assertThat(cancel(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("canceled").asBoolean()).isTrue();
+
+        var verified = verifyGoogle(leader, bandId, tokenFor(bandId));   // 스토어는 여전히 CANCELED
+
+        assertThat(verified.getStatusCode().value()).isEqualTo(200);
+        assertThat(data(verified).get("canceled").asBoolean()).isTrue();
+        assertThat(data(verified).get("autoRenewing").asBoolean()).isFalse();
+        assertThat(data(viewPlan(leader, bandId)).get("canceled").asBoolean()).isTrue();
+    }
+
+    @Test
+    void a_coupon_used_after_account_hold_survives_the_old_subscription_expiring() {
+        // 보류로 FREE → 쿠폰으로 PREMIUM(옛 토큰은 남음, B1) → 옛 구독이 보류 끝에 EXPIRED. 쿠폰 기간이 사라지면 안 된다.
+        String leader = signup("wh-coupon-hold@band.app", "리더");
+        long bandId = createBand(leader, "보류쿠폰밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        assertThat(googlePlayWebhook(RTDN_ON_HOLD, tokenFor(bandId)).getStatusCode().value()).isEqualTo(200);
+        jdbc.update("insert into plan_coupons (code, grant_days, max_uses, expires_at, created_at) "
+                + "values ('HOLDCPN1', 30, null, null, now())");
+        assertThat(redeemCoupon(leader, bandId, "HOLDCPN1").getStatusCode().value()).isEqualTo(200);
+
+        assertThat(googlePlayWebhook(RTDN_EXPIRED, tokenFor(bandId)).getStatusCode().value()).isEqualTo(200);
+        assertThat(googlePlayWebhook(RTDN_CANCELED, tokenFor(bandId)).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("PREMIUM");
+        assertThat(jdbc.queryForObject("select subscription_ref from band_plans where band_id = ?",
+                String.class, bandId)).isEqualTo("coupon-HOLDCPN1");
+    }
+
+    @Test
     void wrong_secret_is_rejected_without_touching_state() {
         String leader = signup("wh-sec@band.app", "리더");
         long bandId = createBand(leader, "시크릿밴드");

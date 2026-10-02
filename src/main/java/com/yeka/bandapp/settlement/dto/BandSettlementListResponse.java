@@ -17,7 +17,7 @@ public record BandSettlementListResponse(
         List<Item> settlements,
 
         @Schema(description = "이 목록에서 내가 아직 안 낸 금액의 합.", example = "45000")
-        int myOutstandingTotal,
+        long myOutstandingTotal,
 
         @Schema(description = "다음 페이지 커서(정산 id). null 이면 더 없음.", example = "12")
         Long nextCursor
@@ -48,7 +48,8 @@ public record BandSettlementListResponse(
     public static BandSettlementListResponse of(List<Item> items, int size) {
         boolean hasMore = items.size() > size;
         List<Item> page = hasMore ? items.subList(0, size) : items;
-        int outstanding = page.stream().mapToInt(Item::myOutstanding).sum();
+        // long — 큰 금액 정산이 여러 건이면 int 합이 넘쳐 음수로 보였다.
+        long outstanding = page.stream().mapToLong(Item::myOutstanding).sum();
         return new BandSettlementListResponse(
                 page, outstanding,
                 hasMore ? page.get(page.size() - 1).settlementId() : null);

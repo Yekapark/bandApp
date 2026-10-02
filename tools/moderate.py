@@ -62,6 +62,12 @@ def quote(text):
     return "'" + text.replace("'", "''") + "'"
 
 
+def must_exist(table, row_id, what):
+    """번호를 잘못 치면 0행이 바뀌는데도 "완료" 가 찍혀, 조치한 줄 알고 넘어가게 된다. 먼저 멈춘다."""
+    if sql(f"SELECT count(*) FROM {table} WHERE id = {row_id};", table=False).strip() != "1":
+        sys.exit(f"!! {what} {row_id} 이(가) 없다. 번호를 확인한다. 아무것도 바꾸지 않았다.")
+
+
 def confirm(what):
     print()
     print(what)
@@ -99,6 +105,7 @@ def cmd_post(a):
 
 
 def cmd_hide_post(a):
+    must_exist("board_posts", a.post_id, "글")
     cmd_post(a)
     confirm(f"글 {a.post_id} 을 숨기고, 첨부를 저장소 삭제 대기로 돌리고, 관련 신고를 처리 완료로 바꾼다.")
     print(sql(hide_post_sql(a.post_id)))
@@ -119,6 +126,9 @@ def cmd_suspend(a):
         sys.exit("!! --days N 또는 --forever 중 하나를 준다.")
     if not a.reason.strip():
         sys.exit("!! --reason 에 사유(운영 기록)를 적는다. 신고 번호를 같이 적어 두면 나중에 찾기 쉽다.")
+    if a.forever and a.days:
+        sys.exit("!! --days 와 --forever 는 함께 쓰지 않는다.")
+    must_exist("users", a.user_id, "사용자")
     print(sql(f"SELECT id, name, email, social_provider, deleted_at, suspended_until, suspension_reason "
               f"FROM users WHERE id = {a.user_id};"))
     if a.hide_posts:
@@ -148,6 +158,7 @@ def cmd_suspend(a):
 
 
 def cmd_unsuspend(a):
+    must_exist("users", a.user_id, "사용자")
     print(sql(f"SELECT id, name, email, suspended_until, suspension_reason FROM users WHERE id = {a.user_id};"))
     confirm(f"사용자 {a.user_id} 의 정지를 지금 푼다. 사유 기록은 남긴다.")
     # 사유는 지우지 않는다 — 언제 왜 정지됐었는지가 다음 판단의 근거다.
@@ -157,6 +168,7 @@ def cmd_unsuspend(a):
 
 
 def cmd_resolve(a):
+    must_exist("reports", a.report_id, "신고")
     print(sql(f"SELECT id, target_type, target_id, reason, status FROM reports WHERE id = {a.report_id};"))
     confirm(f"신고 {a.report_id} 를 조치 없이 처리 완료로 바꾼다.")
     print(sql(f"UPDATE reports SET status = 'RESOLVED' WHERE id = {a.report_id};"))

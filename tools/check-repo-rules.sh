@@ -57,6 +57,8 @@ for f in $tracked; do
         secrets/*|*/secrets/*)                                blocked="$blocked $f" ;;
         *-adminsdk-*.json|*serviceAccount*.json)              blocked="$blocked $f" ;;
         id_rsa|id_ed25519|*/id_rsa|*/id_ed25519)              blocked="$blocked $f" ;;
+        # DB 덤프(deploy/backup) — 회원정보 전체다. 서버에서 내려받아 둔 것이 휩쓸리지 않게.
+        *.dump|*.dump.part)                                   blocked="$blocked $f" ;;
     esac
 done
 if [ -n "$blocked" ]; then
