@@ -264,7 +264,8 @@ public class StoreSubscriptionService {
                 // 복구(RECOVERED)보다 늦게 도착한 해지·보류 알림이 결제 중인 밴드를 FREE 나 "해지 예약" 으로 만들었다.
                 // 그러면 돈을 내는 밴드가 다음 갱신까지 FREE 로 남거나(사진·영상 삭제), 자동 결제가 이어지는데도
                 // 밴드 삭제·탈퇴 해지 대상에서 빠졌다. 스토어의 지금 상태가 아직 유효하면 그 상태로 맞춘다.
-                StoreSubscription live = fetchForWebhook(notificationType, purchaseToken)
+                Optional<StoreSubscription> fetched = fetchForWebhook(notificationType, purchaseToken);
+                StoreSubscription live = fetched
                         .filter(this::grantable)
                         .filter(sub -> sub.expiryTime().isAfter(now))
                         .orElse(null);
@@ -274,8 +275,11 @@ public class StoreSubscriptionService {
                 } else if (live != null || notificationType == SUB_CANCELED) {
                     // 해지 예약됐지만 결제한 기간이 남았다 — 내리지 않고 해지 예약만(쿠폰 기간이면 그대로 둔다).
                     planMutationService.applyCancelAtPeriodEndIfPremium(bandId, now);
+                    // 보류 중 해지(결제자 이탈 자동 해지 포함) — 이제 되살아나지 않으니 FREE 의 "결제 보류 중" 표시를 지운다.
+                    planMutationService.syncOnHold(bandId, isOnHold(fetched), now);
                 } else {
-                    planMutationService.applyDowngradeIfPremium(bandId, now, graceUntil);
+                    // 보류(ON_HOLD)면 FREE 에 "결제 보류 중" 을 남긴다 — 앱이 새 결제 대신 결제 수단 수정을 안내한다.
+                    planMutationService.applyDowngradeIfPremium(bandId, now, graceUntil, isOnHold(fetched));
                 }
             }
             case SUB_REVOKED -> planMutationService.applyRevoke(bandId, now);
@@ -339,6 +343,10 @@ public class StoreSubscriptionService {
         }
         BandPlan current = bandPlanRepository.findByBandId(bandId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PLAN_NOT_FOUND));
+        String oldToken = current.getPurchaseToken();
+        if (oldToken != null && !oldToken.equals(sub.purchaseToken())) {
+            requireEnded(bandId, current.getStore(), oldToken, now);
+        }
         if (current.isFree()) {
             try {
                 return new Granted(planMutationService.applyUpgrade(bandId, now, sub.expiryTime(),
@@ -351,8 +359,49 @@ public class StoreSubscriptionService {
             }
         }
         PlanMutationService.StoreRenewal renewal = planMutationService.applyStoreRenewCarryingCoupon(bandId, now,
-                sub.expiryTime(), sub.orderId(), sub.store(), sub.purchaseToken());
+                sub.expiryTime(), sub.orderId(), sub.store(), sub.purchaseToken(), oldToken);
         return new Granted(renewal.plan(), renewal.couponLeft());
+    }
+
+    /**
+     * 이 밴드에 이미 붙은 <b>다른</b> 구독이 끝났는지 스토어에 묻는다. 아직 살아 있으면(자동 갱신 중·유예·결제 보류·일시중지,
+     * 또는 해지 예약했지만 기간이 남음) {@code BAND_ALREADY_SUBSCRIBED}(409) — 새 구매를 붙이지도 확인 처리(acknowledge)하지도
+     * 않아 Google 이 3일 안에 자동 환불한다.
+     *
+     * <p>예전에는 새 토큰이 옛 토큰을 덮었다. 결제 보류 중인 밴드에서 밴드장이 다른 계정·상품으로 다시 결제하면, 보류가 풀릴 때
+     * 옛 구독도 다시 청구되는데 그 알림은 밴드를 못 찾아 버려졌다 — 한 밴드에 두 번 청구되고 하나는 아무 데도 반영되지 않았다.
+     *
+     * <p>스토어가 답하지 않으면 확인을 못 했으니 붙이지 않는다({@code PURCHASE_NOT_VERIFIED} — 앱·웹훅이 다시 시도한다).
+     */
+    private void requireEnded(long bandId, Store store, String oldToken, Instant now) {
+        StoreSubscription old;
+        try {
+            old = billingGateway.fetch(store, oldToken).orElse(null);
+        } catch (StoreBillingUnavailableException transientFailure) {
+            log.warn("구매 반영: 이 밴드의 이전 구독 상태를 못 물었다 bandId={} — 다음 시도에 맡긴다", bandId, transientFailure);
+            throw new BusinessException(ErrorCode.PURCHASE_NOT_VERIFIED);
+        }
+        if (old != null && isAlive(old, now)) {
+            log.warn("구매 반영: 이 밴드에 살아 있는 다른 구독이 있다 bandId={} state={} — 새 구매를 붙이지 않는다(자동 환불)",
+                    bandId, old.state());
+            throw new BusinessException(ErrorCode.BAND_ALREADY_SUBSCRIBED);
+        }
+    }
+
+    private static boolean isOnHold(Optional<StoreSubscription> fetched) {
+        return fetched.map(sub -> sub.state() == StoreBillingGateway.StoreSubscriptionState.ON_HOLD).orElse(false);
+    }
+
+    /**
+     * 이 구독이 앞으로 청구될 수 있거나 결제한 기간이 남았는가. 해지 예약(CANCELED)도 기간이 남았으면 살아 있다고 본다 — 그
+     * 사이 새로 결제하면 남은 기간과 새 1년이 겹쳐 두 번 낸 셈이 된다. 기간이 끝나 EXPIRED 가 된 뒤에 다시 결제하면 된다.
+     */
+    private static boolean isAlive(StoreSubscription sub, Instant now) {
+        return switch (sub.state()) {
+            case ACTIVE, IN_GRACE, ON_HOLD, PAUSED -> true;
+            case CANCELED -> sub.expiryTime() == null || sub.expiryTime().isAfter(now);
+            case EXPIRED, REVOKED -> false;
+        };
     }
 
     /**
@@ -442,7 +491,11 @@ public class StoreSubscriptionService {
             grantAndAcknowledge(bandId, sub);
             log.info("RTDN: 앱 확인 없이 구매에 적힌 밴드로 반영 type={} bandId={}", notificationType, bandId);
         } catch (BusinessException unusable) {
-            // 적힌 밴드가 그 사이 삭제됐다(PLAN_NOT_FOUND) 등 — 재전송해도 같다. 확인 처리를 안 했으니
+            if (unusable.errorCode() == ErrorCode.PURCHASE_NOT_VERIFIED && withinGrantRetryWindow(publishTime)) {
+                // 이 밴드의 이전 구독 상태를 스토어가 답하지 않았다 — 일시 장애라 다시 받아 본다.
+                throw new StoreWebhookRetryException("type=" + notificationType + " 이전 구독 확인 실패 — 재전송 대기");
+            }
+            // 적힌 밴드가 그 사이 삭제됐다(PLAN_NOT_FOUND), 이미 다른 구독이 살아 있다(BAND_ALREADY_SUBSCRIBED) 등 — 재전송해도 같다. 확인 처리를 안 했으니
             // Google 이 3일 뒤 자동 환불한다(돈을 받을 밴드가 없으니 그게 맞다).
             log.warn("RTDN: 구매에 적힌 밴드에 반영 불가 bandId={} code={} — 자동 환불로 둔다",
                     bandId, unusable.errorCode());

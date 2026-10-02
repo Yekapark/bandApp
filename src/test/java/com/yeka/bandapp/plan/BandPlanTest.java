@@ -133,4 +133,30 @@ class BandPlanTest {
         plan.revokeToFree(NOW);                                              // 환불
         assertThat(plan.getPurchasedByUserId()).isNull();
     }
+
+    @Test
+    void on_hold_is_only_a_free_plan_whose_store_token_is_kept_and_marked() {
+        BandPlan plan = BandPlan.freePlan(1L, NOW);
+        plan.markOnHold(true, NOW);
+        assertThat(plan.isOnHold()).isFalse();                       // 토큰 없는 FREE 는 보류일 수 없다
+
+        plan.upgradeToPremium(NOW, NOW.plus(365, ChronoUnit.DAYS), "GPA.1", Store.GOOGLE_PLAY, "tok-hold");
+        plan.markOnHold(true, NOW);
+        assertThat(plan.isOnHold()).isFalse();                       // PREMIUM 은 보류가 아니다
+        assertThat(plan.getSubscriptionRef()).isEqualTo("GPA.1");
+
+        plan.downgradeToFree(NOW);
+        assertThat(plan.isOnHold()).isFalse();                       // 만료로 내려온 FREE
+        plan.markOnHold(true, NOW);
+        assertThat(plan.isOnHold()).isTrue();
+        assertThat(plan.isCanceled()).isFalse();
+        assertThat(plan.isAutoRenewingStoreSubscription()).isFalse();
+
+        plan.markOnHold(false, NOW);
+        assertThat(plan.isOnHold()).isFalse();
+
+        plan.markOnHold(true, NOW);
+        plan.revokeToFree(NOW);
+        assertThat(plan.isOnHold()).isFalse();                       // 환불되면 토큰과 함께 사라진다
+    }
 }

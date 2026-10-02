@@ -38,6 +38,12 @@ public class BandPlan extends BaseTimeEntity {
     /** 쿠폰으로 받은 PREMIUM 의 {@code subscriptionRef} 접두사({@code coupon-코드}). */
     public static final String COUPON_REF_PREFIX = "coupon-";
 
+    /**
+     * FREE 인데 스토어 구독이 결제 보류(ON_HOLD) 중이라는 표시 — FREE 에서는 쓰지 않는 {@code subscriptionRef} 에 둔다.
+     * 칼럼을 늘리지 않으려는 것이고, 보류가 풀리면(복구 → PREMIUM, 만료·환불 → FREE) 다른 값으로 덮이거나 비워진다.
+     */
+    public static final String ON_HOLD_REF = "on-hold";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -133,6 +139,27 @@ public class BandPlan extends BaseTimeEntity {
         this.startedAt = now;
         this.expiresAt = null;
         this.updatedAt = now;
+    }
+
+    /**
+     * FREE 인 동안 스토어 구독이 결제 보류(ON_HOLD) 중인지 적는다(true) 또는 지운다(false). 웹훅이 스토어 상태를 보고 부른다.
+     * PREMIUM 이거나 스토어 토큰이 없으면 아무것도 안 한다 — 보류 표시는 "FREE 인데 남은 토큰의 구독이 아직 살아 있다" 는 뜻이다.
+     */
+    public void markOnHold(boolean onHold, Instant now) {
+        if (!isFree() || purchaseToken == null) {
+            return;
+        }
+        this.subscriptionRef = onHold ? ON_HOLD_REF : null;
+        this.updatedAt = now;
+    }
+
+    /**
+     * 결제 보류 중이라 FREE 다 — 결제 수단을 고치면 같은 구독이 되살아난다(B1 로 토큰을 남겨 둔 이유). 앱은 "결제 보류 중" 을
+     * 보여 주고, 새로 결제하지 말고 Play 에서 결제 수단을 고치라고 안내한다(새로 결제하면 이중 청구 — 서버는 409).
+     * ponytail: 보류가 끝났다는 알림(EXPIRED·REVOKED)을 끝내 못 받으면 표시가 남는다 — 그러면 보류 시작 시각(startedAt)으로 상한을 둔다.
+     */
+    public boolean isOnHold() {
+        return isFree() && purchaseToken != null && ON_HOLD_REF.equals(subscriptionRef);
     }
 
     /**
