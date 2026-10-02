@@ -183,7 +183,9 @@ class _ReservationDetailScreenState
                 const SizedBox(height: 10),
                 _AttendanceList(entries: board.members),
                 const SizedBox(height: 24),
+                // 확정 전·취소된 일정은 새 정산을 못 만든다(서버 409). 이미 있는 정산은 볼 수 있다.
                 _SettlementLink(
+                  canCreate: r.isConfirmed,
                   onTap: () => context.push(Routes.settlement(r.id)),
                 ),
                 if (r.isPending && band.isLeader) ...[
@@ -1025,7 +1027,8 @@ class _AttendanceList extends StatelessWidget {
 }
 
 class _SettlementLink extends StatelessWidget {
-  const _SettlementLink({required this.onTap});
+  const _SettlementLink({required this.canCreate, required this.onTap});
+  final bool canCreate;
   final VoidCallback onTap;
 
   @override
@@ -1042,10 +1045,10 @@ class _SettlementLink extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                '정산 (N빵) 보기 · 만들기',
-                style: TextStyle(
+                canCreate ? '정산 (N빵) 보기 · 만들기' : '정산 (N빵) 보기',
+                style: const TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w700,
                   color: AppColors.purpleSoft,

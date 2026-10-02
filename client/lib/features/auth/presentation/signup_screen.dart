@@ -8,6 +8,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../application/auth_controller.dart';
+import 'password_field.dart';
 import 'password_validation.dart';
 
 /// 회원가입 STEP 2 — 계정 정보. POST /auth/signup.
@@ -23,6 +24,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _passwordConfirm = TextEditingController();
 
   bool _loading = false;
   String? _error;
@@ -33,6 +35,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _name.dispose();
     _email.dispose();
     _password.dispose();
+    _passwordConfirm.dispose();
     super.dispose();
   }
 
@@ -124,16 +127,20 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 ),
                 const SizedBox(height: 14),
                 _Label('비밀번호'),
-                TextFormField(
+                PasswordField(
                   controller: _password,
-                  obscureText: true,
+                  hintText: '8자 이상',
+                  errorText: _fieldErrors['password'],
+                  validator: validateNewPassword,
+                ),
+                const SizedBox(height: 14),
+                _Label('비밀번호 확인'),
+                PasswordField(
+                  controller: _passwordConfirm,
+                  hintText: '한 번 더 입력',
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _submit(),
-                  decoration: InputDecoration(
-                    hintText: '8자 이상',
-                    errorText: _fieldErrors['password'],
-                  ),
-                  validator: validateNewPassword,
+                  validator: (v) => validatePasswordConfirm(v, _password.text),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 14),

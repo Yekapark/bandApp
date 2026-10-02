@@ -138,4 +138,43 @@ void main() {
       expect(result.overlaps.first.roomName, '사운드박스 B');
     });
   });
+
+  group('매월 몇째 주 (U26)', () {
+    test('5번째 그 요일에서 시작하면 "마지막 주" 로 안내한다', () {
+      // 2026-10-31 은 10월의 5번째 토요일.
+      final hint = monthlyRuleHint(DateTime(2026, 10, 31), DateTime.saturday);
+      expect(hint, contains('매월 마지막 주 토요일'));
+      expect(hint, isNot(contains('건너뛰')));
+    });
+
+    test('1~4번째는 "N째 주" 로 안내한다', () {
+      expect(monthlyRuleHint(DateTime(2026, 10, 10), DateTime.saturday),
+          contains('매월 2째 주 토요일'));
+    });
+
+    test('서버 monthlyWeek -1 은 목록 한 줄에 "마지막 주" 로 보인다', () {
+      final rule = RecurringRule.fromJson({
+        'id': 1,
+        'frequency': 'MONTHLY',
+        'dayOfWeek': 'SATURDAY',
+        'startTime': '15:00:00',
+        'endTime': '18:00:00',
+        'startDate': '2026-10-31',
+        'monthlyWeek': -1,
+      });
+      expect(rule.summary, '매월 마지막 주 토 15:00–18:00');
+    });
+
+    test('매주 규칙(monthlyWeek null)은 주차를 붙이지 않는다', () {
+      final rule = RecurringRule.fromJson({
+        'id': 1,
+        'frequency': 'WEEKLY',
+        'dayOfWeek': 'SATURDAY',
+        'startTime': '15:00',
+        'endTime': '18:00',
+        'startDate': '2026-10-31',
+      });
+      expect(rule.summary, '매주 토 15:00–18:00');
+    });
+  });
 }

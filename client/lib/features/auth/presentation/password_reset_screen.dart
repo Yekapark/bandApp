@@ -9,6 +9,7 @@ import '../../../routing/app_router.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../data/auth_repository.dart';
+import 'password_field.dart';
 import 'password_validation.dart';
 
 /// 비밀번호 재설정. 한 화면에서 두 단계로 진행한다.
@@ -28,6 +29,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
   final _email = TextEditingController();
   final _code = TextEditingController();
   final _password = TextEditingController();
+  final _passwordConfirm = TextEditingController();
 
   int _step = 0; // 0: 이메일, 1: 인증번호 + 새 비밀번호
   bool _loading = false;
@@ -38,6 +40,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
     _email.dispose();
     _code.dispose();
     _password.dispose();
+    _passwordConfirm.dispose();
     super.dispose();
   }
 
@@ -101,6 +104,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
       _error = null;
       _code.clear();
       _password.clear();
+      _passwordConfirm.clear();
     });
   }
 
@@ -194,13 +198,20 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                   ),
                   const SizedBox(height: 14),
                   const _Label('새 비밀번호'),
-                  TextFormField(
+                  PasswordField(
                     controller: _password,
-                    obscureText: true,
+                    hintText: '8자 이상',
+                    validator: validateNewPassword,
+                  ),
+                  const SizedBox(height: 14),
+                  const _Label('새 비밀번호 확인'),
+                  PasswordField(
+                    controller: _passwordConfirm,
+                    hintText: '한 번 더 입력',
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _resetPassword(),
-                    decoration: const InputDecoration(hintText: '8자 이상'),
-                    validator: validateNewPassword,
+                    validator: (v) =>
+                        validatePasswordConfirm(v, _password.text),
                   ),
                 ],
                 if (_error != null) ...[

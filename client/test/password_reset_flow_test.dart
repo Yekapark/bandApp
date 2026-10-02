@@ -84,6 +84,7 @@ void main() {
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), '123456');
     await tester.enterText(fields.at(1), 'newpass123');
+    await tester.enterText(fields.at(2), 'newpass123');
     await tester.tap(find.text('비밀번호 바꾸기'));
     await tester.pumpAndSettle();
 
@@ -102,6 +103,7 @@ void main() {
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), '000000');
     await tester.enterText(fields.at(1), 'newpass123');
+    await tester.enterText(fields.at(2), 'newpass123');
     await tester.tap(find.text('비밀번호 바꾸기'));
     await tester.pumpAndSettle();
 
@@ -135,10 +137,30 @@ void main() {
 
     await tester.enterText(find.byType(TextFormField).at(0), '123');
     await tester.enterText(find.byType(TextFormField).at(1), 'newpass123');
+    await tester.enterText(find.byType(TextFormField).at(2), 'newpass123');
     await tester.tap(find.text('비밀번호 바꾸기'));
     await tester.pumpAndSettle();
 
     expect(repo.confirmedCode, isNull);
     expect(find.text('인증번호는 숫자 6자리예요.'), findsOneWidget);
+  });
+
+  testWidgets('새 비밀번호 확인이 다르면 안내하고 재설정 요청을 보내지 않는다', (tester) async {
+    final repo = _FakeAuthRepo();
+    await _pump(tester, repo);
+
+    await tester.enterText(find.byType(TextFormField).first, 'me@test.app');
+    await tester.tap(find.text('인증번호 받기'));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), '123456');
+    await tester.enterText(fields.at(1), 'newpass123');
+    await tester.enterText(fields.at(2), 'newpass124');
+    await tester.tap(find.text('비밀번호 바꾸기'));
+    await tester.pumpAndSettle();
+
+    expect(repo.confirmedCode, isNull);
+    expect(find.text('비밀번호가 서로 달라요'), findsOneWidget);
   });
 }
