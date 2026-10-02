@@ -23,17 +23,20 @@ class CrashReporting {
 
   static Future<void> init() async {
     if (kIsWeb) return;
+    // main() 이 이것을 await 한 뒤 runApp 한다 — 여기서 던지면 앱이 첫 화면도 못 띄운다. Crashlytics 쪽 어떤
+    // 실패든(초기화·네이티브 채널) 오류 기록만 끄고 넘어간다(QA-F05).
+    final FirebaseCrashlytics crashlytics;
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
+      crashlytics = FirebaseCrashlytics.instance;
+      if (!kReleaseMode) {
+        await crashlytics.setCrashlyticsCollectionEnabled(false);
+        return;
+      }
     } catch (e) {
       debugPrint('CrashReporting: Firebase 미설정 — 오류 기록 끔 ($e)');
-      return;
-    }
-    final crashlytics = FirebaseCrashlytics.instance;
-    if (!kReleaseMode) {
-      await crashlytics.setCrashlyticsCollectionEnabled(false);
       return;
     }
     available = true;
