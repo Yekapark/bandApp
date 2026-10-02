@@ -74,6 +74,7 @@ public abstract class IntegrationTestSupport {
         registry.add("app.media.expire-cron", () -> "-");
         registry.add("app.media.orphan-cron", () -> "-");
         registry.add("app.plan.expire-cron", () -> "-");
+        registry.add("app.band.memberless-purge-cron", () -> "-");
         // 스토어 결제: no-op 게이트웨이(기본)로 검증 없이 동작한다. RTDN 웹훅 공유 시크릿은 고정.
         registry.add("app.plan.billing.webhook-secret", () -> TEST_WEBHOOK_SECRET);
         // 초대 딥링크: 링크·검증 파일의 값을 고정해 assertion 을 쓸 수 있게 한다.

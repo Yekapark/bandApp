@@ -20,7 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * BACKLOG §1.9 — 계정 탈퇴 시 밴드 멤버십 정리.
  *
  * <p>채택한 동작: 탈퇴 시 소속 전 밴드에서 자동으로 나간다. 탈퇴자가 밴드장이면 가장 먼저 가입한
- * 다른 활성 멤버가 밴드장으로 승격되고, 다른 멤버가 없으면 그 밴드는 활성 멤버 0인 상태로 남는다.
+ * 다른 활성 멤버가 밴드장으로 승격되고, 다른 멤버가 없으면 그 밴드는 활성 멤버 0인 채 닫혔다가 정리 배치가 지운다
+ * (LAUNCH_REVIEW L7 — {@code BandDeletionIntegrationTest}).
  */
 class AccountWithdrawalBandCleanupIntegrationTest extends BandApiSupport {
 

@@ -119,8 +119,9 @@ public class BandMemberService {
      * 계정 탈퇴 정리. 탈퇴자의 활성 멤버십을 전부 종료한다.
      *
      * <p>탈퇴자가 밴드장인 밴드는 <b>가장 먼저 가입한 다른 활성 멤버</b>를 밴드장으로 자동 승격한다.
-     * 다른 멤버가 없으면 그 밴드는 활성 멤버 0인 상태로 남는다({@code bands} 행은 유지 —
-     * 활성 멤버가 없어 어떤 API 로도 접근되지 않으므로 사실상 소멸이다. 빈 밴드 정리는 이번 범위 밖).
+     * 다른 멤버가 없으면 초대를 막아 둔다. 그 밴드(글·사진·일정까지)는 10분 안에
+     * {@link BandDeletionService#purgeMemberlessBands} 가 통째로 지운다(LAUNCH_REVIEW L7). 여기서 바로 지우지 않는 이유:
+     * R2 삭제·스토어 해지는 외부 호출이라 탈퇴 응답을 앱 타임아웃(10초) 너머로 늦출 수 있다.
      *
      * <p>밴드장 밴드에서는 {@code delegateLeadership} 과 같은 이유로 순서가 중요하다:
      * 탈퇴자를 먼저 {@code leave} + flush 해 {@code ux_band_members_single_leader} 슬롯을 비운 뒤 승격한다.

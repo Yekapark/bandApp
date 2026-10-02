@@ -96,11 +96,29 @@ public class BandPurgeService {
 
     @Transactional
     public void purge(long bandId) {
+        purge(bandId, false);
+    }
+
+    /**
+     * 활성 멤버가 없을 때만 지운다(마지막 멤버가 탈퇴한 밴드 — LAUNCH_REVIEW L7). 밴드를 잠근 뒤 다시 세므로
+     * 그 사이 누가 들어왔으면 지우지 않는다.
+     *
+     * @return 지웠으면 true
+     */
+    @Transactional
+    public boolean purgeIfMemberless(long bandId) {
+        return purge(bandId, true);
+    }
+
+    private boolean purge(long bandId, boolean onlyIfMemberless) {
         // 규칙 → 일정 → 하위 행. 밴드 잠금도 규칙 연장의 FK 확인과 서로 기다리지 않도록 뒤에 얻는다.
         recurringRuleRepository.findByBandIdForUpdate(bandId);
         reservationRepository.findByBandIdForUpdate(bandId);
         if (bandRepository.findByIdForUpdate(bandId).isEmpty()) {
-            return;
+            return false;
+        }
+        if (onlyIfMemberless && bandMemberRepository.countByBandIdAndLeftAtIsNull(bandId) > 0) {
+            return false;
         }
         settlementRepository.deleteByBandId(bandId);   // settlement_shares 는 cascade 로 따라온다
         attendanceRepository.deleteByBandId(bandId);
@@ -121,5 +139,6 @@ public class BandPurgeService {
         dispatchRepository.deleteByBandId(bandId);     // FK 가 없어 FK 를 훑으면 빠진다
 
         bandRepository.deleteById(bandId);
+        return true;
     }
 }
