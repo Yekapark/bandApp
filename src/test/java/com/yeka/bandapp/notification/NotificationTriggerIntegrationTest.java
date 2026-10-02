@@ -124,7 +124,7 @@ class NotificationTriggerIntegrationTest extends NotificationApiSupport {
         setPermission(leader, bandId, "ANYONE");
         registerToken(member, "member-dev", "ANDROID");
         long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
-        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        long reservationId = createReservation(leader, bandId, roomId, F10, F13);
         push.reset();
 
         assertThat(delete("/api/v1/bands/" + bandId + "/reservations/" + reservationId, leader)
@@ -136,6 +136,7 @@ class NotificationTriggerIntegrationTest extends NotificationApiSupport {
         assertThat(tokensFor("RESERVATION_CANCELLED")).containsExactly("member-dev");
     }
 
+    /** 결정 #28 — 푸시를 꺼도 앱 안 알림 목록에는 쌓인다. FCM 만 건너뛴다. */
     @Test
     void member_who_turned_push_off_is_skipped() {
         String leader = signup("trg-off-l@band.app", "리더");
@@ -149,6 +150,91 @@ class NotificationTriggerIntegrationTest extends NotificationApiSupport {
         createReservation(leader, bandId, roomId, T10, T13);
 
         assertThat(tokensFor("RESERVATION_CREATED")).isEmpty();
+        assertThat(data(get(NOTIFICATIONS + "?bandId=" + bandId, member)).get("notifications")).hasSize(1);
+    }
+
+    /** 결정 #27 — 푸시 제목 앞에 밴드 이름. 앱 안 목록(밴드별)은 원래 제목 그대로. */
+    @Test
+    void push_title_starts_with_the_band_name() {
+        String leader = signup("trg-bn-l@band.app", "리더");
+        String member = signup("trg-bn-m@band.app", "멤버");
+        long bandId = createBand(leader, "노을밴드");
+        join(member, issueInvite(leader, bandId, null));
+        registerToken(member, "member-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+
+        createReservation(leader, bandId, roomId, T10, T13);
+
+        assertThat(push.sent().get(0).message().title()).isEqualTo("[노을밴드] 새 합주 일정");
+        assertThat(data(get(NOTIFICATIONS + "?bandId=" + bandId, member)).get("notifications").get(0)
+                .get("title").asText()).isEqualTo("새 합주 일정");
+    }
+
+    /** 결정 #18 — 확정 일정의 시간·장소가 바뀌면 수정자 말고 다른 멤버에게, 고칠 때마다. 비고만 바뀌면 안 보낸다. */
+    @Test
+    void changing_a_confirmed_reservation_tells_the_other_members_every_time() {
+        String leader = signup("trg-chg-l@band.app", "리더");
+        String member = signup("trg-chg-m@band.app", "멤버");
+        long bandId = createBand(leader, "변경알림");
+        join(member, issueInvite(leader, bandId, null));
+        registerToken(leader, "leader-dev", "ANDROID");
+        registerToken(member, "member-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long otherRoom = createRoom(leader, bandId, "{\"name\":\"다른 방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, F10, F13);
+        String base = "/api/v1/bands/" + bandId + "/reservations/" + reservationId;
+        push.reset();
+
+        put(base, "{\"roomId\":" + roomId + ",\"startAt\":\"" + F10 + "\",\"endAt\":\"" + F13
+                + "\",\"note\":\"메모만\"}", leader);
+        assertThat(tokensFor("RESERVATION_CHANGED")).isEmpty();
+
+        put(base, reservationBody(roomId, F13, F16), leader);
+        put(base, reservationBody(otherRoom, F13, F16), leader);
+
+        assertThat(tokensFor("RESERVATION_CHANGED")).containsExactly("member-dev", "member-dev");
+        assertThat(push.sent().get(0).message().data()).containsEntry("reservationId", Long.toString(reservationId));
+    }
+
+    /** 결정 #19 — 승인제 밴드라도 밴드장이 등록·수정한 일정은 바로 확정. */
+    @Test
+    void leader_reservations_skip_approval_in_approval_mode() {
+        String leader = signup("trg-la-l@band.app", "리더");
+        String member = signup("trg-la-m@band.app", "멤버");
+        long bandId = createBand(leader, "밴드장확정");
+        join(member, issueInvite(leader, bandId, null));
+        setPermission(leader, bandId, "APPROVAL_REQUIRED");
+        registerToken(leader, "leader-dev", "ANDROID");
+        registerToken(member, "member-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+
+        var created = post("/api/v1/bands/" + bandId + "/reservations", reservationBody(roomId, F10, F13), leader);
+        assertThat(reservationOf(created).get("status").asText()).isEqualTo("CONFIRMED");
+        assertThat(tokensFor("RESERVATION_CREATED")).containsExactly("member-dev");
+        assertThat(tokensFor("RESERVATION_APPROVAL_REQUESTED")).isEmpty();
+
+        long reservationId = reservationOf(created).get("id").asLong();
+        var updated = put("/api/v1/bands/" + bandId + "/reservations/" + reservationId,
+                reservationBody(roomId, F13, F16), leader);
+        assertThat(reservationOf(updated).get("status").asText()).isEqualTo("CONFIRMED");
+        assertThat(tokensFor("RESERVATION_APPROVAL_REQUESTED")).isEmpty();
+    }
+
+    /** 결정 #20 — 이미 끝난 일정을 취소하면 알리지 않는다. */
+    @Test
+    void cancelling_a_finished_reservation_sends_no_push() {
+        String leader = signup("trg-pcx-l@band.app", "리더");
+        String member = signup("trg-pcx-m@band.app", "멤버");
+        long bandId = createBand(leader, "지난일정");
+        join(member, issueInvite(leader, bandId, null));
+        registerToken(member, "member-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);   // 2026-09-10 — 지난 일정
+        push.reset();
+
+        assertThat(delete("/api/v1/bands/" + bandId + "/reservations/" + reservationId, leader)
+                .getStatusCode().value()).isEqualTo(204);
+        assertThat(tokensFor("RESERVATION_CANCELLED")).isEmpty();
     }
 
     @Test

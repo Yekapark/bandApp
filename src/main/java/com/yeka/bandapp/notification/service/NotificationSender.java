@@ -1,5 +1,6 @@
 package com.yeka.bandapp.notification.service;
 
+import com.yeka.bandapp.band.service.BandDirectoryService;
 import com.yeka.bandapp.notification.entity.DeviceToken;
 import com.yeka.bandapp.notification.entity.NotificationType;
 import com.yeka.bandapp.notification.push.PushMessage;
@@ -40,23 +41,29 @@ public class NotificationSender {
     private final DeviceTokenRepository deviceTokenRepository;
     private final NotificationSettingService settingService;
     private final PushSender pushSender;
+    private final BandDirectoryService bandDirectory;
 
     public NotificationSender(NotificationDispatchRepository dispatchRepository,
                               NotificationDispatchRecorder dispatchRecorder,
                               DeviceTokenRepository deviceTokenRepository,
                               NotificationSettingService settingService,
-                              PushSender pushSender) {
+                              PushSender pushSender,
+                              BandDirectoryService bandDirectory) {
         this.dispatchRepository = dispatchRepository;
         this.dispatchRecorder = dispatchRecorder;
         this.deviceTokenRepository = deviceTokenRepository;
         this.settingService = settingService;
         this.pushSender = pushSender;
+        this.bandDirectory = bandDirectory;
     }
 
     /**
      * 수신자들에게 알림을 보낸다.
      *
-     * @return 이번 호출에서 <b>새로</b> 발송 처리한 수신자 수(이미 발송된 사람·푸시를 끈 사람은 제외).
+     * <p>푸시를 끈 사람도 <b>앱 안 알림 목록에는 쌓인다</b> — 이력은 남기고 FCM 만 건너뛴다(결정 #28).
+     * 예전에는 수신자에서 통째로 빼서 목록에도 아무것도 안 남았다. 리마인더·참석 독촉도 이 경로라 똑같다.
+     *
+     * @return 이번 호출에서 <b>새로</b> 이력을 남긴 수신자 수(이미 발송된 사람 제외, 푸시를 끈 사람 포함).
      *         푸시가 미설정이거나 등록된 기기가 없어도 이력은 남고 이 수에 포함된다.
      */
     public int notify(NotificationType type, long targetId, int variant,
@@ -65,11 +72,6 @@ public class NotificationSender {
             return 0;
         }
         Set<Long> recipients = new LinkedHashSet<>(recipientUserIds);
-        recipients.removeAll(settingService.pushDisabledUserIds(recipients));
-        if (recipients.isEmpty()) {
-            return 0;
-        }
-
         Long bandId = bandIdOf(message);
         List<Long> fresh = new ArrayList<>();
         for (Long userId : recipients) {
@@ -87,7 +89,11 @@ public class NotificationSender {
             return 0;
         }
 
-        pushToDevices(type, targetId, fresh, message);
+        List<Long> pushTargets = new ArrayList<>(fresh);
+        pushTargets.removeAll(settingService.pushDisabledUserIds(fresh));
+        if (!pushTargets.isEmpty()) {
+            pushToDevices(type, targetId, pushTargets, withBandName(bandId, message));
+        }
         return fresh.size();
     }
 
@@ -105,6 +111,19 @@ public class NotificationSender {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /**
+     * 푸시 제목 앞에 밴드 이름 — "[노을밴드] 새 합주 일정"(결정 #27). 밴드가 여럿이면 알림만 보고는 어느 밴드
+     * 것인지 몰랐다. 앱 안 알림 목록은 밴드별로 보이므로 저장 문구에는 붙이지 않는다.
+     */
+    private PushMessage withBandName(Long bandId, PushMessage message) {
+        if (bandId == null) {
+            return message;
+        }
+        return bandDirectory.nameOf(bandId)
+                .map(name -> new PushMessage("[" + name + "] " + message.title(), message.body(), message.data()))
+                .orElse(message);
     }
 
     /** 보관기한이 지난 발송 이력 정리(리마인더 배치가 실행 끝에 호출). */

@@ -103,6 +103,7 @@ class RecurringOccurrenceMutationIntegrationTest extends RecurringApiSupport {
         var start = today().minusWeeks(2);
         long rule = createRule(leader, band,
                 ruleBody(room, "WEEKLY", start.getDayOfWeek(), "15:00", "18:00", start, null));
+        seedPastOccurrences(leader, band, room, rule, 1);
         var past = reservations.findByRecurringRuleIdOrderByStartAtAsc(rule).getFirst();
         assertThat(past.getStartAt()).isBefore(Instant.now());
         String path = "/api/v1/bands/" + band + "/reservations/" + past.getId() + "/settlement";

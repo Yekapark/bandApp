@@ -54,10 +54,11 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
         long bandId = createBand(leader, "델리스파이스");
         long roomId = createRoom(leader, bandId, "{\"name\":\"합주실\"}");
 
-        // 3주 전부터 시작하는 주간 규칙 → 과거 회차 몇 건 + 미래 회차 여러 건.
+        // 주간 규칙(미래 회차 여러 건) + 예전에 만들어져 지나간 회차 2건.
         LocalDate start = today().minusWeeks(3);
         long ruleId = createRule(leader, bandId, ruleBody(
                 roomId, "WEEKLY", start.plusDays(2).getDayOfWeek(), "15:00", "18:00", start, null));
+        seedPastOccurrences(leader, bandId, roomId, ruleId, 1, 2);
 
         JsonNode occ = ruleDetail(leader, bandId, ruleId).get("occurrences");
         Instant now = Instant.now();
@@ -90,6 +91,26 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
             assertThat(res.getStatusCode().value()).isEqualTo(200);
             assertThat(data(res).get("status").asText()).isEqualTo("CANCELLED");
         }
+    }
+
+    /** 결정 #17 — 규칙을 지우면 다른 멤버에게 "정기 일정이 취소됐어요" 를 회차 수와 상관없이 한 번. 지운 사람은 빼고. */
+    @Test
+    void rule_deletion_notifies_other_members_once() {
+        String leader = signup("rec-dn-l@band.app", "리더");
+        String member = signup("rec-dn-m@band.app", "멤버");
+        long bandId = createBand(leader, "규칙취소");
+        join(member, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        LocalDate firstDate = today().plusDays(1);
+        long ruleId = createRule(leader, bandId, ruleBody(
+                roomId, "WEEKLY", firstDate.getDayOfWeek(), "15:00", "18:00", firstDate, null));
+
+        delete("/api/v1/bands/" + bandId + "/recurring-rules/" + ruleId, leader);
+
+        JsonNode mine = data(get("/api/v1/notifications?bandId=" + bandId, member)).get("notifications");
+        assertThat(mine).hasSize(1);
+        assertThat(mine.get(0).get("type").asText()).isEqualTo("RECURRING_RULE_CANCELLED");
+        assertThat(data(get("/api/v1/notifications?bandId=" + bandId, leader)).get("notifications")).isEmpty();
     }
 
     // --- 회차 산출 --------------------------------------------------------------
@@ -161,7 +182,8 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
                 roomId, "MONTHLY", dow, "14:00", "17:00", start, null));
 
         JsonNode occ = ruleDetail(leader, bandId, ruleId).get("occurrences");
-        assertThat(occ.size()).isGreaterThanOrEqualTo(2);
+        // 회차는 오늘부터(결정 #14) 8주 안이라 월간은 1~2건이다. 주차 계산 자체는 OccurrenceGeneratorTest 가 본다.
+        assertThat(occ.size()).isGreaterThanOrEqualTo(1);
         Integer ordinal = null;
         Integer prevMonthKey = null;
         for (JsonNode o : occ) {
@@ -379,9 +401,11 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
         int horizonWeeks = 8;
         assertThat(all.size()).isLessThanOrEqualTo(2 * horizonWeeks + 1);
 
-        Instant floor = today().minusWeeks(horizonWeeks).atStartOfDay(SEOUL).toInstant();
-        assertThat(all).allSatisfy(r ->
-                assertThat(r.getStartAt()).isAfterOrEqualTo(floor));
+        // 결정 #14 — 과거 시작일이어도 오늘(KST) 이전 회차는 만들지 않고, "앞으로 N개" 도 그 수와 같다.
+        Instant todayStart = today().atStartOfDay(SEOUL).toInstant();
+        assertThat(all).isNotEmpty().allSatisfy(r ->
+                assertThat(r.getStartAt()).isAfterOrEqualTo(todayStart));
+        assertThat(data(res).get("occurrenceCount").asInt()).isEqualTo(all.size());
     }
 
     /**
@@ -394,9 +418,10 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
         long bandId = createBand(leader, "언니네");
         long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
 
-        LocalDate start = today().minusWeeks(3);   // 과거 + 미래 회차가 섞이도록
+        LocalDate start = today().minusWeeks(3);
         long ruleId = createRule(leader, bandId, ruleBody(
                 roomId, "WEEKLY", start.plusDays(1).getDayOfWeek(), "15:00", "18:00", start, null));
+        seedPastOccurrences(leader, bandId, roomId, ruleId, 1, 2);   // 과거 + 미래 회차가 섞이도록
 
         JsonNode occ = ruleDetail(leader, bandId, ruleId).get("occurrences");
         int total = occ.size();
