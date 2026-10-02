@@ -8,6 +8,7 @@ class BandPlan {
     this.expiresAt,
     this.canceled = false,
     this.autoRenewing = false,
+    this.onHold = false,
   });
 
   /// FREE | PREMIUM
@@ -28,6 +29,11 @@ class BandPlan {
   /// 앱은 삭제·위임·탈퇴 창에서 먼저 안내한다(LAUNCH_REVIEW B5). 쿠폰 프리미엄은 false.
   final bool autoRenewing;
 
+  /// 연 갱신 결제가 실패해(카드 문제) Google 이 구독을 "결제 보류"로 둔 상태. 서버는 밴드를 FREE 로 내리지만
+  /// 구독은 살아 있어서, 결제 수단을 고치면 다시 이어진다. 이때 또 결제하면 구독이 두 개가 되고 옛 것이 되살아나
+  /// 두 번 청구되므로 앱은 결제를 막고 Play 에서 고치라고 안내한다. 옛 서버는 안 보내므로 없으면 false.
+  final bool onHold;
+
   bool get isPremium => tier == 'PREMIUM';
 
   String get retentionLabel =>
@@ -45,6 +51,7 @@ class BandPlan {
           : DateTime.parse(json['expiresAt'] as String),
       canceled: json['canceled'] as bool? ?? false,
       autoRenewing: json['autoRenewing'] as bool? ?? false,
+      onHold: json['onHold'] as bool? ?? false,
     );
   }
 }

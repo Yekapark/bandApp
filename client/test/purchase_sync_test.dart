@@ -289,6 +289,63 @@ void main() {
     });
   });
 
+  group('결제 보류(account hold) — 두 번 청구 방지', () {
+    test('요금제가 결제 보류면 결제 창을 띄우지 않는다', () async {
+      repo.viewResult = const BandPlan(tier: 'FREE', onHold: true);
+      sync.start();
+      await settle();
+
+      await expectLater(
+          sync.buy(_products(), bandId: 2),
+          throwsA(isA<PurchaseBlockedException>().having((e) => e.message,
+              'message', PurchaseBlockedException.onHold)));
+      expect(iap.bought, isEmpty);
+    });
+
+    test('이미 구독 중(자동 갱신)이면 결제 창을 띄우지 않는다', () async {
+      repo.viewResult = const BandPlan(tier: 'PREMIUM', autoRenewing: true);
+      sync.start();
+      await settle();
+
+      await expectLater(sync.buy(_products(), bandId: 2),
+          throwsA(isA<PurchaseBlockedException>()));
+      expect(iap.bought, isEmpty);
+    });
+
+    test('서버가 BAND_ALREADY_SUBSCRIBED(409)로 거절하면 완료하지 않고, 다시 와도 서버에 또 보내지 않는다',
+        () async {
+      repo.restoreError = ApiException(
+          code: 'BAND_ALREADY_SUBSCRIBED', message: 'x', statusCode: 409);
+      sync.start();
+      final p = _purchase('tok-h', PurchaseStatus.restored, pending: true, band: 6);
+      iap.emit([p]);
+      await settle();
+      iap.emit([p]); // 앱 복귀 때 스토어가 같은 구매를 다시 흘려보낸다
+      await settle();
+
+      expect(repo.restored, ['tok-h']);
+      expect(iap.completed, isEmpty); // 확인 처리 안 해야 Google 이 환불한다
+      // "결제 처리 중" 으로 이 밴드를 묶어 두지 않는다 — 막는 건 요금제의 onHold 몫이다.
+      await sync.buy(_products(), bandId: 6);
+      expect(iap.bought, isNotEmpty);
+    });
+
+    test('방금 결제가 409 로 거절되면 버튼을 풀라고 알린다', () async {
+      repo.restoreError = ApiException(
+          code: 'BAND_ALREADY_SUBSCRIBED', message: 'x', statusCode: 409);
+      final events = <PurchaseEvent>[];
+      sync.events.listen(events.add);
+      sync.start();
+      await sync.buy(_products(), bandId: 2);
+
+      iap.emit([_purchase('tok-n', PurchaseStatus.purchased, pending: true, band: 2)]);
+      await settle();
+
+      expect(events.map((e) => e.kind), [PurchaseEventKind.failed]);
+      expect(iap.completed, isEmpty);
+    });
+  });
+
   test('서버 반영이 실패하면 끝내지 않는다 — 다음 시작·복귀 때 다시 온다', () async {
     repo.restoreError = ApiException(code: 'NETWORK', message: '연결 안 됨');
     sync.start();
@@ -390,6 +447,7 @@ class _FakeRepo extends PlanRepository {
   _FakeRepo() : super(Dio());
 
   int restoreResult = 1;
+  BandPlan viewResult = const BandPlan(tier: 'FREE');
   ApiException? restoreError;
   final restored = <String>[];
   final verified = <(int, String)>[];
@@ -401,6 +459,9 @@ class _FakeRepo extends PlanRepository {
     if (err != null) throw err;
     return (bandId: restoreResult, plan: const BandPlan(tier: 'PREMIUM'));
   }
+
+  @override
+  Future<BandPlan> view(int bandId) async => viewResult;
 
   @override
   Future<BandPlan> verifyGooglePurchase(int bandId, String purchaseToken) async {

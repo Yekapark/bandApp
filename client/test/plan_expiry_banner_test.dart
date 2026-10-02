@@ -39,4 +39,11 @@ void main() {
     expect(PlanExpiryBanner.messageFor(const BandPlan(tier: 'FREE'), now),
         isNull);
   });
+
+  test('결제 보류면 무료여도 차분하게 띄운다', () {
+    final msg = PlanExpiryBanner.messageFor(
+        const BandPlan(tier: 'FREE', onHold: true), now);
+    expect(msg, contains('잠시 멈췄어요'));
+    expect(msg, isNot(contains('사라져요')));
+  });
 }
