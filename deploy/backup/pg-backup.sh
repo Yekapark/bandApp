@@ -59,6 +59,18 @@ mv "$PART" "$FILE"
 echo "== 검증 통과 ($(du -h "$FILE" | cut -f1))"
 
 if [ -n "${R2_BUCKET:-}" ] && [ -n "${R2_ACCESS_KEY_ID:-}" ]; then
+    # 밖으로 내보내는 사본은 공개키로 잠근다(LAUNCH_REVIEW G7). R2 키는 사진 업로드용과 같은 키라
+    # 그 키가 새면(2026-09-08 에 실제로 샜다) 회원정보 전체가 든 덤프를 누구나 받을 수 있었다.
+    # 서버에는 잠그는 열쇠(공개키)만 있고, 여는 열쇠는 운영자 PC·별도 보관소에만 있다 —
+    # R2 키나 서버가 털려도 이 사본은 못 연다. 복구 절차는 docs/DEPLOY.md §5.
+    PUBKEY="${BACKUP_GPG_PUBKEY:-deploy/backup/backup-pubkey.asc}"
+    [ -f "$PUBKEY" ] || { echo "!! 백업 공개키가 없다: $PUBKEY — 암호화 없이는 올리지 않는다(로컬 덤프는 남음)"; exit 1; }
+    GNUPGHOME=$(mktemp -d); export GNUPGHOME
+    trap 'rm -f "$PART"; rm -rf "$GNUPGHOME"' EXIT
+    ENC="$FILE.gpg"
+    gpg --batch --yes --quiet --trust-model always --recipient-file "$PUBKEY" --output "$ENC" --encrypt "$FILE"
+    echo "== 암호화 ($(du -h "$ENC" | cut -f1))"
+
     ENDPOINT="${R2_ENDPOINT:-https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com}"
     aws_r2() {
         docker run --rm \
@@ -69,9 +81,11 @@ if [ -n "${R2_BUCKET:-}" ] && [ -n "${R2_ACCESS_KEY_ID:-}" ]; then
             amazon/aws-cli --endpoint-url "$ENDPOINT" "$@"
     }
     echo "== R2 업로드 s3://$R2_BUCKET/$R2_PREFIX/"
-    aws_r2 s3 cp "/backup/$(basename "$FILE")" "s3://$R2_BUCKET/$R2_PREFIX/"
+    aws_r2 s3 cp "/backup/$(basename "$ENC")" "s3://$R2_BUCKET/$R2_PREFIX/"
+    rm -f "$ENC"
 
     # 원격도 최근 $KEEP 개만 남긴다. 파일명이 UTC 타임스탬프라 사전순 = 시간순이다.
+    # (암호화 전의 옛 bandapp-*.dump 도 같은 규칙으로 7개가 지나면 밀려 지워진다.)
     aws_r2 s3 ls "s3://$R2_BUCKET/$R2_PREFIX/" | awk '{print $4}' | grep '^bandapp-' | sort \
         | head -n "-$KEEP" | while read -r old; do
             echo "-- 원격 삭제 $old"
