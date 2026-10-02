@@ -80,6 +80,14 @@ public interface BandPlanRepository extends JpaRepository<BandPlan, Long> {
     @Query("select p from BandPlan p where p.purchasedByUserId = :userId")
     List<BandPlan> findByPurchaserForUpdate(@Param("userId") long userId);
 
+    /**
+     * 결제자가 탈퇴했는데 아직 연결이 남은 스토어 구독 = 해지가 아직 확인되지 않은 것(LAUNCH_REVIEW B16·B17).
+     * 해지에 성공하면 연결을 끊으므로 정상이면 비어 있다. 잠그지 않는다 — 재시도 배치가 Play 호출 전에 읽기만 한다.
+     */
+    @Query("select p from BandPlan p where p.purchaseToken is not null and p.purchasedByUserId in "
+            + "(select u.id from User u where u.deletedAt is not null)")
+    List<BandPlan> findWithWithdrawnPurchaser();
+
     /** 밴드 삭제 정리. */
     @Modifying
     @Query("delete from BandPlan p where p.bandId = :bandId")

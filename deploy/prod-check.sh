@@ -114,5 +114,18 @@ else
     fi
 fi
 
+# 8. 탈퇴한 결제자의 구독 해지 실패(LAUNCH_REVIEW B17). 한 건이라도 있으면 실패다 — 에러 급증(5번)은 200줄을 넘어야
+#    걸려서 해지 실패 한 건은 묻혔고, 묻히면 탈퇴한 사람에게 다음 해에도 청구된다. 서버가 매시 다시 시도하고 그때마다
+#    이 표시를 남기므로, 계속 걸리면 bandId 를 보고 Play Console › 주문 관리에서 직접 해지한다. 해지되면 다음 재시도가
+#    확인하고 표시를 그만 남긴다(점검은 24시간을 보므로 하루 뒤 풀린다).
+cancel_fail=$(docker logs --since 24h bandapp-app-1 2>&1 | grep -c 'SUBSCRIPTION_CANCEL_FAILED')
+if [ "${cancel_fail:-0}" -gt 0 ]; then
+    bad "구독해지 24시간 ${cancel_fail}건 실패 — 탈퇴한 결제자의 구독이 아직 청구될 수 있다. 최근 것:"
+    detail && docker logs --since 24h bandapp-app-1 2>&1 | grep 'SUBSCRIPTION_CANCEL_FAILED' \
+        | grep -o 'userId=[0-9]* bandId=[0-9]* cause=.*— ' | sort | uniq -c | tail -5
+else
+    echo "구독해지 실패 0건"
+fi
+
 [ "$fail" = 0 ] && echo "== 이상 없음"
 exit $fail
