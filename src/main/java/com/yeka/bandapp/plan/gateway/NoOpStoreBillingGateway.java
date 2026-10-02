@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,6 +46,8 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
     /** 운영에 이 빈이 떴다 = 설정 사고. 검증을 흉내내지 않고 전부 거부한다. */
     private final boolean refuseEverything;
     private final Set<String> cancelledRenewals = ConcurrentHashMap.newKeySet();
+    /** 토큰 접두사 대신 쓸 상태(테스트용) — 같은 토큰의 상태가 알림마다 바뀌는 것을 흉내낸다. */
+    private final Map<String, StoreSubscriptionState> simulatedStates = new ConcurrentHashMap<>();
 
     public NoOpStoreBillingGateway(PlanProperties planProperties, StoreBillingProperties billingProperties,
                                    Environment environment) {
@@ -66,7 +69,8 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
             return Optional.empty();
         }
         String prefix = purchaseToken.contains("-") ? purchaseToken.substring(0, purchaseToken.indexOf('-')) : "";
-        StoreSubscriptionState state = switch (prefix) {
+        StoreSubscriptionState state = simulatedStates.containsKey(purchaseToken)
+                ? simulatedStates.get(purchaseToken) : switch (prefix) {
             case "unavailable" -> throw new StoreBillingUnavailableException(
                     "[no-op billing] 스토어 일시 장애 흉내 token=" + purchaseToken, null);
             case "invalid" -> null;
@@ -121,6 +125,20 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
     /** 지금까지 {@link #cancelRenewal} 로 해지한 토큰(테스트용). */
     public Set<String> cancelledRenewals() {
         return Set.copyOf(cancelledRenewals);
+    }
+
+    /** 이 토큰의 스토어 상태를 정한다(테스트용). {@code null} 이면 다시 접두사로 정한다. */
+    public void simulateState(String purchaseToken, StoreSubscriptionState state) {
+        if (state == null) {
+            simulatedStates.remove(purchaseToken);
+        } else {
+            simulatedStates.put(purchaseToken, state);
+        }
+    }
+
+    /** {@link #simulateState} 로 정한 상태를 모두 지운다(테스트 사이 초기화). */
+    public void clearSimulatedStates() {
+        simulatedStates.clear();
     }
 
     @Override
