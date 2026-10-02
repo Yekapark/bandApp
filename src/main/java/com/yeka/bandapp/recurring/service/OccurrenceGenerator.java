@@ -1,5 +1,6 @@
 package com.yeka.bandapp.recurring.service;
 
+import com.yeka.bandapp.recurring.entity.RecurringFrequency;
 import com.yeka.bandapp.recurring.entity.RecurringRule;
 
 import java.time.DayOfWeek;
@@ -9,6 +10,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,9 +52,25 @@ public final class OccurrenceGenerator {
         switch (rule.getFrequency()) {
             case WEEKLY -> stepByDays(anchor, hardEnd, exclusiveAfter, 7, out);
             case BIWEEKLY -> stepByDays(anchor, hardEnd, exclusiveAfter, 14, out);
-            case MONTHLY -> monthly(anchor, hardEnd, exclusiveAfter, rule.getDayOfWeek(), out);
+            case MONTHLY -> monthly(anchor, hardEnd, exclusiveAfter, rule.getDayOfWeek(), monthlyWeek(rule), out);
         }
         return out;
+    }
+
+    /** {@link #monthlyWeek} 가 "그 달의 마지막 주" 를 뜻할 때 돌려주는 값(iCal BYDAY=-1SA 와 같은 표기). */
+    public static final int LAST_WEEK = -1;
+
+    /**
+     * 매월 규칙이 반복할 "몇째 주". 첫 회차(시작일 이후 처음 맞는 요일)가 그 달의 몇 번째 해당 요일인지로
+     * 정한다 — 1~4, 5번째이면 {@link #LAST_WEEK}. 5째 주는 1년에 몇 달밖에 없어서, 그 달의 마지막
+     * 해당 요일로 본다(U26). 매월 규칙이 아니면 {@code null}.
+     */
+    public static Integer monthlyWeek(RecurringRule rule) {
+        if (rule.getFrequency() != RecurringFrequency.MONTHLY) {
+            return null;
+        }
+        int ordinal = ((firstOnOrAfter(rule.getStartDate(), rule.getDayOfWeek()).getDayOfMonth() - 1) / 7) + 1;
+        return ordinal == 5 ? LAST_WEEK : ordinal;
     }
 
     /** 로컬 날짜 + 로컬 시각을 주어진 시간대로 해석해 UTC {@link Instant}로. 서울은 DST가 없어 모호하지 않다. */
@@ -74,28 +92,20 @@ public final class OccurrenceGenerator {
     }
 
     private static void monthly(LocalDate anchor, LocalDate hardEnd, LocalDate exclusiveAfter,
-                                DayOfWeek dow, List<LocalDate> out) {
-        int ordinal = ((anchor.getDayOfMonth() - 1) / 7) + 1;   // anchor가 그 달의 몇 번째 dow인지
+                                DayOfWeek dow, int week, List<LocalDate> out) {
         YearMonth month = YearMonth.from(anchor);
         YearMonth lastMonth = YearMonth.from(hardEnd);
         while (!month.isAfter(lastMonth) && out.size() < MAX_OCCURRENCES_PER_RUN) {
-            LocalDate d = nthWeekdayOfMonth(month, dow, ordinal);
-            if (d != null
-                    && !d.isBefore(anchor)
+            LocalDate d = week == LAST_WEEK
+                    ? month.atEndOfMonth().with(TemporalAdjusters.previousOrSame(dow))
+                    : month.atDay(1).with(TemporalAdjusters.dayOfWeekInMonth(week, dow));
+            if (!d.isBefore(anchor)
                     && !d.isAfter(hardEnd)
                     && (exclusiveAfter == null || d.isAfter(exclusiveAfter))) {
                 out.add(d);
             }
             month = month.plusMonths(1);
         }
-    }
-
-    /** 그 달의 {@code n}번째 {@code dow}. 그런 날이 없으면(예: 5번째 토요일이 없는 달) {@code null}. */
-    private static LocalDate nthWeekdayOfMonth(YearMonth month, DayOfWeek dow, int n) {
-        LocalDate first = month.atDay(1);
-        int shift = Math.floorMod(dow.getValue() - first.getDayOfWeek().getValue(), 7);
-        LocalDate candidate = first.plusDays(shift).plusWeeks(n - 1L);
-        return candidate.getMonth() == first.getMonth() ? candidate : null;
     }
 
     private static LocalDate firstOnOrAfter(LocalDate date, DayOfWeek dow) {

@@ -102,6 +102,14 @@ public class ReservationDirectoryService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
     }
 
+    /** 확정({@code CONFIRMED}) 일정인지. 타 밴드 일정이면 404. 정산은 확정된 일정에만 만든다(U28). */
+    @Transactional(readOnly = true)
+    public boolean isConfirmed(long bandId, long reservationId) {
+        return reservationRepository.findByIdAndBandId(reservationId, bandId)
+                .map(r -> r.getStatus() == ReservationStatus.CONFIRMED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESERVATION_NOT_FOUND));
+    }
+
     /** 규칙이 이미 만든 원래 슬롯(이동·취소분 포함). 재생성 시 중복 슬롯을 걸러낸다. */
     @Transactional(readOnly = true)
     public Set<Instant> occurrenceStartsOf(long ruleId) {

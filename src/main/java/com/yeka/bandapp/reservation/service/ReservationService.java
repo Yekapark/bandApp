@@ -57,6 +57,9 @@ public class ReservationService {
     /** 캘린더 조회가 한 번에 볼 수 있는 최대 기간. 1년 + 여유. */
     private static final long MAX_CALENDAR_RANGE_DAYS = 400;
 
+    /** 일정 하나의 최대 길이(U25). 앱은 12시간까지만 고를 수 있어 정상 사용에는 걸리지 않는다. */
+    private static final Duration MAX_RESERVATION_LENGTH = Duration.ofHours(24);
+
     private final ReservationRepository reservationRepository;
     private final BandAccessGuard accessGuard;
     private final BandDirectoryService bandDirectory;
@@ -160,12 +163,14 @@ public class ReservationService {
         if (!r.isActive()) {
             throw new BusinessException(ErrorCode.RESERVATION_NOT_EDITABLE);
         }
-        validatePeriod(request.startAt(), request.endAt());
-
         long previousRoomId = r.getRoomId();
         boolean roomChanged = !request.roomId().equals(previousRoomId);
         boolean timeChanged = !request.startAt().equals(r.getStartAt())
                 || !request.endAt().equals(r.getEndAt());
+        // 시간을 그대로 두면 검사하지 않는다 — 24시간 상한(U25) 이전에 저장된 긴 일정도 메모·비용은 고칠 수 있게.
+        if (timeChanged) {
+            validatePeriod(request.startAt(), request.endAt());
+        }
         boolean wasConfirmed = r.getStatus() == ReservationStatus.CONFIRMED;
 
         if (roomChanged) {
@@ -311,6 +316,11 @@ public class ReservationService {
     private void validatePeriod(Instant startAt, Instant endAt) {
         if (!endAt.isAfter(startAt)) {
             throw new BusinessException(ErrorCode.INVALID_RESERVATION_PERIOD);
+        }
+        // 앱은 0.5~12시간만 고를 수 있다. API 로 100년짜리 일정이 들어와 캘린더 모든 날·모든 겹침 경고를
+        // 덮지 않게 24시간에서 자른다(U25). 겹침 자체는 여전히 막지 않는다.
+        if (Duration.between(startAt, endAt).compareTo(MAX_RESERVATION_LENGTH) > 0) {
+            throw new BusinessException(ErrorCode.RESERVATION_TOO_LONG);
         }
     }
 

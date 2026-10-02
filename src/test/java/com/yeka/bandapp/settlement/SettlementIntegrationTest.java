@@ -361,6 +361,35 @@ class SettlementIntegrationTest extends ReservationApiSupport {
         assertThat(errorCode(again)).isEqualTo("SETTLEMENT_ALREADY_EXISTS");
     }
 
+    /** U28 — 취소·승인 대기 일정에는 정산을 만들 수 없다(409). 이미 만든 정산은 일정이 나중에 취소돼도 남는다. */
+    @Test
+    void only_confirmed_reservations_can_be_settled() {
+        String leader = signup("stl-conf-l@band.app", "리더");
+        String member = signup("stl-conf-m@band.app", "멤버");
+        long bandId = createBand(leader, "국카스텐셋");
+        join(member, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        String body = "{\"totalAmount\":10000,\"splitType\":\"EQUAL\"}";
+
+        long settled = createReservation(leader, bandId, roomId, T10, T13);
+        createSettlement(leader, bandId, settled, 10_000, "EQUAL");
+        long cancelled = createReservation(leader, bandId, roomId, T13, T16);
+        delete("/api/v1/bands/" + bandId + "/reservations/" + cancelled, leader);
+        delete("/api/v1/bands/" + bandId + "/reservations/" + settled, leader);
+
+        ResponseEntity<String> onCancelled = post(settlementPath(bandId, cancelled), body, leader);
+        assertThat(onCancelled.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(onCancelled)).isEqualTo("SETTLEMENT_RESERVATION_NOT_CONFIRMED");
+        assertThat(get(settlementPath(bandId, settled), leader).getStatusCode().value()).isEqualTo(200);
+
+        setPermission(leader, bandId, "APPROVAL_REQUIRED");
+        long pending = createReservation(member, bandId, roomId, T10, T13);
+        ResponseEntity<String> onPending = post(settlementPath(bandId, pending), body, member);
+        assertThat(onPending.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(onPending)).isEqualTo("SETTLEMENT_RESERVATION_NOT_CONFIRMED");
+        assertThat(get(settlementPath(bandId, pending), leader).getStatusCode().value()).isEqualTo(404);
+    }
+
     // --- 납부 체크 ----------------------------------------------------
 
     /** 납부 체크는 본인 몫만. 타인 몫 변경은 403, 분담 대상이 아니면 404. */

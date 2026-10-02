@@ -68,6 +68,7 @@ public enum ErrorCode {
     // 시간대 겹침은 예외가 아니다(경고만 하고 등록은 성공) — 그래서 에러코드가 없다.
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "일정을 찾을 수 없습니다."),
     INVALID_RESERVATION_PERIOD(HttpStatus.BAD_REQUEST, "종료 시각은 시작 시각보다 뒤여야 합니다."),
+    RESERVATION_TOO_LONG(HttpStatus.BAD_REQUEST, "일정은 24시간까지 등록할 수 있어요."),
     NOT_RESERVATION_OWNER(HttpStatus.FORBIDDEN, "등록자 본인 또는 밴드장만 할 수 있는 작업입니다."),
     RESERVATION_NOT_PENDING(HttpStatus.CONFLICT, "승인 대기 중인 일정이 아닙니다."),
     RESERVATION_NOT_EDITABLE(HttpStatus.CONFLICT, "취소·거절된 일정은 수정할 수 없습니다."),
@@ -89,6 +90,7 @@ public enum ErrorCode {
     // 정산(N빵) (Phase 7)
     SETTLEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "정산 정보를 찾을 수 없습니다."),
     SETTLEMENT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 정산이 생성된 일정입니다. 재계산 API 를 사용하세요."),
+    SETTLEMENT_RESERVATION_NOT_CONFIRMED(HttpStatus.CONFLICT, "확정된 일정만 정산할 수 있어요."),
     SETTLEMENT_NO_ATTENDEES(HttpStatus.CONFLICT, "참석자가 없어 참석자 기준 정산을 만들 수 없습니다."),
     SETTLEMENT_TOTAL_BELOW_PAID(HttpStatus.CONFLICT, "정산에서 빠진 멤버가 이미 낸 금액의 합보다 총액을 작게 할 수 없습니다."),
     NOT_SETTLEMENT_MANAGER(HttpStatus.FORBIDDEN, "일정 등록자 본인 또는 밴드장만 정산을 만들거나 재계산할 수 있습니다."),

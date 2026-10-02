@@ -84,26 +84,44 @@ class OccurrenceGeneratorTest {
     }
 
     @Test
-    void monthly_keeps_the_week_ordinal_and_skips_months_that_lack_it() {
-        LocalDate start = LocalDate.of(2026, 5, 29);   // 그 달 해당 요일의 5번째 (29 → 5주차)
-        DayOfWeek dow = start.getDayOfWeek();
-        RecurringRule rule = rule(RecurringFrequency.MONTHLY, dow, start, null);
+    void monthly_fifth_week_means_last_week_of_every_month() {
+        // 2026-10-31 은 그 달 5번째 토요일 → "매월 마지막 주 토요일" 로 본다(U26). 예전에는 5째 토요일이
+        // 있는 달(1년에 몇 번)에만 생겼다.
+        LocalDate start = LocalDate.of(2026, 10, 31);
+        RecurringRule rule = rule(RecurringFrequency.MONTHLY, DayOfWeek.SATURDAY, start, null);
 
-        List<LocalDate> dates = OccurrenceGenerator.occurrenceDates(rule, start.plusMonths(12), null);
+        List<LocalDate> dates = OccurrenceGenerator.occurrenceDates(rule, LocalDate.of(2027, 3, 31), null);
 
-        assertThat(dates).isNotEmpty();
-        assertThat(dates.get(0)).isEqualTo(start);
-        assertThat(dates.size()).isLessThan(12);   // 5주차가 없는 달은 건너뛴다
-        Integer prevKey = null;
-        for (LocalDate d : dates) {
-            assertThat(d.getDayOfWeek()).isEqualTo(dow);
-            assertThat(((d.getDayOfMonth() - 1) / 7) + 1).isEqualTo(5);
-            int key = d.getYear() * 12 + d.getMonthValue();
-            if (prevKey != null) {
-                assertThat(key).isGreaterThan(prevKey);
-            }
-            prevKey = key;
-        }
+        assertThat(dates).containsExactly(
+                LocalDate.of(2026, 10, 31), LocalDate.of(2026, 11, 28), LocalDate.of(2026, 12, 26),
+                LocalDate.of(2027, 1, 30), LocalDate.of(2027, 2, 27), LocalDate.of(2027, 3, 27));
+        assertThat(OccurrenceGenerator.monthlyWeek(rule)).isEqualTo(OccurrenceGenerator.LAST_WEEK);
+    }
+
+    @Test
+    void monthly_last_week_extension_continues_after_last_generated_without_duplicates() {
+        // 배치는 "이미 만든 마지막 회차 다음부터" 요청한다 — 그 날짜는 다시 만들지 않는다.
+        LocalDate start = LocalDate.of(2026, 10, 31);
+        RecurringRule rule = rule(RecurringFrequency.MONTHLY, DayOfWeek.SATURDAY, start, null);
+
+        List<LocalDate> dates = OccurrenceGenerator.occurrenceDates(
+                rule, LocalDate.of(2027, 1, 31), LocalDate.of(2026, 11, 28));
+
+        assertThat(dates).containsExactly(LocalDate.of(2026, 12, 26), LocalDate.of(2027, 1, 30));
+    }
+
+    @Test
+    void monthly_start_before_weekday_uses_first_matching_day_for_the_week() {
+        // 시작일 2026-10-29(목) → 처음 맞는 토요일 10-31 이 5번째 → 마지막 주.
+        RecurringRule rule = rule(RecurringFrequency.MONTHLY, DayOfWeek.SATURDAY, LocalDate.of(2026, 10, 29), null);
+        assertThat(OccurrenceGenerator.monthlyWeek(rule)).isEqualTo(OccurrenceGenerator.LAST_WEEK);
+        // 4번째는 그대로 4번째(마지막 주로 바꾸지 않는다): 2026-10-24 는 4번째 토요일, 2027-01 에는 5번째가 있다.
+        RecurringRule fourth = rule(RecurringFrequency.MONTHLY, DayOfWeek.SATURDAY, LocalDate.of(2026, 10, 24), null);
+        assertThat(OccurrenceGenerator.monthlyWeek(fourth)).isEqualTo(4);
+        assertThat(OccurrenceGenerator.occurrenceDates(fourth, LocalDate.of(2027, 1, 31), null))
+                .contains(LocalDate.of(2027, 1, 23));
+        assertThat(OccurrenceGenerator.monthlyWeek(rule(RecurringFrequency.WEEKLY, DayOfWeek.SATURDAY,
+                LocalDate.of(2026, 10, 31), null))).isNull();
     }
 
     @Test
