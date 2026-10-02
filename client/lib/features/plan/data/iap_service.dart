@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -54,9 +56,21 @@ class IapService {
   /// 개인정보(이메일·이름)는 넣지 않는다 — Play 정책상 평문 개인정보를 넣으면 안 된다.
   static String bandTag(int bandId) => 'band-$bandId';
 
-  /// 구매 시트를 띄운다. 실제 결과는 [purchaseStream] 으로 온다.
+  /// 구매에 적힌 밴드([bandTag]). Play 구매 원문(JSON)의 `obfuscatedAccountId` 에서 읽는다. 없으면 null.
+  static int? taggedBand(PurchaseDetails purchase) {
+    try {
+      final json = jsonDecode(purchase.verificationData.localVerificationData);
+      final tag = json is Map ? json['obfuscatedAccountId'] : null;
+      final m = tag is String ? RegExp(r'^band-(\d+)$').firstMatch(tag) : null;
+      return m == null ? null : int.parse(m.group(1)!);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 구매 시트를 띄운다. 실제 결과는 [purchaseStream] 으로 온다. 시트를 못 띄웠으면 false.
   /// [bandId] 는 구매 기록에 남는다 — 검증 전에 앱이 꺼져도 다음 실행 때 서버가 이 밴드로 반영한다.
-  Future<void> buy(ProductDetails product, {required int bandId}) {
+  Future<bool> buy(ProductDetails product, {required int bandId}) {
     return _iap.buyNonConsumable(
       purchaseParam: PurchaseParam(
         productDetails: product,

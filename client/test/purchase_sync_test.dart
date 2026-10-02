@@ -56,8 +56,8 @@ void main() {
     expect(repo.restored, ['tok-1']);
     expect(repo.verified, isEmpty);
     expect(iap.completed, [p]);
-    expect(events.single.kind, PurchaseEventKind.verified);
-    expect(events.single.bandId, 7);
+    // 이 앱에서 지금 결제한 것이 아니므로 요금제 화면 버튼은 건드리지 않는다.
+    expect(events, isEmpty);
   });
 
   test('이미 확인 처리된 구매는 서버를 부르지 않는다', () async {
@@ -132,6 +132,7 @@ void main() {
       // Play 는 오류 결과에 상품 id 를 비워 보낸다.
       iap.emit([_errorPurchase('BillingResponse.itemAlreadyOwned')]);
       await settle();
+      await settle(); // 다시 띄우기 전에 스토어 목록을 새로 받는다
 
       expect(iap.bought, ['premium_yearly', 'premium_yearly_2']);
     });
@@ -150,6 +151,144 @@ void main() {
     });
   });
 
+  group('감사 #11 — 결제 흐름 구멍', () {
+    test('이 밴드의 결제가 승인 대기면 다시 결제하지 않는다(두 번 청구 방지)', () async {
+      iap.unackedOnStore = [
+        _purchase('tok-p', PurchaseStatus.restored, pending: true, band: 4),
+      ];
+      repo.restoreError = ApiException(code: 'PURCHASE_NOT_VERIFIED', message: 'x', statusCode: 402);
+      sync.start();
+      await settle();
+
+      await expectLater(sync.buy(_products(), bandId: 4),
+          throwsA(isA<PurchaseInProgressException>()));
+      expect(iap.bought, isEmpty);
+
+      // 다른 밴드는 결제할 수 있다 — 승인 대기 상품은 건너뛰고.
+      await sync.buy(_products(), bandId: 5);
+      expect(iap.bought, ['premium_yearly_2']);
+    });
+
+    test('결제 중에 흘러온 밴드 표시 없는 옛 구매를 결제 중인 밴드로 검증하지 않는다', () async {
+      repo.restoreError = ApiException(code: 'PURCHASE_BAND_UNKNOWN', message: 'x', statusCode: 422);
+      final events = <PurchaseEvent>[];
+      sync.events.listen(events.add);
+      sync.start();
+      await settle();
+      iap.unackedOnStore = [_purchase('tok-old', PurchaseStatus.restored, pending: true)];
+
+      await sync.buy(_products(), bandId: 3);
+      await settle();
+
+      expect(repo.verified, isEmpty);
+      expect(iap.completed, isEmpty);
+      expect(events, isEmpty); // 진행 중인 결제를 실패로 알리지 않는다
+    });
+
+    test('결제 창을 못 띄웠는데 스트림 결과가 없으면 실패로 끝내 버튼을 푼다', () async {
+      PurchaseSync.launchFailGrace = Duration.zero;
+      addTearDown(() => PurchaseSync.launchFailGrace = const Duration(seconds: 2));
+      iap.launchResult = false;
+      final events = <PurchaseEvent>[];
+      sync.events.listen(events.add);
+      sync.start();
+      await settle();
+
+      await sync.buy(_products(), bandId: 2);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(events.map((e) => e.kind), [PurchaseEventKind.failed]);
+    });
+
+    test('서버 검증 뒤 스토어 완료 알림이 실패해도 성공으로 알린다', () async {
+      iap.completeThrows = true;
+      final events = <PurchaseEvent>[];
+      sync.events.listen(events.add);
+      sync.start();
+      await sync.buy(_products(), bandId: 1);
+
+      iap.emit([_purchase('tok-c', PurchaseStatus.purchased, pending: true, band: 1)]);
+      await settle();
+
+      expect(events.map((e) => e.kind), [PurchaseEventKind.verified]);
+    });
+
+    test('만료된 구독은 가진 목록에서 빠진다', () async {
+      iap.ownedOnStore = List.of(IapService.productIds);
+      sync.start();
+      await settle();
+
+      iap.ownedOnStore = [];
+      await sync.buy(_products(), bandId: 2);
+
+      expect(iap.bought, ['premium_yearly']);
+    });
+
+    test('"이미 보유" 가 이어져도 앞 상품으로 되돌아가지 않는다', () async {
+      sync.start();
+      await settle();
+      await sync.buy(_products(), bandId: 2);
+
+      iap.emit([_errorPurchase('BillingResponse.itemAlreadyOwned')]);
+      await settle();
+      await settle();
+      iap.emit([_errorPurchase('BillingResponse.itemAlreadyOwned')]);
+      await settle();
+      await settle();
+
+      expect(iap.bought, ['premium_yearly', 'premium_yearly_2', 'premium_yearly_3']);
+    });
+
+    test('결제 중에 다른 밴드의 옛 구매가 확인돼도 진행 중인 결제를 끝내지 않는다', () async {
+      repo.restoreResult = 4;
+      final events = <PurchaseEvent>[];
+      sync.events.listen(events.add);
+      sync.start();
+      await settle();
+      iap.unackedOnStore = [_purchase('tok-4', PurchaseStatus.restored, pending: true, band: 4)];
+
+      await sync.buy(_products(), bandId: 5);
+      await settle();
+      expect(events, isEmpty);
+
+      // 진행 중이던 밴드 5 결제를 취소하면(상품 id 빈 이벤트) 여전히 우리 결과로 받는다.
+      iap.emit([_purchase('', PurchaseStatus.canceled, pending: false, productId: '')]);
+      await settle();
+      expect(events.map((e) => e.kind), [PurchaseEventKind.canceled]);
+    });
+
+    test('먼저 실패한 시도의 타이머가 다음 시도를 실패로 만들지 않는다', () async {
+      PurchaseSync.launchFailGrace = const Duration(milliseconds: 20);
+      addTearDown(() => PurchaseSync.launchFailGrace = const Duration(seconds: 2));
+      final events = <PurchaseEvent>[];
+      sync.events.listen(events.add);
+      sync.start();
+      await settle();
+
+      iap.launchResult = false;
+      await sync.buy(_products(), bandId: 2);
+      iap.emit([_errorPurchase('BillingResponse.serviceUnavailable')]); // 스트림으로 실패가 옴
+      await settle();
+      iap.launchResult = true;
+      await sync.buy(_products(), bandId: 2); // 곧바로 다시 시도
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(events.map((e) => e.kind), [PurchaseEventKind.failed]);
+    });
+
+    test('결제 승인 대기면 버튼을 풀라고 알린다', () async {
+      final events = <PurchaseEvent>[];
+      sync.events.listen(events.add);
+      sync.start();
+      await sync.buy(_products(), bandId: 2);
+
+      iap.emit([_purchase('tok-w', PurchaseStatus.pending, pending: true, band: 2)]);
+      await settle();
+
+      expect(events.map((e) => e.kind), [PurchaseEventKind.pending]);
+    });
+  });
+
   test('서버 반영이 실패하면 끝내지 않는다 — 다음 시작·복귀 때 다시 온다', () async {
     repo.restoreError = ApiException(code: 'NETWORK', message: '연결 안 됨');
     sync.start();
@@ -161,11 +300,12 @@ void main() {
 }
 
 PurchaseDetails _purchase(String token, PurchaseStatus status,
-    {required bool pending, String productId = 'premium_yearly'}) {
+    {required bool pending, String productId = 'premium_yearly', int? band}) {
   return PurchaseDetails(
     productID: productId,
     verificationData: PurchaseVerificationData(
-      localVerificationData: '{}',
+      localVerificationData:
+          band == null ? '{}' : '{"obfuscatedAccountId":"band-$band"}',
       serverVerificationData: token,
       source: 'google_play',
     ),
@@ -205,6 +345,11 @@ class _FakeIap extends IapService {
 
   /// 스토어가 "이 계정이 가진 구독" 으로 돌려줄 상품들(확인 처리 끝난 것).
   List<String> ownedOnStore = [];
+
+  /// 복구 때 함께 돌려줄 확인 처리 안 된 구매들.
+  List<PurchaseDetails> unackedOnStore = [];
+  bool launchResult = true;
+  bool completeThrows = false;
   final completed = <PurchaseDetails>[];
 
   void emit(List<PurchaseDetails> purchases) => _controller.add(purchases);
@@ -218,22 +363,27 @@ class _FakeIap extends IapService {
   @override
   Future<void> restorePurchases() async {
     restoreCalls++;
-    if (ownedOnStore.isNotEmpty) {
+    if (ownedOnStore.isNotEmpty || unackedOnStore.isNotEmpty) {
       emit([
         for (final id in ownedOnStore)
-          _purchase('owned-$id', PurchaseStatus.restored, pending: false, productId: id)
+          _purchase('owned-$id', PurchaseStatus.restored, pending: false, productId: id),
+        ...unackedOnStore,
       ]);
     }
   }
 
   @override
-  Future<void> buy(ProductDetails product, {required int bandId}) async {
+  Future<bool> buy(ProductDetails product, {required int bandId}) async {
     boughtFor = bandId;
     bought.add(product.id);
+    return launchResult;
   }
 
   @override
-  Future<void> complete(PurchaseDetails purchase) async => completed.add(purchase);
+  Future<void> complete(PurchaseDetails purchase) async {
+    if (completeThrows) throw Exception('acknowledge 실패');
+    completed.add(purchase);
+  }
 }
 
 class _FakeRepo extends PlanRepository {
