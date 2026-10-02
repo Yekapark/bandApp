@@ -52,6 +52,7 @@ class _OsPermissionCardState extends State<OsPermissionCard>
   }
 
   Future<void> _turnOn() async {
+    final watch = Stopwatch()..start();
     try {
       final s = await FirebaseMessaging.instance.requestPermission();
       if (s.authorizationStatus == AuthorizationStatus.authorized) {
@@ -59,8 +60,11 @@ class _OsPermissionCardState extends State<OsPermissionCard>
         return;
       }
     } catch (_) {}
-    // 권한 창이 더 뜨지 않는 경우(두 번 거절) — 휴대폰 설정으로.
-    await SystemSettings.openNotificationSettings();
+    // 권한 창이 더 뜨지 않는 경우(두 번 거절) — 휴대폰 설정으로. 창이 떠서 사람이 "허용 안함" 을 고른 것이면
+    // 그 뜻대로 둔다(예전엔 거절하자마자 설정 화면이 열렸다). 구분은 `PushPermissionFlow` 와 같은 기준 — 바로 돌아왔는가.
+    if (watch.elapsed < const Duration(milliseconds: 800)) {
+      await SystemSettings.openNotificationSettings();
+    }
   }
 
   @override

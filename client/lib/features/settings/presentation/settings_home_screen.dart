@@ -194,7 +194,16 @@ class _CrashReportSwitchState extends State<_CrashReportSwitch> {
       value: _on,
       onChanged: (v) async {
         setState(() => _on = v);
-        await CrashReporting.setEnabled(v);
+        try {
+          await CrashReporting.setEnabled(v);
+        } catch (_) {
+          // 실제 값과 다르게 켜짐/꺼짐으로 남지 않게 되돌린다.
+          if (!mounted) return;
+          setState(() => _on = CrashReporting.enabled);
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(const SnackBar(content: Text('설정을 바꾸지 못했어요. 다시 시도해 주세요.')));
+        }
       },
       secondary: const Icon(Icons.bug_report_outlined,
           size: 20, color: AppColors.textSecondary),
