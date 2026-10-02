@@ -92,11 +92,13 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
             children: [
               const _SectionTitle('멤버'),
               const Spacer(),
-              TextButton.icon(
-                onPressed: () => context.push(Routes.invite),
-                icon: const Icon(Icons.person_add_alt, size: 15),
-                label: const Text('초대'),
-              ),
+              // 초대코드는 밴드장만 만든다 — 멤버에게는 버튼을 숨긴다(#43).
+              if (band.isLeader)
+                TextButton.icon(
+                  onPressed: () => context.push(Routes.invite),
+                  icon: const Icon(Icons.person_add_alt, size: 15),
+                  label: const Text('초대'),
+                ),
             ],
           ),
           const SizedBox(height: 8),

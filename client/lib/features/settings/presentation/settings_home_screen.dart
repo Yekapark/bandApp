@@ -59,12 +59,14 @@ class SettingsHomeScreen extends ConsumerWidget {
             onTap:
                 band == null ? null : () => context.push(Routes.bandSettings),
           ),
-          _Tile(
-            icon: Icons.person_add_alt,
-            label: '멤버 초대',
-            sub: '초대코드·링크 발급',
-            onTap: band == null ? null : () => context.push(Routes.invite),
-          ),
+          // 초대코드는 밴드장만 만든다 — 멤버에게는 숨긴다(#43).
+          if (band == null || band.isLeader)
+            _Tile(
+              icon: Icons.person_add_alt,
+              label: '멤버 초대',
+              sub: '초대코드·링크 발급',
+              onTap: band == null ? null : () => context.push(Routes.invite),
+            ),
           _Tile(
             icon: Icons.workspace_premium_outlined,
             label: '요금제',

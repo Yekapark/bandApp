@@ -109,7 +109,28 @@ class SettlementRepository {
     }
   }
 
-  /// 내 몫 납부 상태 변경. 변경 후 전체 현황을 돌려준다.
+  /// 나간 멤버의 미납 몫 면제/면제 취소. 밴드장만. 변경 후 전체 현황을 돌려준다.
+  Future<Settlement> setExempt({
+    required int bandId,
+    required int reservationId,
+    required int userId,
+    required bool exempt,
+  }) async {
+    try {
+      final res = await _dio.put<dynamic>(
+        '${_base(bandId, reservationId)}/shares/$userId/exempt',
+        data: {'exempt': exempt},
+      );
+      return unwrap(
+        res,
+        (d) => Settlement.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  /// 납부 상태 변경 — 내 몫은 누구나, 다른 사람 몫은 밴드장만(현금으로 받았을 때). 변경 후 전체 현황을 돌려준다.
   Future<Settlement> markPaid({
     required int bandId,
     required int reservationId,

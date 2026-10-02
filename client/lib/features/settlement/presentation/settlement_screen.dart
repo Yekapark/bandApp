@@ -33,6 +33,9 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
   /// 여겨 다시 누른다. 먼저 칠하고, 응답이 오면 서버 값으로 맞춘다. 실패하면 거둔다.
   final Map<int, bool> _pendingPaid = {};
 
+  /// 면제도 같은 방식으로 먼저 칠한다. userId → 눌러서 바뀐 값.
+  final Map<int, bool> _pendingExempt = {};
+
   SettlementKey _key(int bandId) =>
       (bandId: bandId, reservationId: widget.reservationId);
 
@@ -54,16 +57,19 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
 
     final key = _key(band.id);
     final settlementAsync = ref.watch(settlementProvider(key));
-    final detail = ref
-        .watch(
-          reservationDetailProvider(
-            (bandId: band.id, reservationId: widget.reservationId),
-          ),
-        )
-        .valueOrNull;
-    final canManage = detail != null &&
-        (band.isLeader ||
-            (meId != null && detail.reservation.requestedBy == meId));
+    final detailKey = (bandId: band.id, reservationId: widget.reservationId);
+    final detailAsync = ref.watch(reservationDetailProvider(detailKey));
+    final detail = detailAsync.valueOrNull;
+    final canManage = band.isLeader ||
+        (detail != null && meId != null && detail.reservation.requestedBy == meId);
+    // 밴드를 나간 멤버 = 지금 멤버 목록에 없는 사람. 목록을 아직 못 받았으면 null(면제 버튼을 숨긴다).
+    final memberIds = band.isLeader
+        ? ref
+            .watch(bandMembersProvider(band.id))
+            .valueOrNull
+            ?.map((m) => m.userId)
+            .toSet()
+        : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -91,6 +97,18 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
               ),
             );
           }
+          if (settlement == null && detail == null) {
+            // 일정이 늦게 오면 총액 칸이 비어 버리고, 못 불러오면 밴드장도 "만들 수 없어요" 였다.
+            // 일정을 받을 때까지 기다리고, 실패하면 다시 시도를 준다.
+            if (detailAsync.hasError) {
+              return _ErrorBody(
+                message: '일정 정보를 불러오지 못했어요.',
+                onRetry: () =>
+                    ref.invalidate(reservationDetailProvider(detailKey)),
+              );
+            }
+            return const Center(child: CircularProgressIndicator());
+          }
           if (settlement == null) {
             return _CreateForm(
               canManage: canManage,
@@ -115,10 +133,14 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
             child: _Board(
               settlement: settlement,
               meId: meId,
+              isLeader: band.isLeader,
+              memberIds: memberIds,
               canManage: canManage,
               busy: _busy,
               pendingPaid: _pendingPaid,
-              onTogglePaid: (share) => _togglePaid(band.id, share),
+              pendingExempt: _pendingExempt,
+              onTogglePaid: (share) => _togglePaid(band.id, share, meId),
+              onToggleExempt: (share) => _toggleExempt(band.id, share),
               onRecalculate: () => _recalculate(band.id),
             ),
           );
@@ -147,11 +169,24 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
     }
   }
 
-  Future<void> _togglePaid(int bandId, SettlementShare share) async {
+  Future<void> _togglePaid(int bandId, SettlementShare share, int? meId) async {
     // 같은 항목이 이미 날고 있으면 무시한다 — 연타로 상태가 뒤집히는 것을 막는다.
     if (_pendingPaid.containsKey(share.userId)) return;
 
     final next = !(_pendingPaid[share.userId] ?? share.paid);
+    // 다른 사람 몫(밴드장만 가능)은 잘못 누르기 쉬우니 한 번 묻는다.
+    if (share.userId != meId) {
+      final ok = await _confirm(
+        next ? '${share.name}님 몫을 낸 것으로 표시할까요?' : '${share.name}님의 납부 체크를 풀까요?',
+        next
+            ? '현금 등으로 직접 받았을 때 써요. "밴드장 확인" 으로 표시돼요.'
+            : '미납으로 돌아가요.',
+        next ? '냈음으로 표시' : '체크 풀기',
+      );
+      if (ok != true || !mounted || _pendingPaid.containsKey(share.userId)) {
+        return;
+      }
+    }
     // 먼저 칠한다. `_busy` 는 켜지 않는다 — 켜면 화면 전체가 잠겨 다른 사람 항목도 못 누른다.
     setState(() => _pendingPaid[share.userId] = next);
     try {
@@ -175,6 +210,67 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
       _revertPaid(share.userId);
       _toast('납부 상태를 바꾸지 못했어요.');
     }
+  }
+
+  Future<void> _toggleExempt(int bandId, SettlementShare share) async {
+    if (_pendingExempt.containsKey(share.userId)) return;
+    final next = !(_pendingExempt[share.userId] ?? share.exempt);
+    if (next) {
+      final ok = await _confirm(
+        '${share.name}님 몫을 면제할까요?',
+        '밴드를 나간 멤버의 미납 몫을 받지 않은 채로 정리해요. 남은 금액에서 빠져요.',
+        '면제',
+      );
+      if (ok != true || !mounted || _pendingExempt.containsKey(share.userId)) {
+        return;
+      }
+    }
+    setState(() => _pendingExempt[share.userId] = next);
+    try {
+      final s = await ref.read(settlementRepositoryProvider).setExempt(
+            bandId: bandId,
+            reservationId: widget.reservationId,
+            userId: share.userId,
+            exempt: next,
+          );
+      if (!mounted) return;
+      setState(() {
+        _override = s;
+        _pendingExempt.remove(share.userId);
+      });
+      _refreshCaches(bandId);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _pendingExempt.remove(share.userId));
+      _toast(e.message);
+    } catch (_) {
+      if (mounted) setState(() => _pendingExempt.remove(share.userId));
+      _toast('면제 상태를 바꾸지 못했어요.');
+    }
+  }
+
+  Future<bool?> _confirm(String title, String body, String action) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(title, style: const TextStyle(fontSize: 16)),
+        content: Text(
+          body,
+          style: const TextStyle(
+              fontSize: 12.5, color: AppColors.textDim, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 실패했으니 먼저 칠한 것을 거둔다 — 안 바뀐 상태가 바뀐 것처럼 남으면 안 된다.
@@ -415,11 +511,23 @@ class _Board extends StatelessWidget {
     required this.busy,
     required this.onTogglePaid,
     required this.onRecalculate,
+    this.isLeader = false,
+    this.memberIds,
+    this.onToggleExempt,
     this.pendingPaid = const {},
+    this.pendingExempt = const {},
   });
 
   final Settlement settlement;
   final int? meId;
+
+  /// 보는 사람이 밴드장인가 — 모든 몫의 납부를 체크하고, 나간 멤버의 미납을 면제할 수 있다.
+  final bool isLeader;
+
+  /// 지금 밴드 멤버 userId. null 이면 모름(면제 버튼을 숨긴다).
+  final Set<int>? memberIds;
+  final ValueChanged<SettlementShare>? onToggleExempt;
+  final Map<int, bool> pendingExempt;
   final bool canManage;
   final bool busy;
 
@@ -490,7 +598,9 @@ class _Board extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '${s.paidCount}/${s.shareCount}명 납부 · 남은 ${Fmt.won(s.outstandingAmount)}',
+                '${s.paidCount}/${s.shareCount}명 납부'
+                '${s.exemptCount > 0 ? ' · 면제 ${s.exemptCount}명' : ''}'
+                ' · 남은 ${Fmt.won(s.outstandingAmount)}',
                 style: const TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
@@ -506,9 +616,11 @@ class _Board extends StatelessWidget {
           style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 4),
-        const Text(
-          '본인 몫만 체크할 수 있어요.',
-          style: TextStyle(fontSize: 10.5, color: AppColors.textFaint),
+        Text(
+          isLeader
+              ? '밴드장은 현금으로 받은 멤버 몫도 체크할 수 있어요.'
+              : '본인 몫만 체크할 수 있어요.',
+          style: const TextStyle(fontSize: 10.5, color: AppColors.textFaint),
         ),
         const SizedBox(height: 10),
         for (final share in s.shares)
@@ -517,9 +629,15 @@ class _Board extends StatelessWidget {
             child: _ShareRow(
               share: share,
               paid: pendingPaid[share.userId] ?? share.paid,
+              exempt: pendingExempt[share.userId] ?? share.exempt,
               isMe: meId != null && share.userId == meId,
+              canToggle: isLeader || (meId != null && share.userId == meId),
+              departed:
+                  memberIds != null && !memberIds!.contains(share.userId),
+              canExempt: isLeader && onToggleExempt != null,
               busy: busy,
               onTap: () => onTogglePaid(share),
+              onExempt: () => onToggleExempt?.call(share),
             ),
           ),
         if (canManage) ...[
@@ -542,9 +660,27 @@ class _ShareRow extends StatelessWidget {
     required this.isMe,
     required this.busy,
     required this.onTap,
+    this.exempt = false,
+    this.canToggle = false,
+    this.departed = false,
+    this.canExempt = false,
+    this.onExempt,
   });
 
   final SettlementShare share;
+
+  /// 면제된 몫 — 체크하지 않고 "면제" 로만 보인다.
+  final bool exempt;
+
+  /// 이 몫의 납부를 바꿀 수 있는가(내 몫, 또는 밴드장).
+  final bool canToggle;
+
+  /// 밴드를 나간 멤버의 몫.
+  final bool departed;
+
+  /// 밴드장 — 나간 멤버의 미납 몫에 "면제"/"면제 취소" 를 보인다.
+  final bool canExempt;
+  final VoidCallback? onExempt;
 
   /// 화면에 그릴 납부 여부. **`paid` 가 아니라 이 값을 쓴다** — 방금 누른 것은
   /// 서버 응답 전에도 체크된 것으로 보여야 한다.
@@ -555,7 +691,8 @@ class _ShareRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tappable = isMe && !busy;
+    final tappable = canToggle && !exempt && !busy;
+    final showExempt = canExempt && departed && !paid;
     return GestureDetector(
       onTap: tappable ? onTap : null,
       child: Container(
@@ -607,29 +744,58 @@ class _ShareRow extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (isMe)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 6),
-                      child: Text(
-                        '나',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.purple,
-                        ),
-                      ),
-                    ),
+                  if (isMe) const _Tag('나', AppColors.purple),
+                  if (departed) const _Tag('나감', AppColors.textFaint),
+                  if (paid && share.paidByLeader)
+                    const _Tag('밴드장 확인', AppColors.success),
+                  if (exempt) const _Tag('면제', AppColors.textDim),
                 ],
               ),
             ),
+            if (showExempt)
+              TextButton(
+                onPressed: busy ? null : onExempt,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 32),
+                ),
+                child: Text(
+                  exempt ? '면제 취소' : '면제',
+                  style: const TextStyle(fontSize: 11.5),
+                ),
+              ),
             Text(
               Fmt.won(share.amount),
               style: AppTypography.mono(
                 fontSize: 12.5,
                 color: paid ? AppColors.success : AppColors.textSecondary,
+              ).copyWith(
+                decoration: exempt ? TextDecoration.lineThrough : null,
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  const _Tag(this.label, this.color);
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: color,
         ),
       ),
     );

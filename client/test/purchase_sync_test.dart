@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:bandapp_client/core/network/api_exception.dart';
+import 'package:bandapp_client/features/band/application/band_providers.dart';
+import 'package:bandapp_client/features/band/data/band_models.dart';
 import 'package:bandapp_client/features/plan/application/purchase_sync.dart';
 import 'package:bandapp_client/features/plan/data/iap_service.dart';
 import 'package:bandapp_client/features/plan/data/plan_models.dart';
@@ -19,12 +21,26 @@ void main() {
   late ProviderContainer container;
   late PurchaseSync sync;
 
+  /// 서버가 돌려줄 내 역할(모든 밴드 공통). 결제 직전에 다시 받는다(#61).
+  var myRole = 'LEADER';
+
   setUp(() {
     iap = _FakeIap();
     repo = _FakeRepo();
+    myRole = 'LEADER';
     container = ProviderContainer(overrides: [
       iapServiceProvider.overrideWithValue(iap),
       planRepositoryProvider.overrideWithValue(repo),
+      myBandsProvider.overrideWith((ref) async => [
+            for (var id = 1; id <= 9; id++)
+              MyBand(
+                id: id,
+                name: 'b$id',
+                myRole: myRole,
+                memberCount: 2,
+                joinedAt: DateTime(2026),
+              ),
+          ]),
     ]);
     sync = container.read(purchaseSyncProvider);
   });
@@ -344,6 +360,45 @@ void main() {
       expect(events.map((e) => e.kind), [PurchaseEventKind.failed]);
       expect(iap.completed, isEmpty);
     });
+  });
+
+  test('#61 결제 직전에 다시 받아 보니 밴드장이 아니면 결제 창을 띄우지 않는다', () async {
+    sync.start();
+    await settle();
+    myRole = 'MEMBER';
+
+    await expectLater(
+        sync.buy(_products(), bandId: 2),
+        throwsA(isA<PurchaseBlockedException>().having((e) => e.message,
+            'message', PurchaseBlockedException.notLeader)));
+    expect(iap.bought, isEmpty);
+  });
+
+  test('#62 서버가 영구적으로 거절한 구매(403 밴드장 아님)는 이번 세션에 다시 보내지 않는다', () async {
+    repo.restoreError = ApiException(
+        code: 'NOT_BAND_LEADER', message: 'x', statusCode: 403);
+    sync.start();
+    final p = _purchase('tok-403', PurchaseStatus.restored, pending: true, band: 4);
+    iap.emit([p]);
+    await settle();
+    iap.emit([p]);
+    await settle();
+
+    expect(repo.restored, ['tok-403']);
+    expect(iap.completed, isEmpty);
+  });
+
+  test('#62 일시적 실패(5xx)는 다음에 다시 보낸다', () async {
+    repo.restoreError =
+        ApiException(code: 'INTERNAL', message: 'x', statusCode: 500);
+    sync.start();
+    final p = _purchase('tok-500', PurchaseStatus.restored, pending: true, band: 4);
+    iap.emit([p]);
+    await settle();
+    iap.emit([p]);
+    await settle();
+
+    expect(repo.restored, ['tok-500', 'tok-500']);
   });
 
   test('서버 반영이 실패하면 끝내지 않는다 — 다음 시작·복귀 때 다시 온다', () async {

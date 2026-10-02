@@ -33,6 +33,8 @@ class SettlementShare {
     required this.role,
     required this.amount,
     required this.paid,
+    this.paidByLeader = false,
+    this.exempt = false,
   });
 
   final int userId;
@@ -40,6 +42,12 @@ class SettlementShare {
   final String role;
   final int amount;
   final bool paid;
+
+  /// 밴드장이 대신 "냈음" 으로 체크했다("밴드장 확인").
+  final bool paidByLeader;
+
+  /// 밴드장이 면제한 몫(나간 멤버의 미납). 미납으로 세지 않는다.
+  final bool exempt;
 
   bool get isLeader => role == 'LEADER';
 
@@ -50,6 +58,8 @@ class SettlementShare {
       role: json['role'] as String? ?? 'MEMBER',
       amount: (json['amount'] as num?)?.toInt() ?? 0,
       paid: json['paid'] as bool? ?? false,
+      paidByLeader: json['paidByLeader'] as bool? ?? false,
+      exempt: json['exempt'] as bool? ?? false,
     );
   }
 }
@@ -64,6 +74,8 @@ class Settlement {
     required this.paidAmount,
     required this.outstandingAmount,
     required this.shares,
+    this.exemptCount = 0,
+    this.exemptAmount = 0,
   });
 
   final int settlementId;
@@ -74,11 +86,16 @@ class Settlement {
   final int outstandingAmount;
   final List<SettlementShare> shares;
 
+  /// 밴드장이 면제한 몫의 인원·합계. [outstandingAmount] 는 이미 이만큼 뺀 값이다.
+  final int exemptCount;
+  final int exemptAmount;
+
   int get shareCount => shares.length;
 
-  /// 0.0 ~ 1.0. 총액이 0이면 0.
-  double get paidRatio =>
-      totalAmount <= 0 ? 0 : (paidAmount / totalAmount).clamp(0, 1).toDouble();
+  /// 0.0 ~ 1.0. 총액이 0이면 0. 면제된 몫은 정리된 것으로 센다.
+  double get paidRatio => totalAmount <= 0
+      ? 0
+      : ((paidAmount + exemptAmount) / totalAmount).clamp(0, 1).toDouble();
 
   SettlementShare? shareOf(int userId) {
     for (final s in shares) {
@@ -95,6 +112,8 @@ class Settlement {
       paidCount: (json['paidCount'] as num?)?.toInt() ?? 0,
       paidAmount: (json['paidAmount'] as num?)?.toInt() ?? 0,
       outstandingAmount: (json['outstandingAmount'] as num?)?.toInt() ?? 0,
+      exemptCount: (json['exemptCount'] as num?)?.toInt() ?? 0,
+      exemptAmount: (json['exemptAmount'] as num?)?.toInt() ?? 0,
       shares: (json['shares'] as List<dynamic>? ?? const [])
           .map((e) => SettlementShare.fromJson(e as Map<String, dynamic>))
           .toList(growable: false),
@@ -115,6 +134,7 @@ class BandSettlementItem {
     required this.totalAmount,
     required this.shareCount,
     required this.paidCount,
+    this.exemptCount = 0,
     this.myAmount,
     this.myPaid,
   });
@@ -129,13 +149,17 @@ class BandSettlementItem {
   final int shareCount;
   final int paidCount;
 
+  /// 밴드장이 면제한 인원(나간 멤버의 미납).
+  final int exemptCount;
+
   /// 내가 이 정산의 분담 대상이 아니면 null (정산 후 합류한 멤버 등).
   final int? myAmount;
   final bool? myPaid;
 
   bool get isMine => myAmount != null;
   bool get iStillOwe => myAmount != null && myPaid == false;
-  bool get allPaid => shareCount > 0 && paidCount == shareCount;
+  /// "다 정리됨" — 낸 사람 + 면제된 사람이 전원.
+  bool get allPaid => shareCount > 0 && paidCount + exemptCount == shareCount;
 
   factory BandSettlementItem.fromJson(Map<String, dynamic> json) {
     return BandSettlementItem(
@@ -146,6 +170,7 @@ class BandSettlementItem {
       totalAmount: (json['totalAmount'] as num?)?.toInt() ?? 0,
       shareCount: (json['shareCount'] as num?)?.toInt() ?? 0,
       paidCount: (json['paidCount'] as num?)?.toInt() ?? 0,
+      exemptCount: (json['exemptCount'] as num?)?.toInt() ?? 0,
       myAmount: (json['myAmount'] as num?)?.toInt(),
       myPaid: json['myPaid'] as bool?,
     );

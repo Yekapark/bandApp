@@ -16,8 +16,11 @@ String? notificationRoute(String? type, int? reservationId) {
       return null; // 운영자용 — 처리는 tools/moderate.py 로 한다
     case 'RESERVATION_CANCELLED':
       return Routes.calendar; // 취소된 일정은 상세가 비어 있다 — 달력에서 바뀐 일정을 본다
+    case 'RECURRING_RULE_CANCELLED':
+      return Routes.calendar; // 정기 일정이 통째로 취소됐다 — 일정 id 가 없다(ruleId 만)
   }
   if (reservationId == null || reservationId <= 0) return Routes.notifications;
+  // RESERVATION_CHANGED(시간·장소가 바뀜)도 여기 — 그 일정 상세로.
   if (type == 'SETTLEMENT_REQUESTED') return Routes.settlement(reservationId);
   return Routes.reservation(reservationId);
 }
