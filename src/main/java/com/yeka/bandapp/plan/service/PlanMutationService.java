@@ -186,11 +186,15 @@ public class PlanMutationService {
         if (plan == null || plan.isCouponPeriod()) {
             return;
         }
-        if (plan.isPremium()) {
+        boolean wasPremium = plan.isPremium();
+        if (wasPremium) {
             plan.downgradeToFree(now);
-            mediaDirectory.applyGracePeriodForBand(bandId, graceUntil);
         }
         plan.markOnHold(storeOnHold, now);
+        // 미디어 일괄 갱신이 영속성 컨텍스트를 비우므로(clearAutomatically) 요금제 변경을 모두 끝낸 뒤에 부른다.
+        if (wasPremium) {
+            mediaDirectory.applyGracePeriodForBand(bandId, graceUntil);
+        }
     }
 
     /** FREE 밴드의 "결제 보류 중" 표시를 스토어 상태에 맞춘다({@link BandPlan#markOnHold}). 요금제가 없거나 PREMIUM 이면 no-op. */
