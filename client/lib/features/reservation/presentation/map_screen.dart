@@ -152,7 +152,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       try {
         await map.moveCamera(CameraUpdate.fitMapPoints(
           [for (final r in located) LatLng(r.lat!, r.lng!)],
-          padding: 80,
+          padding: mapFitPadding(context),
         ));
       } catch (_) {
         // 카메라 이동 실패는 치명적이지 않다 — 첫 합주실 위치 그대로 둔다.

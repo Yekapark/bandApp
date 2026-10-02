@@ -15,6 +15,17 @@ const kMapFallbackCenter = LatLng(37.5666, 126.9784);
 /// 관리할 필요가 없다. 굽는 비용이 있으므로 한 번만 만들어 재사용한다.
 Future<KImage>? _pinImage;
 
+const double _pinSize = 36;
+
+/// 여러 핀을 한 화면에 맞출 때(`CameraUpdate.fitMapPoints`) 가장자리 여백. **물리 픽셀**이다.
+///
+/// 카카오 Android SDK 는 이 값을 dp 가 아니라 px 로 받는다. 마커는 좌표에 **아래 끝**을
+/// 맞춰(anchor 0.5,1.0) 그 위로 핀 높이만큼 솟는데, 예전 80px 은 S24(약 3배 밀도)에서
+/// 27dp 남짓이라 36dp 핀보다 낮아 맨 위 핀 머리가 잘렸다(QA-F03). 핀 높이 + 여유를 dp 로
+/// 잡고 밀도를 곱한다.
+int mapFitPadding(BuildContext context, {double margin = 24}) =>
+    ((_pinSize + margin) * MediaQuery.devicePixelRatioOf(context)).round();
+
 /// 합주실 마커 스타일.
 ///
 /// 이미지는 공유하지만 [PoiStyle] 객체 자체는 호출할 때마다 새로 만든다 — 스타일은 등록된
@@ -22,8 +33,8 @@ Future<KImage>? _pinImage;
 /// 마커가 뜨지 않는다.
 Future<PoiStyle> roomPoiStyle() async {
   final icon = await (_pinImage ??= KImage.fromWidget(
-    const Icon(Icons.place, color: AppColors.primary, size: 36),
-    const Size(36, 36),
+    const Icon(Icons.place, color: AppColors.primary, size: _pinSize),
+    const Size(_pinSize, _pinSize),
   ));
   return PoiStyle(icon: icon);
 }

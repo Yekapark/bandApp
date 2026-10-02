@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../routing/app_router.dart';
 import '../../../shared/widgets/app_scaffold.dart';
+import '../../../shared/widgets/legal_link.dart';
 import '../../../shared/widgets/primary_button.dart';
 
 /// 회원가입 STEP 1 — 약관 동의. 서버 호출 없이 클라이언트에서만 게이트한다.
@@ -33,10 +34,10 @@ class _TermsScreenState extends State<TermsScreen> {
     'privacy': false,
   };
 
-  static const _rows = [
-    ('age', '만 14세 이상이에요', true),
-    ('tos', '이용약관 동의', true),
-    ('privacy', '개인정보 수집·이용 동의', true),
+  static final _rows = <(String, String, bool, Uri?)>[
+    ('age', '만 14세 이상이에요', true, null),
+    ('tos', '이용약관 동의', true, LegalUrls.terms),
+    ('privacy', '개인정보 수집·이용 동의', true, LegalUrls.privacy),
     // 마케팅 수신 동의를 뺐다 - 보낼 마케팅이 없다. 받아 놓고 안 쓰면 동의만 남는 셈이고,
     // 개인정보처리방침에도 "마케팅 이메일을 보낸다" 고 써야 해서 사실과 어긋난다.
   ];
@@ -84,16 +85,17 @@ class _TermsScreenState extends State<TermsScreen> {
               const SizedBox(height: 24),
               _AllAgreeRow(checked: _allDone, onTap: _toggleAll),
               const SizedBox(height: 10),
-              for (final (key, label, isRequired) in _rows)
+              for (final (key, label, isRequired, doc) in _rows)
                 _AgreeRow(
                   label: label,
                   isRequired: isRequired,
                   checked: _agreed[key]!,
                   onTap: () => _toggle(key),
+                  doc: doc,
                 ),
               const Spacer(),
               const Text(
-                '전문은 아래 링크에서 언제든 다시 볼 수 있어요.',
+                '항목 옆 "보기" 를 누르면 전문이 열려요.',
                 style: TextStyle(
                     fontSize: 11, height: 1.7, color: AppColors.textFaint),
               ),
@@ -156,12 +158,16 @@ class _AgreeRow extends StatelessWidget {
     required this.isRequired,
     required this.checked,
     required this.onTap,
+    this.doc,
   });
 
   final String label;
   final bool isRequired;
   final bool checked;
   final VoidCallback onTap;
+
+  /// 전문 페이지. 있으면 줄 끝에 "보기" 링크를 따로 둔다 — 줄을 누르면 체크만 바뀐다.
+  final Uri? doc;
 
   @override
   Widget build(BuildContext context) {
@@ -183,6 +189,10 @@ class _AgreeRow extends StatelessWidget {
                 color: isRequired ? AppColors.primary : AppColors.textFaint,
               ),
             ),
+            if (doc != null) ...[
+              const SizedBox(width: 6),
+              LegalLink(label: '보기', uri: doc!),
+            ],
           ],
         ),
       ),
