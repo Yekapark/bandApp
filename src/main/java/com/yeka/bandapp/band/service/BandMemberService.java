@@ -10,6 +10,7 @@ import com.yeka.bandapp.band.repository.BandMemberRepository;
 import com.yeka.bandapp.band.repository.BandRepository;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import com.yeka.bandapp.plan.service.WithdrawnPurchaserSubscriptions;
 import com.yeka.bandapp.user.service.UserDirectoryService;
 import com.yeka.bandapp.user.service.UserDirectoryService.UserSummary;
 import org.springframework.stereotype.Service;
@@ -32,15 +33,18 @@ public class BandMemberService {
     private final BandInviteRepository bandInviteRepository;
     private final BandAccessGuard accessGuard;
     private final UserDirectoryService userDirectory;
+    private final WithdrawnPurchaserSubscriptions purchaserSubscriptions;
 
     public BandMemberService(BandRepository bandRepository, BandMemberRepository bandMemberRepository,
                              BandInviteRepository bandInviteRepository,
-                             BandAccessGuard accessGuard, UserDirectoryService userDirectory) {
+                             BandAccessGuard accessGuard, UserDirectoryService userDirectory,
+                             WithdrawnPurchaserSubscriptions purchaserSubscriptions) {
         this.bandRepository = bandRepository;
         this.bandMemberRepository = bandMemberRepository;
         this.bandInviteRepository = bandInviteRepository;
         this.accessGuard = accessGuard;
         this.userDirectory = userDirectory;
+        this.purchaserSubscriptions = purchaserSubscriptions;
     }
 
     @Transactional(readOnly = true)
@@ -56,7 +60,10 @@ public class BandMemberService {
         return new BandMemberListResponse(bandId, rows.size(), rows);
     }
 
-    /** 자발적 탈퇴. 밴드장은 위임 전에는 나갈 수 없다(밴드에 리더가 사라지는 것을 막는다). */
+    /**
+     * 자발적 탈퇴. 밴드장은 위임 전에는 나갈 수 없다(밴드에 리더가 사라지는 것을 막는다).
+     * 나간 사람이 이 밴드 구독의 결제자면 커밋 뒤 자동 결제를 해지한다(결제한 기간은 유지, 환불 없음).
+     */
     @Transactional
     public void leave(long bandId, long userId) {
         accessGuard.lockBand(bandId);
@@ -65,9 +72,10 @@ public class BandMemberService {
             throw new BusinessException(ErrorCode.LEADER_MUST_DELEGATE_BEFORE_LEAVING);
         }
         me.leave(Instant.now());
+        purchaserSubscriptions.cancelRenewalAfterLeavingBand(bandId, userId);
     }
 
-    /** 밴드장의 멤버 추방. 자기 자신은 추방 대상이 될 수 없다. */
+    /** 밴드장의 멤버 추방. 자기 자신은 추방 대상이 될 수 없다. 추방된 사람이 결제자면 {@link #leave} 와 같이 해지한다. */
     @Transactional
     public void kick(long bandId, long leaderUserId, long targetUserId) {
         accessGuard.lockBand(bandId);
@@ -78,6 +86,7 @@ public class BandMemberService {
         BandMember target = bandMemberRepository.findByBandIdAndUserIdAndLeftAtIsNull(bandId, targetUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
         target.leave(Instant.now());
+        purchaserSubscriptions.cancelRenewalAfterLeavingBand(bandId, targetUserId);
     }
 
     /**

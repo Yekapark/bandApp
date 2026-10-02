@@ -131,6 +131,7 @@ public enum ErrorCode {
     PAYMENT_FAILED(HttpStatus.PAYMENT_REQUIRED, "결제 처리에 실패했습니다."),
     PURCHASE_NOT_VERIFIED(HttpStatus.PAYMENT_REQUIRED, "구매를 확인하지 못했습니다. 결제가 끝난 뒤 잠시 후 다시 시도해 주세요."),
     PURCHASE_ALREADY_LINKED(HttpStatus.CONFLICT, "이 구매는 다른 밴드에 이미 연결되어 있습니다."),
+    BAND_ALREADY_SUBSCRIBED(HttpStatus.CONFLICT, "이 밴드에는 아직 끝나지 않은 구독이 있어요(결제 보류 중이거나, 해지했지만 기간이 남았어요). 보류 중이면 결제한 Google 계정의 Play 스토어에서 결제 수단을 고쳐 주세요. 방금 결제한 금액은 자동으로 환불돼요."),
     PURCHASE_BAND_MISMATCH(HttpStatus.CONFLICT, "이 구매는 다른 밴드의 요금제로 결제되었습니다."),
     PURCHASE_BAND_UNKNOWN(HttpStatus.UNPROCESSABLE_ENTITY, "어느 밴드의 구매인지 알 수 없습니다. 결제한 밴드의 요금제 화면에서 다시 시도해 주세요."),
     PLAN_REQUIRED(HttpStatus.FORBIDDEN, "프리미엄에서만 쓸 수 있는 기능이에요."),

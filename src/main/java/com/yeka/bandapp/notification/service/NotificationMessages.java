@@ -86,6 +86,19 @@ public final class NotificationMessages {
     }
 
     /**
+     * 결제한 회원이 밴드를 나가 자동 결제를 해지했다. {@code premiumUntil} 은 결제한 기간의 끝 — 이미 FREE(결제 보류 중)면 null.
+     */
+    public static PushMessage planPurchaserLeft(long bandId, Instant premiumUntil) {
+        String next = premiumUntil == null
+                ? "프리미엄을 쓰려면 누군가 다시 결제해 주세요."
+                : DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN).format(premiumUntil.atZone(SEOUL))
+                        + "까지는 프리미엄이 유지돼요. 그 뒤에도 쓰려면 기간이 끝난 다음 누군가 다시 결제해 주세요.";
+        return planMessage(NotificationType.PLAN_PURCHASER_LEFT, bandId,
+                "프리미엄 자동 결제가 해지됐어요",
+                "결제한 멤버가 밴드를 나가 다음 결제가 멈췄어요. " + next);
+    }
+
+    /**
      * 신고 접수를 운영자에게 알린다.
      *
      * <p><b>밴드 정보를 싣지 않는다.</b> 운영자는 그 밴드 멤버가 아니라서, 밴드를 실으면

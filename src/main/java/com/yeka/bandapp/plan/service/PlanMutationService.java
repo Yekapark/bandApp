@@ -6,6 +6,7 @@ import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.plan.entity.BandPlan;
 import com.yeka.bandapp.plan.entity.Store;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +51,7 @@ public class PlanMutationService {
             throw new BusinessException(ErrorCode.PLAN_ALREADY_PREMIUM);
         }
         plan.upgradeToPremium(now, periodEnd, subscriptionRef, store, purchaseToken);
+        flushTokenWrite();
         mediaDirectory.extendRetentionForBand(bandId);
         return plan;
     }
@@ -110,6 +112,7 @@ public class PlanMutationService {
             throw new BusinessException(ErrorCode.PLAN_ALREADY_FREE);
         }
         plan.renewFromStore(now, newPeriodEnd, subscriptionRef, store, purchaseToken);
+        flushTokenWrite();
         return plan;
     }
 
@@ -121,18 +124,27 @@ public class PlanMutationService {
      * {@link #applyStoreRenew} 와 같고, <b>쿠폰 기간 중이었다면 남은 기간을 함께 돌려준다</b>(B7). 호출자가 그만큼
      * 스토어 결제일을 미뤄 쿠폰 기간을 결제 기간 뒤에 쌓는다. 행 잠금 안에서 판정하므로 결제 확인과 웹훅이 동시에
      * 와도 남은 기간은 한 번만 나온다(두 번째는 이미 스토어 결제로 바뀐 행을 본다).
+     *
+     * <p>{@code checkedToken} 은 호출자가 트랜잭션 밖에서 "이미 끝난 구독" 이라고 확인한 이 밴드의 옛 토큰(없었으면 null)이다.
+     * 그 사이 다른 결제가 다른 토큰을 붙였으면 {@code BAND_ALREADY_SUBSCRIBED} — 살아 있는 구독을 새 결제로 덮지 않는다.
      */
     @Transactional
     public StoreRenewal applyStoreRenewCarryingCoupon(long bandId, Instant now, Instant newPeriodEnd,
-                                                      String subscriptionRef, Store store, String purchaseToken) {
+                                                      String subscriptionRef, Store store, String purchaseToken,
+                                                      String checkedToken) {
         BandPlan plan = requirePlan(bandId);
         if (!plan.isPremium()) {
             throw new BusinessException(ErrorCode.PLAN_ALREADY_FREE);
+        }
+        String current = plan.getPurchaseToken();
+        if (current != null && !current.equals(purchaseToken) && !current.equals(checkedToken)) {
+            throw new BusinessException(ErrorCode.BAND_ALREADY_SUBSCRIBED);
         }
         Duration couponLeft = plan.isCouponPeriod() && plan.getExpiresAt() != null && plan.getExpiresAt().isAfter(now)
                 ? Duration.between(now, plan.getExpiresAt())
                 : Duration.ZERO;
         plan.renewFromStore(now, newPeriodEnd, subscriptionRef, store, purchaseToken);
+        flushTokenWrite();
         return new StoreRenewal(plan, couponLeft);
     }
 
@@ -164,15 +176,27 @@ public class PlanMutationService {
      * <p><b>쿠폰 기간이면 내리지 않는다</b> — 보류 뒤 FREE 가 된 밴드가 쿠폰을 쓰면 옛 토큰이 남아 있어(B1), 그 옛
      * 구독이 보류 끝에 만료(EXPIRED)되면 이 알림이 온다. 예전에는 받은 쿠폰 기간이 그 자리에서 사라졌다.
      * 쿠폰 기간의 끝은 만료 배치가 맡는다.
+     *
+     * <p>{@code storeOnHold} 는 스토어가 지금 "결제 보류(ON_HOLD)" 라고 답했는지다 — 그러면 FREE 에 보류 표시를 남기고
+     * ({@link BandPlan#isOnHold}), 아니면 지운다. 이미 FREE 인 밴드(만료 배치가 먼저 내렸다)에도 표시는 맞춘다.
      */
     @Transactional
-    public void applyDowngradeIfPremium(long bandId, Instant now, Instant graceUntil) {
+    public void applyDowngradeIfPremium(long bandId, Instant now, Instant graceUntil, boolean storeOnHold) {
         BandPlan plan = bandPlanRepository.findByBandIdForUpdate(bandId).orElse(null);
-        if (plan == null || !plan.isPremium() || plan.isCouponPeriod()) {
+        if (plan == null || plan.isCouponPeriod()) {
             return;
         }
-        plan.downgradeToFree(now);
-        mediaDirectory.applyGracePeriodForBand(bandId, graceUntil);
+        if (plan.isPremium()) {
+            plan.downgradeToFree(now);
+            mediaDirectory.applyGracePeriodForBand(bandId, graceUntil);
+        }
+        plan.markOnHold(storeOnHold, now);
+    }
+
+    /** FREE 밴드의 "결제 보류 중" 표시를 스토어 상태에 맞춘다({@link BandPlan#markOnHold}). 요금제가 없거나 PREMIUM 이면 no-op. */
+    @Transactional
+    public void syncOnHold(long bandId, boolean storeOnHold, Instant now) {
+        bandPlanRepository.findByBandIdForUpdate(bandId).ifPresent(plan -> plan.markOnHold(storeOnHold, now));
     }
 
     /**
@@ -200,16 +224,33 @@ public class PlanMutationService {
     }
 
     /**
-     * 탈퇴한 결제자의 구독 해지를 마친 뒤 결제자 연결을 끊는다 — 그 사이 토큰·결제자가 바뀌지 않았을 때만.
+     * 떠난 결제자의 구독 해지를 마친 뒤 결제자 연결을 끊는다 — 그 사이 토큰·결제자가 바뀌지 않았을 때만. 끊었으면 그 요금제를,
+     * 아니면 null 을 돌려준다(이미 다른 쪽이 끊었다 — 알림이 두 번 가지 않게).
      * 커밋이 끝난 탈퇴 트랜잭션의 {@code afterCommit} 에서도 부르므로 새 트랜잭션으로 연다(이미 커밋된
      * 트랜잭션에 참여하면 쓰기가 반영되지 않는다).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void forgetCanceledPurchaser(long bandId, String purchaseToken, long userId) {
-        bandPlanRepository.findByBandIdForUpdate(bandId)
+    public BandPlan forgetCanceledPurchaser(long bandId, String purchaseToken, long userId) {
+        BandPlan plan = bandPlanRepository.findByBandIdForUpdate(bandId)
                 .filter(p -> purchaseToken.equals(p.getPurchaseToken())
                         && Long.valueOf(userId).equals(p.getPurchasedByUserId()))
-                .ifPresent(BandPlan::forgetPurchaser);
+                .orElse(null);
+        if (plan != null) {
+            plan.forgetPurchaser();
+        }
+        return plan;
+    }
+
+    /**
+     * 구매 토큰을 쓴 변경을 바로 내보내 유니크 위반(V22 {@code ux_band_plans_purchase_token})을 여기서 받는다 — 커밋 때 터지면
+     * 500 이 된다. 같은 토큰을 두 밴드가 동시에 붙이려는 경합이고, 미리 확인하는 {@code PURCHASE_ALREADY_LINKED} 와 같은 뜻이다.
+     */
+    private void flushTokenWrite() {
+        try {
+            bandPlanRepository.flush();
+        } catch (DataIntegrityViolationException sameTokenRaced) {
+            throw new BusinessException(ErrorCode.PURCHASE_ALREADY_LINKED);
+        }
     }
 
     private BandPlan requirePlan(long bandId) {

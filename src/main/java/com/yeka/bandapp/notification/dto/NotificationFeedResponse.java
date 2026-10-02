@@ -43,7 +43,7 @@ public record NotificationFeedResponse(
             // targetId 는 알림 종류마다 가리키는 대상이 다르다. 일정 알림은 일정 id 지만
             // 요금제 알림은 밴드 id 라, 그대로 내보내면 없는 일정으로 보내는 딥링크가 된다.
             Long reservationId = switch (d.getType()) {
-                case PLAN_EXPIRING_SOON, PLAN_EXPIRED -> null;
+                case PLAN_EXPIRING_SOON, PLAN_EXPIRED, PLAN_PURCHASER_LEFT -> null;
                 default -> d.getTargetId();
             };
             return new NotificationItem(

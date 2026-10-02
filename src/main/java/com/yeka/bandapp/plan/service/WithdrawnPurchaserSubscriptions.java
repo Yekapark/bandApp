@@ -6,16 +6,20 @@ import com.yeka.bandapp.plan.gateway.StoreBillingGateway;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
- * 결제한 회원이 탈퇴하면 그 사람이 결제한 구독의 <b>다음 결제</b>를 멈춘다(LAUNCH_REVIEW B13).
+ * 결제한 회원이 탈퇴하면 그 사람이 결제한 구독의 <b>다음 결제</b>를 멈춘다(LAUNCH_REVIEW B13). 계정 탈퇴뿐 아니라
+ * <b>그 밴드에서 나가거나 추방돼도</b> 같다 — 밴드를 떠난 사람이 남의 밴드 요금을 매년 내게 두지 않는다. 해지가 확인되면
+ * 밴드장에게 "기간이 끝나면 프리미엄이 끝나니 누군가 다시 결제해야 한다" 고 알린다({@link PurchaserSubscriptionCanceled}).
  *
  * <p>예전에는 탈퇴 화면에서 "구독은 따로 해지하세요" 라고 안내만 했다 — 안내를 놓친 사람은 앱을 쓸 수도 없는데 매년
  * 청구됐다. 이제 서버가 Play 에 해지를 요청한다. 이미 결제한 기간은 그대로라 그 밴드는 기간이 끝날 때까지 PREMIUM 이고,
@@ -44,13 +48,22 @@ public class WithdrawnPurchaserSubscriptions {
     private final BandPlanRepository bandPlanRepository;
     private final StoreBillingGateway billingGateway;
     private final PlanMutationService planMutationService;
+    private final ApplicationEventPublisher events;
 
     public WithdrawnPurchaserSubscriptions(BandPlanRepository bandPlanRepository,
                                            StoreBillingGateway billingGateway,
-                                           PlanMutationService planMutationService) {
+                                           PlanMutationService planMutationService,
+                                           ApplicationEventPublisher events) {
         this.bandPlanRepository = bandPlanRepository;
         this.billingGateway = billingGateway;
         this.planMutationService = planMutationService;
+        this.events = events;
+    }
+
+    /**
+     * 결제자가 떠난 구독의 자동 결제 해지를 확인했다. 밴드장 알림용. {@code premiumUntil} 은 결제한 기간의 끝(이미 FREE 면 null).
+     */
+    public record PurchaserSubscriptionCanceled(long bandId, long purchaserUserId, Instant premiumUntil) {
     }
 
     private record Target(long userId, long bandId, Store store, String purchaseToken) {
@@ -65,7 +78,20 @@ public class WithdrawnPurchaserSubscriptions {
      */
     @Transactional
     public void cancelRenewalsAfterWithdrawal(long userId) {
-        List<BandPlan> plans = bandPlanRepository.findByPurchaserForUpdate(userId);
+        cancelAfterCommit(bandPlanRepository.findByPurchaserForUpdate(userId));
+    }
+
+    /**
+     * 밴드 탈퇴·추방 트랜잭션 안에서 부른다. 떠난 회원이 이 밴드 구독의 결제자면 계정 탈퇴와 똑같이 커밋 뒤 해지한다.
+     */
+    @Transactional
+    public void cancelRenewalAfterLeavingBand(long bandId, long userId) {
+        cancelAfterCommit(bandPlanRepository.findByBandIdForUpdate(bandId)
+                .filter(p -> Long.valueOf(userId).equals(p.getPurchasedByUserId()))
+                .stream().toList());
+    }
+
+    private void cancelAfterCommit(List<BandPlan> plans) {
         List<Target> targets = plans.stream()
                 .filter(p -> p.getStore() != null && p.getPurchaseToken() != null)
                 .map(Target::of)
@@ -89,20 +115,24 @@ public class WithdrawnPurchaserSubscriptions {
     }
 
     /**
-     * 해지가 확인되지 않은 탈퇴자 구독을 다시 해지한다. 정상이면 대상이 없어 쿼리 한 번으로 끝난다.
+     * 해지가 확인되지 않은 떠난 결제자(계정 탈퇴·밴드 탈퇴·추방)의 구독을 다시 해지한다. 정상이면 대상이 없어 쿼리 한 번으로 끝난다.
      * ponytail: 단일 서버라 동시 실행 잠금이 없다 — 겹쳐도 해지는 멱등이라 Play 호출이 한 번 더 갈 뿐.
      */
     @Scheduled(cron = "${app.plan.withdrawn-cancel-retry-cron:0 20 * * * *}", zone = "${app.plan.zone}")
     public void retryPending() {
-        cancelAll(bandPlanRepository.findWithWithdrawnPurchaser().stream().map(Target::of).toList());
+        cancelAll(bandPlanRepository.findWithDepartedPurchaser().stream().map(Target::of).toList());
     }
 
     private void cancelAll(List<Target> targets) {
         for (Target t : targets) {
             try {
                 billingGateway.cancelRenewal(t.store(), t.purchaseToken());
-                planMutationService.forgetCanceledPurchaser(t.bandId(), t.purchaseToken(), t.userId());
-                log.info("탈퇴한 결제자의 구독 자동 갱신 해지 userId={} bandId={}", t.userId(), t.bandId());
+                BandPlan plan = planMutationService.forgetCanceledPurchaser(t.bandId(), t.purchaseToken(), t.userId());
+                log.info("떠난 결제자의 구독 자동 갱신 해지 userId={} bandId={}", t.userId(), t.bandId());
+                // 끝난 지 오래된 구독(FREE·보류 아님)이면 알릴 게 없다 — 프리미엄이 남았거나 보류 중일 때만.
+                if (plan != null && (plan.isPremium() || plan.isOnHold())) {
+                    events.publishEvent(new PurchaserSubscriptionCanceled(t.bandId(), t.userId(), plan.getExpiresAt()));
+                }
             } catch (RuntimeException e) {
                 // 스택은 남기지 않는다 — 매시 재시도라 같은 스택이 쌓여 에러 급증 검사까지 덮는다. 원인은 메시지(status)에 있다.
                 log.error("{} userId={} bandId={} cause={} — 매시 다시 시도한다. 계속되면 Play Console › 주문 관리에서 "
