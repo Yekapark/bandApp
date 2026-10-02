@@ -96,7 +96,8 @@ services:
       PLAN_BILLING_PUBSUB_AUDIENCE: ${PLAN_BILLING_PUBSUB_AUDIENCE:-}
       PLAN_BILLING_PUBSUB_SA: ${PLAN_BILLING_PUBSUB_SA:-}
       DEEPLINK_BASE_URL: https://${DOMAIN}
-      DEEPLINK_SCHEME: ${DEEPLINK_SCHEME:-bandapp}
+      # 기본값이 bandapp 이면 네이버 밴드 앱의 스킴과 겹쳐 초대 링크가 그 앱으로 열린다(application.yml 기본값과 맞춘다).
+      DEEPLINK_SCHEME: ${DEEPLINK_SCHEME:-bandule}
       IOS_APP_ID: ${IOS_APP_ID:-}
       IOS_APP_STORE_URL: ${IOS_APP_STORE_URL:-}
       ANDROID_PACKAGE: ${ANDROID_PACKAGE:-}
