@@ -69,7 +69,7 @@ public class BandDeletionService {
      * 구매 토큰을 잃어 아무도 해지할 수 없게 되므로, 해지가 확인돼야만(예외 없이 돌아와야만) 지운다. 해지는 멱등이라
      * 이미 해지·만료된 구독이어도 안전하다(게이트웨이 계약, B14).
      *
-     * <p>어느 단계든 실패하면 예외가 그대로 나가고 DB 는 그대로다 — {@link #purgeMemberlessBands} 가 매시 다시 한다.
+     * <p>어느 단계든 실패하면 예외가 그대로 나가고 DB 는 그대로다 — {@link #purgeMemberlessBands} 가 다음 실행에 다시 한다.
      *
      * @return 지웠으면 true, 그새 멤버가 있거나 이미 없는 밴드면 false
      */
@@ -89,12 +89,12 @@ public class BandDeletionService {
     }
 
     /**
-     * 멤버 0명 밴드를 찾아 지운다. 탈퇴 직후 삭제({@link BandMemberService#handleAccountWithdrawal})가 실패한 것(R2 장애 등)과
-     * 이 기능 전에 이미 생긴 빈 밴드를 함께 정리한다. 정상이면 대상이 없어 쿼리 한 번으로 끝난다.
+     * 멤버 0명 밴드를 찾아 지운다(10분마다). 마지막 멤버가 탈퇴한 밴드({@link BandMemberService#handleAccountWithdrawal}),
+     * 지난번에 실패한 것(R2 장애 등), 이 기능 전에 이미 생긴 빈 밴드를 함께 정리한다. 정상이면 대상이 없어 쿼리 한 번으로 끝난다.
      * 실패할 때마다 {@value #PURGE_FAILURE_MARKER} 를 ERROR 로 남긴다(deploy/prod-check.sh 가 센다).
-     * ponytail: 단일 서버라 동시 실행 잠금이 없다 — 탈퇴 직후 삭제와 겹쳐도 R2 접두사 삭제·DB 삭제 모두 멱등이다.
+     * ponytail: 단일 서버라 동시 실행 잠금이 없다 — 겹쳐도 R2 접두사 삭제·DB 삭제 모두 멱등이다.
      */
-    @Scheduled(cron = "${app.band.memberless-purge-cron:0 40 * * * *}")
+    @Scheduled(cron = "${app.band.memberless-purge-cron:0 */10 * * * *}")
     public void purgeMemberlessBands() {
         List<Long> bandIds = bandRepository.findMemberlessBandIds();
         if (bandIds.isEmpty()) {
@@ -107,7 +107,7 @@ public class BandDeletionService {
                     purged++;
                 }
             } catch (RuntimeException e) {
-                log.error("{} bandId={} cause={} — 매시 다시 시도한다", PURGE_FAILURE_MARKER, bandId, e.toString());
+                log.error("{} bandId={} cause={} — 10분 뒤 다시 시도한다", PURGE_FAILURE_MARKER, bandId, e.toString());
             }
         }
         log.info("빈 밴드 정리 대상={} 삭제={} 남음={}", bandIds.size(), purged, bandIds.size() - purged);

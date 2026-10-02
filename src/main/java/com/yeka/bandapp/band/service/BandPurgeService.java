@@ -16,7 +16,6 @@ import com.yeka.bandapp.reservation.repository.SetlistItemRepository;
 import com.yeka.bandapp.room.repository.RoomRepository;
 import com.yeka.bandapp.settlement.repository.SettlementRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -104,12 +103,9 @@ public class BandPurgeService {
      * 활성 멤버가 없을 때만 지운다(마지막 멤버가 탈퇴한 밴드 — LAUNCH_REVIEW L7). 밴드를 잠근 뒤 다시 세므로
      * 그 사이 누가 들어왔으면 지우지 않는다.
      *
-     * <p>탈퇴 트랜잭션의 {@code afterCommit} 에서도 불리므로 새 트랜잭션으로 연다 — 이미 커밋된 트랜잭션에 참여하면
-     * 삭제가 반영되지 않는다({@code PlanMutationService#forgetCanceledPurchaser} 와 같은 이유).
-     *
      * @return 지웠으면 true
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public boolean purgeIfMemberless(long bandId) {
         return purge(bandId, true);
     }

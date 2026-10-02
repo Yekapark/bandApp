@@ -6,12 +6,9 @@ import com.yeka.bandapp.band.entity.BandMemberRole;
 import com.yeka.bandapp.band.repository.BandInviteRepository;
 import com.yeka.bandapp.band.repository.BandMemberRepository;
 import com.yeka.bandapp.band.repository.BandRepository;
-import com.yeka.bandapp.support.FakeStorageClient;
-import com.yeka.bandapp.support.StorageTestConfig;
 import com.yeka.bandapp.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.ResponseEntity;
 
 import java.time.Duration;
@@ -23,10 +20,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * BACKLOG §1.9 — 계정 탈퇴 시 밴드 멤버십 정리.
  *
  * <p>채택한 동작: 탈퇴 시 소속 전 밴드에서 자동으로 나간다. 탈퇴자가 밴드장이면 가장 먼저 가입한
- * 다른 활성 멤버가 밴드장으로 승격되고, 다른 멤버가 없으면 그 밴드는 통째로 삭제된다(LAUNCH_REVIEW L7 —
- * 삭제 내용은 {@code BandDeletionIntegrationTest}).
+ * 다른 활성 멤버가 밴드장으로 승격되고, 다른 멤버가 없으면 그 밴드는 활성 멤버 0인 채 닫혔다가 정리 배치가 지운다
+ * (LAUNCH_REVIEW L7 — {@code BandDeletionIntegrationTest}).
  */
-@Import(StorageTestConfig.class)
 class AccountWithdrawalBandCleanupIntegrationTest extends BandApiSupport {
 
     @Autowired
@@ -34,7 +30,6 @@ class AccountWithdrawalBandCleanupIntegrationTest extends BandApiSupport {
     @Autowired BandInviteRepository invites;
     @Autowired BandRepository bands;
     @Autowired UserRepository users;
-    @Autowired FakeStorageClient storage;
 
     @Test
     void member_withdrawal_removes_them_from_the_band() {
@@ -83,7 +78,7 @@ class AccountWithdrawalBandCleanupIntegrationTest extends BandApiSupport {
     }
 
     @Test
-    void sole_leader_withdrawal_deletes_the_band() {
+    void sole_leader_withdrawal_leaves_the_band_memberless() {
         String leader = signup("wd-solo@band.app", "혼자");
         String outsider = signup("wd-outsider@band.app", "외부인");
         long bandId = createBand(leader, "새소년");
@@ -91,31 +86,13 @@ class AccountWithdrawalBandCleanupIntegrationTest extends BandApiSupport {
 
         withdraw(leader);
 
-        assertThat(bands.findById(bandId)).isEmpty();
-        assertThat(invites.findByCode(code)).isEmpty();
-        assertThat(join(outsider, code).getStatusCode().is2xxSuccessful()).isFalse();
-        assertThat(bandMemberRepository.countByBandIdAndLeftAtIsNull(bandId)).isZero();
-    }
-
-    /** 삭제가 실패해(R2 장애) 빈 밴드가 남아 있는 동안에도 초대 코드로 다시 열리지 않는다. */
-    @Test
-    void sole_leader_band_left_behind_by_a_storage_failure_stays_closed() {
-        String leader = signup("wd-solo-fail@band.app", "혼자");
-        String outsider = signup("wd-outsider@band.app", "외부인");
-        long leaderId = myUserId(leader);
-        long bandId = createBand(leader, "새소년");
-        String code = issueInvite(leader, bandId, null);
-        storage.failNextDeleteByPrefix();
-
-        withdraw(leader); // 삭제 실패는 탈퇴를 막지 않는다
-
-        assertThat(users.findByIdAndDeletedAtIsNull(leaderId)).isEmpty();
         assertThat(bandMemberRepository.countByBandIdAndLeftAtIsNull(bandId)).isZero();
         assertThat(invites.findByCode(code).orElseThrow().isRevoked()).isTrue();
         ResponseEntity<String> rejected = join(outsider, code);
         assertThat(rejected.getStatusCode().value()).isEqualTo(410);
         assertThat(errorCode(rejected)).isEqualTo("INVITE_REVOKED");
         assertThat(get("/api/v1/bands/" + bandId, outsider).getStatusCode().value()).isEqualTo(403);
+        assertThat(bandMemberRepository.countByBandIdAndLeftAtIsNull(bandId)).isZero();
     }
 
     @Test
@@ -124,7 +101,6 @@ class AccountWithdrawalBandCleanupIntegrationTest extends BandApiSupport {
         String outsider = signup("wd-outsider@band.app", "외부인");
         long leaderId = myUserId(leader);
         long bandId = createBand(leader, "기존 빈 밴드");
-        storage.failNextDeleteByPrefix(); // 정리 배치가 지우기 전의 빈 밴드를 남긴다
         withdraw(leader);
         // 수정 전에 남아 있을 수 있는 유효 코드를 재현한다. 운영 데이터를 변경하는 마이그레이션은 없다.
         invites.save(BandInvite.issue(bandId, "LEGACY01", leaderId, Instant.now(), Duration.ofDays(7), null));
@@ -155,10 +131,8 @@ class AccountWithdrawalBandCleanupIntegrationTest extends BandApiSupport {
 
         assertThat(users.findByIdAndDeletedAtIsNull(leaderId)).isEmpty();
         assertThat(bandMemberRepository.findActiveBandIdsForWithdrawal(leaderId)).isEmpty();
-        assertThat(bands.findById(emptyFirst)).isEmpty();
-        assertThat(bands.findById(emptyLast)).isEmpty();
-        assertThat(invites.findByCode(firstCode)).isEmpty();
-        assertThat(invites.findByCode(lastCode)).isEmpty();
+        assertThat(invites.findByCode(firstCode).orElseThrow().isRevoked()).isTrue();
+        assertThat(invites.findByCode(lastCode).orElseThrow().isRevoked()).isTrue();
         assertThat(invites.findByCode(sharedCode).orElseThrow().isRevoked()).isFalse();
         assertThat(bands.findById(shared).orElseThrow().getLeaderId()).isEqualTo(mateId);
         assertThat(bandMemberRepository.findByBandIdAndUserIdAndLeftAtIsNull(shared, mateId)

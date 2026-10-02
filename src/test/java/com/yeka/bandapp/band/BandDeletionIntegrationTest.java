@@ -265,6 +265,8 @@ class BandDeletionIntegrationTest extends PlanApiSupport {
         Fixture f = fullyPopulatedBand(leader, "혼자밴드");
 
         withdraw(leader);
+        assertThat(count("select count(*) from bands where id = %d", f.bandId)).isEqualTo(1); // 탈퇴 응답은 기다리지 않는다
+        bandDeletionService.purgeMemberlessBands();
 
         for (String sql : BAND_OWNED_COUNTS) {
             assertThat(count(sql, f.bandId))
@@ -292,20 +294,17 @@ class BandDeletionIntegrationTest extends PlanApiSupport {
         assertThat(storage.deletedPrefixes()).doesNotContain(StorageKeys.bandPrefix(f.bandId));
     }
 
-    /** R2 가 죽어 있으면 탈퇴는 끝나고 밴드는 남는다 — 정리 배치가 다음 실행에 지운다(이미 있던 빈 밴드도 같은 길). */
+    /** R2 가 죽어 있으면 밴드는 남는다 — 정리 배치가 다음 실행에 지운다(이미 운영에 있던 빈 밴드도 같은 길). */
     @Test
     void storage_failure_leaves_the_band_for_the_sweeper_to_retry() {
         String leader = signup("bd-l7c@band.app", "혼자");
         Fixture f = fullyPopulatedBand(leader, "재시도밴드");
-        storage.failNextDeleteByPrefix();
-
         withdraw(leader);
-        assertThat(count("select count(*) from bands where id = %d", f.bandId)).isEqualTo(1);
         assertThat(count("select count(*) from band_members where band_id = %d and left_at is null", f.bandId))
                 .isZero();
 
         storage.failNextDeleteByPrefix();
-        bandDeletionService.purgeMemberlessBands();          // 또 실패 — 그대로 남는다
+        bandDeletionService.purgeMemberlessBands();          // 실패 — DB 는 그대로 남는다
         assertThat(count("select count(*) from bands where id = %d", f.bandId)).isEqualTo(1);
         assertThat(storage.objectExists(f.mediaKey)).isTrue();
 
@@ -325,6 +324,7 @@ class BandDeletionIntegrationTest extends PlanApiSupport {
         assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
 
         withdraw(leader);
+        bandDeletionService.purgeMemberlessBands();
 
         assertThat(billingGateway.cancelledRenewals()).contains(tokenFor(bandId));
         assertThat(count("select count(*) from bands where id = %d", bandId)).isZero();
