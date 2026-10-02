@@ -90,6 +90,7 @@ public enum ErrorCode {
     SETTLEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "정산 정보를 찾을 수 없습니다."),
     SETTLEMENT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 정산이 생성된 일정입니다. 재계산 API 를 사용하세요."),
     SETTLEMENT_NO_ATTENDEES(HttpStatus.CONFLICT, "참석자가 없어 참석자 기준 정산을 만들 수 없습니다."),
+    SETTLEMENT_TOTAL_BELOW_PAID(HttpStatus.CONFLICT, "정산에서 빠진 멤버가 이미 낸 금액의 합보다 총액을 작게 할 수 없습니다."),
     NOT_SETTLEMENT_MANAGER(HttpStatus.FORBIDDEN, "일정 등록자 본인 또는 밴드장만 정산을 만들거나 재계산할 수 있습니다."),
     SETTLEMENT_SHARE_NOT_FOUND(HttpStatus.NOT_FOUND, "본인의 분담 항목이 없습니다."),
     NOT_SETTLEMENT_SHARE_OWNER(HttpStatus.FORBIDDEN, "본인의 납부 상태만 변경할 수 있습니다."),

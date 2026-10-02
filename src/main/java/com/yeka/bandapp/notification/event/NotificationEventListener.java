@@ -79,6 +79,17 @@ public class NotificationEventListener {
                 NotificationMessages.settlementRequested(e.bandId(), e.reservationId(), e.totalAmount())));
     }
 
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onSettlementShareChanged(NotificationEvents.SettlementShareChanged e) {
+        for (NotificationEvents.ShareChange c : e.changes()) {
+            // variant = -1 - 새 몫 — 음수라 정산 요청(variant = 총액, 양수)·옛 기록(0)과 겹치지 않고, 몫이 또 바뀌면 다시 간다.
+            // ponytail: 같은 금액으로 되돌아왔다 다시 바뀌는 경우(10,000→15,000→10,000→15,000)의 두 번째 15,000 은 걸러진다.
+            safely(() -> sender.notify(NotificationType.SETTLEMENT_REQUESTED, e.reservationId(), -1 - c.after(),
+                    List.of(c.userId()),
+                    NotificationMessages.settlementShareChanged(e.bandId(), e.reservationId(), c.before(), c.after())));
+        }
+    }
+
     private void safely(Runnable action) {
         try {
             action.run();

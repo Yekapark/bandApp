@@ -52,6 +52,17 @@ public final class NotificationMessages {
                 "정산 요청", "합주 비용 " + String.format(Locale.KOREA, "%,d", totalAmount) + "원 정산이 등록됐어요. 납부를 확인해 주세요.");
     }
 
+    /** 재계산으로 몫이 바뀌어 납부 체크가 풀림. 유형은 정산 요청과 같다(눌렀을 때 같은 정산 화면으로). */
+    public static PushMessage settlementShareChanged(long bandId, long reservationId, int before, int after) {
+        return message(NotificationType.SETTLEMENT_REQUESTED, bandId, reservationId,
+                "정산 금액 변경", "정산 금액이 바뀌었어요 (" + won(before) + " → " + won(after)
+                        + "). 납부 체크가 풀렸으니 차액을 확인해 주세요.");
+    }
+
+    private static String won(int amount) {
+        return String.format(Locale.KOREA, "%,d", amount) + "원";
+    }
+
     public static PushMessage reminder(long bandId, long reservationId, Instant startAt, int offsetMinutes) {
         return message(NotificationType.RESERVATION_REMINDER, bandId, reservationId,
                 "합주 리마인더", when(startAt) + " 합주가 " + lead(offsetMinutes) + " 뒤 시작해요.");

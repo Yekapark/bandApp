@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li>일정당 정산은 하나({@code reservation_id} 유니크). 만든 뒤에는 {@link #recalculate}로만 바꾼다 —
  *       서버가 참석 응답 변화를 감지해 자동으로 다시 나누지 않는다(BUILD_PLAN Phase 7).</li>
- *   <li>몫 합계는 항상 총액과 일치한다. 나누어떨어지지 않는 나머지는 "밴드장 먼저 → 가입일 순"으로
+ *   <li>몫 합계는 항상 총액과 일치한다(재계산에서 빠진 멤버가 이미 낸 몫도 합계에 든다 — {@link #recalculate}). 나누어떨어지지 않는 나머지는 "밴드장 먼저 → 가입일 순"으로
  *       앞에서부터 1원씩 더한다({@link SettlementCalculator}). ATTENDEES_ONLY 이고 밴드장이 불참이면
  *       가장 먼저 가입한 참석자가 나머지를 진다.</li>
  *   <li>{@code ATTENDEES_ONLY}인데 참석자가 0명이면 정산을 만들지 않는다(409).</li>
@@ -120,8 +120,16 @@ public class SettlementService {
 
     /**
      * 재계산. 넘어온 {@code totalAmount}/{@code splitType}이 있으면 갱신하고(없으면 유지), 현재
-     * 밴드 멤버·참석자 기준으로 몫을 다시 만든다. 계속 대상인 멤버의 행은 금액만 새로 매기고
-     * 납부 여부는 보존, 빠진 멤버의 행은 삭제, 새 멤버의 행은 미납으로 추가한다.
+     * 밴드 멤버·참석자 기준으로 몫을 다시 만든다.
+     *
+     * <ul>
+     *   <li><b>대상에서 빠진 멤버</b>(탈퇴·불참 전환 등) — 미납 몫은 삭제한다. 이미 낸 몫은 지우지 않고 금액도
+     *       그대로 둔다(낸 기록이 사라지면 그 돈이 총액에서 빠지지 않아 남은 사람이 더 낸다).</li>
+     *   <li><b>남은 금액</b> = 총액 − 빠진 멤버가 낸 몫의 합. 이것을 현재 대상자끼리 기존 나머지 규칙으로 나눈다.
+     *       빠진 멤버가 낸 합이 총액보다 크면 409 {@code SETTLEMENT_TOTAL_BELOW_PAID}, 같으면 대상자는 0원.</li>
+     *   <li><b>계속 대상인 멤버</b> — 금액이 그대로면 납부 여부 보존, 바뀌었으면 납부 체크를 풀고 본인에게
+     *       "금액이 바뀌었어요" 알림(예전 금액만 냈으므로). 새 멤버는 미납으로 추가.</li>
+     * </ul>
      */
     @Transactional
     public SettlementResponse recalculate(long bandId, long reservationId, long callerId,
@@ -137,23 +145,38 @@ public class SettlementService {
         if (recipients.isEmpty()) {
             throw new BusinessException(ErrorCode.SETTLEMENT_NO_ATTENDEES);
         }
-        settlement.changeTerms(total, type);
-        Map<Long, Integer> amounts = SettlementCalculator.split(total, userIds(recipients));
+        Set<Long> recipientIds = Set.copyOf(userIds(recipients));
 
         List<SettlementShare> existing = shareRepository.findBySettlementId(settlement.getId());
+        // 대상에서 빠졌지만 이미 낸 몫 — 지우지 않고 금액도 고정한다.
+        List<SettlementShare> keptPaid = existing.stream()
+                .filter(s -> s.isPaid() && !recipientIds.contains(s.getUserId()))
+                .toList();
+        int keptPaidSum = keptPaid.stream().mapToInt(SettlementShare::getAmount).sum();
+        if (keptPaidSum > total) {
+            throw new BusinessException(ErrorCode.SETTLEMENT_TOTAL_BELOW_PAID);
+        }
+
+        settlement.changeTerms(total, type);
+        Map<Long, Integer> amounts = SettlementCalculator.split(total - keptPaidSum, userIds(recipients));
+
         Map<Long, SettlementShare> byUser = existing.stream()
                 .collect(Collectors.toMap(SettlementShare::getUserId, Function.identity()));
 
         shareRepository.deleteAll(existing.stream()
-                .filter(s -> !amounts.containsKey(s.getUserId()))
+                .filter(s -> !s.isPaid() && !recipientIds.contains(s.getUserId()))
                 .toList());
 
-        List<SettlementShare> result = new ArrayList<>(amounts.size());
+        List<SettlementShare> result = new ArrayList<>(keptPaid);
         List<SettlementShare> added = new ArrayList<>();
+        List<NotificationEvents.ShareChange> unpaidAgain = new ArrayList<>();
         for (Map.Entry<Long, Integer> e : amounts.entrySet()) {
             SettlementShare share = byUser.get(e.getKey());
             if (share != null) {
-                share.reassign(e.getValue()); // paid/paidAt 보존
+                int before = share.getAmount();
+                if (share.reassign(e.getValue())) {
+                    unpaidAgain.add(new NotificationEvents.ShareChange(e.getKey(), before, e.getValue()));
+                }
             } else {
                 share = SettlementShare.of(settlement.getId(), e.getKey(), e.getValue());
                 added.add(share);
@@ -162,13 +185,25 @@ public class SettlementService {
         }
         shareRepository.saveAll(added);
 
-        publishRequestedEvent(bandId, reservationId, settlement.getTotalAmount(), amounts.keySet(), callerId);
+        // 납부 체크가 풀린 사람은 "금액이 바뀌었어요" 만 받는다(정산 요청 알림과 겹치지 않게).
+        Set<Long> unpaidAgainIds = unpaidAgain.stream()
+                .map(NotificationEvents.ShareChange::userId)
+                .collect(Collectors.toSet());
+        publishRequestedEvent(bandId, reservationId, settlement.getTotalAmount(),
+                amounts.keySet().stream().filter(id -> !unpaidAgainIds.contains(id)).collect(Collectors.toSet()),
+                callerId);
+        List<NotificationEvents.ShareChange> toNotify = unpaidAgain.stream()
+                .filter(c -> c.userId() != callerId)
+                .toList();
+        if (!toNotify.isEmpty()) {
+            eventPublisher.publishEvent(new NotificationEvents.SettlementShareChanged(bandId, reservationId, toNotify));
+        }
         return assemble(bandId, reservationId, settlement, result);
     }
 
     /** 정산 생성·재계산 시 분담 대상자(요청자 제외)에게 "정산 요청" 알림. 실제 발송은 커밋 후. */
     private void publishRequestedEvent(long bandId, long reservationId, int totalAmount,
-                                      java.util.Set<Long> shareUserIds, long callerId) {
+                                      Set<Long> shareUserIds, long callerId) {
         List<Long> recipients = shareUserIds.stream().filter(id -> id != callerId).toList();
         if (!recipients.isEmpty()) {
             eventPublisher.publishEvent(new NotificationEvents.SettlementRequested(

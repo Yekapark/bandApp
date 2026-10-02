@@ -191,6 +191,40 @@ class NotificationTriggerIntegrationTest extends NotificationApiSupport {
         assertThat(push.sent().get(0).message().body()).contains("40,000원");
     }
 
+    /**
+     * 재계산으로 몫이 바뀌어 납부 체크가 풀린 사람은 "정산 금액이 바뀌었어요 (이전 → 새)" 를 한 번만 받고,
+     * 아직 안 낸 사람은 평소처럼 새 총액의 정산 요청을 받는다.
+     */
+    @Test
+    void recalculation_that_changes_a_paid_share_tells_that_member_the_old_and_new_amount() {
+        String leader = signup("trg-pc-l@band.app", "리더");
+        String payer = signup("trg-pc-p@band.app", "낸사람");
+        String other = signup("trg-pc-o@band.app", "안낸사람");
+        long bandId = createBand(leader, "혁오넷");
+        join(payer, issueInvite(leader, bandId, null));
+        join(other, issueInvite(leader, bandId, null));
+        registerToken(payer, "payer-dev", "ANDROID");
+        registerToken(other, "other-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        String path = "/api/v1/bands/" + bandId + "/reservations/" + reservationId + "/settlement";
+        post(path, "{\"totalAmount\":30000,\"splitType\":\"EQUAL\"}", leader);   // 10,000 씩
+        long payerId = myUserId(payer);
+        assertThat(put(path + "/shares/" + payerId, "{\"paid\":true}", payer).getStatusCode().value())
+                .isEqualTo(200);
+        push.reset();
+
+        post(path + "/recalculate", "{\"totalAmount\":45000}", leader);           // 15,000 씩
+
+        var payerPushes = push.sent().stream().filter(p -> p.tokens().contains("payer-dev")).toList();
+        assertThat(payerPushes).hasSize(1);
+        assertThat(payerPushes.get(0).message().body()).contains("10,000원 → 15,000원");
+        assertThat(payerPushes.get(0).message().data()).containsEntry("type", "SETTLEMENT_REQUESTED");
+        var otherPushes = push.sent().stream().filter(p -> p.tokens().contains("other-dev")).toList();
+        assertThat(otherPushes).hasSize(1);
+        assertThat(otherPushes.get(0).message().body()).contains("45,000원");
+    }
+
     // --- helpers ---------------------------------------------------------
 
     private long createReservationExpectPending(String token, long bandId, long roomId) {

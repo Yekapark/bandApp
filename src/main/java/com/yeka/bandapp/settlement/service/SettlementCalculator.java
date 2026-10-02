@@ -17,13 +17,13 @@ public final class SettlementCalculator {
     }
 
     /**
-     * @param total      나눌 총액(원). 0보다 커야 한다.
+     * @param total      나눌 총액(원). 0 이상 — 재계산에서 빠진 멤버가 이미 낸 몫이 총액과 같으면 0 이 온다(모두 0원).
      * @param recipients 분배 대상 userId, 우선순위 순. 비어 있으면 안 된다.
      * @return userId → 몫(원). 입력 순서를 유지하며 값 합계 = {@code total}.
      */
     public static Map<Long, Integer> split(int total, List<Long> recipients) {
-        if (total <= 0) {
-            throw new IllegalArgumentException("총액은 0보다 커야 합니다: " + total);
+        if (total < 0) {
+            throw new IllegalArgumentException("총액은 음수일 수 없습니다: " + total);
         }
         if (recipients.isEmpty()) {
             throw new IllegalArgumentException("분배 대상이 없습니다.");

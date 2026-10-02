@@ -17,7 +17,8 @@ import java.time.Instant;
  * 정산에서 멤버 한 명이 낼 몫. {@code (settlement_id, user_id)} 유니크 — 정산당 멤버 하나.
  *
  * <p>{@code paid}는 본인이 직접 체크하는 셀프 리포트다({@link #markPaid}). 다른 멤버가 대신 바꿀 수 없다.
- * 재계산 시 계속 대상인 멤버의 행은 {@link #reassign}으로 금액만 새로 매기고 납부 여부는 보존한다.
+ * 재계산 시 계속 대상인 멤버의 행은 {@link #reassign}으로 금액을 새로 매긴다 — 금액이 그대로면 납부 여부를
+ * 보존하고, 바뀌면 납부 체크를 푼다(낸 돈과 새 몫이 달라 차액을 다시 확인해야 하므로).
  */
 @Entity
 @Table(name = "settlement_shares")
@@ -57,9 +58,23 @@ public class SettlementShare extends BaseTimeEntity {
         return new SettlementShare(settlementId, userId, amount);
     }
 
-    /** 재계산 — 분담액만 새로 매긴다. 납부 여부({@code paid}/{@code paidAt})는 유지한다. */
-    public void reassign(int amount) {
+    /**
+     * 재계산 — 분담액을 새로 매긴다. 금액이 그대로면 납부 여부를 유지하고, 바뀌었는데 납부 체크가 돼 있었으면
+     * 체크를 푼다(예전 금액만 냈으므로 "냈음" 으로 두면 차액이 조용히 사라진다).
+     *
+     * @return 이 호출로 납부 체크가 풀렸으면 {@code true}(본인에게 알려야 한다).
+     */
+    public boolean reassign(int amount) {
+        if (this.amount == amount) {
+            return false;
+        }
         this.amount = amount;
+        if (!paid) {
+            return false;
+        }
+        this.paid = false;
+        this.paidAt = null;
+        return true;
     }
 
     /** 본인 납부 체크. 취소({@code paid=false})하면 시각도 지운다. */
