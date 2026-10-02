@@ -201,7 +201,8 @@ class PurchaseSync {
   int _attempt = 0;
 
   static const alreadySubscribedMessage =
-      '이 밴드는 이미 구독 중이에요(결제 보류 포함). 방금 결제는 3일 안에 자동으로 환불돼요. '
+      '이 밴드에는 아직 끝나지 않은 구독이 있어요(결제 보류 중이거나, 해지했지만 기간이 남았어요). '
+      '방금 결제는 3일 안에 자동으로 환불돼요. '
       '결제 수단은 Google Play 에서 고쳐 주세요.';
 
   static const _genericFailure = '결제를 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
@@ -337,7 +338,8 @@ class PurchaseSync {
           _emit(const PurchaseEvent(PurchaseEventKind.failed));
         }
         // 앱이 꺼졌다 켜져 복구로 온 경우에도 돈 이야기라 한 번은 알린다.
-        _toast(alreadySubscribedMessage);
+        // 서버 문구가 보류·해지 후 남은 기간 두 경우를 다 설명한다. 비어 있으면 앱 문구로.
+        _toast(e.message.trim().isEmpty ? alreadySubscribedMessage : e.message);
         return;
       }
       _failed(mine, e.message);

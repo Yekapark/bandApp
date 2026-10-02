@@ -10,6 +10,7 @@ String? notificationRoute(String? type, int? reservationId) {
   switch (type) {
     case 'PLAN_EXPIRING_SOON':
     case 'PLAN_EXPIRED':
+    case 'PLAN_PURCHASER_LEFT': // 결제한 사람이 나가 갱신이 꺼졌다 — 밴드장에게 요금제 화면을 보인다
       return Routes.plan;
     case 'REPORT_RECEIVED':
       return null; // 운영자용 — 처리는 tools/moderate.py 로 한다

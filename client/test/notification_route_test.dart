@@ -17,6 +17,7 @@ void main() {
   test('요금제 알림은 요금제 화면으로 — 일정 id 가 없어도 없는 일정으로 가지 않는다', () {
     expect(notificationRoute('PLAN_EXPIRING_SOON', 0), Routes.plan);
     expect(notificationRoute('PLAN_EXPIRED', null), Routes.plan);
+    expect(notificationRoute('PLAN_PURCHASER_LEFT', null), Routes.plan);
   });
 
   test('취소된 일정은 달력으로, 운영자 알림은 이동 없음', () {
