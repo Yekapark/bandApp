@@ -180,6 +180,8 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
   Future<void> _syncPins(List<PlaceSuggestion> places) async {
     final map = _map;
     if (map == null) return;
+    // await 전에 — 이후엔 화면이 사라졌을 수 있다. 미리보기 지도는 180dp 로 낮아 여유를 줄인다.
+    final fitPadding = mapFitPadding(context, margin: 4);
     final seq = ++_pinSeq;
 
     final style = _poiStyle ??= await roomPoiStyle();
@@ -213,7 +215,7 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
               )
             : CameraUpdate.fitMapPoints(
                 [for (final p in located) LatLng(p.lat!, p.lng!)],
-                padding: 48,
+                padding: fitPadding,
               ),
       );
     }

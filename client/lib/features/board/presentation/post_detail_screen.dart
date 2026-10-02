@@ -590,7 +590,8 @@ class _FullVideoState extends State<_FullVideo> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
-      body: Center(child: _body()),
+      // 가로로 돌리면 시스템 내비게이션 바·카메라 구멍이 탐색 막대를 덮을 수 있다.
+      body: SafeArea(child: Center(child: _body())),
     );
   }
 
@@ -604,43 +605,70 @@ class _FullVideoState extends State<_FullVideo> {
     if (!_ready) {
       return const CircularProgressIndicator();
     }
+    return FullVideoLayout(
+      aspectRatio: _controller.value.aspectRatio,
+      video: GestureDetector(
+        onTap: () => setState(() {
+          _controller.value.isPlaying ? _controller.pause() : _controller.play();
+        }),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            VideoPlayer(_controller),
+            // 일시정지 상태에서만 큰 재생 아이콘을 덮어 보여준다.
+            if (!_controller.value.isPlaying)
+              Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.play_arrow,
+                    color: Colors.white, size: 38),
+              ),
+          ],
+        ),
+      ),
+      controls: VideoProgressIndicator(
+        _controller,
+        allowScrubbing: true,
+        colors: const VideoProgressColors(playedColor: AppColors.primary),
+      ),
+    );
+  }
+}
+
+/// 영상 + 탐색 막대 배치. 영상은 **남은 너비와 높이 둘 다** 안에 비율을 지켜 들어간다.
+///
+/// 예전에는 Column 안에 AspectRatio 를 그냥 두어 너비만 보고 높이를 정했다. 세로 영상을
+/// 가로 화면에서 열면 높이가 화면을 넘어 영상 아래와 탐색 막대가 잘렸다(QA-F04).
+/// [Flexible] 이 높이 상한을 주면 AspectRatio 가 그 안에서 너비를 줄여 맞춘다.
+@visibleForTesting
+class FullVideoLayout extends StatelessWidget {
+  const FullVideoLayout({
+    super.key,
+    required this.aspectRatio,
+    required this.video,
+    required this.controls,
+  });
+
+  final double aspectRatio;
+  final Widget video;
+  final Widget controls;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        GestureDetector(
-          onTap: () => setState(() {
-            _controller.value.isPlaying ? _controller.pause() : _controller.play();
-          }),
-          child: AspectRatio(
-            aspectRatio: _controller.value.aspectRatio,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                VideoPlayer(_controller),
-                // 일시정지 상태에서만 큰 재생 아이콘을 덮어 보여준다.
-                if (!_controller.value.isPlaying)
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: const BoxDecoration(
-                      color: Colors.black54,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.play_arrow,
-                        color: Colors.white, size: 38),
-                  ),
-              ],
-            ),
-          ),
+        Flexible(
+          child: AspectRatio(aspectRatio: aspectRatio, child: video),
         ),
         const SizedBox(height: 12),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: VideoProgressIndicator(
-            _controller,
-            allowScrubbing: true,
-            colors: const VideoProgressColors(playedColor: AppColors.primary),
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: controls,
         ),
       ],
     );

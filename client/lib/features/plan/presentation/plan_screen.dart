@@ -8,6 +8,7 @@ import '../../../core/format/formatters.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../shared/widgets/legal_link.dart';
 import '../../band/application/band_providers.dart';
 import '../application/plan_providers.dart';
 import '../application/purchase_sync.dart';
@@ -466,7 +467,13 @@ class _SubscriptionTerms extends StatelessWidget {
           line('해지해도 결제한 기간이 끝날 때까지는 프리미엄이 유지돼요.'),
           line('구독은 이 밴드 전체에 적용되고 밴드마다 따로 결제해요. 한 Google 계정으로 밴드 '
               '${IapService.productIds.length}개까지 결제할 수 있어요.'),
-          line('이용약관·개인정보처리방침: bandule.com/terms · bandule.com/privacy'),
+          // 글자만 있으면 눌러도 안 열린다(QA-F06 과 같은 문제) — 구독 고지의 약관은 열려야 한다.
+          Wrap(
+            children: [
+              LegalLink(label: '이용약관', uri: LegalUrls.terms),
+              LegalLink(label: '개인정보처리방침', uri: LegalUrls.privacy),
+            ],
+          ),
           line(_sellerLine),
         ],
       ),

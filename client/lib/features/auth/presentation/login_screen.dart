@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../shared/widgets/brand_mark.dart';
+import '../../../shared/widgets/legal_link.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../routing/app_router.dart';
@@ -236,13 +237,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   // 실제로 붙일 때 다시 넣는다.
                   const SizedBox(height: 18),
                   const Text(
-                    '계속하면 이용약관과 개인정보처리방침에 동의하는 것으로 봐요.',
+                    '계속하면 아래 이용약관과 개인정보처리방침에 동의하는 것으로 봐요.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 10.5,
                       height: 1.7,
                       color: AppColors.textFaint,
                     ),
+                  ),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [
+                      LegalLink(
+                          label: '이용약관', uri: LegalUrls.terms, fontSize: 11),
+                      LegalLink(
+                          label: '개인정보처리방침',
+                          uri: LegalUrls.privacy,
+                          fontSize: 11),
+                    ],
                   ),
                 ],
               ),
