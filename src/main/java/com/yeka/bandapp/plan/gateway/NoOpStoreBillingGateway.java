@@ -1,5 +1,6 @@
 package com.yeka.bandapp.plan.gateway;
 
+import com.yeka.bandapp.common.log.LogMasks;
 import com.yeka.bandapp.plan.config.PlanProperties;
 import com.yeka.bandapp.plan.config.StoreBillingProperties;
 import com.yeka.bandapp.plan.entity.Store;
@@ -74,7 +75,7 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
         StoreSubscriptionState state = simulatedStates.containsKey(purchaseToken)
                 ? simulatedStates.get(purchaseToken) : switch (prefix) {
             case "unavailable" -> throw new StoreBillingUnavailableException(
-                    "[no-op billing] 스토어 일시 장애 흉내 token=" + purchaseToken, null);
+                    "[no-op billing] 스토어 일시 장애 흉내 token=" + LogMasks.token(purchaseToken), null);
             case "invalid" -> null;
             case "revoked" -> StoreSubscriptionState.REVOKED;
             case "expired" -> StoreSubscriptionState.EXPIRED;
@@ -100,10 +101,10 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
     @Override
     public Instant defer(Store store, String purchaseToken, Duration by) {
         if (refuseEverything || purchaseToken == null || purchaseToken.startsWith("nodefer-")) {
-            throw new StoreDeferRejectedException("[no-op billing] 연기 거절 흉내 token=" + purchaseToken, null);
+            throw new StoreDeferRejectedException("[no-op billing] 연기 거절 흉내 token=" + LogMasks.token(purchaseToken), null);
         }
         if (purchaseToken.startsWith("unavailable-")) {
-            throw new StoreBillingUnavailableException("[no-op billing] 스토어 일시 장애 흉내 token=" + purchaseToken, null);
+            throw new StoreBillingUnavailableException("[no-op billing] 스토어 일시 장애 흉내 token=" + LogMasks.token(purchaseToken), null);
         }
         return Instant.now().plus(planProperties.premiumPeriodDays(), ChronoUnit.DAYS).plus(by);
     }
@@ -115,13 +116,13 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
     @Override
     public void cancelRenewal(Store store, String purchaseToken) {
         if (refuseEverything || purchaseToken == null) {
-            throw new StoreBillingUnavailableException("[no-op billing] 해지할 수 없음 token=" + purchaseToken, null);
+            throw new StoreBillingUnavailableException("[no-op billing] 해지할 수 없음 token=" + LogMasks.token(purchaseToken), null);
         }
         if (purchaseToken.startsWith("unavailable-") || purchaseToken.startsWith("nocancel-")) {
-            throw new StoreBillingUnavailableException("[no-op billing] 스토어 일시 장애 흉내 token=" + purchaseToken, null);
+            throw new StoreBillingUnavailableException("[no-op billing] 스토어 일시 장애 흉내 token=" + LogMasks.token(purchaseToken), null);
         }
         cancelledRenewals.add(purchaseToken);
-        log.info("[no-op billing] cancelRenewal store={} token={}", store, purchaseToken);
+        log.info("[no-op billing] cancelRenewal store={} token={}", store, LogMasks.token(purchaseToken));
     }
 
     /** 지금까지 {@link #cancelRenewal} 로 해지한 토큰(테스트용). */
@@ -151,6 +152,6 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
 
     @Override
     public void acknowledge(Store store, String productId, String purchaseToken) {
-        log.info("[no-op billing] acknowledge store={} productId={} token={}", store, productId, purchaseToken);
+        log.info("[no-op billing] acknowledge store={} productId={} token={}", store, productId, LogMasks.token(purchaseToken));
     }
 }
