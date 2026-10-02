@@ -96,9 +96,9 @@ class SettlementIntegrationTest extends ReservationApiSupport {
         assertThat(hasShare(s, myUserId(m2))).isFalse();
     }
 
-    /** 재계산 — 새로 참석한 멤버가 추가되고, 이미 납부 체크한 멤버의 상태는 보존된다. */
+    /** 재계산 — 새로 참석한 멤버가 추가되고, 몫이 바뀐 납부자는 체크가 풀린다(4,500 낸 사람의 몫이 3,000 이 됨). */
     @Test
-    void recalculate_adds_new_attendee_and_preserves_paid_flag() {
+    void recalculate_adds_new_attendee_and_unmarks_paid_share_whose_amount_changed() {
         String leader = signup("stl-rec-l@band.app", "리더");
         String m1 = signup("stl-rec-1@band.app", "멤버1");
         String m2 = signup("stl-rec-2@band.app", "멤버2");
@@ -125,11 +125,163 @@ class SettlementIntegrationTest extends ReservationApiSupport {
 
         assertThat(s.get("shareCount").asInt()).isEqualTo(3);
         assertThat(sumOfShares(s)).isEqualTo(9_000);            // 3000 * 3
-        assertThat(shareOf(s, m1Id).get("paid").asBoolean()).isTrue();   // 보존
-        assertThat(shareOf(s, m1Id).get("paidAt").isNull()).isFalse();
+        assertThat(shareOf(s, m1Id).get("amount").asInt()).isEqualTo(3_000);
+        assertThat(shareOf(s, m1Id).get("paid").asBoolean()).isFalse();  // 4500 만 냈으므로 풀림
+        assertThat(shareOf(s, m1Id).get("paidAt").isNull()).isTrue();
         assertThat(shareOf(s, m2Id).get("paid").asBoolean()).isFalse();  // 신규는 미납
-        assertThat(s.get("paidAmount").asInt()).isEqualTo(3_000);
-        assertThat(s.get("outstandingAmount").asInt()).isEqualTo(6_000);
+        assertThat(s.get("paidAmount").asInt()).isZero();
+        assertThat(s.get("outstandingAmount").asInt()).isEqualTo(9_000);
+    }
+
+    /**
+     * 항목 1 — 40,000원 / 4명 = 10,000. A 가 내고 체크 → 같은 금액으로 재계산하면 체크 유지,
+     * 60,000원으로 재계산하면 A 몫 15,000 이 되며 체크가 풀린다(예전엔 "낸 사람" 으로 남아 5,000 이 사라졌다).
+     */
+    @Test
+    void paid_mark_survives_unchanged_amount_but_is_cleared_when_amount_changes() {
+        String leader = signup("stl-chg-l@band.app", "리더");
+        String a = signup("stl-chg-a@band.app", "에이");
+        String b = signup("stl-chg-b@band.app", "비");
+        String c = signup("stl-chg-c@band.app", "씨");
+        long bandId = createBand(leader, "변경밴드");
+        join(a, issueInvite(leader, bandId, null));
+        join(b, issueInvite(leader, bandId, null));
+        join(c, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        long aId = myUserId(a);
+
+        createSettlement(leader, bandId, reservationId, 40_000, "EQUAL");
+        markPaid(a, bandId, reservationId, aId, true);
+
+        JsonNode same = data(recalculate(leader, bandId, reservationId, "{}"));
+        assertThat(shareOf(same, aId).get("amount").asInt()).isEqualTo(10_000);
+        assertThat(shareOf(same, aId).get("paid").asBoolean()).isTrue();
+        assertThat(same.get("paidAmount").asInt()).isEqualTo(10_000);
+
+        JsonNode s = data(recalculate(leader, bandId, reservationId, "{\"totalAmount\":60000}"));
+        assertThat(shareOf(s, aId).get("amount").asInt()).isEqualTo(15_000);
+        assertThat(shareOf(s, aId).get("paid").asBoolean()).isFalse();
+        assertThat(shareOf(s, aId).get("paidAt").isNull()).isTrue();
+        assertThat(sumOfShares(s)).isEqualTo(60_000);
+        assertThat(s.get("paidCount").asInt()).isZero();
+        assertThat(s.get("outstandingAmount").asInt()).isEqualTo(60_000);
+
+        JsonNode list = data(get("/api/v1/bands/" + bandId + "/settlements", a));
+        assertThat(list.get("myOutstandingTotal").asLong()).isEqualTo(15_000);
+    }
+
+    /**
+     * 항목 2 — 40,000원 / 4명 = 10,000. A 가 내고 밴드를 떠남 → 재계산해도 A 의 10,000(납부) 행은 남고,
+     * 남은 30,000 만 3명이 10,000씩. 예전엔 A 행이 지워지고 40,000 을 3명이 13,334/13,333/13,333 으로 나눠
+     * 10,000 을 더 걷었다. 총액을 A 가 낸 금액보다 작게 하면 409, 같게 하면 나머지는 0원.
+     */
+    @Test
+    void paid_share_of_member_who_left_is_kept_and_only_the_rest_is_split() {
+        String leader = signup("stl-left-l@band.app", "리더");
+        String a = signup("stl-left-a@band.app", "떠난에이");
+        String b = signup("stl-left-b@band.app", "비");
+        String c = signup("stl-left-c@band.app", "씨");
+        long bandId = createBand(leader, "떠남밴드");
+        join(a, issueInvite(leader, bandId, null));
+        join(b, issueInvite(leader, bandId, null));
+        join(c, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        long leaderId = myUserId(leader);
+        long aId = myUserId(a);
+        long bId = myUserId(b);
+
+        createSettlement(leader, bandId, reservationId, 40_000, "EQUAL");
+        markPaid(a, bandId, reservationId, aId, true);
+        assertThat(post("/api/v1/bands/" + bandId + "/members/leave", "", a).getStatusCode().is2xxSuccessful())
+                .isTrue();
+
+        JsonNode s = data(recalculate(leader, bandId, reservationId, "{}"));
+        assertThat(s.get("shareCount").asInt()).isEqualTo(4);
+        assertThat(sumOfShares(s)).isEqualTo(40_000);
+        JsonNode aShare = shareOf(s, aId);
+        assertThat(aShare.get("amount").asInt()).isEqualTo(10_000);
+        assertThat(aShare.get("paid").asBoolean()).isTrue();
+        assertThat(aShare.get("name").asText()).isEqualTo("떠난에이");   // 떠났어도 이름이 보인다
+        assertThat(shareOf(s, leaderId).get("amount").asInt()).isEqualTo(10_000);
+        assertThat(shareOf(s, bId).get("amount").asInt()).isEqualTo(10_000);
+        assertThat(s.get("paidAmount").asInt()).isEqualTo(10_000);
+        assertThat(s.get("outstandingAmount").asInt()).isEqualTo(30_000);
+
+        // 총액 32,000 → 남은 22,000 / 3 = 7,334(밴드장) + 7,333 + 7,333
+        JsonNode lower = data(recalculate(leader, bandId, reservationId, "{\"totalAmount\":32000}"));
+        assertThat(shareOf(lower, aId).get("amount").asInt()).isEqualTo(10_000);
+        assertThat(shareOf(lower, leaderId).get("amount").asInt()).isEqualTo(7_334);
+        assertThat(shareOf(lower, bId).get("amount").asInt()).isEqualTo(7_333);
+        assertThat(sumOfShares(lower)).isEqualTo(32_000);
+
+        // A 가 낸 10,000 보다 작은 총액은 거부(음수 몫을 만들지 않는다). 아무것도 바뀌지 않는다.
+        ResponseEntity<String> tooLow = post(settlementPath(bandId, reservationId) + "/recalculate",
+                "{\"totalAmount\":5000}", leader);
+        assertThat(tooLow.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(tooLow)).isEqualTo("SETTLEMENT_TOTAL_BELOW_PAID");
+        assertThat(data(get(settlementPath(bandId, reservationId), leader)).get("totalAmount").asInt())
+                .isEqualTo(32_000);
+
+        // 딱 10,000 이면 남은 사람은 0원.
+        JsonNode exact = data(recalculate(leader, bandId, reservationId, "{\"totalAmount\":10000}"));
+        assertThat(sumOfShares(exact)).isEqualTo(10_000);
+        assertThat(shareOf(exact, leaderId).get("amount").asInt()).isZero();
+        assertThat(exact.get("outstandingAmount").asInt()).isZero();
+    }
+
+    /**
+     * 두 규칙을 함께 — ATTENDEES_ONLY 40,000원 / 4명 = 10,000. A·B 가 냄 → A 는 불참으로 바꿈 →
+     * 총액 46,000 으로 재계산. A 의 10,000 은 그대로 남고(빠진 사람의 낸 몫 고정), 남은 36,000 을
+     * 리더·B·C 가 12,000 씩. B 는 계속 참석자인데 몫이 10,000 → 12,000 으로 바뀌어 체크가 풀린다.
+     */
+    @Test
+    void excluded_paid_share_is_fixed_while_participant_paid_share_is_recalculated() {
+        String leader = signup("stl-mix-l@band.app", "리더");
+        String a = signup("stl-mix-a@band.app", "에이");
+        String b = signup("stl-mix-b@band.app", "비");
+        String c = signup("stl-mix-c@band.app", "씨");
+        long bandId = createBand(leader, "섞임밴드");
+        join(a, issueInvite(leader, bandId, null));
+        join(b, issueInvite(leader, bandId, null));
+        join(c, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        long leaderId = myUserId(leader);
+        long aId = myUserId(a);
+        long bId = myUserId(b);
+        long cId = myUserId(c);
+        setAttendance(leader, bandId, reservationId, leaderId, "ATTENDING");
+        setAttendance(a, bandId, reservationId, aId, "ATTENDING");
+        setAttendance(b, bandId, reservationId, bId, "ATTENDING");
+        setAttendance(c, bandId, reservationId, cId, "ATTENDING");
+
+        createSettlement(leader, bandId, reservationId, 40_000, "ATTENDEES_ONLY");
+        markPaid(a, bandId, reservationId, aId, true);
+        markPaid(b, bandId, reservationId, bId, true);
+        setAttendance(a, bandId, reservationId, aId, "ABSENT");
+
+        JsonNode s = data(recalculate(leader, bandId, reservationId, "{\"totalAmount\":46000}"));
+
+        assertThat(s.get("shareCount").asInt()).isEqualTo(4);
+        assertThat(sumOfShares(s)).isEqualTo(46_000);
+        assertThat(shareOf(s, aId).get("amount").asInt()).isEqualTo(10_000);
+        assertThat(shareOf(s, aId).get("paid").asBoolean()).isTrue();
+        assertThat(shareOf(s, bId).get("amount").asInt()).isEqualTo(12_000);
+        assertThat(shareOf(s, bId).get("paid").asBoolean()).isFalse();
+        assertThat(shareOf(s, leaderId).get("amount").asInt()).isEqualTo(12_000);
+        assertThat(shareOf(s, cId).get("amount").asInt()).isEqualTo(12_000);
+        assertThat(s.get("paidCount").asInt()).isEqualTo(1);
+        assertThat(s.get("paidAmount").asInt()).isEqualTo(10_000);
+        assertThat(s.get("outstandingAmount").asInt()).isEqualTo(36_000);
+
+        JsonNode list = data(get("/api/v1/bands/" + bandId + "/settlements", b));
+        JsonNode item = list.get("settlements").get(0);
+        assertThat(item.get("shareCount").asInt()).isEqualTo(4);
+        assertThat(item.get("paidCount").asInt()).isEqualTo(1);
+        assertThat(item.get("myAmount").asInt()).isEqualTo(12_000);
+        assertThat(list.get("myOutstandingTotal").asLong()).isEqualTo(12_000);
     }
 
     /** 재계산 본문에 totalAmount 를 넘기면 그 값으로 갱신된다(splitType 은 유지). */

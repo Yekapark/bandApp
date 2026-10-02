@@ -61,11 +61,17 @@ class SettlementCalculatorTest {
     }
 
     @Test
-    void rejects_empty_recipients_and_non_positive_total() {
+    void rejects_empty_recipients_and_negative_total() {
         assertThatThrownBy(() -> SettlementCalculator.split(1_000, List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> SettlementCalculator.split(0, List.of(1L)))
+        assertThatThrownBy(() -> SettlementCalculator.split(-1, List.of(1L)))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** 재계산에서 빠진 멤버가 낸 몫이 총액을 다 채우면 남은 사람은 0원씩. */
+    @Test
+    void zero_total_gives_everyone_zero() {
+        assertThat(SettlementCalculator.split(0, List.of(1L, 2L)).values()).containsExactly(0, 0);
     }
 
     private static int sum(Map<Long, Integer> shares) {
