@@ -136,6 +136,11 @@ public class RoomService {
         String phone = trimToNull(request.phone());
         String memo = trimToNull(request.memo());
 
+        // 이름 충돌을 지오코딩(외부 호출·분당 상한 소모)보다 먼저 본다 — 어차피 409 로 끝날 요청이 상한을 태우지 않게.
+        if (!name.equals(snapshot.getName())) {
+            requireNameAvailable(bandId, name);
+        }
+
         Double lat = snapshot.getLat();
         Double lng = snapshot.getLng();
         if (hasBoth(request.lat(), request.lng())) {
@@ -149,10 +154,6 @@ public class RoomService {
             lat = found.map(Coordinates::lat).orElse(null);
             lng = found.map(Coordinates::lng).orElse(null);
         }
-        if (!name.equals(snapshot.getName())) {
-            requireNameAvailable(bandId, name);
-        }
-
         try {
             if (roomRepository.updateEditableFields(roomId, name, address, lat, lng, phone, memo) == 0) {
                 throw new BusinessException(ErrorCode.ROOM_NOT_FOUND); // 조회와 UPDATE 사이에 삭제됨

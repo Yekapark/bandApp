@@ -69,8 +69,8 @@ public class MediaAttachmentController {
     }
 
     @Operation(summary = "첨부 삭제",
-            description = "DB 행을 지우고 R2 객체를 정리한다(204). 작성자 본인 또는 밴드장만(그 외 403 NOT_POST_OWNER). "
-                    + "없으면 404 MEDIA_NOT_FOUND.")
+            description = "R2 객체를 지운 뒤 DB 행을 지운다(204). 작성자 본인 또는 밴드장만(그 외 403 NOT_POST_OWNER). "
+                    + "없으면 404 MEDIA_NOT_FOUND. 저장소 삭제 실패면 502 MEDIA_STORAGE_ERROR(첨부는 그대로 — 다시 시도).")
     @DeleteMapping("/{mediaId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal AuthPrincipal principal,

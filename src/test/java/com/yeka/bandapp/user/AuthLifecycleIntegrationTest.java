@@ -1,9 +1,15 @@
 package com.yeka.bandapp.user;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.yeka.bandapp.common.security.JwtTokenProvider;
+import com.yeka.bandapp.common.security.RefreshTokenStore;
+import com.yeka.bandapp.common.security.TokenPair;
 import com.yeka.bandapp.support.ApiIntegrationTest;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -70,5 +76,30 @@ class AuthLifecycleIntegrationTest extends ApiIntegrationTest {
         ResponseEntity<String> meAfter = get("/api/v1/users/me", newAccess);
         assertThat(meAfter.getStatusCode().value()).isEqualTo(401);
         assertThat(errorCode(meAfter)).isEqualTo("ACCOUNT_WITHDRAWN");
+    }
+
+    @Autowired
+    JwtTokenProvider tokenProvider;
+
+    @Autowired
+    RefreshTokenStore refreshTokenStore;
+
+    /** 로그인과 탈퇴가 겹쳐 탈퇴 뒤에 세션이 저장된 경우 — 그 refresh 로 갱신되면 탈퇴 계정이 되살아난다. */
+    @Test
+    void session_saved_after_withdrawal_cannot_refresh() {
+        JsonNode data = body(post("/api/v1/auth/signup",
+                "{\"email\":\"late@band.app\",\"password\":\"pw12345678\",\"name\":\"늦은세션\"}")).get("data");
+        long userId = data.at("/user/id").asLong();
+        post("/api/v1/users/me/withdraw", "{\"password\":\"pw12345678\"}",
+                data.at("/tokens/accessToken").asText());
+
+        TokenPair late = tokenProvider.issue(userId);
+        refreshTokenStore.save(userId, late.refreshJti(), Duration.ofDays(14));
+
+        ResponseEntity<String> refreshed = post("/api/v1/auth/refresh",
+                "{\"refreshToken\":\"" + late.refreshToken() + "\"}");
+        assertThat(refreshed.getStatusCode().value()).isEqualTo(401);
+        assertThat(errorCode(refreshed)).isEqualTo("REFRESH_TOKEN_INVALID");
+        assertThat(refreshTokenStore.exists(userId, late.refreshJti())).isFalse();
     }
 }

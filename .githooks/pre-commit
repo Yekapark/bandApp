@@ -14,7 +14,8 @@
 # 정말 올려야 하는 예외적인 경우에만:
 #     ALLOW_SECRET_COMMIT=1 git commit ...
 
-staged=$(git diff --cached --name-only --diff-filter=ACM)
+# R 포함 — 이름을 바꿔 담은 파일(예: 예시 파일을 지우고 비밀 파일을 새로 담아 rename 으로 잡힌 경우)도 본다.
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -z "$staged" ] && exit 0
 
 blocked=""
@@ -35,6 +36,8 @@ for f in $staged; do
         secrets/*|*/secrets/*)                                blocked="$blocked $f" ;;
         *-adminsdk-*.json|*serviceAccount*.json)              blocked="$blocked $f" ;;
         id_rsa|id_ed25519|*/id_rsa|*/id_ed25519)              blocked="$blocked $f" ;;
+        # DB 덤프(deploy/backup) — 회원정보 전체다. 서버에서 내려받아 둔 것이 휩쓸리지 않게.
+        *.dump|*.dump.part)                                   blocked="$blocked $f" ;;
     esac
 done
 
@@ -45,6 +48,17 @@ done
 for f in $staged; do
     if git show ":$f" 2>/dev/null | head -c 4096 | grep -qE "BEGIN [A-Z ]*PRIVATE KEY"; then
         blocked="$blocked $f"
+    fi
+done
+
+# 이름을 바꾼 .env 사본(예: prod-backup.txt) — 이름 패턴으로는 못 잡는다. 서버 비밀값 이름에
+# 실제 값(공백·<·$ 없이 16자 이상)이 붙은 줄이 있으면 막는다. 문서의 `JWT_SECRET=<...>` 나
+# 빈 견본(`JWT_SECRET=`)은 통과한다.
+secret_line='^[[:space:]]*(export[[:space:]]+)?(DB_PASSWORD|REDIS_PASSWORD|JWT_SECRET|R2_SECRET_ACCESS_KEY|R2_ACCESS_KEY_ID|KAKAO_ADMIN_KEY|KAKAO_REST_API_KEY|MAIL_SMTP_PASSWORD|PLAN_BILLING_WEBHOOK_SECRET|FCM_CREDENTIALS_JSON)=["'"'"']?[A-Za-z0-9+/=_-]{16,}'
+for f in $staged; do
+    case "$(basename "$f")" in *.example|*.sample|*.template) continue ;; esac
+    if git show ":$f" 2>/dev/null | head -c 65536 | grep -qE "$secret_line"; then
+        case "$blocked" in *" $f"*) ;; *) blocked="$blocked $f" ;; esac
     fi
 done
 

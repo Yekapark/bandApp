@@ -77,11 +77,16 @@ public class BandInviteService {
         return InviteResponse.of(invite, deeplinkProperties.inviteLink(invite.getCode()));
     }
 
-    /** 현재 활성 초대코드. 밴드장만 조회 가능. 없으면 404. */
+    /**
+     * 현재 쓸 수 있는 초대코드. 밴드장만 조회 가능. 없으면 404.
+     * 만료·소진된 코드는 "없음" 으로 본다 — 돌려주면 밴드장이 이미 안 먹는 코드를 공유하게 된다.
+     */
     @Transactional(readOnly = true)
     public InviteResponse current(long bandId, long userId) {
         accessGuard.requireLeader(bandId, userId);
+        Instant now = Instant.now();
         BandInvite invite = bandInviteRepository.findFirstByBandIdAndRevokedFalseOrderByCreatedAtDesc(bandId)
+                .filter(i -> !i.isExpired(now) && !i.isExhausted())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVITE_NOT_FOUND));
         return InviteResponse.of(invite, deeplinkProperties.inviteLink(invite.getCode()));
     }

@@ -41,6 +41,20 @@ class BandSettlementListIntegrationTest extends ReservationApiSupport {
         assertThat(res.getStatusCode().value()).isEqualTo(200);
     }
 
+    /** 큰 금액 정산이 여러 건이면 미납 합계가 int 를 넘는다 — 예전에는 음수로 넘쳐 보였다. */
+    @Test
+    void outstanding_total_does_not_overflow_with_large_amounts() {
+        String leader = signup("bstl-ovf-l@band.app", "리더");
+        long bandId = createBand(leader, "넘침");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long r1 = createReservation(leader, bandId, roomId, T10, T13);
+        long r2 = createReservation(leader, bandId, roomId, T13, T16);
+        createSettlement(leader, bandId, r1, 2_000_000_000);
+        createSettlement(leader, bandId, r2, 2_000_000_000);
+
+        assertThat(list(leader, bandId, "").get("myOutstandingTotal").asLong()).isEqualTo(4_000_000_000L);
+    }
+
     @Test
     void list_carries_my_share_and_sums_what_i_still_owe() {
         String leader = signup("bstl-a-l@band.app", "리더");

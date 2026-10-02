@@ -83,7 +83,7 @@ public class FakeStorageClient implements StorageClient {
     }
 
     @Override
-    public URI presignPut(String storageKey, String contentType, Duration ttl) {
+    public URI presignPut(String storageKey, String contentType, long sizeBytes, Duration ttl) {
         presignedPutKeys.add(storageKey);
         return URI.create("https://fake-r2.test/" + storageKey + "?sig=fake&op=put");
     }

@@ -46,9 +46,11 @@ public interface StoreBillingGateway {
 
     /**
      * 구독의 <b>다음 결제만</b> 멈춘다 — 이미 결제한 기간은 끝까지 유효하고 환불하지 않는다. 결제한 회원이 탈퇴했을 때
-     * 쓴다(LAUNCH_REVIEW B13). 이미 해지된 구독에 불러도 안전해야 한다. 반영되면 스토어가 CANCELED 알림을 보낸다.
+     * 쓴다(LAUNCH_REVIEW B13). 이미 해지·만료된 구독에 불러도 안전해야 한다(스토어에서 끝난 것을 <b>확인했을 때만</b> 조용히
+     * 성공 — B14). 반영되면 스토어가 CANCELED 알림을 보낸다.
      *
      * @throws StoreBillingUnavailableException 스토어가 일시적으로 답하지 않음(다시 시도할 만함)
+     * @throws IllegalStateException            스토어가 거절했고 구독이 끝났는지도 확인되지 않음(권한 없음 등)
      */
     default void cancelRenewal(Store store, String purchaseToken) {
         throw new UnsupportedOperationException("이 게이트웨이는 구독 해지를 지원하지 않는다");

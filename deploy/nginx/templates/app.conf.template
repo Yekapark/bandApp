@@ -30,6 +30,8 @@
 server {
     listen 80;
     server_name ${DOMAIN};
+    # 응답 헤더·에러 페이지에 nginx 버전을 싣지 않는다(알려진 취약 버전 골라 찌르기 방지).
+    server_tokens off;
 
     # Let's Encrypt 갱신용 챌린지. 이 경로만 평문으로 열어 둔다.
     location /.well-known/acme-challenge/ {
@@ -45,6 +47,7 @@ server {
     listen 443 ssl;
     http2 on;
     server_name ${DOMAIN};
+    server_tokens off;
 
     ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;

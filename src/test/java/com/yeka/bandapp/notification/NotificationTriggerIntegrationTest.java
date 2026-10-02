@@ -74,6 +74,30 @@ class NotificationTriggerIntegrationTest extends NotificationApiSupport {
         assertThat(tokensFor("RESERVATION_APPROVED")).containsExactly("member-dev");
     }
 
+    /** 승인제 밴드에서 확정 일정을 고쳐 다시 대기로 돌아가면, 재승인 요청과 재승인 알림이 다시 나간다. */
+    @Test
+    void editing_a_confirmed_reservation_in_approval_mode_requests_and_announces_approval_again() {
+        String leader = signup("trg-reap-l@band.app", "리더");
+        String member = signup("trg-reap-m@band.app", "멤버");
+        long bandId = createBand(leader, "재승인");
+        join(member, issueInvite(leader, bandId, null));
+        setPermission(leader, bandId, "APPROVAL_REQUIRED");
+        registerToken(leader, "leader-dev", "ANDROID");
+        registerToken(member, "member-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservationExpectPending(member, bandId, roomId);
+        String base = "/api/v1/bands/" + bandId + "/reservations/" + reservationId;
+        post(base + "/approve", "{}", leader);
+        push.reset();
+
+        assertThat(put(base, "{\"roomId\":" + roomId + ",\"startAt\":\"" + T13 + "\",\"endAt\":\"" + T16 + "\"}",
+                member).getStatusCode().value()).isEqualTo(200);
+        assertThat(tokensFor("RESERVATION_APPROVAL_REQUESTED")).containsExactly("leader-dev");
+
+        post(base + "/approve", "{}", leader);
+        assertThat(tokensFor("RESERVATION_APPROVED")).containsExactly("member-dev");
+    }
+
     @Test
     void reject_notifies_the_requester() {
         String leader = signup("trg-rj-l@band.app", "리더");
@@ -143,6 +167,28 @@ class NotificationTriggerIntegrationTest extends NotificationApiSupport {
                 "{\"totalAmount\":30000,\"splitType\":\"EQUAL\"}", leader);
 
         assertThat(tokensFor("SETTLEMENT_REQUESTED")).containsExactly("member-dev");
+    }
+
+    /** 재계산으로 총액이 바뀌면 다시 알린다. 예전에는 variant 0 고정이라 "이미 보냄" 으로 걸러져 아무도 몰랐다. */
+    @Test
+    void recalculating_with_a_new_total_notifies_again_but_same_total_does_not() {
+        String leader = signup("trg-rc-l@band.app", "리더");
+        String member = signup("trg-rc-m@band.app", "멤버");
+        long bandId = createBand(leader, "혁오셋");
+        join(member, issueInvite(leader, bandId, null));
+        registerToken(member, "member-dev", "ANDROID");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        String path = "/api/v1/bands/" + bandId + "/reservations/" + reservationId + "/settlement";
+        post(path, "{\"totalAmount\":30000,\"splitType\":\"EQUAL\"}", leader);
+        push.reset();
+
+        post(path + "/recalculate", "{}", leader);   // 같은 총액 — 다시 보낼 필요 없음
+        assertThat(tokensFor("SETTLEMENT_REQUESTED")).isEmpty();
+
+        post(path + "/recalculate", "{\"totalAmount\":40000}", leader);
+        assertThat(tokensFor("SETTLEMENT_REQUESTED")).containsExactly("member-dev");
+        assertThat(push.sent().get(0).message().body()).contains("40,000원");
     }
 
     // --- helpers ---------------------------------------------------------
