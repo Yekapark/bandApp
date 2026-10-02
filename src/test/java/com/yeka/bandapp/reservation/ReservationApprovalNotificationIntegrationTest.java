@@ -95,7 +95,7 @@ class ReservationApprovalNotificationIntegrationTest extends NotificationApiSupp
     }
 
     private long createPending(String token, long bandId, long roomId) {
-        var res = post("/api/v1/bands/" + bandId + "/reservations", reservationBody(roomId, T10, T13), token);
+        var res = post("/api/v1/bands/" + bandId + "/reservations", reservationBody(roomId, F10, F13), token);
         assertThat(res.getStatusCode().value()).isEqualTo(201);
         assertThat(reservationOf(res).get("status").asText()).isEqualTo("PENDING");
         return reservationOf(res).get("id").asLong();

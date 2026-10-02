@@ -47,6 +47,20 @@ public final class NotificationMessages {
                 "일정 취소", when(startAt) + " 합주 일정이 취소됐어요.");
     }
 
+    public static PushMessage changed(long bandId, long reservationId, Instant startAt) {
+        return message(NotificationType.RESERVATION_CHANGED, bandId, reservationId,
+                "일정이 바뀌었어요", when(startAt) + " 합주로 시간·장소가 바뀌었어요.");
+    }
+
+    /** 정기 규칙 삭제. 눌렀을 때 캘린더로 가도록 reservationId 대신 ruleId 를 싣는다. */
+    public static PushMessage recurringRuleCancelled(long bandId, long ruleId, int cancelledCount) {
+        return new PushMessage("정기 일정이 취소됐어요",
+                "앞으로 남은 정기 합주 " + cancelledCount + "개가 취소됐어요.",
+                Map.of("type", NotificationType.RECURRING_RULE_CANCELLED.name(),
+                        "bandId", Long.toString(bandId),
+                        "ruleId", Long.toString(ruleId)));
+    }
+
     public static PushMessage settlementRequested(long bandId, long reservationId, int totalAmount) {
         return message(NotificationType.SETTLEMENT_REQUESTED, bandId, reservationId,
                 "정산 요청", "합주 비용 " + String.format(Locale.KOREA, "%,d", totalAmount) + "원 정산이 등록됐어요. 납부를 확인해 주세요.");

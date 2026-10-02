@@ -10,6 +10,12 @@ public enum NotificationType {
     RESERVATION_APPROVED,
     RESERVATION_REJECTED,
     RESERVATION_CANCELLED,
+
+    /** 확정 일정의 시간·합주실이 바뀜. {@code variant} 는 바뀐 값의 해시 — 고칠 때마다 한 번씩. */
+    RESERVATION_CHANGED,
+
+    /** 정기 규칙이 삭제돼 미래 회차가 취소됨. {@code targetId} 는 규칙 id — 삭제 한 번에 한 통. */
+    RECURRING_RULE_CANCELLED,
     SETTLEMENT_REQUESTED,
     RESERVATION_REMINDER,
     ATTENDANCE_NUDGE,

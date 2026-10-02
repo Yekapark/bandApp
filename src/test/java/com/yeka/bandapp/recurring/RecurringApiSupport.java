@@ -2,9 +2,15 @@ package com.yeka.bandapp.recurring;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yeka.bandapp.reservation.ReservationApiSupport;
+import com.yeka.bandapp.reservation.service.OccurrenceSlot;
+import com.yeka.bandapp.reservation.service.ReservationDirectoryService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 
 import java.time.DayOfWeek;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
@@ -78,5 +84,20 @@ public abstract class RecurringApiSupport extends ReservationApiSupport {
     /** 개별 일정(회차) 상세. Phase 4 일정 API 를 그대로 쓴다. */
     protected ResponseEntity<String> getReservation(String token, long bandId, long reservationId) {
         return get("/api/v1/bands/" + bandId + "/reservations/" + reservationId, token);
+    }
+
+    @Autowired
+    private ReservationDirectoryService occurrenceSeeder;
+
+    /**
+     * 규칙에 과거 회차(N주 전 15:00~18:00 KST)를 심는다. 규칙 등록은 오늘 이전 회차를 만들지 않으므로(결정 #14),
+     * "예전에 배치가 만든 회차가 지나간" 상황이 필요한 테스트가 쓴다. 합주실 사용 횟수·참석 행도 함께 생긴다.
+     */
+    protected void seedPastOccurrences(String token, long bandId, long roomId, long ruleId, int... weeksAgo) {
+        List<OccurrenceSlot> slots = Arrays.stream(weeksAgo).mapToObj(w -> {
+            Instant s = today().minusWeeks(w).atTime(15, 0).atZone(SEOUL).toInstant();
+            return new OccurrenceSlot(s, s.plusSeconds(3 * 3600));
+        }).toList();
+        occurrenceSeeder.createOccurrences(bandId, roomId, myUserId(token), ruleId, slots, null, null);
     }
 }

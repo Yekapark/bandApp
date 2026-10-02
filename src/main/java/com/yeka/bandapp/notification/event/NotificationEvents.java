@@ -38,6 +38,19 @@ public final class NotificationEvents {
     public record ReservationRescheduled(long reservationId) {
     }
 
+    /**
+     * 확정 일정의 시간·합주실이 바뀜. 수정자를 뺀 멤버에게. {@code variant} 는 바뀐 값(시각·합주실)에서 만든 수 —
+     * 같은 일정을 여러 번 고쳐도 고칠 때마다 알림이 간다(발송 이력의 멱등 키가 {@code variant} 를 포함).
+     */
+    public record ReservationChanged(long bandId, long reservationId, Instant startAt, int variant,
+                                     List<Long> recipientUserIds) {
+    }
+
+    /** 정기 규칙이 삭제돼 미래 회차 {@code cancelledCount}개가 취소됨. 삭제자를 뺀 멤버에게 한 번. */
+    public record RecurringRuleCancelled(long bandId, long ruleId, int cancelledCount,
+                                         List<Long> recipientUserIds) {
+    }
+
     /** 일정이 취소됨. 취소자를 뺀 밴드 멤버 전원에게. */
     public record ReservationCancelled(long bandId, long reservationId, Instant startAt,
                                        List<Long> recipientUserIds) {

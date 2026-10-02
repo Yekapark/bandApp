@@ -103,6 +103,12 @@ public class BandDirectoryService {
         return names;
     }
 
+    /** 밴드 이름. 알림 제목 앞에 붙인다(결정 #27). 없는 밴드면 빈 값. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<String> nameOf(long bandId) {
+        return bandRepository.findById(bandId).map(Band::getName);
+    }
+
     /** 활성 멤버 한 명의 표시용 요약. */
     public record MemberBrief(long userId, String name, String role) {
     }

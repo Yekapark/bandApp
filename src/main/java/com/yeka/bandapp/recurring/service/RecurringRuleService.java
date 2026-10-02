@@ -6,6 +6,7 @@ import com.yeka.bandapp.band.service.BandAccessGuard;
 import com.yeka.bandapp.band.service.BandDirectoryService;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
+import com.yeka.bandapp.notification.event.NotificationEvents;
 import com.yeka.bandapp.plan.service.PlanDirectoryService;
 import com.yeka.bandapp.recurring.dto.CreateRecurringRuleRequest;
 import com.yeka.bandapp.recurring.dto.RecurringRuleDetailResponse;
@@ -20,6 +21,7 @@ import com.yeka.bandapp.reservation.entity.Reservation;
 import com.yeka.bandapp.reservation.service.OccurrenceSlot;
 import com.yeka.bandapp.reservation.service.ReservationDirectoryService;
 import com.yeka.bandapp.room.service.RoomDirectoryService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,11 +63,13 @@ public class RecurringRuleService {
     private final ReservationDirectoryService reservationDirectory;
     private final RecurringProperties properties;
     private final PlanDirectoryService planDirectory;
+    private final ApplicationEventPublisher eventPublisher;
 
     public RecurringRuleService(RecurringRuleRepository ruleRepository, BandAccessGuard accessGuard,
                                 BandDirectoryService bandDirectory, RoomDirectoryService roomDirectory,
                                 ReservationDirectoryService reservationDirectory,
-                                RecurringProperties properties, PlanDirectoryService planDirectory) {
+                                RecurringProperties properties, PlanDirectoryService planDirectory,
+                                ApplicationEventPublisher eventPublisher) {
         this.ruleRepository = ruleRepository;
         this.accessGuard = accessGuard;
         this.bandDirectory = bandDirectory;
@@ -73,6 +77,7 @@ public class RecurringRuleService {
         this.reservationDirectory = reservationDirectory;
         this.properties = properties;
         this.planDirectory = planDirectory;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -98,8 +103,9 @@ public class RecurringRuleService {
         reservationDirectory.createOccurrences(bandId, rule.getRoomId(), userId, rule.getId(),
                 slots, rule.getCost(), rule.getNote());
 
+        // 등록 응답의 "앞으로 N개" — 오늘부터의 회차만(결정 #14). 오늘 이전 회차는 애초에 만들지 않는다.
         List<Reservation> occurrences = reservationDirectory.occurrencesSince(
-                rule.getId(), displayWindowStart());
+                rule.getId(), LocalDate.now(properties.zoneId()).atStartOfDay(properties.zoneId()).toInstant());
         List<Reservation> overlaps = reservationDirectory.overlapsAmong(
                 bandId, rule.getId(), slots, OVERLAP_WARNING_LIMIT);
 
@@ -158,8 +164,16 @@ public class RecurringRuleService {
             throw new BusinessException(ErrorCode.NOT_RECURRING_RULE_OWNER);
         }
         Instant now = Instant.now();
-        reservationDirectory.cancelFutureOccurrences(rule.getId(), now);
+        int cancelled = reservationDirectory.cancelFutureOccurrences(rule.getId(), now);
         rule.delete(now);
+        // 미래 회차가 조용히 사라지지 않게 멤버들에게 한 번 알린다(결정 #17). 회차마다가 아니라 삭제 한 번에 하나.
+        if (cancelled > 0) {
+            List<Long> others = bandDirectory.activeMemberUserIds(bandId).stream()
+                    .filter(id -> id != userId)
+                    .toList();
+            eventPublisher.publishEvent(new NotificationEvents.RecurringRuleCancelled(
+                    bandId, rule.getId(), cancelled, others));
+        }
     }
 
     // --- 배치 연장 (RecurringExtensionJob 이 루프를 소유한다) ------------------
@@ -209,10 +223,10 @@ public class RecurringRuleService {
     // --- 내부 헬퍼 ----------------------------------------------------------
 
     /**
-     * 생성 대상 슬롯 계산. 회차는 <b>오늘 ± {@code horizonWeeks}</b> 구간에서만 만든다 —
-     * {@code startDate}를 과거로 멀리 잡아도 한 요청에 수백 개 회차를 백필하지 않는다.
-     * 배치({@code extendRule})는 이미 만든 마지막 회차 다음({@code exclusiveAfter})부터 앞으로만
-     * 이어가므로 이 바닥에 걸리지 않는다.
+     * 생성 대상 슬롯 계산. 회차는 <b>오늘 ~ 오늘 + {@code horizonWeeks}</b> 구간에서만 만든다 —
+     * {@code startDate}를 과거로 잡아도 지난 날짜의 회차를 확정 일정으로 만들지 않는다(결정 #14. 예전에는
+     * 최대 8주 전까지 만들어 "앞으로 N개" 에 지난 회차도 들어갔다). 배치({@code extendRule})는 이미 만든
+     * 마지막 회차 다음({@code exclusiveAfter})부터 앞으로만 이어간다.
      */
     private List<OccurrenceSlot> freshSlots(RecurringRule rule, LocalDate exclusiveAfter) {
         ZoneId zone = properties.zoneId();
@@ -220,7 +234,7 @@ public class RecurringRuleService {
         LocalDate horizonEnd = today.plusWeeks(properties.horizonWeeks());
         // 이 날짜(포함)보다 이전 회차는 만들지 않는다. occurrenceDates 의 exclusiveAfter 는
         // "이 날짜 다음부터"라, 바닥을 포함시키려면 하루 앞선 값을 넘긴다.
-        LocalDate floorExclusive = today.minusWeeks(properties.horizonWeeks()).minusDays(1);
+        LocalDate floorExclusive = today.minusDays(1);
         LocalDate effectiveAfter = (exclusiveAfter == null || exclusiveAfter.isBefore(floorExclusive))
                 ? floorExclusive : exclusiveAfter;
 

@@ -77,6 +77,20 @@ public class NotificationEventListener {
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onReservationChanged(NotificationEvents.ReservationChanged e) {
+        safely(() -> sender.notify(NotificationType.RESERVATION_CHANGED, e.reservationId(), e.variant(),
+                e.recipientUserIds(),
+                NotificationMessages.changed(e.bandId(), e.reservationId(), e.startAt())));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onRecurringRuleCancelled(NotificationEvents.RecurringRuleCancelled e) {
+        safely(() -> sender.notify(NotificationType.RECURRING_RULE_CANCELLED, e.ruleId(), 0,
+                e.recipientUserIds(),
+                NotificationMessages.recurringRuleCancelled(e.bandId(), e.ruleId(), e.cancelledCount())));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onSettlementRequested(NotificationEvents.SettlementRequested e) {
         // variant = 총액 — 같은 금액의 요청은 한 번만, 재계산으로 총액이 바뀌면 다시 알린다. 예전에는 0 으로 고정이라
         // 재계산 알림이 "이미 보냄" 으로 전부 걸러져 바뀐 금액을 아무도 몰랐다.

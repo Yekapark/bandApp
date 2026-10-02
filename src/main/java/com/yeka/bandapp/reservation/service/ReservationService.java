@@ -30,6 +30,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -152,7 +153,10 @@ public class ReservationService {
      * 일정 수정(PUT 전체 교체). 등록자 본인 또는 밴드장만. 취소·거절된 일정은 수정할 수 없다(409).
      *
      * <p>{@code APPROVAL_REQUIRED} 밴드에서 <b>확정된</b> 일정의 시간 또는 합주실이 바뀌면 다시
-     * 승인 대기({@code PENDING})로 돌아간다. 비고·비용만 바뀐 경우는 확정 상태를 유지한다.
+     * 승인 대기({@code PENDING})로 돌아간다. 비고·비용만 바뀐 경우, 밴드장이 고친 경우(결정 #19)는 확정 상태를 유지한다.
+     *
+     * <p>확정 일정의 시간·합주실이 바뀌면 수정한 사람을 뺀 멤버에게 "일정이 바뀌었어요" 를 보낸다(결정 #18).
+     * 재승인으로 돌아간 경우 밴드장은 승인 요청을 따로 받으므로 빠진다.
      */
     @Transactional
     public ReservationWriteResponse update(long bandId, long reservationId, long userId,
@@ -187,11 +191,24 @@ public class ReservationService {
         if (roomChanged) {
             shiftUsage(previousRoomId, request.roomId());
         }
-        if (wasConfirmed && (roomChanged || timeChanged)
-                && bandDirectory.reservationPermissionOf(bandId) == ReservationPermission.APPROVAL_REQUIRED) {
-            r.revertToPending();
-            eventPublisher.publishEvent(new NotificationEvents.ReservationApprovalRequested(
-                    bandId, r.getId(), r.getStartAt(), bandDirectory.leaderUserIds(bandId)));
+        if (wasConfirmed && (roomChanged || timeChanged)) {
+            List<Long> leaders = bandDirectory.leaderUserIds(bandId);
+            boolean reapproval = !member.isLeader()
+                    && bandDirectory.reservationPermissionOf(bandId) == ReservationPermission.APPROVAL_REQUIRED;
+            if (reapproval) {
+                r.revertToPending();
+                eventPublisher.publishEvent(new NotificationEvents.ReservationApprovalRequested(
+                        bandId, r.getId(), r.getStartAt(), leaders));
+            }
+            List<Long> others = bandDirectory.activeMemberUserIds(bandId).stream()
+                    .filter(id -> id != userId)
+                    .filter(id -> !reapproval || !leaders.contains(id))
+                    .toList();
+            // variant — 바뀐 시각·합주실마다 한 번. 같은 일정을 여러 번 고쳐도 매번 알린다.
+            // ponytail: A→B→A→B 처럼 이미 알린 값으로 되돌아오면 두 번째 B 는 걸러진다(정산 몫 변경과 같은 한계).
+            eventPublisher.publishEvent(new NotificationEvents.ReservationChanged(
+                    bandId, r.getId(), r.getStartAt(),
+                    Objects.hash(r.getStartAt(), r.getEndAt(), r.getRoomId()), others));
         }
 
         return writeResponse(r, findOverlaps(bandId, r));
@@ -245,6 +262,10 @@ public class ReservationService {
         boolean wasPending = r.getStatus() == ReservationStatus.PENDING;
         if (r.cancel()) {
             roomDirectory.decreaseUsage(r.getRoomId());
+            // 이미 끝난 일정을 정리하려고 지우는 것까지 멤버 전원에게 알릴 필요는 없다(결정 #20).
+            if (!r.getEndAt().isAfter(Instant.now())) {
+                return;
+            }
             // 승인 대기 일정은 멤버들이 알림을 받은 적이 없다 — 알고 있던 밴드장·등록자에게만 취소를 알린다.
             List<Long> leaders = wasPending ? bandDirectory.leaderUserIds(bandId) : List.of();
             List<Long> others = bandDirectory.activeMemberUserIds(bandId).stream()
@@ -283,7 +304,8 @@ public class ReservationService {
                 yield ReservationStatus.CONFIRMED;
             }
             case ANYONE -> ReservationStatus.CONFIRMED;
-            case APPROVAL_REQUIRED -> ReservationStatus.PENDING;
+            // 밴드장이 등록한 일정은 스스로 승인할 필요가 없다(결정 #19).
+            case APPROVAL_REQUIRED -> member.isLeader() ? ReservationStatus.CONFIRMED : ReservationStatus.PENDING;
         };
     }
 

@@ -17,6 +17,12 @@ public abstract class NotificationApiSupport extends ReservationApiSupport {
 
     protected static final String NOTIFICATIONS = "/api/v1/notifications";
 
+    /** 아직 끝나지 않은 일정 시각. 끝난 일정의 취소는 알리지 않으므로(결정 #20) 취소 알림을 보는 테스트가 쓴다. */
+    protected static final String F10 = Instant.now().plus(Duration.ofDays(30))
+            .truncatedTo(java.time.temporal.ChronoUnit.HOURS).toString();
+    protected static final String F13 = Instant.parse(F10).plus(Duration.ofHours(3)).toString();
+    protected static final String F16 = Instant.parse(F10).plus(Duration.ofHours(6)).toString();
+
     protected ResponseEntity<String> registerToken(String accessToken, String token, String platform) {
         return post(NOTIFICATIONS + "/device-tokens",
                 "{\"token\":\"" + token + "\",\"platform\":\"" + platform + "\"}", accessToken);
