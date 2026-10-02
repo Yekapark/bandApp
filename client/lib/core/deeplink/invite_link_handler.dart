@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../features/auth/application/auth_controller.dart';
 import '../../routing/app_router.dart';
 
 /// 초대 링크(`bandule://invite/{code}`)를 받아 합류 화면으로 넘긴다.
@@ -15,9 +15,11 @@ import '../../routing/app_router.dart';
 /// 주소다. 예전 값으로 두면 초대 링크가 네이버 밴드 앱을 열었다(실제로 그랬다).
 /// 백엔드의 `app.deeplink.scheme` 과 같은 값이어야 한다.
 class InviteLinkHandler {
-  InviteLinkHandler(this._router);
+  InviteLinkHandler({required bool Function() isAuthenticated, required void Function(String location) push})
+      : _isAuthenticated = isAuthenticated,
+        _push = push;
 
-  /// 아직 못 연 초대코드.
+  /// 아직 못 연 초대코드. 빈 문자열은 "코드 없는 초대 링크" — 합류 화면만 연다.
   ///
   /// **초대 링크를 받은 사람은 대개 로그인도 안 되어 있다** — 새로 들어오는 멤버니까.
   /// 그대로 두면 로그인 화면으로 가면서 코드가 사라지고, 로그인해도 홈으로 갈 뿐이다.
@@ -31,28 +33,40 @@ class InviteLinkHandler {
     return code;
   }
 
-  final GoRouter _router;
+  /// 합류 화면 주소. 코드는 쿼리로 넣으므로 `&`·`#` 같은 글자가 섞여도 깨지지 않게 감싼다.
+  static String joinLocation(String? code) => code == null || code.isEmpty
+      ? Routes.joinBand
+      : '${Routes.joinBand}?code=${Uri.encodeQueryComponent(code)}';
+
+  final bool Function() _isAuthenticated;
+  final void Function(String location) _push;
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _sub;
 
   /// 코드가 오면 합류 화면을 연다. 합류 화면은 이미 `?code=` 를 받게 돼 있다.
   ///
+  /// **로그인이 확정되기 전이면 바로 열지 않고 담아 둔다(QA-F02).** 앱이 꺼져 있다가 링크로
+  /// 열리면 이 링크는 스플래시가 세션을 확인하는 **도중에** 온다. 그때 화면을 밀어 넣으면
+  /// 라우터 redirect 가 "부팅 확인 전에는 스플래시" 규칙으로 그 화면을 스플래시로 바꿔 버리고,
+  /// 코드는 그대로 사라져 홈으로 간다(실기기에서 두 번 재현). 담아 두면 로그인이 확정되는
+  /// 순간 redirect 가 꺼내 합류 화면으로 데려간다 — 로그아웃 상태였다면 로그인 뒤에.
+  ///
   /// 링크를 눌렀는데 아무 반응이 없는 것이 사용자에게 가장 나쁘므로, 코드를 못 읽어도
   /// 화면은 열어 준다 — 손으로 넣을 수 있는 입력칸이 거기 있다.
-  void _open(Uri uri) {
+  @visibleForTesting
+  void handle(Uri uri) {
     if (!isInviteLink(uri)) {
       // 우리 초대 링크가 아니면 손대지 않는다. 웹에서는 페이지 주소 자체가 여기로
       // 들어오므로, 이 검사가 없으면 앱을 열 때마다 합류 화면이 뜬다.
-      debugPrint('초대 링크가 아니라 무시: $uri');
       return;
     }
+    // 코드는 로그에 남기지 않는다 — 릴리스 빌드에서도 debugPrint 는 기기 로그로 나간다.
     final code = codeOf(uri);
-    debugPrint('초대 링크 수신: $uri (code=$code)');
-    // 코드를 못 읽어도 화면은 열어 준다 — 링크를 눌렀는데 아무 반응이 없는 것이
-    // 사용자에게 가장 나쁘고, 그 화면에 손으로 넣는 입력칸이 있다.
-    _router.push(
-      code == null ? Routes.joinBand : '${Routes.joinBand}?code=$code',
-    );
+    if (_isAuthenticated()) {
+      _push(joinLocation(code));
+    } else {
+      pendingCode = code ?? '';
+    }
   }
 
   @visibleForTesting
@@ -70,17 +84,12 @@ class InviteLinkHandler {
     return segments.isEmpty ? null : segments.first;
   }
 
-  Future<void> start() async {
-    // 앱이 꺼져 있다가 링크로 열린 경우.
-    try {
-      final initial = await _appLinks.getInitialLink();
-      if (initial != null) _open(initial);
-    } catch (e) {
-      debugPrint('초대 링크 최초 수신 실패: $e');
-    }
-    // 앱이 떠 있는 동안 온 링크.
+  /// 링크 듣기 시작. 앱이 꺼져 있다가 링크로 열린 경우의 **첫 링크도 이 스트림으로 온다**
+  /// (app_links 가 구독 순간 넘겨준다). 예전에는 `getInitialLink()` 도 따로 불러서 같은 링크를
+  /// 두 번 처리했다 — 로그인 확정 직후라면 합류 화면이 두 겹 쌓일 수 있다.
+  void start() {
     _sub = _appLinks.uriLinkStream.listen(
-      _open,
+      handle,
       onError: (Object e) => debugPrint('초대 링크 수신 실패: $e'),
     );
   }
@@ -93,8 +102,10 @@ class InviteLinkHandler {
 
 /// 앱이 사는 동안 하나만 둔다. `BandApp` 이 watch 해서 시작시킨다.
 final inviteLinkHandlerProvider = Provider<InviteLinkHandler>((ref) {
-  final handler = InviteLinkHandler(ref.watch(routerProvider));
-  unawaited(handler.start());
+  final handler = InviteLinkHandler(
+    isAuthenticated: () => ref.read(authControllerProvider).isAuthenticated,
+    push: (location) => ref.read(routerProvider).push(location),
+  )..start();
   ref.onDispose(handler.dispose);
   return handler;
 });

@@ -32,6 +32,22 @@ void main() {
     expect(container.read(authControllerProvider).status,
         AuthStatus.unauthenticated);
   });
+
+  test('서버 로그아웃이 실패해도(오프라인) 이 기기에서는 로그아웃된다', () async {
+    final calls = <String>[];
+    final container = ProviderContainer(overrides: [
+      tokenStorageProvider.overrideWithValue(_FakeStorage(calls)),
+      authRepositoryProvider.overrideWithValue(_FakeAuthRepo(calls)..fail = true),
+      pushServiceProvider.overrideWith((ref) => _FakePush(ref, calls)),
+    ]);
+    addTearDown(container.dispose);
+
+    await container.read(authControllerProvider.notifier).logout();
+
+    expect(calls, contains('storage.clear'));
+    expect(container.read(authControllerProvider).status,
+        AuthStatus.unauthenticated);
+  });
 }
 
 class _FakeStorage extends TokenStorage {
@@ -53,10 +69,12 @@ class _FakeAuthRepo extends AuthRepository {
   final List<String> calls;
   String? lastRefresh;
   String? lastDeviceToken;
+  bool fail = false;
 
   @override
   Future<void> logout({required String refreshToken, String? deviceToken}) async {
     calls.add('logout');
+    if (fail) throw StateError('offline');
     lastRefresh = refreshToken;
     lastDeviceToken = deviceToken;
   }

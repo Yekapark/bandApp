@@ -1,5 +1,9 @@
+import 'package:bandapp_client/core/network/api_exception.dart';
 import 'package:bandapp_client/core/storage/token_storage.dart';
 import 'package:bandapp_client/features/auth/application/auth_controller.dart';
+import 'package:bandapp_client/features/auth/data/auth_models.dart';
+import 'package:bandapp_client/features/auth/data/auth_repository.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,4 +36,39 @@ void main() {
       AuthStatus.unauthenticated,
     );
   });
+
+  test('오프라인으로 켜도 로그아웃되지 않는다 — 토큰을 지우지 않고 로그인 상태로', () async {
+    final storage = _SavedTokens();
+    final container = ProviderContainer(overrides: [
+      tokenStorageProvider.overrideWith((ref) => storage),
+      authRepositoryProvider.overrideWith((ref) => _OfflineRepo()),
+    ]);
+    addTearDown(container.dispose);
+
+    await container.read(authControllerProvider.notifier).bootstrap();
+
+    expect(container.read(authControllerProvider).status,
+        AuthStatus.authenticated);
+    expect(storage.cleared, isFalse);
+  });
+}
+
+class _SavedTokens extends TokenStorage {
+  _SavedTokens() : super(const FlutterSecureStorage());
+  bool cleared = false;
+
+  @override
+  Future<Tokens?> load() async =>
+      const Tokens(accessToken: 'a', refreshToken: 'r');
+
+  @override
+  Future<void> clear() async => cleared = true;
+}
+
+class _OfflineRepo extends AuthRepository {
+  _OfflineRepo() : super(Dio());
+
+  @override
+  Future<AppUser> me() async =>
+      throw ApiException(code: 'NETWORK', message: '서버에 연결하지 못했어요.');
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 
 /// 카카오 SDK 로그인 플로우 → access token 반환.
@@ -13,9 +14,12 @@ Future<String> fetchKakaoAccessToken() async {
   if (!kIsWeb && await isKakaoTalkInstalled()) {
     try {
       token = await UserApi.instance.loginWithKakaoTalk();
-    } catch (_) {
+    } catch (e) {
       // 사용자가 카카오톡 로그인을 취소하면 계정 로그인으로 폴백하지 않는다
       // (취소를 계정창으로 되돌리면 UX 가 나쁨). 그 외 오류만 폴백.
+      // 예전에는 주석과 달리 모든 오류를 폴백해서, 카카오톡에서 "취소" 를 눌러도 브라우저
+      // 로그인 창이 또 떴다. 취소 신호는 카카오 SDK 의 PlatformException('CANCELED') 다.
+      if (e is PlatformException && e.code == 'CANCELED') rethrow;
       token = await UserApi.instance.loginWithKakaoAccount();
     }
   } else {
