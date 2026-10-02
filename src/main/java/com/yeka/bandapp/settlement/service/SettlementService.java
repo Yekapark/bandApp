@@ -43,7 +43,8 @@ import java.util.stream.Collectors;
  *       앞에서부터 1원씩 더한다({@link SettlementCalculator}). ATTENDEES_ONLY 이고 밴드장이 불참이면
  *       가장 먼저 가입한 참석자가 나머지를 진다.</li>
  *   <li>{@code ATTENDEES_ONLY}인데 참석자가 0명이면 정산을 만들지 않는다(409).</li>
- *   <li>생성·재계산은 일정 등록자 본인 또는 밴드장만. 납부 체크({@code paid})는 본인 몫만.</li>
+ *   <li>생성·재계산은 일정 등록자 본인 또는 밴드장만. 납부 체크({@code paid})는 본인 몫만 — 밴드장은 누구 몫이든
+ *       대신 체크하고, 나간 멤버의 미납 몫을 면제할 수 있다.</li>
  * </ul>
  *
  * <p>외부 HTTP 호출이 없으므로 각 명령은 하나의 일반 {@code @Transactional}로 처리한다.
@@ -51,6 +52,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class SettlementService {
+
+    /** 정산 총액 상한(원) — 0 을 하나 더 친 실수(3억 원)가 저장되고 알림까지 가지 않게(결정 #26). */
+    static final int MAX_TOTAL_AMOUNT = 10_000_000;
 
     private final SettlementRepository settlementRepository;
     private final SettlementShareRepository shareRepository;
@@ -86,6 +90,7 @@ public class SettlementService {
     public SettlementResponse create(long bandId, long reservationId, long callerId,
                                      CreateSettlementRequest request) {
         requireManager(bandId, reservationId, callerId);
+        requireTotalWithinCap(request.totalAmount());
         // 취소·거절·승인 대기 일정은 정산하지 않는다(U28). 이미 만든 정산은 일정이 나중에 취소돼도 그대로 둔다.
         if (!reservationDirectory.isConfirmed(bandId, reservationId)) {
             throw new BusinessException(ErrorCode.SETTLEMENT_RESERVATION_NOT_CONFIRMED);
@@ -143,6 +148,9 @@ public class SettlementService {
 
         Settlement settlement = settlementRepository.findByReservationIdForUpdate(reservationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SETTLEMENT_NOT_FOUND));
+        if (request.totalAmount() != null) {
+            requireTotalWithinCap(request.totalAmount());
+        }
         int total = request.totalAmount() != null ? request.totalAmount() : settlement.getTotalAmount();
         SplitType type = request.splitType() != null ? request.splitType() : settlement.getSplitType();
 
@@ -153,9 +161,9 @@ public class SettlementService {
         Set<Long> recipientIds = Set.copyOf(userIds(recipients));
 
         List<SettlementShare> existing = shareRepository.findBySettlementId(settlement.getId());
-        // 대상에서 빠졌지만 이미 낸 몫 — 지우지 않고 금액도 고정한다.
+        // 대상에서 빠졌지만 이미 낸(또는 밴드장이 면제한) 몫 — 지우지 않고 금액도 고정한다.
         List<SettlementShare> keptPaid = existing.stream()
-                .filter(s -> s.isPaid() && !recipientIds.contains(s.getUserId()))
+                .filter(s -> (s.isPaid() || s.isExempt()) && !recipientIds.contains(s.getUserId()))
                 .toList();
         int keptPaidSum = keptPaid.stream().mapToInt(SettlementShare::getAmount).sum();
         if (keptPaidSum > total) {
@@ -169,7 +177,7 @@ public class SettlementService {
                 .collect(Collectors.toMap(SettlementShare::getUserId, Function.identity()));
 
         shareRepository.deleteAll(existing.stream()
-                .filter(s -> !s.isPaid() && !recipientIds.contains(s.getUserId()))
+                .filter(s -> !s.isPaid() && !s.isExempt() && !recipientIds.contains(s.getUserId()))
                 .toList());
 
         List<SettlementShare> result = new ArrayList<>(keptPaid);
@@ -217,8 +225,9 @@ public class SettlementService {
     }
 
     /**
-     * 본인 몫의 납부 상태 변경. {@code targetUserId}가 요청자 본인이 아니면 403
-     * {@code NOT_SETTLEMENT_SHARE_OWNER}. 요청자가 분담 대상이 아니면 404 {@code SETTLEMENT_SHARE_NOT_FOUND}.
+     * 납부 상태 변경. 본인 몫은 본인이, <b>다른 사람 몫은 밴드장만</b>(현금으로 받은 경우 — 결정 #25) 바꾼다. 밴드장이 대신
+     * 체크하면 {@code paidByLeader} 로 남아 앱이 "밴드장 확인" 으로 보여 준다. 대상 멤버에게 알림은 보내지 않는다.
+     * 그 외에는 403 {@code NOT_SETTLEMENT_SHARE_OWNER}. 대상이 분담자가 아니면 404 {@code SETTLEMENT_SHARE_NOT_FOUND}.
      *
      * <p>{@link #recalculate}와 같은 정산 행 비관적 락을 잡아 직렬화한다 — 재계산이 이 멤버의 몫을
      * 삭제/재산정하는 것과 납부 체크가 겹쳐 갱신이 유실되거나 사라진 몫이 응답에 실리는 레이스를 막는다.
@@ -226,20 +235,52 @@ public class SettlementService {
     @Transactional
     public SettlementResponse markPaid(long bandId, long reservationId, long targetUserId,
                                        long callerId, boolean paid) {
-        accessGuard.requireActiveMember(bandId, callerId);
-        if (targetUserId != callerId) {
+        BandMember caller = accessGuard.requireActiveMember(bandId, callerId);
+        boolean byLeader = targetUserId != callerId;
+        if (byLeader && !caller.isLeader()) {
             throw new BusinessException(ErrorCode.NOT_SETTLEMENT_SHARE_OWNER);
         }
-        reservationDirectory.requesterOf(bandId, reservationId); // 타 밴드 일정이면 404
-        Settlement settlement = settlementRepository.findByReservationIdForUpdate(reservationId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SETTLEMENT_NOT_FOUND));
-        SettlementShare share = shareRepository
-                .findBySettlementIdAndUserId(settlement.getId(), callerId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SETTLEMENT_SHARE_NOT_FOUND));
-        share.markPaid(paid, Instant.now()); // 더티 업데이트만(flush 없음)
+        Settlement settlement = lockSettlement(bandId, reservationId);
+        SettlementShare share = requireShare(settlement, targetUserId);
+        share.markPaid(paid, Instant.now(), byLeader); // 더티 업데이트만(flush 없음)
 
         return assemble(bandId, reservationId, settlement,
                 shareRepository.findBySettlementId(settlement.getId()));
+    }
+
+    /**
+     * 밴드를 나간 멤버의 미납 몫을 면제하거나 푼다(결정 #25). 밴드장만(403 {@code NOT_BAND_LEADER}). 면제한 몫은 미납
+     * ({@code outstandingAmount})에서 빠지고, 재계산 때도 낸 몫처럼 금액이 고정된다(남은 사람에게 다시 나누지 않는다).
+     * 아직 밴드에 있는 멤버이거나 이미 낸 몫이면 409 {@code SETTLEMENT_SHARE_NOT_EXEMPTABLE}. 푸는 것은 언제든 된다.
+     */
+    @Transactional
+    public SettlementResponse exempt(long bandId, long reservationId, long targetUserId,
+                                     long callerId, boolean exempt) {
+        accessGuard.requireLeader(bandId, callerId);
+        Settlement settlement = lockSettlement(bandId, reservationId);
+        SettlementShare share = requireShare(settlement, targetUserId);
+        if (exempt) {
+            boolean stillMember = bandDirectory.activeMembers(bandId).stream()
+                    .anyMatch(m -> m.userId() == targetUserId);
+            if (stillMember || share.isPaid()) {
+                throw new BusinessException(ErrorCode.SETTLEMENT_SHARE_NOT_EXEMPTABLE);
+            }
+        }
+        share.exempt(exempt);
+
+        return assemble(bandId, reservationId, settlement,
+                shareRepository.findBySettlementId(settlement.getId()));
+    }
+
+    private Settlement lockSettlement(long bandId, long reservationId) {
+        reservationDirectory.requesterOf(bandId, reservationId); // 타 밴드 일정이면 404
+        return settlementRepository.findByReservationIdForUpdate(reservationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SETTLEMENT_NOT_FOUND));
+    }
+
+    private SettlementShare requireShare(Settlement settlement, long userId) {
+        return shareRepository.findBySettlementIdAndUserId(settlement.getId(), userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SETTLEMENT_SHARE_NOT_FOUND));
     }
 
     // --- 내부 헬퍼 -----------------------------------------------------------
@@ -250,6 +291,12 @@ public class SettlementService {
         long requestedBy = reservationDirectory.requesterOf(bandId, reservationId);
         if (callerId != requestedBy && !member.isLeader()) {
             throw new BusinessException(ErrorCode.NOT_SETTLEMENT_MANAGER);
+        }
+    }
+
+    private static void requireTotalWithinCap(int totalAmount) {
+        if (totalAmount > MAX_TOTAL_AMOUNT) {
+            throw new BusinessException(ErrorCode.SETTLEMENT_TOTAL_TOO_LARGE);
         }
     }
 

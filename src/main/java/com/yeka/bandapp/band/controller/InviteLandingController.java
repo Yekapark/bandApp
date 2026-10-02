@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -51,7 +52,9 @@ public class InviteLandingController {
             description = "공유된 초대 링크(/invite/{code})를 브라우저로 열었을 때의 HTML. 앱이 있으면 앱을 열고, "
                     + "없으면 스토어로 유도한다. 코드 형식이 아니면 404.")
     @GetMapping("/invite/{code}")
-    public ResponseEntity<String> landing(@PathVariable String code) {
+    public ResponseEntity<String> landing(@PathVariable("code") String rawCode) {
+        // 링크를 소문자로 옮겨 적어도 열린다(앱 안 입력도 대소문자를 가리지 않는다 — 결정 #12).
+        String code = rawCode.toUpperCase(Locale.ROOT);
         if (!CODE.matcher(code).matches()) {
             return ResponseEntity.notFound().build();
         }

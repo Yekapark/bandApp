@@ -143,6 +143,36 @@ class BandDoubleSubscriptionIntegrationTest extends PlanApiSupport {
     }
 
     @Test
+    void 만료_뒤_Play_스토어에서_재구독하면_이전_토큰의_밴드에_붙는다() {
+        // 새 토큰엔 밴드 표시가 없고 linkedPurchaseToken 만 이전 토큰을 가리킨다(결정 #50).
+        String leader = signup("dbl-resub@band.app", "리더");
+        long bandId = createBand(leader, "재구독밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        assertThat(googlePlayWebhook(RTDN_EXPIRED, tokenFor(bandId)).getStatusCode().value()).isEqualTo(200);
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("FREE");
+        String resub = "resub-" + bandId;
+        storeLinks(resub, tokenFor(bandId));
+
+        assertThat(googlePlayWebhook(RTDN_PURCHASED, resub).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(data(viewPlan(leader, bandId)).get("tier").asText()).isEqualTo("PREMIUM");
+        assertThat(storedToken(bandId)).isEqualTo(resub);
+    }
+
+    @Test
+    void 이전_구독이_살아_있으면_이어받은_새_구독도_붙이지_않는다() {
+        String leader = signup("dbl-resub-alive@band.app", "리더");
+        long bandId = createBand(leader, "재구독활성밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+        String resub = "resub-alive-" + bandId;
+        storeLinks(resub, tokenFor(bandId));
+
+        assertThat(googlePlayWebhook(RTDN_PURCHASED, resub).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(storedToken(bandId)).isEqualTo(tokenFor(bandId));   // B18 — 살아 있는 구독을 덮지 않는다
+    }
+
+    @Test
     void 쿠폰_PREMIUM_은_onHold_가_아니다() {
         String leader = signup("dbl-coupon@band.app", "리더");
         long bandId = createBand(leader, "쿠폰보류밴드");

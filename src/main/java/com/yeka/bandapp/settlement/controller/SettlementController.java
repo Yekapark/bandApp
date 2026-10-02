@@ -5,6 +5,7 @@ import com.yeka.bandapp.common.security.AuthPrincipal;
 import com.yeka.bandapp.settlement.dto.CreateSettlementRequest;
 import com.yeka.bandapp.settlement.dto.RecalculateSettlementRequest;
 import com.yeka.bandapp.settlement.dto.SettlementResponse;
+import com.yeka.bandapp.settlement.dto.UpdateShareExemptRequest;
 import com.yeka.bandapp.settlement.dto.UpdateSharePaidRequest;
 import com.yeka.bandapp.settlement.service.SettlementService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 일정 정산(N빵). Bearer 인증 필요, 모든 엔드포인트가 밴드 멤버십을 검증한다.
  *
  * <p>일정당 정산은 하나다. 만든 뒤 총액·참석자 변화는 재계산 API 로만 반영하며, 서버가 자동으로
- * 다시 나누지는 않는다. 생성·재계산은 일정 등록자 본인 또는 밴드장만, 납부 체크는 본인 몫만 가능하다.
+ * 다시 나누지는 않는다. 생성·재계산은 일정 등록자 본인 또는 밴드장만, 납부 체크는 본인 몫만(밴드장은 누구 몫이든) 가능하다.
  */
 @Tag(name = "11. 정산(N빵)",
         description = "일정 총비용을 분배 방식(EQUAL=멤버 전원 / ATTENDEES_ONLY=참석자만)에 따라 멤버별 몫으로 나눈다. "
@@ -42,7 +43,7 @@ public class SettlementController {
     }
 
     @Operation(summary = "정산 생성",
-            description = "totalAmount(0 초과)·splitType 필수. 일정 등록자 본인 또는 밴드장만(그 외 403 NOT_SETTLEMENT_MANAGER). "
+            description = "totalAmount(0 초과, 1,000만 이하 — 넘으면 400 SETTLEMENT_TOTAL_TOO_LARGE)·splitType 필수. 일정 등록자 본인 또는 밴드장만(그 외 403 NOT_SETTLEMENT_MANAGER). "
                     + "이미 정산이 있으면 409 SETTLEMENT_ALREADY_EXISTS. splitType=ATTENDEES_ONLY 인데 참석(ATTENDING) "
                     + "멤버가 0명이면 409 SETTLEMENT_NO_ATTENDEES. 다른 밴드의 일정이면 404 RESERVATION_NOT_FOUND.")
     @PostMapping
@@ -77,9 +78,10 @@ public class SettlementController {
         return ApiResponse.ok(settlementService.recalculate(bandId, reservationId, principal.userId(), request));
     }
 
-    @Operation(summary = "내 납부 상태 변경",
-            description = "path 의 userId 가 요청자 본인이 아니면 403 NOT_SETTLEMENT_SHARE_OWNER. 요청자가 분담 대상이 "
-                    + "아니면 404 SETTLEMENT_SHARE_NOT_FOUND. paid=false 로 보내면 체크 취소. 변경 후 전체 정산 현황을 반환한다.")
+    @Operation(summary = "납부 상태 변경",
+            description = "본인 몫은 본인이, 다른 사람 몫은 밴드장만 바꾼다(현금 등 — 응답 몫의 paidByLeader=true). 그 외 403 "
+                    + "NOT_SETTLEMENT_SHARE_OWNER. 대상이 분담자가 아니면 404 SETTLEMENT_SHARE_NOT_FOUND. paid=false 로 보내면 "
+                    + "체크 취소. 변경 후 전체 정산 현황을 반환한다.")
     @PutMapping("/shares/{userId}")
     public ApiResponse<SettlementResponse> markPaid(@AuthenticationPrincipal AuthPrincipal principal,
                                                     @PathVariable long bandId,
@@ -88,5 +90,19 @@ public class SettlementController {
                                                     @Valid @RequestBody UpdateSharePaidRequest request) {
         return ApiResponse.ok(settlementService.markPaid(
                 bandId, reservationId, userId, principal.userId(), request.paid()));
+    }
+
+    @Operation(summary = "나간 멤버의 미납 몫 면제",
+            description = "밴드장만(403 NOT_BAND_LEADER). exempt=true 면 면제 — 미납(outstandingAmount)에서 빠지고 재계산 때 "
+                    + "금액이 고정된다. 아직 밴드에 있는 멤버이거나 이미 낸 몫이면 409 SETTLEMENT_SHARE_NOT_EXEMPTABLE. "
+                    + "exempt=false 면 면제 취소. 변경 후 전체 정산 현황을 반환한다.")
+    @PutMapping("/shares/{userId}/exempt")
+    public ApiResponse<SettlementResponse> exempt(@AuthenticationPrincipal AuthPrincipal principal,
+                                                  @PathVariable long bandId,
+                                                  @PathVariable long reservationId,
+                                                  @PathVariable long userId,
+                                                  @Valid @RequestBody UpdateShareExemptRequest request) {
+        return ApiResponse.ok(settlementService.exempt(
+                bandId, reservationId, userId, principal.userId(), request.exempt()));
     }
 }

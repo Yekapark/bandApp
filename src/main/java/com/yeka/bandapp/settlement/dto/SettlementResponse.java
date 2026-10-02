@@ -11,7 +11,7 @@ import java.util.List;
  * (나머지는 밴드장 먼저, 없으면 최고참이 부담).
  *
  * <p>{@code paidAmount}는 납부 완료로 체크된 몫의 합, {@code outstandingAmount}는 남은 금액
- * ({@code totalAmount - paidAmount})이다.
+ * ({@code totalAmount - paidAmount - exemptAmount})이다. {@code exemptAmount}·{@code exemptCount} 는 밴드장이 면제한 몫.
  */
 public record SettlementResponse(
         Long reservationId,
@@ -22,6 +22,8 @@ public record SettlementResponse(
         int paidCount,
         int paidAmount,
         int outstandingAmount,
+        int exemptCount,
+        int exemptAmount,
         Instant createdAt,
         List<SettlementShareResponse> shares
 ) {
@@ -30,6 +32,9 @@ public record SettlementResponse(
         int paidAmount = shares.stream().filter(SettlementShareResponse::paid)
                 .mapToInt(SettlementShareResponse::amount).sum();
         long paidCount = shares.stream().filter(SettlementShareResponse::paid).count();
+        int exemptAmount = shares.stream().filter(SettlementShareResponse::exempt)
+                .mapToInt(SettlementShareResponse::amount).sum();
+        long exemptCount = shares.stream().filter(SettlementShareResponse::exempt).count();
         return new SettlementResponse(
                 reservationId,
                 settlement.getId(),
@@ -38,7 +43,9 @@ public record SettlementResponse(
                 shares.size(),
                 (int) paidCount,
                 paidAmount,
-                settlement.getTotalAmount() - paidAmount,
+                settlement.getTotalAmount() - paidAmount - exemptAmount,
+                (int) exemptCount,
+                exemptAmount,
                 settlement.getCreatedAt(),
                 shares);
     }

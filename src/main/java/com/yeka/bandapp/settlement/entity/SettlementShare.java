@@ -16,7 +16,8 @@ import java.time.Instant;
 /**
  * 정산에서 멤버 한 명이 낼 몫. {@code (settlement_id, user_id)} 유니크 — 정산당 멤버 하나.
  *
- * <p>{@code paid}는 본인이 직접 체크하는 셀프 리포트다({@link #markPaid}). 다른 멤버가 대신 바꿀 수 없다.
+ * <p>{@code paid}는 본인이 직접 체크하거나, 밴드장이 대신 체크한다({@link #markPaid}, 현금 등 — {@code paidByLeader}).
+ * 밴드를 나간 멤버의 미납 몫은 밴드장이 면제할 수 있다({@link #exempt}) — 미납으로 세지 않는다.
  * 재계산 시 계속 대상인 멤버의 행은 {@link #reassign}으로 금액을 새로 매긴다 — 금액이 그대로면 납부 여부를
  * 보존하고, 바뀌면 납부 체크를 푼다(낸 돈과 새 몫이 달라 차액을 다시 확인해야 하므로).
  */
@@ -46,6 +47,14 @@ public class SettlementShare extends BaseTimeEntity {
     @Column(name = "paid_at")
     private Instant paidAt;
 
+    /** 밴드장이 대신 "냈음" 으로 체크했는지. {@code paid} 가 false 면 항상 false. */
+    @Column(name = "paid_by_leader", nullable = false)
+    private boolean paidByLeader;
+
+    /** 밴드장이 면제한 몫(나간 멤버의 미납). {@code paid} 와 함께 true 일 수 없다. */
+    @Column(nullable = false)
+    private boolean exempt;
+
     private SettlementShare(long settlementId, long userId, int amount) {
         this.settlementId = settlementId;
         this.userId = userId;
@@ -65,6 +74,7 @@ public class SettlementShare extends BaseTimeEntity {
      * @return 이 호출로 납부 체크가 풀렸으면 {@code true}(본인에게 알려야 한다).
      */
     public boolean reassign(int amount) {
+        this.exempt = false;   // 다시 분담 대상이 됐다(재가입) — 면제는 나간 동안의 것이다
         if (this.amount == amount) {
             return false;
         }
@@ -74,12 +84,28 @@ public class SettlementShare extends BaseTimeEntity {
         }
         this.paid = false;
         this.paidAt = null;
+        this.paidByLeader = false;
         return true;
     }
 
-    /** 본인 납부 체크. 취소({@code paid=false})하면 시각도 지운다. */
-    public void markPaid(boolean paid, Instant when) {
+    /**
+     * 납부 체크. 취소({@code paid=false})하면 시각도 지운다. {@code byLeader} 는 밴드장이 본인 대신 체크했는지 —
+     * 본인이 다시 체크하면 풀린다. 냈다고 체크하면 면제는 풀린다.
+     */
+    public void markPaid(boolean paid, Instant when, boolean byLeader) {
         this.paid = paid;
         this.paidAt = paid ? when : null;
+        this.paidByLeader = paid && byLeader;
+        if (paid) {
+            this.exempt = false;
+        }
+    }
+
+    /** 면제하거나 푼다. 낸 몫은 면제할 수 없다(호출 측이 먼저 거른다). */
+    public void exempt(boolean exempt) {
+        if (exempt && paid) {
+            throw new IllegalStateException("낸 몫은 면제할 수 없다 shareId=" + id);
+        }
+        this.exempt = exempt;
     }
 }

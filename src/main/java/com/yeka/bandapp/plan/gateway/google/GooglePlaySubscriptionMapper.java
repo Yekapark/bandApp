@@ -61,7 +61,8 @@ public final class GooglePlaySubscriptionMapper {
                 mapState(purchase.getSubscriptionState()),
                 expiry,
                 acknowledged,
-                obfuscatedAccountId);
+                obfuscatedAccountId,
+                purchase.getLinkedPurchaseToken());
     }
 
     /** Play 문자열 상태 → 우리 enum. 모르는 값은 EXPIRED 로 취급한다(PREMIUM 을 주지 않는 쪽이 안전). */

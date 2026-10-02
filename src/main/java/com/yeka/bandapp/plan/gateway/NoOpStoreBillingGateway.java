@@ -48,6 +48,8 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
     private final Set<String> cancelledRenewals = ConcurrentHashMap.newKeySet();
     /** 토큰 접두사 대신 쓸 상태(테스트용) — 같은 토큰의 상태가 알림마다 바뀌는 것을 흉내낸다. */
     private final Map<String, StoreSubscriptionState> simulatedStates = new ConcurrentHashMap<>();
+    /** 토큰 → 이어받은 이전 토큰(linkedPurchaseToken, 테스트용) — 만료 뒤 Play 스토어 재구독을 흉내낸다. */
+    private final Map<String, String> simulatedLinks = new ConcurrentHashMap<>();
 
     public NoOpStoreBillingGateway(PlanProperties planProperties, StoreBillingProperties billingProperties,
                                    Environment environment) {
@@ -88,7 +90,7 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
         String accountTag = at >= 0 ? purchaseToken.substring(at + 1) : null;
         return Optional.of(new StoreSubscription(
                 store, purchaseToken, "premium_yearly", "noop-order-" + purchaseToken, state, expiry, true,
-                accountTag));
+                accountTag, simulatedLinks.get(purchaseToken)));
     }
 
     /**
@@ -136,9 +138,15 @@ public class NoOpStoreBillingGateway implements StoreBillingGateway {
         }
     }
 
-    /** {@link #simulateState} 로 정한 상태를 모두 지운다(테스트 사이 초기화). */
+    /** 이 토큰이 {@code linkedPurchaseToken} 을 이어받은 구독이라고 정한다(테스트용). */
+    public void simulateLinkedPurchaseToken(String purchaseToken, String linkedPurchaseToken) {
+        simulatedLinks.put(purchaseToken, linkedPurchaseToken);
+    }
+
+    /** {@link #simulateState}·{@link #simulateLinkedPurchaseToken} 로 정한 것을 모두 지운다(테스트 사이 초기화). */
     public void clearSimulatedStates() {
         simulatedStates.clear();
+        simulatedLinks.clear();
     }
 
     @Override

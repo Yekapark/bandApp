@@ -94,8 +94,10 @@ public enum ErrorCode {
     SETTLEMENT_NO_ATTENDEES(HttpStatus.CONFLICT, "참석자가 없어 참석자 기준 정산을 만들 수 없습니다."),
     SETTLEMENT_TOTAL_BELOW_PAID(HttpStatus.CONFLICT, "정산에서 빠진 멤버가 이미 낸 금액의 합보다 총액을 작게 할 수 없습니다."),
     NOT_SETTLEMENT_MANAGER(HttpStatus.FORBIDDEN, "일정 등록자 본인 또는 밴드장만 정산을 만들거나 재계산할 수 있습니다."),
-    SETTLEMENT_SHARE_NOT_FOUND(HttpStatus.NOT_FOUND, "본인의 분담 항목이 없습니다."),
+    SETTLEMENT_SHARE_NOT_FOUND(HttpStatus.NOT_FOUND, "분담 항목이 없습니다."),
     NOT_SETTLEMENT_SHARE_OWNER(HttpStatus.FORBIDDEN, "본인의 납부 상태만 변경할 수 있습니다."),
+    SETTLEMENT_SHARE_NOT_EXEMPTABLE(HttpStatus.CONFLICT, "밴드를 나간 멤버의 미납 몫만 면제할 수 있어요."),
+    SETTLEMENT_TOTAL_TOO_LARGE(HttpStatus.BAD_REQUEST, "정산 총액은 1,000만 원까지 입력할 수 있어요."),
 
     // 게시판·미디어·신고·차단 (Phase 8)
     // 파일 바이트는 서버를 지나지 않는다. 형식·크기 위반은 URL 발급 시(400) 걸러지고, 신고한 값과

@@ -52,6 +52,14 @@ class InviteDeepLinkIntegrationTest extends ApiIntegrationTest {
         assertThat(get("/invite/ABCD2345").getBody()).doesNotContain("setTimeout");
     }
 
+    /** 결정 #12 — 링크를 소문자로 옮겨 적어도 열린다(대문자로 보여 준다). */
+    @Test
+    void lowercase_code_in_landing_path_is_accepted() {
+        ResponseEntity<String> res = get("/invite/abcd2345");
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
+        assertThat(res.getBody()).contains("ABCD2345");
+    }
+
     @Test
     void malformed_code_in_landing_path_is_404() {
         assertThat(get("/invite/not-a-code").getStatusCode().value()).isEqualTo(404);

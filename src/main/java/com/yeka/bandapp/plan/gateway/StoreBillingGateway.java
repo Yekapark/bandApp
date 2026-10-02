@@ -65,15 +65,23 @@ public interface StoreBillingGateway {
      * @param acknowledged  이미 확인 처리됐는지. false 면 호출자가 {@link #acknowledge} 를 불러야 한다.
      * @param obfuscatedAccountId 구매할 때 앱이 붙인 표시(Play {@code obfuscatedExternalAccountId}).
      *                      이 앱은 결제한 밴드를 적는다 — {@code PurchaseBandTag}. 옛 구매·스토어 밖 구매는 null.
+     * @param linkedPurchaseToken 이 구독이 이어받은 이전 구독의 토큰(Play {@code linkedPurchaseToken}). 만료 뒤 Play 스토어에서
+     *                      다시 구독하면 새 토큰에 밴드 표시가 없고 이것만 온다. 없으면 null.
      */
     record StoreSubscription(Store store, String purchaseToken, String productId, String orderId,
                              StoreSubscriptionState state, Instant expiryTime, boolean acknowledged,
-                             String obfuscatedAccountId) {
+                             String obfuscatedAccountId, String linkedPurchaseToken) {
+
+        public StoreSubscription(Store store, String purchaseToken, String productId, String orderId,
+                                 StoreSubscriptionState state, Instant expiryTime, boolean acknowledged,
+                                 String obfuscatedAccountId) {
+            this(store, purchaseToken, productId, orderId, state, expiryTime, acknowledged, obfuscatedAccountId, null);
+        }
 
         /** 밴드 표시 없는 구독(옛 구매·테스트용). */
         public StoreSubscription(Store store, String purchaseToken, String productId, String orderId,
                                  StoreSubscriptionState state, Instant expiryTime, boolean acknowledged) {
-            this(store, purchaseToken, productId, orderId, state, expiryTime, acknowledged, null);
+            this(store, purchaseToken, productId, orderId, state, expiryTime, acknowledged, null, null);
         }
     }
 
