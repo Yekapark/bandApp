@@ -15,6 +15,7 @@ import com.google.api.services.androidpublisher.model.SubscriptionPurchaseV2;
 import com.google.api.services.androidpublisher.model.SubscriptionPurchasesAcknowledgeRequest;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.yeka.bandapp.common.log.LogMasks;
 import com.yeka.bandapp.plan.config.StoreBillingProperties;
 import com.yeka.bandapp.plan.entity.Store;
 import com.yeka.bandapp.plan.gateway.StoreBillingGateway;
@@ -88,9 +89,9 @@ public class GooglePlayBillingGateway implements StoreBillingGateway {
                 log.info("Play 구매 토큰 무효 status={} — empty 로 반환", e.getStatusCode());
                 return Optional.empty();
             }
-            throw new StoreBillingUnavailableException("Play 구독 조회 실패 status=" + e.getStatusCode(), e);
+            throw new StoreBillingUnavailableException("Play 구독 조회 실패 status=" + e.getStatusCode(), LogMasks.redacted(e));
         } catch (IOException e) {
-            throw new StoreBillingUnavailableException("Play 구독 조회 중 네트워크 오류", e);
+            throw new StoreBillingUnavailableException("Play 구독 조회 중 네트워크 오류", LogMasks.redacted(e));
         }
     }
 
@@ -105,9 +106,9 @@ public class GooglePlayBillingGateway implements StoreBillingGateway {
                 log.debug("Play 구매가 이미 acknowledge 됨 — 무시");
                 return;
             }
-            throw new StoreBillingUnavailableException("Play acknowledge 실패 status=" + e.getStatusCode(), e);
+            throw new StoreBillingUnavailableException("Play acknowledge 실패 status=" + e.getStatusCode(), LogMasks.redacted(e));
         } catch (IOException e) {
-            throw new StoreBillingUnavailableException("Play acknowledge 중 네트워크 오류", e);
+            throw new StoreBillingUnavailableException("Play acknowledge 중 네트워크 오류", LogMasks.redacted(e));
         }
     }
 
@@ -140,12 +141,12 @@ public class GooglePlayBillingGateway implements StoreBillingGateway {
         } catch (GoogleJsonResponseException e) {
             if (e.getStatusCode() >= 500 || e.getStatusCode() == 429 || e.getStatusCode() == 409) {
                 // 409 = etag 불일치(그 사이 상태가 바뀜) — 다시 하면 된다.
-                throw new StoreBillingUnavailableException("Play 결제일 연기 일시 실패 status=" + e.getStatusCode(), e);
+                throw new StoreBillingUnavailableException("Play 결제일 연기 일시 실패 status=" + e.getStatusCode(), LogMasks.redacted(e));
             }
             throw new StoreDeferRejectedException("Play 가 결제일 연기를 거절 status=" + e.getStatusCode()
-                    + " " + messageOf(e), e);
+                    + " " + messageOf(e), LogMasks.redacted(e));
         } catch (IOException e) {
-            throw new StoreBillingUnavailableException("Play 결제일 연기 중 네트워크 오류", e);
+            throw new StoreBillingUnavailableException("Play 결제일 연기 중 네트워크 오류", LogMasks.redacted(e));
         }
     }
 
@@ -170,15 +171,15 @@ public class GooglePlayBillingGateway implements StoreBillingGateway {
         } catch (GoogleJsonResponseException e) {
             int code = e.getStatusCode();
             if (code >= 500 || code == 429) {
-                throw new StoreBillingUnavailableException("Play 구독 해지 일시 실패 status=" + code, e);
+                throw new StoreBillingUnavailableException("Play 구독 해지 일시 실패 status=" + code, LogMasks.redacted(e));
             }
             if (code == 410 || alreadyEnded(purchaseToken)) {
                 log.info("Play 가 해지를 거절했지만 구독은 이미 끝났다 status={} — 할 일 없음", code);
                 return;
             }
-            throw new IllegalStateException("Play 가 구독 해지를 거절 status=" + code + " " + messageOf(e), e);
+            throw new IllegalStateException("Play 가 구독 해지를 거절 status=" + code + " " + messageOf(e), LogMasks.redacted(e));
         } catch (IOException e) {
-            throw new StoreBillingUnavailableException("Play 구독 해지 중 네트워크 오류", e);
+            throw new StoreBillingUnavailableException("Play 구독 해지 중 네트워크 오류", LogMasks.redacted(e));
         }
     }
 
@@ -212,7 +213,7 @@ public class GooglePlayBillingGateway implements StoreBillingGateway {
     private static String messageOf(GoogleJsonResponseException e) {
         String m = e.getDetails() != null && e.getDetails().getMessage() != null
                 ? e.getDetails().getMessage() : e.getMessage();
-        return m == null ? "" : m.toLowerCase(Locale.ROOT);
+        return m == null ? "" : LogMasks.stripUrls(m).toLowerCase(Locale.ROOT);
     }
 
     private static AndroidPublisher buildPublisher(String credentialsPath, String applicationName) {

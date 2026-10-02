@@ -22,6 +22,13 @@ class CrashReporting {
   static bool available = false;
 
   static Future<void> init() async {
+    // 릴리스의 debugPrint 도 기기 로그(logcat)로 나간다 — 오류 문자열 속 URL 서명·토큰을 가린다(PRIV-06).
+    if (kReleaseMode) {
+      debugPrint = (message, {wrapWidth}) => debugPrintThrottled(
+          message == null ? null : scrubSensitive(message),
+            wrapWidth: wrapWidth,
+          );
+    }
     if (kIsWeb) return;
     // main() 이 이것을 await 한 뒤 runApp 한다 — 여기서 던지면 앱이 첫 화면도 못 띄운다. Crashlytics 쪽 어떤
     // 실패든(초기화·네이티브 채널) 오류 기록만 끄고 넘어간다(QA-F05).
@@ -42,10 +49,10 @@ class CrashReporting {
     available = true;
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
-      crashlytics.recordFlutterError(details);
+      crashlytics.recordFlutterError(scrubDetails(details));
     };
     PlatformDispatcher.instance.onError = (error, stack) {
-      crashlytics.recordError(error, stack);
+      crashlytics.recordError(ScrubbedError(error), stack);
       return true;
     };
   }
@@ -61,4 +68,53 @@ class CrashReporting {
     await crashlytics.setCrashlyticsCollectionEnabled(value);
     if (!value) await crashlytics.deleteUnsentReports();
   }
+}
+
+/// Crashlytics 로 나가는 오류 — 원래 오류 문자열에서 민감값을 가린 것(PRIV-09). 스택은 호출부가 그대로 넘긴다.
+/// Dio·이미지 로드 오류 문자열에는 요청 URL(R2 presigned 서명 포함)이 들어 있다.
+class ScrubbedError {
+  ScrubbedError(this.original);
+  final Object original;
+  @override
+  String toString() => scrubSensitive(original.toString());
+}
+
+/// FlutterError 용 — 예외 문자열과 부가 정보(NetworkImage URL 등)를 가린다.
+FlutterErrorDetails scrubDetails(FlutterErrorDetails details) {
+  final collector = details.informationCollector;
+  return details.copyWith(
+    exception: ScrubbedError(details.exception),
+    informationCollector: collector == null
+        ? null
+        : () => [
+              for (final node in collector())
+                DiagnosticsNode.message(scrubSensitive(node.toString())),
+            ],
+  );
+}
+
+final _rules = <(RegExp, String Function(Match))>[
+  // URL 쿼리스트링 통째로(X-Amz-Signature·X-Amz-Credential 등).
+  (RegExp(r'''(https?://[^\s?#"']+)\?[^\s"')]*'''), (m) => '${m[1]}?<redacted>'),
+  (RegExp(r'''Bearer\s+[^\s"',]+''', caseSensitive: false), (_) => 'Bearer <redacted>'),
+  (RegExp(r'eyJ[\w-]+\.[\w-]+\.[\w-]*'), (_) => '<jwt>'),
+  (RegExp(r'[\w.%+-]+@[\w-]+(\.[\w-]+)*\.[A-Za-z]{2,}'), (_) => '<email>'),
+  // "purchaseToken":"…", password=… 처럼 이름이 붙은 값.
+  (
+    RegExp(r'''((?:token|password|code|secret)["']?\s*[:=]\s*["']?)[^\s,"'&}]+''',
+      caseSensitive: false,
+    ),
+    (m) => '${m[1]}<redacted>',
+  ),
+  // 이름 없이 떠도는 긴 불투명 문자열(구매 토큰 등).
+  (RegExp(r'[\w.-]{40,}'), (_) => '<redacted>'),
+];
+
+/// 오류·로그 문자열에서 URL 쿼리, Bearer/JWT 토큰, 이메일, 구매 토큰 같은 값을 가린다.
+String scrubSensitive(String text) {
+  var out = text;
+  for (final (pattern, replace) in _rules) {
+    out = out.replaceAllMapped(pattern, replace);
+  }
+  return out;
 }
