@@ -1,5 +1,15 @@
 # 문제 기록
 
+## 2026-10-03 — 로그·오류 기록에 구매 토큰과 R2 서명 URL 이 섞일 수 있었다 (L9, QA PRIV-06·09)
+
+**증상** — 실제 유출 사례는 없었다(운영 로그 72h 민감 패턴 0건). 코드 점검으로 경로를 찾았다: Play 조회가 실패하면 서버 로그 스택에 구매 토큰이, 앱 오류가 나면 Crashlytics 에 R2 서명 URL 이 들어갈 수 있었다.
+
+**원인** — ① Google API 클라이언트 예외(`GoogleJsonResponseException`)의 메시지에는 `GET https://androidpublisher.googleapis.com/…/tokens/<구매 토큰>` 이 통째로 들어 있다. 이 예외를 cause 로 붙여 다시 던져서, 로그가 스택을 찍을 때 "Caused by:" 줄에 토큰이 나갈 수 있었다. 로그 문장만 보고 점검하면 cause 안의 메시지는 놓친다. ② Crashlytics 는 오류의 `toString()` 과 FlutterError 부가 정보를 그대로 보낸다. Dio·NetworkImage 오류 문자열에는 요청 URL(서명 쿼리 포함)이 들어간다.
+
+**해결** — 서버 `common/log/LogMasks`: 토큰은 앞 6자만, 문자열 속 URL 은 `<url>`, 예외는 URL 을 지운 사본(스택 유지)으로 바꿔 cause 로 넘긴다(게이트웨이 한 곳). 앱 `scrubSensitive`·`ScrubbedError`·`scrubDetails` 로 URL 쿼리·Bearer·JWT·이메일·token/password/code 값을 가린 뒤 보낸다. PR #188.
+
+**확인법** — `LogMasksTest`, `client/test/crash_scrub_test.dart`. 운영: `docker logs --since 72h bandapp-app-1 | grep -cE "X-Amz-Signature|eyJ|/tokens/"` 가 0. 앱: 릴리스 빌드에서 오류를 하나 내고 Crashlytics 콘솔 메시지에 `<redacted>` 로 보이는지. **새 외부 API 클라이언트를 붙이면 그 예외 메시지에 무엇이 들어가는지 먼저 본다.**
+
 ## 2026-10-02 — 결정 대기였던 결제·사용성 22건 일괄 처리 (§9, #175·#176·#177)
 
 **증상·원인·해결** (항목별 한 줄 — 상세는 각 PR 본문)
