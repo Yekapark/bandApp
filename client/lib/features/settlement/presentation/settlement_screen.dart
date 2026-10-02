@@ -80,6 +80,17 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
         ),
         data: (loaded) {
           final settlement = _override ?? loaded;
+          // 취소·승인 대기 일정은 서버가 정산 생성을 거부한다(409). 폼을 내밀지 않는다.
+          if (settlement == null &&
+              detail != null &&
+              !detail.reservation.isConfirmed) {
+            return const Center(
+              child: Text(
+                '확정된 일정만 정산할 수 있어요.',
+                style: TextStyle(color: AppColors.textDim),
+              ),
+            );
+          }
           if (settlement == null) {
             return _CreateForm(
               canManage: canManage,
@@ -178,8 +189,9 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
         backgroundColor: AppColors.surface,
         title: const Text('정산을 다시 계산할까요?', style: TextStyle(fontSize: 16)),
         content: const Text(
-          '지금 멤버·참석자 기준으로 몫을 다시 나눠요. 총액과 나누는 방식은 그대로고, '
-          '이미 냈다고 체크한 건 유지돼요.',
+          '지금 멤버·참석자 기준으로 몫을 다시 나눠요. 총액과 나누는 방식은 그대로예요.\n'
+          '몫이 바뀐 사람은 납부 체크가 풀리고 알림이 가요. '
+          '빠진 멤버가 이미 낸 금액은 그대로 두고 나머지만 다시 나눠요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
         ),

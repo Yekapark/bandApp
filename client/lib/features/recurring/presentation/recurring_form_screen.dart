@@ -212,16 +212,6 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
     );
   }
 
-  /// 매월 반복은 "시작일 이후 첫 그 요일" 이 그 달의 몇 째 주인지를 따른다(서버 OccurrenceGenerator).
-  /// 화면에 안 보여 주면 "매월 토요일" 이 어느 토요일인지 등록해 봐야 알았다.
-  String _monthlyHint() {
-    final anchor =
-        _startDate.add(Duration(days: (_weekday - _startDate.weekday) % 7));
-    final nth = (anchor.day - 1) ~/ 7 + 1;
-    final text = '매월 $nth째 주 ${_dowKo[_weekday - 1]}요일에 반복돼요 (시작일 기준).';
-    return nth == 5 ? '$text 5째 주가 없는 달은 건너뛰어요.' : text;
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -296,7 +286,7 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
                 ),
                 if (_freq == RecurringFrequency.monthly) ...[
                   const SizedBox(height: 6),
-                  Text(_monthlyHint(),
+                  Text(monthlyRuleHint(_startDate, _weekday),
                       style: const TextStyle(
                           fontSize: 11.5, color: AppColors.textDim)),
                 ],

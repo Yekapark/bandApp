@@ -56,6 +56,19 @@ String dayOfWeekKo(String? name) {
   return i < 0 ? '-' : _dowKo[i];
 }
 
+/// 매월 반복 안내. "시작일 이후 첫 그 요일" 이 그 달의 몇째 주인지를 따르고(서버
+/// OccurrenceGenerator), 5째 주는 "마지막 주" 로 본다 — 5째 주가 없는 달도 거르지 않는다.
+String monthlyRuleHint(DateTime startDate, int weekday) {
+  final anchor =
+      startDate.add(Duration(days: (weekday - startDate.weekday) % 7));
+  final nth = (anchor.day - 1) ~/ 7 + 1;
+  return '매월 ${monthlyWeekLabel(nth == 5 ? -1 : nth)} '
+      '${_dowKo[weekday - 1]}요일에 반복돼요 (시작일 기준).';
+}
+
+/// 서버 `monthlyWeek`(1~4, -1 = 마지막 주) → "2째 주" / "마지막 주".
+String monthlyWeekLabel(int week) => week == -1 ? '마지막 주' : '$week째 주';
+
 /// "HH:mm[:ss]" → "HH:mm".
 String hhmmOf(String? raw) {
   if (raw == null || raw.length < 5) return raw ?? '-';
@@ -77,6 +90,7 @@ class RecurringRule {
     this.cost,
     this.note,
     required this.createdBy,
+    this.monthlyWeek,
   });
 
   final int id;
@@ -98,10 +112,15 @@ class RecurringRule {
   final String? note;
   final int createdBy;
 
-  /// "매주 토 15:00–18:00" 형태의 한 줄.
-  String get summary =>
-      '${recurringFrequencyLabel(frequency)} ${dayOfWeekKo(dayOfWeek)} '
-      '$startTime–$endTime';
+  /// 매월 규칙의 "몇째 주" — 1~4, -1 이면 마지막 주. 매월이 아니면 null.
+  final int? monthlyWeek;
+
+  /// "매주 토 15:00–18:00" / "매월 마지막 주 토 15:00–18:00" 형태의 한 줄.
+  String get summary {
+    final week = monthlyWeek == null ? '' : '${monthlyWeekLabel(monthlyWeek!)} ';
+    return '${recurringFrequencyLabel(frequency)} $week${dayOfWeekKo(dayOfWeek)} '
+        '$startTime–$endTime';
+  }
 
   factory RecurringRule.fromJson(Map<String, dynamic> json) {
     return RecurringRule(
@@ -117,6 +136,7 @@ class RecurringRule {
       cost: (json['cost'] as num?)?.toInt(),
       note: json['note'] as String?,
       createdBy: (json['createdBy'] as num?)?.toInt() ?? 0,
+      monthlyWeek: (json['monthlyWeek'] as num?)?.toInt(),
     );
   }
 }
