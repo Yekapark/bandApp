@@ -110,6 +110,25 @@ class BandInviteIntegrationTest extends BandApiSupport {
         assertThat(errorCode(res)).isEqualTo("INVITE_REVOKED");
     }
 
+    /** 만료·소진된 코드는 "현재 코드" 가 아니다 — 돌려주면 밴드장이 안 먹는 코드를 공유한다. */
+    @Test
+    void current_invite_hides_expired_and_exhausted_codes() {
+        String leader = signup("inv-leader10@band.app", "리더");
+        String joiner = signup("inv-joiner10@band.app", "참여자");
+        long bandId = createBand(leader, "검정치마");
+        String current = "/api/v1/bands/" + bandId + "/invites/current";
+
+        String code = issueInvite(leader, bandId, "{\"maxUses\":1}");
+        join(joiner, code);
+        assertThat(get(current, leader).getStatusCode().value()).isEqualTo(404);
+
+        bandInviteRepository.save(BandInvite.issue(bandId, "EXPIRED1", myUserId(leader),
+                Instant.now().minus(Duration.ofDays(10)), Duration.ofDays(7), null));
+        ResponseEntity<String> res = get(current, leader);
+        assertThat(res.getStatusCode().value()).isEqualTo(404);
+        assertThat(errorCode(res)).isEqualTo("INVITE_NOT_FOUND");
+    }
+
     @Test
     void unknown_code_is_404() {
         String joiner = signup("inv-joiner7@band.app", "참여자");

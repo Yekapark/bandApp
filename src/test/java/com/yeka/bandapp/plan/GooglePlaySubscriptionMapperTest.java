@@ -40,6 +40,19 @@ class GooglePlaySubscriptionMapperTest {
     }
 
     @Test
+    void order_id_comes_from_the_line_item_when_the_deprecated_top_level_one_is_missing() {
+        // 주문 번호가 비면 요금제가 결제 직후 "해지 예약" 으로 보인다(BandPlan.isCanceled).
+        SubscriptionPurchaseV2 p = new SubscriptionPurchaseV2()
+                .setSubscriptionState("SUBSCRIPTION_STATE_ACTIVE")
+                .setLineItems(List.of(new SubscriptionPurchaseLineItem()
+                        .setProductId("premium_yearly")
+                        .setLatestSuccessfulOrderId("GPA.9999-0000")
+                        .setExpiryTime("2027-01-15T09:30:00Z")));
+
+        assertThat(GooglePlaySubscriptionMapper.toStoreSubscription("t", p).orderId()).isEqualTo("GPA.9999-0000");
+    }
+
+    @Test
     void band_tag_comes_from_obfuscated_external_account_id() {
         SubscriptionPurchaseV2 tagged = activePurchase().setExternalAccountIdentifiers(
                 new ExternalAccountIdentifiers().setObfuscatedExternalAccountId("band-7"));

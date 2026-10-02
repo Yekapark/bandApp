@@ -72,7 +72,9 @@ public class NotificationEventListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onSettlementRequested(NotificationEvents.SettlementRequested e) {
-        safely(() -> sender.notify(NotificationType.SETTLEMENT_REQUESTED, e.reservationId(), 0,
+        // variant = 총액 — 같은 금액의 요청은 한 번만, 재계산으로 총액이 바뀌면 다시 알린다. 예전에는 0 으로 고정이라
+        // 재계산 알림이 "이미 보냄" 으로 전부 걸러져 바뀐 금액을 아무도 몰랐다.
+        safely(() -> sender.notify(NotificationType.SETTLEMENT_REQUESTED, e.reservationId(), e.totalAmount(),
                 e.recipientUserIds(),
                 NotificationMessages.settlementRequested(e.bandId(), e.reservationId(), e.totalAmount())));
     }

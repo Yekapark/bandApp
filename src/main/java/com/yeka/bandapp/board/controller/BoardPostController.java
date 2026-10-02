@@ -85,8 +85,8 @@ public class BoardPostController {
     }
 
     @Operation(summary = "게시글 삭제",
-            description = "소프트 삭제(204). 작성자 본인 또는 밴드장만. 첨부는 EXPIRED 로 바뀌고 R2 객체는 "
-                    + "정리된다(실패해도 보관기한 배치가 최종 정리).")
+            description = "소프트 삭제(204). 작성자 본인 또는 밴드장만. 첨부의 R2 객체를 바로 지우고 "
+                    + "EXPIRED 로 바꾼다(실패한 건은 보관기한을 지금으로 당겨 둬 만료 배치가 다시 지운다).")
     @DeleteMapping("/{postId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal AuthPrincipal principal,

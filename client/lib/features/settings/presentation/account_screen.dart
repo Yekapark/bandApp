@@ -33,7 +33,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
           _InfoRow(label: '이름', value: user?.name ?? '-'),
           _InfoRow(
             label: '로그인 방식',
-            value: isEmail ? '이메일' : (user?.socialProvider ?? '소셜'),
+            // 서버 값(KAKAO)을 그대로 보이지 않는다.
+            value: isEmail
+                ? '이메일'
+                : (user?.socialProvider == 'KAKAO' ? '카카오' : '소셜 로그인'),
           ),
           if (user?.email != null) _InfoRow(label: '이메일', value: user!.email!),
           const SizedBox(height: 36),

@@ -49,7 +49,7 @@ public final class NotificationMessages {
 
     public static PushMessage settlementRequested(long bandId, long reservationId, int totalAmount) {
         return message(NotificationType.SETTLEMENT_REQUESTED, bandId, reservationId,
-                "정산 요청", "합주 비용 " + totalAmount + "원 정산이 등록됐어요. 납부를 확인해 주세요.");
+                "정산 요청", "합주 비용 " + String.format(Locale.KOREA, "%,d", totalAmount) + "원 정산이 등록됐어요. 납부를 확인해 주세요.");
     }
 
     public static PushMessage reminder(long bandId, long reservationId, Instant startAt, int offsetMinutes) {

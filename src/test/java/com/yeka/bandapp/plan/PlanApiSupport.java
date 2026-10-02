@@ -1,7 +1,11 @@
 package com.yeka.bandapp.plan;
 
 import com.yeka.bandapp.board.BoardApiSupport;
+import com.yeka.bandapp.plan.gateway.NoOpStoreBillingGateway;
+import com.yeka.bandapp.plan.gateway.StoreBillingGateway.StoreSubscriptionState;
 import com.yeka.bandapp.support.FakeStorageClient;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 
 import java.nio.charset.StandardCharsets;
@@ -19,6 +23,22 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 들어오므로 {@link #cancel}/{@link #renew} 는 웹훅을 쏜다.
  */
 public abstract class PlanApiSupport extends BoardApiSupport {
+
+    /** 테스트 설정이 다른 게이트웨이로 바꾼 경우 null. */
+    @Autowired(required = false)
+    private NoOpStoreBillingGateway noOpGateway;
+
+    @BeforeEach
+    void resetSimulatedStoreStates() {
+        if (noOpGateway != null) {
+            noOpGateway.clearSimulatedStates();
+        }
+    }
+
+    /** 스토어(no-op)가 이 토큰을 어떤 상태로 답할지 정한다. {@code null} 이면 토큰 접두사대로. */
+    protected void storeSays(String purchaseToken, StoreSubscriptionState state) {
+        noOpGateway.simulateState(purchaseToken, state);
+    }
 
     // Google RTDN notificationType
     protected static final int RTDN_RECOVERED = 1;
@@ -45,6 +65,10 @@ public abstract class PlanApiSupport extends BoardApiSupport {
 
     /** FREE → PREMIUM: 클라이언트가 결제 후 구매 토큰을 검증받는 흐름. */
     protected ResponseEntity<String> subscribe(String token, long bandId) {
+        // 다시 결제했다 = 스토어에서 유효하다. 앞선 웹훅이 정해 둔 상태(해지·보류·만료)를 지운다.
+        if (noOpGateway != null) {
+            noOpGateway.simulateState(tokenFor(bandId), null);
+        }
         return verifyGoogle(token, bandId, tokenFor(bandId));
     }
 
@@ -81,6 +105,22 @@ public abstract class PlanApiSupport extends BoardApiSupport {
     protected ResponseEntity<String> googlePlayWebhook(int notificationType, String purchaseToken,
                                                        String messageId, String secret,
                                                        Instant publishTime) {
+        // Play 는 상태가 바뀐 뒤에 알린다 — 웹훅이 스토어에 다시 물었을 때 그 알림에 맞는 상태가 나오게 한다.
+        if (noOpGateway != null) {
+            noOpGateway.simulateState(purchaseToken, switch (notificationType) {
+                case RTDN_CANCELED -> StoreSubscriptionState.CANCELED;
+                case RTDN_ON_HOLD -> StoreSubscriptionState.ON_HOLD;
+                case RTDN_EXPIRED -> StoreSubscriptionState.EXPIRED;
+                default -> null;
+            });
+        }
+        return googlePlayWebhookKeepingStoreState(notificationType, purchaseToken, messageId, secret, publishTime);
+    }
+
+    /** 스토어 상태는 그대로 두고 알림만 보낸다 — 늦게 도착한(순서가 뒤바뀐) 알림을 흉내낼 때. */
+    protected ResponseEntity<String> googlePlayWebhookKeepingStoreState(int notificationType, String purchaseToken,
+                                                                        String messageId, String secret,
+                                                                        Instant publishTime) {
         String notification = "{\"version\":\"1.0\",\"packageName\":\"com.yeka.bandule\","
                 + "\"eventTimeMillis\":\"1700000000000\",\"subscriptionNotification\":{"
                 + "\"version\":\"1.0\",\"notificationType\":" + notificationType + ","

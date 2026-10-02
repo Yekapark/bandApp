@@ -145,7 +145,13 @@ public class AuthService {
         // 정지는 운영자가 DB 에 적는다(tools/moderate.py). 갱신 때마다 확인해 두면 늦어도 access 토큰 수명(30분)
         // 안에 막힌다 — 스크립트가 차단 목록에도 올리므로 보통은 즉시다. 남은 세션도 모두 지운다.
         User user = userRepository.findById(userId).orElse(null);
-        if (user != null && user.isSuspendedAt(Instant.now())) {
+        // 탈퇴는 세션을 지우지만, 로그인(비밀번호 확인 ~ 세션 저장 사이)과 탈퇴가 겹치면 탈퇴 뒤에 세션이
+        // 새로 저장될 수 있다. 그 세션으로 계속 갱신하면 탈퇴한 계정이 차단 목록(30분)이 풀린 뒤 다시 쓰인다.
+        if (user == null || user.isWithdrawn()) {
+            refreshTokenStore.removeAll(userId);
+            throw new BusinessException(ErrorCode.REFRESH_TOKEN_INVALID);
+        }
+        if (user.isSuspendedAt(Instant.now())) {
             refreshTokenStore.removeAll(userId);
             throw suspended(user);
         }

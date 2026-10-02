@@ -78,7 +78,8 @@ public class MediaMaintenanceService {
 
     /**
      * 배치 2 — 콜백이 오지 않아 {@code threshold}보다 오래 PENDING 인 고아 첨부를 지운다.
-     * R2 객체는 best-effort 로 지우고(대개 애초에 업로드가 안 됐다), DB 행은 삭제한다.
+     * R2 객체를 먼저 지우고(대개 애초에 업로드가 안 됐다 — 멱등), <b>성공했을 때만</b> DB 행을 지운다.
+     * 행을 먼저(또는 실패와 무관하게) 지우면 업로드는 됐는데 R2 삭제가 실패한 객체를 다시 찾을 길이 없다.
      *
      * @return 지운 PENDING 행 수
      */
@@ -93,11 +94,12 @@ public class MediaMaintenanceService {
             for (MediaAttachment media : page) {
                 try {
                     storage.delete(media.getStorageKey());
+                    if (mediaRepository.deletePending(media.getId()) > 0) {
+                        done++;
+                    }
                 } catch (RuntimeException e) {
-                    log.warn("고아 PENDING R2 삭제 실패 id={} key={}", media.getId(), media.getStorageKey(), e);
-                }
-                if (mediaRepository.deletePending(media.getId()) > 0) {
-                    done++;
+                    log.warn("고아 PENDING R2 삭제 실패 id={} key={} — 다음 실행에서 재시도한다",
+                            media.getId(), media.getStorageKey(), e);
                 }
             }
             total += done;

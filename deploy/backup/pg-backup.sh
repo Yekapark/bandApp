@@ -13,6 +13,12 @@ ENV_FILE="${ENV_FILE:-.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 KEEP="${BACKUP_KEEP:-7}"
+# 원격 경로. deploy.sh 는 배포 전 백업을 따로 모으려고 db-backups/predeploy 로 바꿔 부른다 —
+# 같은 곳에 섞으면 하루 여러 번 배포할 때 "최근 7개" 정리가 매일 백업을 밀어내 하루 전으로도 못 돌아간다.
+R2_PREFIX="${BACKUP_R2_PREFIX:-db-backups}"
+
+# 덤프에는 회원정보 전체가 들어 있다. 서버의 다른 계정이 읽지 못하게 소유자만 읽는 권한으로 만든다.
+umask 077
 
 # .env.prod 는 **docker compose 가 읽는 형식이지 셸 스크립트가 아니다.** `.`(source)은 각 줄을
 # 셸 코드로 **실행**하므로 값에 #·<·>·따옴표가 섞이면 문법 에러로 죽는다. 비밀값을
@@ -34,18 +40,22 @@ mkdir -p "$BACKUP_DIR"
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 FILE="$BACKUP_DIR/bandapp-$STAMP.dump"
+# 검증을 통과할 때까지 .part 이름으로 둔다. pg_dump 가 중간에 죽으면(set -e) 반쪽 파일이
+# bandapp-*.dump 이름으로 남아 "최근 백업" 으로 세어지고, 정리 때 멀쩡한 옛 백업을 밀어낸다.
+PART="$FILE.part"
+trap 'rm -f "$PART"' EXIT
 
 echo "== pg_dump → $FILE"
 # -Fc(커스텀 포맷): 자체 압축되고, 복구 시 테이블 단위 선택·병렬 복구가 된다.
-$COMPOSE exec -T postgres pg_dump -U "$DB_USERNAME" -d "$DB_NAME" -Fc > "$FILE"
+$COMPOSE exec -T postgres pg_dump -U "$DB_USERNAME" -d "$DB_NAME" -Fc > "$PART"
 
 # 덤프가 실제로 읽히는지 그 자리에서 확인한다. "백업은 도는데 복구가 안 되는" 사고의 대부분은
 # 여기서 걸린다(빈 파일, 에러 메시지가 stdout 에 섞여 들어간 파일).
-if ! $COMPOSE exec -T postgres pg_restore --list < "$FILE" > /dev/null 2>&1; then
+if ! $COMPOSE exec -T postgres pg_restore --list < "$PART" > /dev/null 2>&1; then
     echo "!! 덤프가 유효하지 않다: $FILE"
-    rm -f "$FILE"
     exit 1
 fi
+mv "$PART" "$FILE"
 echo "== 검증 통과 ($(du -h "$FILE" | cut -f1))"
 
 if [ -n "${R2_BUCKET:-}" ] && [ -n "${R2_ACCESS_KEY_ID:-}" ]; then
@@ -58,14 +68,14 @@ if [ -n "${R2_BUCKET:-}" ] && [ -n "${R2_ACCESS_KEY_ID:-}" ]; then
             -v "$(cd "$BACKUP_DIR" && pwd):/backup" \
             amazon/aws-cli --endpoint-url "$ENDPOINT" "$@"
     }
-    echo "== R2 업로드 s3://$R2_BUCKET/db-backups/"
-    aws_r2 s3 cp "/backup/$(basename "$FILE")" "s3://$R2_BUCKET/db-backups/"
+    echo "== R2 업로드 s3://$R2_BUCKET/$R2_PREFIX/"
+    aws_r2 s3 cp "/backup/$(basename "$FILE")" "s3://$R2_BUCKET/$R2_PREFIX/"
 
     # 원격도 최근 $KEEP 개만 남긴다. 파일명이 UTC 타임스탬프라 사전순 = 시간순이다.
-    aws_r2 s3 ls "s3://$R2_BUCKET/db-backups/" | awk '{print $4}' | grep '^bandapp-' | sort \
+    aws_r2 s3 ls "s3://$R2_BUCKET/$R2_PREFIX/" | awk '{print $4}' | grep '^bandapp-' | sort \
         | head -n "-$KEEP" | while read -r old; do
             echo "-- 원격 삭제 $old"
-            aws_r2 s3 rm "s3://$R2_BUCKET/db-backups/$old"
+            aws_r2 s3 rm "s3://$R2_BUCKET/$R2_PREFIX/$old"
         done
 else
     echo "== R2 미설정 — 로컬에만 보관한다"

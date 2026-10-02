@@ -125,6 +125,12 @@ class AuthInterceptor extends Interceptor {
         // 로그인 화면으로 튕기고 refresh 토큰까지 폐기됐다). 이 요청만 "연결 실패" 로 끝낸다.
         return handler.reject(e);
       } catch (e) {
+        // 갱신(또는 재시도) 요청이 **서버에 닿지 못했거나**(인터넷 끊김·시간 초과) 서버가 5xx 를
+        // 냈으면 토큰이 틀렸다는 뜻이 아니다. 예전에는 이것도 세션 만료로 쳐서, 배포 중(502)이나
+        // 신호가 약한 곳에서 access 토큰이 만료되는 순간 로그아웃됐다. 이 요청만 "연결 실패" 로
+        // 돌려주고 세션은 둔다 — 401 응답을 그대로 넘기면 부르는 쪽(부팅 확인 등)이 "토큰 무효" 로
+        // 읽는다. (`_refreshDio` 는 4xx 를 응답으로 돌려주므로 DioException 은 연결 실패·5xx 뿐이다.)
+        if (e is DioException) return handler.reject(e);
         onSessionExpired(e is AccountSuspendedException ? e.message : null);
         return handler.next(response);
       }
