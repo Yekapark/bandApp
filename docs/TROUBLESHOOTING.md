@@ -1,5 +1,44 @@
 # 문제 기록
 
+## 2026-10-02 — 스토어 빌드에서 푸시와 앱 오류 기록이 둘 다 꺼졌다 — "FirebaseCrashlytics component is not present" (U29, QA-F05)
+
+**증상** — Play 설치본 1.0.0+33 을 켜면 logcat 에 `CrashReporting: Firebase 미설정 — 오류 기록 끔 (… FirebaseCrashlytics component is not present.)` 와
+`PushService: Firebase 미설정` 이 찍혔다. 서버의 기기 토큰이 0건이라 리마인더·일정·정산 푸시가 아무에게도 가지 않았다. +32 까지는 정상. 디버그 빌드로는 재현되지 않는다.
+
+**원인** — 릴리스 빌드의 코드 축소 도구 R8(AGP 8 이상 기본 full mode)이 `CrashlyticsRegistrar` 클래스는 남기고 **기본 생성자만 지웠다.**
+Firebase 라이브러리가 싣고 오는 보존 규칙 `-keep class * implements ComponentRegistrar` 는 클래스만 지키고, full mode 에서는 생성자까지 지켜 주지 않는다.
+Firebase 는 매니페스트에 적힌 이름으로 등록기를 찾아 기본 생성자로 만들기 때문에 생성에 실패했고(`NoSuchMethodException: CrashlyticsRegistrar.<init>`), Crashlytics 컴포넌트가 없는 상태가 됐다.
+FlutterFire 의 `Firebase.initializeApp()` 은 설치된 Firebase 플러그인 전부에서 초기 정보를 모으는데 crashlytics 에서 예외가 나 **초기화 전체가 실패**했고, 같은 초기화를 쓰는 푸시도 함께 꺼졌다.
+Crashlytics 를 넣은 U17(+33)에서 처음 드러났다. 버전 불일치(BoM 33.16.0 으로 일치)·매니페스트 누락·클래스 삭제는 직접 확인해 배제했다.
+
+**해결** — `client/android/app/proguard-rules.pro` 에 `-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }`(같은 이유로 실패하던 Messaging·Installations Ktx 등록기도 함께 살아남).
+`CrashReporting.init` 은 Crashlytics 관련 실패가 앱 시작을 막지 않게 전체를 try 로 감쌌다. PR #173.
+
+**확인법** — prod **릴리스** APK 를 깔고 `adb logcat | grep -E "Could not instantiate|Firebase 미설정|Initializing Firebase Crashlytics"` — 앞의 둘이 없고
+`Initializing Firebase Crashlytics 19.x` 가 보이면 정상. 최종 확인은 로그인 뒤 서버 `device_tokens` 에 그 기기가 생기고 테스트 알림이 오는 것(+35 실기기).
+**새 Firebase·네이티브 SDK 를 넣으면 반드시 릴리스 빌드로 한 번 띄워 본다** — 디버그는 R8 을 안 써서 이런 문제가 숨는다.
+
+## 2026-10-02 — 약관 동의 화면에 "아래 링크" 라고 써 놓고 링크가 없었다 (U30, QA-F06)
+
+**증상** — 회원가입 약관 동의 화면이 "전문은 아래 링크에서 언제든 다시 볼 수 있어요" 라고 안내하지만 링크가 없었다. 줄을 누르면 체크만 바뀌었다. 로그인 화면·요금제 화면의 약관 문구도 눌러지지 않는 글자였다.
+
+**원인** — 화면을 만들 때 안내 문구만 넣고 링크 연결을 빠뜨렸다. 점검은 "공개 웹 페이지가 200 으로 열리는가" 만 봤고, **앱 안에서 그 페이지로 가는 길이 있는가** 는 따로 보지 않았다.
+
+**해결** — `client/lib/shared/widgets/legal_link.dart` 에 주소(`bandule.com/terms/`·`/privacy/`)와 링크 위젯을 두고, 동의 항목별 "보기"(체크와 분리)·로그인 하단·요금제 구독 안내에 붙였다. 브라우저를 못 열면 안내. PR #172.
+
+**확인법** — `flutter test test/legal_links_and_video_layout_test.dart`, 실기기에서 각 "보기" 가 브라우저로 열리고 체크는 그대로인지.
+
+## 2026-10-02 — 세로 영상을 가로로 보면 아래가 잘리고, 지도 맨 위 핀이 잘렸다 (U31·U32, QA-F04·F03)
+
+**증상** — ① 세로 영상을 전체 화면으로 열고 가로로 돌리면 영상 아래와 재생 막대가 화면 밖으로 밀렸다. ② 서울·부산 합주실 지도 전체 보기에서 서울 핀 머리가 지도 경계에 걸렸다.
+
+**원인** — ① 영상과 재생 막대를 세로로 쌓는 배치(Column) 안에 비율 상자를 그냥 둬서, 상자가 너비(가로 화면 전체)만 보고 높이를 정했다 — 9:16 영상이면 화면 높이의 몇 배가 된다. 세로 화면에서는 너비가 좁아 드러나지 않았다.
+② 카카오 지도 Android SDK(kakao_map_sdk 1.3.0)의 `fitMapPoints(padding)` 는 여백을 **물리 픽셀**로 받는다 — 코드만 봐서는 단위가 안 드러난다. 80px 은 S24(밀도 약 3)에서 약 27dp 로, 좌표 위로 36dp 솟는 핀보다 작았다.
+
+**해결** — ① 비율 상자를 `Flexible` 로 감싸 남은 높이를 상한으로 주고 SafeArea 추가(`post_detail_screen.dart`). ② `room_map_bits.dart` 의 `mapFitPadding` = (핀 36dp + 여유) × devicePixelRatio, 지도 화면과 등록 화면 미리보기 지도 둘 다. PR #172.
+
+**확인법** — 가로 780×360 레이아웃 테스트(`legal_links_and_video_layout_test.dart`), 실기기에서 세로 영상 가로 회전·서울/부산 지도.
+
 ## 2026-10-02 — 혼자 남은 밴드장이 탈퇴하면 밴드가 멤버 0명으로 영원히 남았다 (L7)
 
 **증상** — 혼자 남은 밴드장이 회원 탈퇴를 하면 밴드가 멤버 0명인 채로 남고, 그 사람이 올린 글·사진·영상(R2)·일정·정산이

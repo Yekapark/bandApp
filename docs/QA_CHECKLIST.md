@@ -543,7 +543,7 @@ Play 해지 호출·보류 복구→운영 실패 감시를 읽었다. 정책을
 | QA-F01 선택 밴드 초기화 | #154 수정(계정별로 기기에 저장, 나간 밴드면 첫 밴드, 로그아웃 시 지움) — LAUNCH_REVIEW U22 | BAND-01, UI-08 |
 | QA-F02 종료 상태 초대 링크 | #157 수정(로그인 확인 전에 온 링크를 보관했다가 확정 시 합류 화면) — U23 | BAND-06 (+ 아래 BAND-14) |
 | QA-C01~C04 (§19) | #152 수정 — LAUNCH_REVIEW B14~B17 | BILL-16~19, BILL-21~24 |
-| QA-F03 지도 핀 잘림 / QA-F04 가로 영상 / QA-F05 Firebase 초기화 / QA-F06 약관 링크 | 10-02 수정 PR 진행 중(머지되면 이 칸에 PR 번호) — +35 에서 재확인 | ROOM-05, UI-02·MEDIA-07, PUSH-02·PRIV-07·08, PRIV-01 |
+| QA-F03 지도 핀 잘림 / QA-F04 가로 영상 / QA-F05 Firebase 초기화 / QA-F06 약관 링크 | F05 #173(R8 이 Firebase 등록기 생성자 제거 — 보존 규칙), F03·F04·F06 #172 — LAUNCH_REVIEW U29~U32. +35 에서 재확인. F05 는 logcat 에 `Firebase 미설정`·`Could not instantiate …Registrar` 없음 + 로그인 뒤 기기 토큰 | ROOM-05, UI-02·MEDIA-07, PUSH-02·PRIV-07·08, PRIV-01 |
 
 ### 새 시나리오 (+35 · 운영 서버)
 
