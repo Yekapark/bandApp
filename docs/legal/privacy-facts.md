@@ -33,7 +33,7 @@
 | 사진·영상 | 이용자가 게시글에 올린 파일 |
 | 기기 푸시 토큰 | 알림을 보내기 위해. 기기 종류(Android/iOS) 포함 (`device_tokens`) |
 | 신고 내역 | 신고 대상, 사유, 신고한 사람 (`reports`) |
-| 구독 결제 기록 | 스토어 종류, **구매 토큰**, 주문 ID, 구독 만료일, **결제한 회원**(결제 뒤 검증을 보낸 회원 — 탈퇴 때 자동 결제 해지용, LAUNCH_REVIEW B13) (`band_plans.store`/`purchase_token`/`subscription_ref`/`expires_at`/`purchased_by_user_id`). **카드번호 같은 결제수단 정보는 받지도 저장하지도 않는다** — 결제는 Google Play 가 처리한다 |
+| 구독 결제 기록 | 스토어 종류, **구매 토큰**, 주문 ID, 구독 만료일, **결제한 회원**(결제 뒤 검증을 보낸 회원 — 탈퇴·밴드 탈퇴·내보내기 때 자동 갱신 중지 요청용, LAUNCH_REVIEW B13~B17) (`band_plans.store`/`purchase_token`/`subscription_ref`/`expires_at`/`purchased_by_user_id`). **카드번호 같은 결제수단 정보는 받지도 저장하지도 않는다** — 결제는 Google Play 가 처리한다 |
 | 결제 알림 처리 이력 | Google 이 보낸 알림의 메시지 ID·종류·구매 토큰 (`processed_store_events`). 같은 알림을 두 번 반영하지 않으려고 남긴다 |
 | 앱 오류 기록 | 기기 모델·OS·앱 버전, 오류 내용(스택), 발생 시각, Crashlytics 설치 식별자. **서버 DB 가 아니라 Firebase Crashlytics 로 바로 간다.** 릴리스 빌드만, 계정 정보는 안 붙인다(`setUserIdentifier` 안 씀), 설정에서 끌 수 있다 (`core/diagnostics/crash_reporting.dart`, 2026-10-01) |
 | 차단 목록 | 서로 글이 보이지 않게 한 상대 (`user_blocks`) |

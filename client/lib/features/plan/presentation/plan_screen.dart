@@ -537,7 +537,8 @@ class _ManageNotice extends StatelessWidget {
           const Text(
             '기간이 끝나면 Google Play 가 자동으로 1년씩 갱신해요. 해지하거나 환불받으려면 '
             '아래 버튼으로 Play 스토어 구독 화면에서 하면 돼요. 구독은 결제한 사람의 '
-            'Google 계정에 있어서, 밴드장이 바뀌어도 그 계정에서만 관리할 수 있어요.',
+            'Google 계정에 있어서, 밴드장이 바뀌어도 그 계정에서만 관리할 수 있어요. 결제한 사람이 탈퇴하거나 '
+            '밴드를 나가면 다음 자동 결제를 멈추도록 Google Play 에 요청해요(이미 낸 기간은 유지, 환불 없음).',
             style:
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
           ),
