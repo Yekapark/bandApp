@@ -75,7 +75,10 @@ public class BandMemberService {
         purchaserSubscriptions.cancelRenewalAfterLeavingBand(bandId, userId);
     }
 
-    /** 밴드장의 멤버 추방. 자기 자신은 추방 대상이 될 수 없다. 추방된 사람이 결제자면 {@link #leave} 와 같이 해지한다. */
+    /**
+     * 밴드장의 멤버 추방. 자기 자신은 추방 대상이 될 수 없다. 추방된 사람이 결제자면 {@link #leave} 와 같이 해지한다.
+     * 밴드의 활성 초대코드도 무효화한다.
+     */
     @Transactional
     public void kick(long bandId, long leaderUserId, long targetUserId) {
         accessGuard.lockBand(bandId);
@@ -86,6 +89,8 @@ public class BandMemberService {
         BandMember target = bandMemberRepository.findByBandIdAndUserIdAndLeftAtIsNull(bandId, targetUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
         target.leave(Instant.now());
+        // 추방된 사람이 이미 가진 초대코드로 바로 다시 들어오지 못하게 지금 코드를 무효화한다 — 밴드장이 새로 발급한다(결정 #7).
+        bandInviteRepository.revokeActiveByBandId(bandId);
         purchaserSubscriptions.cancelRenewalAfterLeavingBand(bandId, targetUserId);
     }
 

@@ -3,7 +3,9 @@ package com.yeka.bandapp.settlement;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yeka.bandapp.reservation.ReservationApiSupport;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -14,6 +16,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 내 몫·납부 여부가 제대로 붙는지, 미납 합계, 페이징, 밴드 격리만 확인한다.
  */
 class BandSettlementListIntegrationTest extends ReservationApiSupport {
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private String listPath(long bandId) {
         return "/api/v1/bands/" + bandId + "/settlements";
@@ -41,7 +46,10 @@ class BandSettlementListIntegrationTest extends ReservationApiSupport {
         assertThat(res.getStatusCode().value()).isEqualTo(200);
     }
 
-    /** 큰 금액 정산이 여러 건이면 미납 합계가 int 를 넘는다 — 예전에는 음수로 넘쳐 보였다. */
+    /**
+     * 큰 금액 정산이 여러 건이면 미납 합계가 int 를 넘는다 — 예전에는 음수로 넘쳐 보였다. 지금은 API 가 1,000만 원을
+     * 넘는 총액을 막지만(결정 #26) 상한 전에 만든 정산이 남아 있을 수 있어 DB 로 큰 금액을 넣어 본다.
+     */
     @Test
     void outstanding_total_does_not_overflow_with_large_amounts() {
         String leader = signup("bstl-ovf-l@band.app", "리더");
@@ -49,8 +57,12 @@ class BandSettlementListIntegrationTest extends ReservationApiSupport {
         long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
         long r1 = createReservation(leader, bandId, roomId, T10, T13);
         long r2 = createReservation(leader, bandId, roomId, T13, T16);
-        createSettlement(leader, bandId, r1, 2_000_000_000);
-        createSettlement(leader, bandId, r2, 2_000_000_000);
+        long s1 = createSettlement(leader, bandId, r1, 10_000);
+        long s2 = createSettlement(leader, bandId, r2, 10_000);
+        for (long settlementId : new long[]{s1, s2}) {
+            jdbc.update("update settlements set total_amount = 2000000000 where id = ?", settlementId);
+            jdbc.update("update settlement_shares set amount = 2000000000 where settlement_id = ?", settlementId);
+        }
 
         assertThat(list(leader, bandId, "").get("myOutstandingTotal").asLong()).isEqualTo(4_000_000_000L);
     }

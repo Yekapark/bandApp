@@ -168,12 +168,27 @@ public class StoreSubscriptionService {
         requireToken(purchaseToken);
 
         StoreSubscription sub = fetchGrantable(purchaseToken);
-        long bandId = PurchaseBandTag.parse(sub.obfuscatedAccountId())
+        long bandId = purchaseBand(sub)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PURCHASE_BAND_UNKNOWN));
         accessGuard.requireLeader(bandId, userId);
         RestoredPurchaseResponse response = RestoredPurchaseResponse.of(bandId, grantAndAcknowledge(bandId, sub));
         planMutationService.recordPurchaser(bandId, sub.purchaseToken(), userId);
         return response;
+    }
+
+    /**
+     * 이 구매가 갈 밴드 — 구매에 적힌 밴드({@link PurchaseBandTag}), 없으면 이어받은 이전 구독 토큰({@code linkedPurchaseToken})이
+     * 붙어 있던 밴드. 만료 뒤 Play 스토어에서 다시 구독하면 새 토큰엔 밴드 표시가 없고 이전 토큰만 이어져 온다(결정 #50).
+     * 강등돼도 토큰은 밴드에 남아 있어(B1) 찾을 수 있다. 붙이는 것은 여전히 {@link #applyGrant} 의 규칙(B18 409·토큰 유일)을 탄다.
+     */
+    private OptionalLong purchaseBand(StoreSubscription sub) {
+        OptionalLong tagged = PurchaseBandTag.parse(sub.obfuscatedAccountId());
+        if (tagged.isPresent() || sub.linkedPurchaseToken() == null || sub.linkedPurchaseToken().isBlank()) {
+            return tagged;
+        }
+        return bandPlanRepository.findBandIdByPurchaseToken(sub.linkedPurchaseToken())
+                .map(OptionalLong::of)
+                .orElse(OptionalLong.empty());
     }
 
     private static void requireToken(String purchaseToken) {
@@ -482,7 +497,7 @@ public class StoreSubscriptionService {
         if (sub == null) {
             return false;
         }
-        OptionalLong tagged = PurchaseBandTag.parse(sub.obfuscatedAccountId());
+        OptionalLong tagged = purchaseBand(sub);
         if (tagged.isEmpty()) {
             return false;
         }

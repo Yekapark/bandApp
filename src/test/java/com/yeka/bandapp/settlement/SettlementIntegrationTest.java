@@ -549,6 +549,116 @@ class SettlementIntegrationTest extends ReservationApiSupport {
 
     // --- 헬퍼 -------------------------------------------------------
 
+    /** 결정 #26 — 총액 상한 1,000만 원(생성·재계산). */
+    @Test
+    void total_amount_over_ten_million_is_rejected() {
+        String leader = signup("stl-cap-l@band.app", "리더");
+        long bandId = createBand(leader, "상한밴드");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+
+        ResponseEntity<String> tooBig = post(settlementPath(bandId, reservationId),
+                "{\"totalAmount\":10000001,\"splitType\":\"EQUAL\"}", leader);
+        assertThat(tooBig.getStatusCode().value()).isEqualTo(400);
+        assertThat(errorCode(tooBig)).isEqualTo("SETTLEMENT_TOTAL_TOO_LARGE");
+        assertThat(body(tooBig).at("/error/message").asText()).isEqualTo("정산 총액은 1,000만 원까지 입력할 수 있어요.");
+
+        createSettlement(leader, bandId, reservationId, 10_000_000, "EQUAL");
+        ResponseEntity<String> recalcTooBig = post(settlementPath(bandId, reservationId) + "/recalculate",
+                "{\"totalAmount\":300000000}", leader);
+        assertThat(recalcTooBig.getStatusCode().value()).isEqualTo(400);
+        assertThat(errorCode(recalcTooBig)).isEqualTo("SETTLEMENT_TOTAL_TOO_LARGE");
+        assertThat(data(get(settlementPath(bandId, reservationId), leader)).get("totalAmount").asInt())
+                .isEqualTo(10_000_000);
+    }
+
+    /** 결정 #25 — 밴드장은 누구 몫이든 대신 체크하고(현금), 본인이 다시 체크하면 "밴드장 확인" 이 풀린다. */
+    @Test
+    void leader_can_mark_any_share_paid_and_it_shows_as_leader_confirmed() {
+        String leader = signup("stl-lp-l@band.app", "리더");
+        String m1 = signup("stl-lp-1@band.app", "멤버1");
+        String m2 = signup("stl-lp-2@band.app", "멤버2");
+        long bandId = createBand(leader, "대신체크밴드");
+        join(m1, issueInvite(leader, bandId, null));
+        join(m2, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        long m1Id = myUserId(m1);
+        long m2Id = myUserId(m2);
+        createSettlement(leader, bandId, reservationId, 30_000, "EQUAL");
+
+        JsonNode s = data(markPaid(leader, bandId, reservationId, m1Id, true));
+        assertThat(shareOf(s, m1Id).get("paid").asBoolean()).isTrue();
+        assertThat(shareOf(s, m1Id).get("paidByLeader").asBoolean()).isTrue();
+        assertThat(s.get("paidCount").asInt()).isEqualTo(1);
+
+        // 일반 멤버는 여전히 남의 몫을 못 바꾼다
+        ResponseEntity<String> forbidden = put(settlementPath(bandId, reservationId) + "/shares/" + m1Id,
+                "{\"paid\":false}", m2);
+        assertThat(forbidden.getStatusCode().value()).isEqualTo(403);
+        assertThat(errorCode(forbidden)).isEqualTo("NOT_SETTLEMENT_SHARE_OWNER");
+
+        // 본인이 다시 체크하면 본인 체크로 바뀐다
+        JsonNode self = data(markPaid(m1, bandId, reservationId, m1Id, true));
+        assertThat(shareOf(self, m1Id).get("paidByLeader").asBoolean()).isFalse();
+
+        // 밴드장이 체크 해제
+        JsonNode undone = data(markPaid(leader, bandId, reservationId, m1Id, false));
+        assertThat(shareOf(undone, m1Id).get("paid").asBoolean()).isFalse();
+        assertThat(shareOf(undone, m1Id).get("paidByLeader").asBoolean()).isFalse();
+        assertThat(shareOf(undone, m2Id).get("exempt").asBoolean()).isFalse();
+    }
+
+    /** 결정 #25 — 나간 멤버의 미납 몫만 면제. 면제 몫은 미납에서 빠지고, 재계산 때도 고정된다. */
+    @Test
+    void leader_can_exempt_unpaid_share_of_member_who_left() {
+        String leader = signup("stl-ex-l@band.app", "리더");
+        String a = signup("stl-ex-a@band.app", "떠난에이");
+        String b = signup("stl-ex-b@band.app", "비");
+        long bandId = createBand(leader, "면제밴드");
+        join(a, issueInvite(leader, bandId, null));
+        join(b, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        long aId = myUserId(a);
+        long bId = myUserId(b);
+        String exemptPath = settlementPath(bandId, reservationId) + "/shares/" + aId + "/exempt";
+        createSettlement(leader, bandId, reservationId, 30_000, "EQUAL");
+
+        // 아직 밴드에 있으면 면제할 수 없다
+        ResponseEntity<String> stillMember = put(exemptPath, "{\"exempt\":true}", leader);
+        assertThat(stillMember.getStatusCode().value()).isEqualTo(409);
+        assertThat(errorCode(stillMember)).isEqualTo("SETTLEMENT_SHARE_NOT_EXEMPTABLE");
+
+        assertThat(post("/api/v1/bands/" + bandId + "/members/leave", "", a).getStatusCode().is2xxSuccessful())
+                .isTrue();
+
+        // 밴드장만
+        ResponseEntity<String> notLeader = put(exemptPath, "{\"exempt\":true}", b);
+        assertThat(notLeader.getStatusCode().value()).isEqualTo(403);
+        assertThat(errorCode(notLeader)).isEqualTo("NOT_BAND_LEADER");
+
+        ResponseEntity<String> ok = put(exemptPath, "{\"exempt\":true}", leader);
+        assertThat(ok.getStatusCode().value()).isEqualTo(200);
+        JsonNode s = data(ok);
+        assertThat(shareOf(s, aId).get("exempt").asBoolean()).isTrue();
+        assertThat(s.get("exemptCount").asInt()).isEqualTo(1);
+        assertThat(s.get("exemptAmount").asInt()).isEqualTo(10_000);
+        assertThat(s.get("outstandingAmount").asInt()).isEqualTo(20_000);
+
+        // 재계산해도 면제 몫은 남고 금액이 고정된다 — 남은 사람에게 다시 나누지 않는다
+        JsonNode r = data(recalculate(leader, bandId, reservationId, "{}"));
+        assertThat(shareOf(r, aId).get("amount").asInt()).isEqualTo(10_000);
+        assertThat(shareOf(r, aId).get("exempt").asBoolean()).isTrue();
+        assertThat(shareOf(r, bId).get("amount").asInt()).isEqualTo(10_000);
+        assertThat(sumOfShares(r)).isEqualTo(30_000);
+
+        // 면제 취소
+        JsonNode undone = data(put(exemptPath, "{\"exempt\":false}", leader));
+        assertThat(shareOf(undone, aId).get("exempt").asBoolean()).isFalse();
+        assertThat(undone.get("outstandingAmount").asInt()).isEqualTo(30_000);
+    }
+
     private String settlementPath(long bandId, long reservationId) {
         return "/api/v1/bands/" + bandId + "/reservations/" + reservationId + "/settlement";
     }

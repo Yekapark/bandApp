@@ -128,6 +128,39 @@ class BandMemberIntegrationTest extends BandApiSupport {
         assertThat(get("/api/v1/bands/" + bandId, member).getStatusCode().value()).isEqualTo(403);
     }
 
+    /** 결정 #7 — 추방된 사람이 이미 가진 초대코드로 바로 다시 들어오지 못한다. */
+    @Test
+    void kicking_revokes_the_current_invite_code() {
+        String leader = signup("leader7r@band.app", "리더");
+        String member = signup("member7r@band.app", "쫓겨날사람");
+        long bandId = createBand(leader, "추방코드밴드");
+        long memberId = myUserId(member);
+        String code = issueInvite(leader, bandId, null);
+        join(member, code);
+
+        assertThat(delete("/api/v1/bands/" + bandId + "/members/" + memberId, leader)
+                .getStatusCode().value()).isEqualTo(204);
+
+        ResponseEntity<String> rejoin = join(member, code);
+        assertThat(rejoin.getStatusCode().value()).isEqualTo(410);
+        assertThat(errorCode(rejoin)).isEqualTo("INVITE_REVOKED");
+        assertThat(join(member, issueInvite(leader, bandId, null)).getStatusCode().is2xxSuccessful()).isTrue();
+    }
+
+    /** 결정 #11 — 보이지 않는 문자만으로 된 밴드 이름은 400. */
+    @Test
+    void band_name_of_only_invisible_characters_is_rejected() {
+        String leader = signup("leader-blank@band.app", "리더");
+        for (String name : new String[]{"\\u200B\\u200B", "\\u3164", "\\u2800 \\uFEFF\\u0007"}) {
+            ResponseEntity<String> res = post("/api/v1/bands", "{\"name\":\"" + name + "\"}", leader);
+            assertThat(res.getStatusCode().value()).as(name).isEqualTo(400);
+            assertThat(body(res).at("/error/message").asText()).isEqualTo("밴드 이름을 입력해 주세요");
+        }
+        // 공백·줄바꿈만이면 그 전에 @NotBlank 가 400 으로 막는다
+        assertThat(post("/api/v1/bands", "{\"name\":\"\\n\\t\"}", leader).getStatusCode().value()).isEqualTo(400);
+        assertThat(createBand(leader, "\\u200B실리카겔")).isPositive();
+    }
+
     @Test
     void member_cannot_kick() {
         String leader = signup("leader8@band.app", "리더");

@@ -122,6 +122,8 @@ class BandPlanTest {
         assertThat(plan.getPurchasedByUserId()).isNull();
         plan.recordPurchaser("tok-a", 7L);
         assertThat(plan.getPurchasedByUserId()).isEqualTo(7L);
+        plan.recordPurchaser("tok-a", 9L);            // 같은 토큰을 다른 계정이 복원 — 처음 결제자 유지(#31)
+        assertThat(plan.getPurchasedByUserId()).isEqualTo(7L);
 
         plan.renewFromStore(NOW, end, "GPA.1", Store.GOOGLE_PLAY, "tok-a");   // 같은 구매의 갱신
         assertThat(plan.getPurchasedByUserId()).isEqualTo(7L);

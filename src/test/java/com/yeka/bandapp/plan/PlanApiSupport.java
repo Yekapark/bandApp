@@ -40,6 +40,11 @@ public abstract class PlanApiSupport extends BoardApiSupport {
         noOpGateway.simulateState(purchaseToken, state);
     }
 
+    /** 스토어(no-op)가 이 토큰을 {@code linkedPurchaseToken} 을 이어받은 구독으로 답하게 한다(만료 뒤 Play 스토어 재구독). */
+    protected void storeLinks(String purchaseToken, String linkedPurchaseToken) {
+        noOpGateway.simulateLinkedPurchaseToken(purchaseToken, linkedPurchaseToken);
+    }
+
     // Google RTDN notificationType
     protected static final int RTDN_RECOVERED = 1;
     protected static final int RTDN_RENEWED = 2;

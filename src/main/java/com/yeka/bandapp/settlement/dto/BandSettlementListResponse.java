@@ -32,7 +32,8 @@ public record BandSettlementListResponse(
             String roomName,
             @Schema(description = "정산 총액.", example = "90000") int totalAmount,
             @Schema(description = "참여 인원(몫 개수).", example = "3") int shareCount,
-            @Schema(description = "납부 완료 인원.", example = "1") int paidCount,
+            @Schema(description = "납부 완료 인원(밴드장 대신 체크 포함).", example = "1") int paidCount,
+            @Schema(description = "면제된 인원(나간 멤버의 미납을 밴드장이 면제).", example = "0") int exemptCount,
 
             @Schema(description = "내 몫. 내가 이 정산에 포함되지 않았으면 null.", example = "30000")
             Integer myAmount,

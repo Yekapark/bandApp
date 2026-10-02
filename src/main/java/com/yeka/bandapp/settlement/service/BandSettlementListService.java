@@ -102,6 +102,7 @@ public class BandSettlementListService {
                 row.totalAmount(),
                 shares.size(),
                 paidCount,
+                (int) shares.stream().filter(SettlementShare::isExempt).count(),
                 mine == null ? null : mine.getAmount(),
                 mine == null ? null : mine.isPaid());
     }

@@ -225,9 +225,12 @@ public class BandPlan extends BaseTimeEntity {
     /**
      * 결제한 회원을 적는다 — 그 회원이 보낸 구매 토큰이 <b>지금 이 밴드의 토큰일 때만</b>. 검증 사이에 다른 결제·환불로 토큰이
      * 바뀌었으면 적지 않는다(엉뚱한 구독에 결제자가 붙지 않게).
+     *
+     * <p><b>이미 적혀 있으면 바꾸지 않는다</b> — 같은 Google 계정을 쓰는 다른 앱 계정이 같은 토큰을 "구매 복원" 해도 처음
+     * 결제한 사람이 남는다(LAUNCH_REVIEW 결정 #31). 토큰이 바뀌면 {@link #forgetPurchaserIfTokenChanges} 가 비워 새로 적힌다.
      */
     public void recordPurchaser(String purchaseToken, long userId) {
-        if (purchaseToken != null && purchaseToken.equals(this.purchaseToken)) {
+        if (this.purchasedByUserId == null && purchaseToken != null && purchaseToken.equals(this.purchaseToken)) {
             this.purchasedByUserId = userId;
         }
     }
