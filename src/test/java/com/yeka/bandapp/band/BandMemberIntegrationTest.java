@@ -151,11 +151,13 @@ class BandMemberIntegrationTest extends BandApiSupport {
     @Test
     void band_name_of_only_invisible_characters_is_rejected() {
         String leader = signup("leader-blank@band.app", "리더");
-        for (String name : new String[]{"\\u200B\\u200B", "\\n\\t", "\\u3164", "\\u2800 \\uFEFF"}) {
+        for (String name : new String[]{"\\u200B\\u200B", "\\u3164", "\\u2800 \\uFEFF\\u0007"}) {
             ResponseEntity<String> res = post("/api/v1/bands", "{\"name\":\"" + name + "\"}", leader);
             assertThat(res.getStatusCode().value()).as(name).isEqualTo(400);
             assertThat(body(res).at("/error/message").asText()).isEqualTo("밴드 이름을 입력해 주세요");
         }
+        // 공백·줄바꿈만이면 그 전에 @NotBlank 가 400 으로 막는다
+        assertThat(post("/api/v1/bands", "{\"name\":\"\\n\\t\"}", leader).getStatusCode().value()).isEqualTo(400);
         assertThat(createBand(leader, "\\u200B실리카겔")).isPositive();
     }
 
