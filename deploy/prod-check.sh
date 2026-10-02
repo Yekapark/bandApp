@@ -127,5 +127,15 @@ else
     echo "구독해지 실패 0건"
 fi
 
+# 9. 멤버 0명 밴드 삭제 실패(LAUNCH_REVIEW L7). 마지막 멤버가 탈퇴한 밴드는 서버가 지우고, 실패하면 매시 다시 하며 이 표시를
+#    남긴다. 계속 걸리면 cause 를 본다 — R2 장애면 기다리고, 구독 해지 실패면 Play Console › 주문 관리에서 직접 해지한다.
+purge_fail=$(docker logs --since 24h bandapp-app-1 2>&1 | grep -c 'MEMBERLESS_BAND_PURGE_FAILED')
+if [ "${purge_fail:-0}" -gt 0 ]; then
+    bad "빈밴드삭제 24시간 ${purge_fail}건 실패 — 탈퇴한 사람의 글·사진이 아직 남아 있다. 최근 것:"
+    detail && docker logs --since 24h bandapp-app-1 2>&1 | grep 'MEMBERLESS_BAND_PURGE_FAILED'         | grep -o 'bandId=[0-9]* cause=.*— ' | sort | uniq -c | tail -5
+else
+    echo "빈밴드삭제 실패 0건"
+fi
+
 [ "$fail" = 0 ] && echo "== 이상 없음"
 exit $fail

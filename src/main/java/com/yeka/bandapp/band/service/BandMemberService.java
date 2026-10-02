@@ -13,8 +13,12 @@ import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.plan.service.WithdrawnPurchaserSubscriptions;
 import com.yeka.bandapp.user.service.UserDirectoryService;
 import com.yeka.bandapp.user.service.UserDirectoryService.UserSummary;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
@@ -28,23 +32,28 @@ import java.util.stream.Collectors;
 @Service
 public class BandMemberService {
 
+    private static final Logger log = LoggerFactory.getLogger(BandMemberService.class);
+
     private final BandRepository bandRepository;
     private final BandMemberRepository bandMemberRepository;
     private final BandInviteRepository bandInviteRepository;
     private final BandAccessGuard accessGuard;
     private final UserDirectoryService userDirectory;
     private final WithdrawnPurchaserSubscriptions purchaserSubscriptions;
+    private final BandDeletionService bandDeletionService;
 
     public BandMemberService(BandRepository bandRepository, BandMemberRepository bandMemberRepository,
                              BandInviteRepository bandInviteRepository,
                              BandAccessGuard accessGuard, UserDirectoryService userDirectory,
-                             WithdrawnPurchaserSubscriptions purchaserSubscriptions) {
+                             WithdrawnPurchaserSubscriptions purchaserSubscriptions,
+                             BandDeletionService bandDeletionService) {
         this.bandRepository = bandRepository;
         this.bandMemberRepository = bandMemberRepository;
         this.bandInviteRepository = bandInviteRepository;
         this.accessGuard = accessGuard;
         this.userDirectory = userDirectory;
         this.purchaserSubscriptions = purchaserSubscriptions;
+        this.bandDeletionService = bandDeletionService;
     }
 
     @Transactional(readOnly = true)
@@ -119,8 +128,9 @@ public class BandMemberService {
      * 계정 탈퇴 정리. 탈퇴자의 활성 멤버십을 전부 종료한다.
      *
      * <p>탈퇴자가 밴드장인 밴드는 <b>가장 먼저 가입한 다른 활성 멤버</b>를 밴드장으로 자동 승격한다.
-     * 다른 멤버가 없으면 그 밴드는 활성 멤버 0인 상태로 남는다({@code bands} 행은 유지 —
-     * 활성 멤버가 없어 어떤 API 로도 접근되지 않으므로 사실상 소멸이다. 빈 밴드 정리는 이번 범위 밖).
+     * 다른 멤버가 없으면 초대를 막고, <b>탈퇴가 커밋된 뒤</b> 그 밴드를 통째로 지운다(글·사진·일정까지 — LAUNCH_REVIEW L7).
+     * R2 삭제·구독 해지가 외부 호출이라 트랜잭션 밖에서 한다. 실패해도 탈퇴는 되돌리지 않고,
+     * {@link BandDeletionService#purgeMemberlessBands} 가 매시 다시 한다.
      *
      * <p>밴드장 밴드에서는 {@code delegateLeadership} 과 같은 이유로 순서가 중요하다:
      * 탈퇴자를 먼저 {@code leave} + flush 해 {@code ux_band_members_single_leader} 슬롯을 비운 뒤 승격한다.
@@ -158,7 +168,21 @@ public class BandMemberService {
                 band.handOverLeadership(successor.getUserId());
             } else {
                 bandInviteRepository.revokeActiveByBandId(bandId);
+                purgeAfterCommit(bandId);
             }
         }
+    }
+
+    private void purgeAfterCommit(long bandId) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    bandDeletionService.purgeIfMemberless(bandId);
+                } catch (RuntimeException e) {
+                    log.warn("빈 밴드 즉시 삭제 실패 — 정리 배치가 다시 한다 bandId={} cause={}", bandId, e.toString());
+                }
+            }
+        });
     }
 }

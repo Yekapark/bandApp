@@ -1,6 +1,8 @@
 package com.yeka.bandapp.band;
 
+import com.yeka.bandapp.band.service.BandDeletionService;
 import com.yeka.bandapp.board.service.StorageKeys;
+import com.yeka.bandapp.plan.gateway.NoOpStoreBillingGateway;
 import com.yeka.bandapp.plan.PlanApiSupport;
 import com.yeka.bandapp.support.FakeStorageClient;
 import com.yeka.bandapp.support.StorageTestConfig;
@@ -56,6 +58,12 @@ class BandDeletionIntegrationTest extends PlanApiSupport {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private BandDeletionService bandDeletionService;
+
+    @Autowired
+    private NoOpStoreBillingGateway billingGateway;
 
     @BeforeEach
     void resetStorage() {
@@ -247,6 +255,96 @@ class BandDeletionIntegrationTest extends PlanApiSupport {
         // 다시 시도하면 성공한다 — 접두사 삭제는 멱등이다.
         assertThat(deleteBand(leader, f.bandId, "실패밴드").getStatusCode().value()).isEqualTo(204);
         assertThat(count("select count(*) from bands where id = %d", f.bandId)).isZero();
+    }
+
+    // ---------- 마지막 멤버 탈퇴 → 밴드 삭제 (LAUNCH_REVIEW L7) ----------
+
+    @Test
+    void last_member_withdrawal_deletes_the_band_and_its_storage() {
+        String leader = signup("bd-l7a@band.app", "혼자");
+        Fixture f = fullyPopulatedBand(leader, "혼자밴드");
+
+        withdraw(leader);
+
+        for (String sql : BAND_OWNED_COUNTS) {
+            assertThat(count(sql, f.bandId))
+                    .withFailMessage("마지막 멤버 탈퇴 뒤에도 행이 남았다: %s", sql.formatted(f.bandId))
+                    .isZero();
+        }
+        assertThat(storage.deletedPrefixes()).contains(StorageKeys.bandPrefix(f.bandId));
+        assertThat(storage.objectExists(f.mediaKey)).isFalse();
+    }
+
+    @Test
+    void band_with_remaining_members_is_untouched_by_withdrawal_and_sweeper() {
+        String leader = signup("bd-l7b1@band.app", "리더");
+        String member = signup("bd-l7b2@band.app", "남는사람");
+        Fixture f = fullyPopulatedBand(leader, "남는밴드");
+        join(member, issueInvite(leader, f.bandId, null));
+
+        withdraw(leader);
+        bandDeletionService.purgeMemberlessBands();
+
+        assertThat(count("select count(*) from bands where id = %d", f.bandId)).isEqualTo(1);
+        assertThat(count("select count(*) from board_posts where band_id = %d", f.bandId)).isEqualTo(1);
+        assertThat(count("select count(*) from reservations where band_id = %d", f.bandId)).isPositive();
+        assertThat(storage.objectExists(f.mediaKey)).isTrue();
+        assertThat(storage.deletedPrefixes()).doesNotContain(StorageKeys.bandPrefix(f.bandId));
+    }
+
+    /** R2 가 죽어 있으면 탈퇴는 끝나고 밴드는 남는다 — 정리 배치가 다음 실행에 지운다(이미 있던 빈 밴드도 같은 길). */
+    @Test
+    void storage_failure_leaves_the_band_for_the_sweeper_to_retry() {
+        String leader = signup("bd-l7c@band.app", "혼자");
+        Fixture f = fullyPopulatedBand(leader, "재시도밴드");
+        storage.failNextDeleteByPrefix();
+
+        withdraw(leader);
+        assertThat(count("select count(*) from bands where id = %d", f.bandId)).isEqualTo(1);
+        assertThat(count("select count(*) from band_members where band_id = %d and left_at is null", f.bandId))
+                .isZero();
+
+        storage.failNextDeleteByPrefix();
+        bandDeletionService.purgeMemberlessBands();          // 또 실패 — 그대로 남는다
+        assertThat(count("select count(*) from bands where id = %d", f.bandId)).isEqualTo(1);
+        assertThat(storage.objectExists(f.mediaKey)).isTrue();
+
+        bandDeletionService.purgeMemberlessBands();          // 다음 실행에 성공
+        for (String sql : BAND_OWNED_COUNTS) {
+            assertThat(count(sql, f.bandId)).withFailMessage("정리 배치 뒤에도 남았다: %s", sql.formatted(f.bandId))
+                    .isZero();
+        }
+        assertThat(storage.objectExists(f.mediaKey)).isFalse();
+    }
+
+    /** 자동 갱신 중인 구독(B5 로 직접 삭제는 막힌다)도 빈 밴드는 지운다 — 지우기 전에 스토어 해지를 먼저 한다. */
+    @Test
+    void memberless_band_with_auto_renewing_subscription_is_canceled_then_deleted() {
+        String leader = signup("bd-l7d@band.app", "혼자");
+        long bandId = createBand(leader, "구독혼자밴드");
+        assertThat(subscribe(leader, bandId).getStatusCode().value()).isEqualTo(200);
+
+        withdraw(leader);
+
+        assertThat(billingGateway.cancelledRenewals()).contains(tokenFor(bandId));
+        assertThat(count("select count(*) from bands where id = %d", bandId)).isZero();
+    }
+
+    /** 해지가 확인되지 않으면 지우지 않는다 — 요금제 행(구매 토큰)을 잃으면 아무도 해지할 수 없게 된다. */
+    @Test
+    void memberless_band_is_kept_while_the_store_cancel_fails() {
+        String leader = signup("bd-l7e@band.app", "혼자");
+        long bandId = createBand(leader, "해지실패밴드");
+        String token = "nocancel-l7-" + bandId;
+        assertThat(verifyGoogle(leader, bandId, token).getStatusCode().value()).isEqualTo(200);
+
+        withdraw(leader);
+        bandDeletionService.purgeMemberlessBands();
+
+        assertThat(count("select count(*) from bands where id = %d", bandId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("select purchase_token from band_plans where band_id = ?", String.class, bandId))
+                .isEqualTo(token);
+        assertThat(storage.deletedPrefixes()).doesNotContain(StorageKeys.bandPrefix(bandId));
     }
 
     // ---------- 픽스처 ----------
