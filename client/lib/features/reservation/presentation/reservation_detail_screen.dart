@@ -123,8 +123,7 @@ class _ReservationDetailScreenState
                       (meId == null
                           ? AttendanceStatus.pending
                           : board.statusOf(meId)),
-                  // 저장 중에도 계속 누를 수 있게 둔다 — 잘못 눌렀을 때 바로 고치는 편이
-                  // 응답을 기다렸다 고치는 것보다 낫다. 마지막 요청의 응답이 이긴다.
+                  // 저장 중 누름은 [_respond] 가 무시한다(#21). 버튼을 회색으로 바꾸지는 않는다 — 누를 때마다 깜빡인다.
                   enabled: editable && meId != null,
                   onSelect: (s) => _respond(band.id, meId!, s),
                 ),
@@ -224,6 +223,9 @@ class _ReservationDetailScreenState
   }
 
   Future<void> _respond(int bandId, int meId, AttendanceStatus status) async {
+    // 요청이 날고 있으면 무시한다(#21). 아직 참석 행이 없는 멤버(나중에 합류)가 연타하면 서버가 행을 두 번
+    // 만들려다 둘째가 "동시에 처리되었습니다" 로 실패했다.
+    if (_savingRsvp) return;
     // 먼저 칠하고 나중에 보낸다.
     final seq = ++_rsvpSeq;
     setState(() {
@@ -344,7 +346,18 @@ class _ReservationDetailScreenState
     }
   }
 
+  /// ✕ 는 드래그 손잡이 옆이라 잘못 누르기 쉽다(#65). 바로 지우되 "되돌리기" 를 준다.
   Future<void> _deleteSong(int bandId, SetlistItem item) async {
+    final order = ref
+            .read(reservationDetailProvider(_key(bandId)))
+            .valueOrNull
+            ?.setlist
+            .items
+            .map((e) => e.id)
+            .toList() ??
+        const <int>[];
+    // 되돌리기는 화면을 벗어난 뒤에도 눌릴 수 있다(스낵바는 앱 전체에 뜬다) — ref 대신 컨테이너를 잡아 둔다.
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() => _busy = true);
     try {
       await ref.read(reservationRepositoryProvider).deleteSetlistItem(
@@ -353,6 +366,18 @@ class _ReservationDetailScreenState
             itemId: item.id,
           );
       ref.invalidate(reservationDetailProvider(_key(bandId)));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: const Text('곡을 지웠어요'),
+            action: SnackBarAction(
+              label: '되돌리기',
+              onPressed: () =>
+                  _restoreSong(container, _key(bandId), item, order),
+            ),
+          ));
+      }
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
@@ -360,6 +385,36 @@ class _ReservationDetailScreenState
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// 지운 곡을 다시 만들고 원래 자리로 옮긴다. 새 곡은 맨 뒤에 붙으므로 [order] 의 옛 id 자리에 새 id 를 넣어
+  /// 재정렬한다. 그 사이 다른 사람이 곡을 바꿨으면 재정렬이 거절된다 — 곡은 맨 뒤에 남는다.
+  Future<void> _restoreSong(ProviderContainer container, ReservationKey key,
+      SetlistItem item, List<int> order) async {
+    final repo = container.read(reservationRepositoryProvider);
+    try {
+      final added = await repo.addSetlistItem(
+        bandId: key.bandId,
+        reservationId: key.reservationId,
+        title: item.title,
+        artist: item.artist,
+        referenceUrl: item.referenceUrl,
+      );
+      if (order.length > 1) {
+        try {
+          await repo.reorderSetlist(
+            bandId: key.bandId,
+            reservationId: key.reservationId,
+            itemIds: [for (final id in order) id == item.id ? added.id : id],
+          );
+        } catch (_) {}
+      }
+    } on ApiException catch (e) {
+      _toast(e.message);
+    } catch (_) {
+      _toast('곡을 되돌리지 못했어요.');
+    }
+    container.invalidate(reservationDetailProvider(key));
   }
 
   Future<void> _confirmCancel(int bandId) async {

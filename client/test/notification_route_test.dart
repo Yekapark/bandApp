@@ -8,6 +8,7 @@ void main() {
     expect(notificationRoute('RESERVATION_REMINDER', 12), Routes.reservation(12));
     expect(notificationRoute('RESERVATION_CREATED', 12), Routes.reservation(12));
     expect(notificationRoute('ATTENDANCE_NUDGE', 12), Routes.reservation(12));
+    expect(notificationRoute('RESERVATION_CHANGED', 12), Routes.reservation(12));
   });
 
   test('정산 요청은 그 일정의 정산으로', () {
@@ -23,6 +24,7 @@ void main() {
   test('취소된 일정은 달력으로, 운영자 알림은 이동 없음', () {
     expect(notificationRoute('RESERVATION_CANCELLED', 5), Routes.calendar);
     expect(notificationRoute('REPORT_RECEIVED', 3), isNull);
+    expect(notificationRoute('RECURRING_RULE_CANCELLED', null), Routes.calendar);
   });
 
   test('모르는 종류·id 없음은 알림 목록으로', () {

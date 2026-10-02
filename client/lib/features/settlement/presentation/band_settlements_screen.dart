@@ -285,7 +285,8 @@ class _SettlementTile extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     '총 ${_won.format(item.totalAmount)}원 · '
-                    '${item.paidCount}/${item.shareCount}명 납부',
+                    '${item.paidCount}/${item.shareCount}명 납부'
+                    '${item.exemptCount > 0 ? ' · 면제 ${item.exemptCount}명' : ''}',
                     style: const TextStyle(
                         fontSize: 10.5, color: AppColors.textFaint),
                   ),

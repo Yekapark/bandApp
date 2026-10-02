@@ -32,6 +32,7 @@ class RecurringListScreen extends ConsumerWidget {
     }
     final meId = ref.watch(authControllerProvider).user?.id;
     final rulesAsync = ref.watch(recurringRulesProvider(band.id));
+    final deleting = ref.watch(recurringDeletingProvider);
 
     // 정기 일정 *등록*은 PREMIUM 기능이다(서버 RecurringRuleService.create 가 막는다).
     // 목록은 FREE 에서도 보여준다 — PREMIUM 을 쓰다 내려온 밴드의 기존 규칙과 이미 만든 회차가
@@ -108,7 +109,9 @@ class RecurringListScreen extends ConsumerWidget {
                       ref.invalidate(recurringRulesProvider(band.id));
                     }
                   },
-                  onDelete: () => _confirmDelete(context, ref, band.id, rule),
+                  onDelete: deleting.contains(rule.id)
+                      ? null
+                      : () => _confirmDelete(context, ref, band.id, rule),
                 );
               },
             );
@@ -150,6 +153,9 @@ class RecurringListScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
+    final deleting = ref.read(recurringDeletingProvider.notifier);
+    if (deleting.state.contains(rule.id)) return;
+    deleting.update((s) => {...s, rule.id});
     try {
       await ref
           .read(recurringRepositoryProvider)
@@ -166,6 +172,8 @@ class RecurringListScreen extends ConsumerWidget {
       _snack(context, e.message);
     } catch (_) {
       _snack(context, '삭제하지 못했어요.');
+    } finally {
+      deleting.update((s) => {...s}..remove(rule.id));
     }
   }
 
@@ -188,7 +196,8 @@ class _RuleCard extends StatelessWidget {
   final RecurringRule rule;
   final bool canDelete;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
+  /// null 이면 삭제 중 — 버튼을 잠근다.
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {

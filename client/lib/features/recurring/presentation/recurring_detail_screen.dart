@@ -131,7 +131,9 @@ class RecurringDetailScreen extends ConsumerWidget {
                 if (canDelete) ...[
                   const SizedBox(height: 24),
                   OutlinedButton(
-                    onPressed: () => _confirmDelete(context, ref, band.id),
+                    onPressed: ref.watch(recurringDeletingProvider).contains(ruleId)
+                        ? null
+                        : () => _confirmDelete(context, ref, band.id),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(50),
                       side: const BorderSide(color: AppColors.danger),
@@ -181,6 +183,9 @@ class RecurringDetailScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
+    final deleting = ref.read(recurringDeletingProvider.notifier);
+    if (deleting.state.contains(ruleId)) return;
+    deleting.update((s) => {...s, ruleId});
     try {
       await ref
           .read(recurringRepositoryProvider)
@@ -198,6 +203,8 @@ class RecurringDetailScreen extends ConsumerWidget {
       _snack(context, e.message);
     } catch (_) {
       _snack(context, '삭제하지 못했어요.');
+    } finally {
+      deleting.update((s) => {...s}..remove(ruleId));
     }
   }
 

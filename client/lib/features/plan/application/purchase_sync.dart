@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/network/api_exception.dart';
+import '../../band/application/band_providers.dart';
 import '../../notification/data/push_service.dart' show scaffoldMessengerKey;
 import '../data/iap_service.dart';
 import '../data/plan_repository.dart';
@@ -42,6 +43,7 @@ class PurchaseBlockedException implements Exception {
   static const String alreadyPremium = '이 밴드는 이미 프리미엄이에요.';
   static const String onHold = '카드 결제가 실패해 프리미엄이 잠시 멈췄어요. 새로 결제하지 말고 '
       'Google Play 에서 결제 수단을 고쳐 주세요. 고치면 바로 다시 이어져요.';
+  static const String notLeader = '밴드장만 결제할 수 있어요. 밴드장이 바뀌었을 수 있어요.';
 
   final String message;
 
@@ -110,7 +112,8 @@ class PurchaseSync {
   /// 스토어에 있지만 아직 확인 처리되지 않은 구매가 적힌 밴드들(승인 대기·검증 전). 이 밴드는 다시 결제하지 않는다.
   final _unackedBands = <int>{};
 
-  /// 서버가 "이 밴드는 이미 구독 중" 으로 거절한 구매 토큰(`BAND_ALREADY_SUBSCRIBED`). 서버가 확인 처리하지
+  /// 서버가 영구적으로 거절한 구매 토큰 — 이미 구독 중(`BAND_ALREADY_SUBSCRIBED`), 밴드장 아님(403), 밴드
+  /// 없음(404), 이미 연결됨(409), 밴드를 모름(422) 등([_isPermanentRejection]). 서버가 확인 처리하지
   /// 않았으니 Google 이 3일 안에 자동 환불하고, 그동안 스토어는 이 구매를 복구 때마다 다시 흘려보낸다 — 다시
   /// 보내도 같은 답이라 이 앱이 켜져 있는 동안은 더 보내지 않는다.
   final _rejected = <String>{};
@@ -156,6 +159,12 @@ class PurchaseSync {
     // 화면의 요금제는 처음 열 때 받은 것이다. 그 사이 다른 기기·다른 밴드장이 결제했거나 갱신 결제가 보류됐으면
     // 같은 밴드에 구독이 하나 더 생겨 두 번 청구되므로, 결제 창을 띄우기 직전에 서버에서 새로 받아 본다.
     final plan = await _ref.refresh(bandPlanProvider(bandId).future);
+    // 밴드장 여부도 화면을 연 때의 것이다. 그 사이 밴드장이 바뀌었으면 결제는 되고 서버가 403 으로 거절해
+    // 3일 뒤 자동 환불된다("결제했는데 실패"). 결제 창을 띄우기 전에 내 역할을 새로 받아 본다.
+    final bands = await _ref.refresh(myBandsProvider.future);
+    if (!bands.any((b) => b.id == bandId && b.isLeader)) {
+      throw const PurchaseBlockedException(PurchaseBlockedException.notLeader);
+    }
     if (plan.onHold) {
       throw const PurchaseBlockedException(PurchaseBlockedException.onHold);
     }
@@ -329,10 +338,13 @@ class PurchaseSync {
       }
       _toast('결제가 확인돼 프리미엄이 시작됐어요.');
     } on ApiException catch (e) {
-      if (e.code == 'BAND_ALREADY_SUBSCRIBED') {
-        // 이 밴드에는 이미 다른 구독이 있다(결제 보류 포함). 완료(확인 처리)하지 않아야 Google 이 환불한다.
+      if (_isPermanentRejection(e)) {
+        // 다시 보내도 같은 답이다. 완료(확인 처리)하지 않아야 Google 이 환불한다.
         _rejected.add(token);
         if (tag != null) _unackedBands.remove(tag);
+      }
+      if (e.code == 'BAND_ALREADY_SUBSCRIBED') {
+        // 이 밴드에는 이미 다른 구독이 있다(결제 보류 포함).
         if (mine) {
           _clearBuying();
           _emit(const PurchaseEvent(PurchaseEventKind.failed));
@@ -349,6 +361,12 @@ class PurchaseSync {
       _inFlight.remove(token);
     }
   }
+
+  /// 서버가 다시 보내도 같은 답을 줄 거절인가. 403(밴드장 아님)·404(밴드 없음)·409(이미 구독·연결됨)·
+  /// 422(밴드 모름). 네트워크·5xx·401 은 다음에 다시 보낸다.
+  static bool _isPermanentRejection(ApiException e) =>
+      e.code == 'BAND_ALREADY_SUBSCRIBED' ||
+      const {403, 404, 409, 422}.contains(e.statusCode);
 
   /// 방금 결제한 사람에게만 알린다. 앱 시작 때 조용히 복구하다 실패한 것은 다음에 다시 시도하므로
   /// 매번 안내를 띄우지 않는다.

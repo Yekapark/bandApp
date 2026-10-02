@@ -61,10 +61,20 @@ class _HomeBody extends ConsumerWidget {
         ref.invalidate(myBandsProvider);
         ref.invalidate(bandMembersProvider(band.id));
         ref.invalidate(upcomingReservationsProvider(band.id));
-        await Future.wait([
-          ref.read(bandMembersProvider(band.id).future),
-          ref.read(upcomingReservationsProvider(band.id).future),
-        ]);
+        try {
+          await Future.wait([
+            ref.read(bandMembersProvider(band.id).future),
+            ref.read(upcomingReservationsProvider(band.id).future),
+          ]);
+        } catch (_) {
+          // 예전엔 실패해도 아무 안내 없이 옛 화면이 남았다(#44). 옛 값은 그대로 두고 알린다.
+          if (context.mounted) {
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(
+                  const SnackBar(content: Text('새로고침하지 못했어요')));
+          }
+        }
       },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 64, 20, 24),
