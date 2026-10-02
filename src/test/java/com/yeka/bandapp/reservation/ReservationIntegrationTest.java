@@ -289,6 +289,28 @@ class ReservationIntegrationTest extends ReservationApiSupport {
         assertThat(errorCode(res)).isEqualTo("INVALID_RESERVATION_PERIOD");
     }
 
+    /** U25 — 24시간까지는 받고, 넘으면 등록·수정 모두 400. */
+    @Test
+    void reservation_longer_than_24_hours_is_400_on_create_and_update() {
+        String leader = signup("resv-long@band.app", "리더");
+        long bandId = createBand(leader, "쏜애플셋");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        String plus24h = "2026-09-11T10:00:00Z";
+        String plus24h1m = "2026-09-11T10:01:00Z";
+
+        long reservationId = createReservation(leader, bandId, roomId, T10, plus24h);
+
+        ResponseEntity<String> create = post("/api/v1/bands/" + bandId + "/reservations",
+                reservationBody(roomId, T10, plus24h1m), leader);
+        assertThat(create.getStatusCode().value()).isEqualTo(400);
+        assertThat(errorCode(create)).isEqualTo("RESERVATION_TOO_LONG");
+
+        ResponseEntity<String> update = put("/api/v1/bands/" + bandId + "/reservations/" + reservationId,
+                reservationBody(roomId, T10, "2126-09-10T10:00:00Z"), leader);
+        assertThat(update.getStatusCode().value()).isEqualTo(400);
+        assertThat(errorCode(update)).isEqualTo("RESERVATION_TOO_LONG");
+    }
+
     @Test
     void calendar_query_excludes_out_of_range_reservations() {
         String leader = signup("resv-cal@band.app", "리더");

@@ -79,12 +79,17 @@ public class SettlementService {
     /**
      * 정산 생성. 현재 밴드 멤버(EQUAL) 또는 참석자(ATTENDEES_ONLY) 기준으로 몫을 만든다.
      * 이미 정산이 있으면 409 {@code SETTLEMENT_ALREADY_EXISTS}, ATTENDEES_ONLY 인데 참석자가 없으면
-     * 409 {@code SETTLEMENT_NO_ATTENDEES}(아무것도 저장하지 않는다).
+     * 409 {@code SETTLEMENT_NO_ATTENDEES}(아무것도 저장하지 않는다). 확정되지 않은 일정(승인 대기·취소·거절)이면
+     * 409 {@code SETTLEMENT_RESERVATION_NOT_CONFIRMED}.
      */
     @Transactional
     public SettlementResponse create(long bandId, long reservationId, long callerId,
                                      CreateSettlementRequest request) {
         requireManager(bandId, reservationId, callerId);
+        // 취소·거절·승인 대기 일정은 정산하지 않는다(U28). 이미 만든 정산은 일정이 나중에 취소돼도 그대로 둔다.
+        if (!reservationDirectory.isConfirmed(bandId, reservationId)) {
+            throw new BusinessException(ErrorCode.SETTLEMENT_RESERVATION_NOT_CONFIRMED);
+        }
 
         List<MemberBrief> recipients = recipientsFor(bandId, reservationId, request.splitType());
         if (recipients.isEmpty()) {

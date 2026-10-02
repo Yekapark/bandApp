@@ -154,7 +154,7 @@ class RecurringRuleIntegrationTest extends RecurringApiSupport {
         long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
 
         // 2개월 전 그 달 1일부터 시작하고 요일을 1일의 요일로 잡으면 anchor 주차가 항상 1 →
-        // 어느 달에도 존재해 매달 회차가 생긴다(5주차 없는 달 스킵은 OccurrenceGeneratorTest 에서 본다).
+        // 어느 달에도 존재해 매달 회차가 생긴다(5주차 = 마지막 주 처리는 OccurrenceGeneratorTest 에서 본다).
         LocalDate start = today().minusMonths(2).withDayOfMonth(1);
         java.time.DayOfWeek dow = start.getDayOfWeek();
         long ruleId = createRule(leader, bandId, ruleBody(
