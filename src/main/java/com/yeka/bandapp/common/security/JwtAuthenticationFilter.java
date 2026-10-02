@@ -48,11 +48,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = header.substring(BEARER_PREFIX.length()).trim();
             try {
                 JwtTokenProvider.ParsedToken parsed = tokenProvider.parseAccess(token);
-                var blocked = blocklist.reason(parsed.userId());
+                var blocked = blocklist.reason(parsed.userId(), parsed.issuedAt());
                 if (blocked.isPresent()) {
-                    throw new BusinessException(blocked.get() == AccessTokenBlocklist.Reason.SUSPENDED
-                            ? ErrorCode.ACCOUNT_SUSPENDED
-                            : ErrorCode.ACCOUNT_WITHDRAWN);
+                    // 비밀번호 변경은 INVALID_TOKEN — 클라이언트가 refresh 를 시도하고(세션은 재설정 때 지워짐)
+                    // 실패하면 로그인 화면으로 보낸다.
+                    throw new BusinessException(switch (blocked.get()) {
+                        case SUSPENDED -> ErrorCode.ACCOUNT_SUSPENDED;
+                        case WITHDRAWN -> ErrorCode.ACCOUNT_WITHDRAWN;
+                        case PASSWORD_CHANGED -> ErrorCode.INVALID_TOKEN;
+                    });
                 }
                 var authentication = new UsernamePasswordAuthenticationToken(
                         new AuthPrincipal(parsed.userId()), null, List.of());

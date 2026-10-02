@@ -29,6 +29,8 @@ public class JwtTokenProvider {
     private static final String CLAIM_TYPE = "typ";
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
+    /** 밀리초 발급 시각. {@code iat} 는 초 단위라 비밀번호 재설정과 같은 초에 발급된 토큰을 가를 수 없다(U24). */
+    private static final String CLAIM_ISSUED_AT_MS = "iat_ms";
 
     private final JwtProperties properties;
     private final SecretKey key;
@@ -62,6 +64,7 @@ public class JwtTokenProvider {
                 .subject(Long.toString(userId))
                 .claim(CLAIM_TYPE, type)
                 .issuedAt(Date.from(now))
+                .claim(CLAIM_ISSUED_AT_MS, now.toEpochMilli())
                 .expiration(Date.from(now.plus(ttl)))
                 .signWith(key);
         if (jti != null) {
@@ -88,9 +91,19 @@ public class JwtTokenProvider {
         if (!expectedType.equals(claims.get(CLAIM_TYPE, String.class))) {
             throw new BusinessException(access ? ErrorCode.INVALID_TOKEN : ErrorCode.REFRESH_TOKEN_INVALID);
         }
-        return new ParsedToken(Long.parseLong(claims.getSubject()), claims.getId());
+        return new ParsedToken(Long.parseLong(claims.getSubject()), claims.getId(), issuedAt(claims));
     }
 
-    public record ParsedToken(Long userId, String jti) {
+    /** {@code iat_ms} 우선, 없으면(이 클레임 전에 발급된 토큰) 초 단위 {@code iat}, 그것도 없으면 EPOCH(차단 쪽으로). */
+    private static Instant issuedAt(Claims claims) {
+        if (claims.get(CLAIM_ISSUED_AT_MS) instanceof Number ms) {
+            return Instant.ofEpochMilli(ms.longValue());
+        }
+        Date iat = claims.getIssuedAt();
+        return iat == null ? Instant.EPOCH : iat.toInstant();
+    }
+
+    /** {@code issuedAt} 은 발급 시각(밀리초 정밀도, 옛 토큰은 초). */
+    public record ParsedToken(Long userId, String jti, Instant issuedAt) {
     }
 }

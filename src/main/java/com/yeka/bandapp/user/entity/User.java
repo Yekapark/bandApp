@@ -28,6 +28,9 @@ import java.time.Instant;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User extends BaseTimeEntity {
 
+    /** 탈퇴한 사람을 다른 사람에게 보일 때의 이름. 파기({@link #anonymize}) 뒤 저장값도 이것이다. */
+    public static final String WITHDRAWN_NAME = "탈퇴한 사용자";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -129,7 +132,7 @@ public class User extends BaseTimeEntity {
         this.email = null;
         this.passwordHash = null;
         this.socialId = null;
-        this.name = "탈퇴한 사용자";
+        this.name = WITHDRAWN_NAME;
         this.suspensionReason = null;
     }
 

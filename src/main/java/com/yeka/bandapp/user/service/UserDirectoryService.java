@@ -39,6 +39,10 @@ public class UserDirectoryService {
     /**
      * 주어진 id 들의 표시용 요약. 탈퇴/익명화된 사용자도 포함해 반환한다
      * (밴드 멤버 목록에서 "탈퇴한 사용자"로 보여야 하므로).
+     *
+     * <p>탈퇴한 사람은 <b>탈퇴 즉시</b> "탈퇴한 사용자" 로, 이메일은 비워서 돌려준다(LAUNCH_REVIEW L8).
+     * 예전엔 저장된 값을 그대로 줘서 90일 파기({@code User#anonymize}) 전까지 정산·게시판·출석 등에 실명이 보였다.
+     * 정산·게시판·출석·멤버 목록의 다른 사람 이름은 모두 이 메서드를 지난다. 운영 도구(ReportMail 의 SQL)는 원래 값을 본다.
      */
     @Transactional(readOnly = true)
     public List<UserSummary> summariesOf(Collection<Long> userIds) {
@@ -49,6 +53,9 @@ public class UserDirectoryService {
 
     public record UserSummary(long userId, String name, String email) {
         static UserSummary from(User user) {
+            if (user.isWithdrawn()) {
+                return new UserSummary(user.getId(), User.WITHDRAWN_NAME, null);
+            }
             return new UserSummary(user.getId(), user.getName(), user.getEmail());
         }
     }
