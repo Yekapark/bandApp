@@ -1,12 +1,18 @@
 package com.yeka.bandapp.user;
 
+import com.yeka.bandapp.common.mail.EmailSender;
 import com.yeka.bandapp.support.ApiIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * 비밀번호 재설정. 테스트 환경엔 {@code app.mail.from}이 없어 실제 메일은 안 나가므로,
@@ -16,6 +22,10 @@ class PasswordResetIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     StringRedisTemplate redis;
+
+    /** 실제 발송은 테스트에서 건너뛰지만(발신 계정 없음) 호출 자체는 센다. */
+    @MockitoSpyBean
+    EmailSender emailSender;
 
     private static final String SIGNUP = """
             {"email":"reset@band.app","password":"pw12345678","name":"재설정"}
@@ -56,6 +66,32 @@ class PasswordResetIntegrationTest extends ApiIntegrationTest {
                 "{\"email\":\"reset@band.app\",\"code\":\"" + code + "\",\"newPassword\":\"anotherpw123\"}");
         assertThat(replay.getStatusCode().value()).isEqualTo(400);
         assertThat(errorCode(replay)).isEqualTo("PASSWORD_RESET_CODE_INVALID");
+    }
+
+    /**
+     * LAUNCH_REVIEW U24 — 재설정 전에 받은 access 토큰은 만료 전이어도 바로 401, 새로 로그인한 토큰은 통한다.
+     * 본인에게 "비밀번호가 변경되었어요" 메일이 한 통 간다.
+     */
+    @Test
+    void reset_revokes_old_access_tokens_keeps_new_login_and_sends_notice_mail() {
+        String oldAccess = body(post("/api/v1/auth/signup", SIGNUP)).at("/data/tokens/accessToken").asText();
+        assertThat(get("/api/v1/users/me", oldAccess).getStatusCode().value()).isEqualTo(200);
+        post("/api/v1/auth/password-reset/request", "{\"email\":\"reset@band.app\"}");
+        assertThat(post("/api/v1/auth/password-reset/confirm",
+                "{\"email\":\"reset@band.app\",\"code\":\"" + storedCode() + "\",\"newPassword\":\"newpw12345\"}")
+                .getStatusCode().value()).isEqualTo(204);
+
+        ResponseEntity<String> stale = get("/api/v1/users/me", oldAccess);
+        assertThat(stale.getStatusCode().value()).isEqualTo(401);
+        assertThat(errorCode(stale)).isEqualTo("INVALID_TOKEN");
+
+        String newAccess = body(post("/api/v1/auth/login",
+                "{\"email\":\"reset@band.app\",\"password\":\"newpw12345\"}"))
+                .at("/data/tokens/accessToken").asText();
+        assertThat(get("/api/v1/users/me", newAccess).getStatusCode().value()).isEqualTo(200);
+
+        verify(emailSender, times(1)).send(eq("reset@band.app"), eq("[밴듈] 비밀번호가 변경되었어요"),
+                contains("notice@bandule.com"));
     }
 
     @Test

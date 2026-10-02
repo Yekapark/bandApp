@@ -3,18 +3,27 @@ package com.yeka.bandapp.user.service;
 import com.yeka.bandapp.common.exception.BusinessException;
 import com.yeka.bandapp.common.exception.ErrorCode;
 import com.yeka.bandapp.common.mail.EmailSender;
+import com.yeka.bandapp.common.security.AccessTokenBlocklist;
+import com.yeka.bandapp.common.security.JwtProperties;
 import com.yeka.bandapp.common.security.RefreshTokenStore;
 import com.yeka.bandapp.user.entity.User;
 import com.yeka.bandapp.user.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 /**
@@ -28,25 +37,35 @@ import java.util.Locale;
 @Service
 public class PasswordResetService {
 
+    private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
+
     private static final String CODE_KEY_PREFIX = "auth:pwreset:code:";
     private static final String ATTEMPTS_KEY_PREFIX = "auth:pwreset:attempts:";
     private static final Duration CODE_TTL = Duration.ofMinutes(15);
     private static final int MAX_ATTEMPTS = 5;
+    private static final DateTimeFormatter KST = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            .withZone(ZoneId.of("Asia/Seoul"));
+    static final String CHANGED_MAIL_SUBJECT = "[밴듈] 비밀번호가 변경되었어요";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redis;
     private final EmailSender emailSender;
     private final RefreshTokenStore refreshTokenStore;
+    private final AccessTokenBlocklist accessTokenBlocklist;
+    private final JwtProperties jwtProperties;
 
     public PasswordResetService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                                 StringRedisTemplate redis, EmailSender emailSender,
-                                RefreshTokenStore refreshTokenStore) {
+                                RefreshTokenStore refreshTokenStore, AccessTokenBlocklist accessTokenBlocklist,
+                                JwtProperties jwtProperties) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.redis = redis;
         this.emailSender = emailSender;
         this.refreshTokenStore = refreshTokenStore;
+        this.accessTokenBlocklist = accessTokenBlocklist;
+        this.jwtProperties = jwtProperties;
     }
 
     /**
@@ -78,8 +97,10 @@ public class PasswordResetService {
     }
 
     /**
-     * 인증번호 확인 + 비밀번호 변경. 성공하면 이 계정의 모든 refresh 세션을 무효화한다 —
-     * 비밀번호가 새어 재설정하는 상황이라면 기존 세션도 함께 끊는 것이 안전하다.
+     * 인증번호 확인 + 비밀번호 변경. 성공하면 이 계정의 모든 refresh 세션을 지우고, 이미 나가 있는
+     * access 토큰도 즉시 막는다(재설정 시각 전에 발급된 것만 — LAUNCH_REVIEW U24). 예전엔 refresh 만 지워
+     * 다른 기기가 access 만료(최대 30분)까지 그대로 썼다. 커밋 뒤 본인에게 "비밀번호가 변경되었어요"
+     * 메일을 보낸다 — 남이 바꿨을 때 알아챌 수 있도록. 메일은 트랜잭션 밖이고 실패해도 재설정은 유지된다.
      *
      * <p>시도는 <b>비교하기 전에</b> 센다. 비교 뒤에 세면 동시에 쏜 요청들이 모두 "아직 0회" 를 보고
      * 통과해 5회 상한을 넘겨 대입할 수 있다. 상한을 넘기면 {@link #CODE_TTL} 동안 잠기고
@@ -107,6 +128,33 @@ public class PasswordResetService {
         redis.delete(codeKey(email));
         redis.delete(attemptsKey(email));
         refreshTokenStore.removeAll(user.getId());
+        Instant now = Instant.now();
+        accessTokenBlocklist.revokeIssuedBefore(user.getId(), now, jwtProperties.accessTokenTtl());
+        notifyChangedAfterCommit(email, now);
+    }
+
+    private void notifyChangedAfterCommit(String email, Instant when) {
+        Runnable send = () -> {
+            try {
+                emailSender.send(email, CHANGED_MAIL_SUBJECT,
+                        "밴듈 계정의 비밀번호가 " + KST.format(when) + "(한국 시간)에 변경되었어요.\n"
+                                + "다른 기기의 로그인은 모두 해제되었어요.\n\n"
+                                + "본인이 아니면 즉시 비밀번호 재설정 후 notice@bandule.com 로 알려 주세요.");
+            } catch (RuntimeException e) {
+                // 커밋은 끝났다 — 알림 실패(예: 상한 확인용 Redis 오류)로 재설정 응답을 500 으로 만들지 않는다.
+                log.error("[pwreset] 변경 알림 메일 실패, 재설정은 완료됨", e);
+            }
+        };
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            send.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                send.run();
+            }
+        });
     }
 
     /** 이번 시도를 포함한 횟수. 창은 첫 시도부터 {@link #CODE_TTL} — 키와 TTL 을 한 번에 건다(TTL 없는 좀비 키 방지). */

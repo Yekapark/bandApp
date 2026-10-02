@@ -231,6 +231,26 @@ class SettlementIntegrationTest extends ReservationApiSupport {
         assertThat(exact.get("outstandingAmount").asInt()).isZero();
     }
 
+    /** LAUNCH_REVIEW L8 — 탈퇴한 사람의 몫은 90일 파기 전이라도 바로 "탈퇴한 사용자" 로 보인다(실명 노출 금지). */
+    @Test
+    void withdrawn_members_share_shows_withdrawn_name_immediately() {
+        String leader = signup("stl-wd-l@band.app", "리더");
+        String a = signup("stl-wd-a@band.app", "실명에이");
+        long bandId = createBand(leader, "탈퇴밴드");
+        join(a, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long reservationId = createReservation(leader, bandId, roomId, T10, T13);
+        long aId = myUserId(a);
+        createSettlement(leader, bandId, reservationId, 20_000, "EQUAL");
+        markPaid(a, bandId, reservationId, aId, true);
+
+        withdraw(a);
+
+        JsonNode s = data(get(settlementPath(bandId, reservationId), leader));
+        assertThat(shareOf(s, aId).get("name").asText()).isEqualTo("탈퇴한 사용자");
+        assertThat(s.toString()).doesNotContain("실명에이");
+    }
+
     /**
      * 두 규칙을 함께 — ATTENDEES_ONLY 40,000원 / 4명 = 10,000. A·B 가 냄 → A 는 불참으로 바꿈 →
      * 총액 46,000 으로 재계산. A 의 10,000 은 그대로 남고(빠진 사람의 낸 몫 고정), 남은 36,000 을

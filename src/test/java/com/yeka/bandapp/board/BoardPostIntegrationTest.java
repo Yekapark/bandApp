@@ -28,6 +28,22 @@ class BoardPostIntegrationTest extends BoardApiSupport {
         assertThat(detail.get("mediaCount").asInt()).isZero();
     }
 
+    /** LAUNCH_REVIEW L8 — 탈퇴한 사람의 글은 남지만 작성자는 바로 "탈퇴한 사용자" 로 보인다. */
+    @Test
+    void withdrawn_authors_name_is_hidden_immediately() {
+        String leader = signup("bp-wd-l@band.app", "리더");
+        String member = signup("bp-wd-m@band.app", "실명멤버");
+        long bandId = createBand(leader, "탈퇴글밴드");
+        join(member, issueInvite(leader, bandId, null));
+        long postId = createPost(member, bandId, "남는 글", "본문");
+
+        withdraw(member);
+
+        assertThat(data(get(postPath(bandId, postId), leader)).get("authorName").asText())
+                .isEqualTo("탈퇴한 사용자");
+        assertThat(get(postsPath(bandId), leader).getBody()).doesNotContain("실명멤버");
+    }
+
     @Test
     void non_member_cannot_read_posts() {
         String leader = signup("bp-nm-l@band.app", "리더");
