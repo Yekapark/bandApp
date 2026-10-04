@@ -72,6 +72,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
   bool get _isEdit => _postId != null;
 
+  /// 화면을 연 밴드에 고정한다(POST-10·UI-06). 작성 중 밴드에서 나가거나 알림을 눌러 밴드가 바뀌면
+  /// "현재 밴드" 가 다른 밴드로 넘어간다 — 등록할 때 그걸 읽으면 엉뚱한 밴드에 글이 올라간다.
+  int? _bandId;
+
   /// 올라간 것 + 올릴 것. 10개 상한은 이 합계로 센다.
   int get _attachmentCount => _media.length + _pending.length;
 
@@ -79,12 +83,22 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   void initState() {
     super.initState();
     _postId = widget.postId;
+    _bandId = ref.read(currentBandProvider)?.id;
     _title.addListener(() => _dirty = true);
     _content.addListener(() => _dirty = true);
   }
 
   @override
   void dispose() {
+    // 압축 중에 나가면 네이티브 인코더가 끝까지 돌고 결과 파일이 캐시에 남는다(MEDIA-05).
+    // 못 올린 압축본도 이 화면이 사라지면 다시 올릴 길이 없으니 함께 치운다.
+    if (_compressPct != null || _pending.isNotEmpty) {
+      unawaited(_compressor
+          .cancelCompression()
+          .whenComplete(
+              () => _compressor.cleanupFiles(deleteCompressedVideos: true))
+          .catchError((_) {}));
+    }
     _title.dispose();
     _content.dispose();
     super.dispose();
@@ -102,8 +116,8 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final band = ref.watch(currentBandProvider);
-    if (band == null) {
+    final bandId = _bandId;
+    if (bandId == null) {
       return const Scaffold(
         body: Center(
           child: Text('밴드를 먼저 선택해 주세요.',
@@ -115,7 +129,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
     // 수정 모드 최초 진입 시 기존 값 채우기.
     if (widget.postId != null && !_prefilled) {
       final detailAsync = ref
-          .watch(postDetailProvider((bandId: band.id, postId: widget.postId!)));
+          .watch(postDetailProvider((bandId: bandId, postId: widget.postId!)));
       return detailAsync.when(
         loading: () => const Scaffold(
           body: Center(child: CircularProgressIndicator()),
@@ -135,12 +149,12 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
           _media = detail.media;
           _prefilled = true;
           _dirty = false;
-          return _form(band.id);
+          return _form(bandId);
         },
       );
     }
 
-    return _form(band.id);
+    return _form(bandId);
   }
 
   Widget _form(int bandId) {
@@ -298,6 +312,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   /// 첨부가 하나라도 실패하면 화면을 닫지 않고 실패분만 대기 목록에 남긴다 — 글은 이미
   /// 저장됐으므로 사용자는 남은 것만 다시 시도하면 된다.
   Future<void> _createThenAttach(int bandId) async {
+    if (_busy) return; // 같은 프레임의 연타 — 버튼이 아직 비활성으로 다시 그려지기 전
     setState(() => _busy = true);
     try {
       final detail = await ref.read(boardRepositoryProvider).create(

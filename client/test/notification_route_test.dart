@@ -30,4 +30,12 @@ void main() {
   test('모르는 종류·id 없음은 알림 목록으로', () {
     expect(notificationRoute('SOMETHING_NEW', null), Routes.notifications);
   });
+
+  test('나간 밴드의 알림은 열지 않는다 — 목록을 못 불러왔으면 단정하지 않는다 (PUSH-07)', () {
+    expect(notificationBandGone(3, [1, 2]), isTrue);
+    expect(notificationBandGone(2, [1, 2]), isFalse);
+    expect(notificationBandGone(3, null), isFalse);
+    expect(notificationBandGone(3, const []), isFalse);
+    expect(notificationBandGone(null, [1]), isFalse);
+  });
 }

@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../band/application/band_providers.dart';
+import '../../band/data/band_models.dart';
 import '../application/calendar_providers.dart';
 import '../data/place_models.dart';
 import '../data/room_models.dart';
@@ -64,9 +65,14 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
   bool get _isEdit => widget.existing != null;
   bool get _mapAvailable => AppConfig.mapEnabled;
 
+  /// 화면을 연 밴드에 고정한다(POST-10·UI-06). 작성 중 밴드에서 나가거나 알림을 눌러 밴드가 바뀌면
+  /// "현재 밴드" 가 다른 밴드로 넘어간다 — 저장할 때 그걸 읽으면 엉뚱한 밴드에 써진다.
+  MyBand? _band;
+
   @override
   void initState() {
     super.initState();
+    _band = ref.read(currentBandProvider);
     final r = widget.existing;
     if (r != null) {
       _name.text = r.name;
@@ -125,7 +131,7 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
   }
 
   Future<void> _search(String query) async {
-    final band = ref.read(currentBandProvider);
+    final band = _band;
     if (band == null) {
       debugPrint('장소 검색 건너뜀: 선택된 밴드가 없다');
       return;
@@ -159,6 +165,8 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
   void _pick(PlaceSuggestion s) {
     if (!mounted) return; // 지도 마커 탭은 네이티브에서 오므로 화면이 사라진 뒤에도 올 수 있다
     FocusScope.of(context).unfocus();
+    // 아직 오는 중인 검색 응답이 고른 핀과 닫은 목록을 다시 덮지 않게 버린다(ROOM-06).
+    _searchSeq++;
     setState(() {
       _address.text = s.bestAddress;
       if (_name.text.trim().isEmpty) _name.text = s.name;
@@ -222,7 +230,7 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
   }
 
   Future<void> _submit() async {
-    final band = ref.read(currentBandProvider);
+    final band = _band;
     final name = _name.text.trim();
     if (band == null || name.isEmpty) return;
 

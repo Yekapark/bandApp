@@ -24,3 +24,12 @@ String? notificationRoute(String? type, int? reservationId) {
   if (type == 'SETTLEMENT_REQUESTED') return Routes.settlement(reservationId);
   return Routes.reservation(reservationId);
 }
+
+/// 알림의 밴드가 이미 내 목록에 없는가(나갔거나 추방·삭제, PUSH-07). 그대로 열면 "현재 밴드" 가 첫 밴드로
+/// 돌아가서 요금제 알림이 **다른 밴드의 요금제**를 보여준다. 목록을 아직 못 불러왔으면(콜드 스타트, null·빈 목록)
+/// 단정하지 않는다 — 일정·정산은 서버가 밴드 소속을 확인해 404 로 막는다.
+bool notificationBandGone(int? bandId, Iterable<int>? myBandIds) =>
+    bandId != null &&
+    myBandIds != null &&
+    myBandIds.isNotEmpty &&
+    !myBandIds.contains(bandId);
