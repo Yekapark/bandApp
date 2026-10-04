@@ -401,6 +401,27 @@ void main() {
     expect(repo.restored, ['tok-500', 'tok-500']);
   });
 
+  test('BILL-07 검증 중 연결이 끊겼다 돌아와도 결제한 밴드에만 반영한다 — 현재 밴드는 보지 않는다', () async {
+    sync.start();
+    await sync.buy(_products(), bandId: 3);
+
+    repo.restoreError = ApiException(code: 'NETWORK', message: '연결 안 됨');
+    final p = _purchase('tok-7', PurchaseStatus.purchased, pending: true, band: 3);
+    iap.emit([p]);
+    await settle();
+    expect(iap.completed, isEmpty); // 끝내지 않아야 다음에 다시 온다
+
+    // 그 사이 사용자는 밴드 5 로 옮겼다 — PurchaseSync 는 현재 밴드를 읽지 않으므로 바꿀 것도 없다.
+    repo.restoreError = null;
+    repo.restoreResult = 3; // 서버가 구매에 적힌 밴드로 정한다
+    iap.emit([p]); // 복귀 때 스토어가 다시 흘려보낸 같은 구매
+    await settle();
+
+    expect(repo.restored, ['tok-7', 'tok-7']);
+    expect(repo.verified, isEmpty); // 결제 중인 밴드로 따로 검증하지 않는다
+    expect(iap.completed, [p]);
+  });
+
   test('서버 반영이 실패하면 끝내지 않는다 — 다음 시작·복귀 때 다시 온다', () async {
     repo.restoreError = ApiException(code: 'NETWORK', message: '연결 안 됨');
     sync.start();

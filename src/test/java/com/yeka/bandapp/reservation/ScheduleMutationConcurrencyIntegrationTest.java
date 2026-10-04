@@ -183,6 +183,31 @@ class ScheduleMutationConcurrencyIntegrationTest extends RecurringApiSupport {
         assertThat(jdbc.queryForObject("select count(*) from recurring_rules where id = ?", Integer.class, f.rule)).isZero();
     }
 
+    /** QA CAL-08 — 승인 대기 일정을 등록자는 취소, 밴드장은 거절을 동시에 눌러도 사용 횟수는 한 번만 깎인다. */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void simultaneous_cancel_and_reject_decrement_once(boolean cancelFirst) throws Exception {
+        String leader = signup("cancel-reject-l@band.app", "리더");
+        String member = signup("cancel-reject-m@band.app", "멤버");
+        long leaderId = myUserId(leader);
+        long memberId = myUserId(member);
+        long band = createBand(leader, "동시밴드");
+        join(member, issueInvite(leader, band, null));
+        setPermission(leader, band, "APPROVAL_REQUIRED");
+        long room = createRoom(leader, band, "{\"name\":\"room\"}");
+        long pending = createReservation(member, band, room, T10, T13);
+        assertThat(usageCount(leader, band, room)).isEqualTo(1);
+
+        Runnable cancel = () -> reservationService.cancel(band, pending, memberId);
+        Runnable reject = () -> reservationService.reject(band, pending, leaderId);
+        ErrorCode second = overlap(cancelFirst ? cancel : reject, cancelFirst ? reject : cancel);
+
+        assertThat(second).isEqualTo(cancelFirst ? ErrorCode.RESERVATION_NOT_PENDING : ErrorCode.RESERVATION_NOT_EDITABLE);
+        assertThat(usageCount(leader, band, room)).isZero();
+        assertThat(reservations.findById(pending).orElseThrow().getStatus())
+                .isEqualTo(cancelFirst ? ReservationStatus.CANCELLED : ReservationStatus.REJECTED);
+    }
+
     private long add(Fixture f, String title) {
         return setlists.add(f.band, f.occurrence, f.owner, new CreateSetlistItemRequest(title, null, null)).id();
     }

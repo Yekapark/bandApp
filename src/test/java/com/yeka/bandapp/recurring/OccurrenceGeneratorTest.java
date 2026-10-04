@@ -150,6 +150,24 @@ class OccurrenceGeneratorTest {
     }
 
     @Test
+    void leap_day_year_end_and_end_date_boundaries() {
+        // QA REC-02 — 윤일(2028-02-29 은 그 달 5번째 화요일 → 마지막 주), 종료일 하루 전 회차는 빠진다.
+        RecurringRule leap = rule(RecurringFrequency.MONTHLY, DayOfWeek.TUESDAY,
+                LocalDate.of(2028, 2, 29), LocalDate.of(2028, 5, 29));
+        assertThat(OccurrenceGenerator.occurrenceDates(leap, LocalDate.of(2028, 12, 31), null))
+                .containsExactly(LocalDate.of(2028, 2, 29), LocalDate.of(2028, 3, 28), LocalDate.of(2028, 4, 25));
+
+        // 격주가 해를 넘어도 14일 간격, 종료일 당일은 포함·하루 앞당기면 제외.
+        LocalDate start = LocalDate.of(2026, 12, 24);
+        RecurringRule onEnd = rule(RecurringFrequency.BIWEEKLY, DayOfWeek.THURSDAY, start, LocalDate.of(2027, 1, 21));
+        assertThat(OccurrenceGenerator.occurrenceDates(onEnd, LocalDate.of(2027, 3, 1), null))
+                .containsExactly(start, LocalDate.of(2027, 1, 7), LocalDate.of(2027, 1, 21));
+        RecurringRule beforeEnd = rule(RecurringFrequency.BIWEEKLY, DayOfWeek.THURSDAY, start, LocalDate.of(2027, 1, 20));
+        assertThat(OccurrenceGenerator.occurrenceDates(beforeEnd, LocalDate.of(2027, 3, 1), null))
+                .containsExactly(start, LocalDate.of(2027, 1, 7));
+    }
+
+    @Test
     void empty_when_the_first_occurrence_is_past_the_horizon() {
         LocalDate start = LocalDate.of(2026, 6, 1);
         RecurringRule rule = rule(RecurringFrequency.WEEKLY, start.getDayOfWeek(), start, null);

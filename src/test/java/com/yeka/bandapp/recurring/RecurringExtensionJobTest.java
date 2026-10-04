@@ -68,6 +68,38 @@ class RecurringExtensionJobTest extends RecurringApiSupport {
         assertThat(reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId)).hasSize(full);
     }
 
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Test
+    void resume_after_a_long_pause_does_not_backfill_the_paused_weeks() {
+        // QA REC-07 — 마지막 회차가 3주 전에 멈춘 채 PREMIUM 으로 돌아오면, 그 사이 3주는 채우지 않고 오늘부터 만든다.
+        String leader = signup("rec-resume@band.app", "리더");
+        long bandId = createBand(leader, "복귀밴드");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        LocalDate firstDate = today().plusDays(1);
+        long ruleId = createRule(leader, bandId, ruleBody(
+                roomId, "WEEKLY", firstDate.getDayOfWeek(), "15:00", "18:00", firstDate, null));
+        List<Reservation> occ = reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId);
+        int full = occ.size();
+        hardDeleteOccurrences(occ.subList(1, full));
+        // 남은 첫 회차를 4주 전으로 — "3주 넘게 쉬었다" 를 흉내 낸다.
+        jdbc.update("update reservations set start_at = start_at - interval '28 days', "
+                + "end_at = end_at - interval '28 days' where id = ?", occ.get(0).getId());
+
+        planMutationService.applyRevoke(bandId, java.time.Instant.now());
+        assertThat(recurringRuleService.extendRule(ruleId)).isZero();
+        makePremium(leader, bandId);
+        recurringRuleService.extendRule(ruleId);
+
+        java.time.Instant todayStart = today().atStartOfDay(java.time.ZoneId.of("Asia/Seoul")).toInstant();
+        List<Reservation> after = reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId);
+        assertThat(after.subList(1, after.size()))
+                .allSatisfy(r -> assertThat(r.getStartAt()).isAfterOrEqualTo(todayStart));
+        assertThat(after).hasSize(full + 1); // 4주 전 1건 + 오늘부터 지평선까지(처음과 같은 날짜들)
+        assertThat(recurringRuleService.extendRule(ruleId)).isZero(); // 다시 돌려도 늘지 않는다
+    }
+
     @Test
     void extend_fills_missing_future_occurrences_and_is_idempotent() {
         String leader = signup("rec-job-l@band.app", "리더");
