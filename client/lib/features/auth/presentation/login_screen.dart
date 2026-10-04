@@ -61,9 +61,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .loginEmail(_email.text, _password.text);
       // 성공 시 라우터 redirect 가 /home 으로 보낸다.
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = '로그인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      if (mounted) setState(() => _error = '로그인하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -110,12 +110,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref.read(authControllerProvider.notifier).loginKakao(token);
       // 성공 시 라우터 redirect 가 /home 으로 보낸다.
     } on ApiException catch (e) {
-      setState(() => _error = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (e) {
       debugPrint('kakao login failed: $e');
       final msg = e.toString().toLowerCase();
       final canceled = msg.contains('cancel') || msg.contains('access_denied');
-      if (!canceled) setState(() => _error = '카카오 로그인을 마치지 못했어요. 다시 시도해 주세요.');
+      if (!canceled && mounted) setState(() => _error = '카카오 로그인을 마치지 못했어요. 다시 시도해 주세요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

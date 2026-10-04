@@ -79,6 +79,8 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   }
 
   Future<void> _startPurchase() async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     if (_products.isEmpty) {
       _toast('지금은 결제를 시작할 수 없어요. 잠시 후 다시 시도해 주세요.');
       return;
@@ -89,7 +91,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
     setState(() => _busy = true);
     try {
       // 이미 구독 중·결제 보류 중인지는 buy 가 서버에서 새로 받아 확인한다.
-      await ref.read(purchaseSyncProvider).buy(_products, bandId: band.id);
+      await container.read(purchaseSyncProvider).buy(_products, bandId: band.id);
     } on NoPremiumSlotException {
       if (mounted) setState(() => _busy = false);
       _toast(NoPremiumSlotException.message);
@@ -269,10 +271,12 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   }
 
   Future<void> _redeemCoupon(int bandId, String code) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() => _busy = true);
     try {
-      await ref.read(planRepositoryProvider).redeemCoupon(bandId, code);
-      ref.invalidate(bandPlanProvider(bandId));
+      await container.read(planRepositoryProvider).redeemCoupon(bandId, code);
+      container.invalidate(bandPlanProvider(bandId));
       _toast('쿠폰을 사용했어요.');
     } on ApiException catch (e) {
       _toast(e.message);

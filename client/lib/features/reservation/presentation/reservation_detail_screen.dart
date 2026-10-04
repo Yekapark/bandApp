@@ -223,6 +223,8 @@ class _ReservationDetailScreenState
   }
 
   Future<void> _respond(int bandId, int meId, AttendanceStatus status) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     // 요청이 날고 있으면 무시한다(#21). 아직 참석 행이 없는 멤버(나중에 합류)가 연타하면 서버가 행을 두 번
     // 만들려다 둘째가 "동시에 처리되었습니다" 로 실패했다.
     if (_savingRsvp) return;
@@ -234,7 +236,7 @@ class _ReservationDetailScreenState
     });
     try {
       final board =
-          await ref.read(reservationRepositoryProvider).respondAttendance(
+          await container.read(reservationRepositoryProvider).respondAttendance(
                 bandId: bandId,
                 reservationId: widget.reservationId,
                 userId: meId,
@@ -252,7 +254,7 @@ class _ReservationDetailScreenState
       // 캐시가 계속 남아서, 화면을 벗어났다 돌아오면(_boardOverride 가 사라진 뒤) 응답 전의
       // 옛 값이 다시 그려진다. 캐시도 함께 무효화한다 — 이미 데이터가 있는 상태의 갱신이라
       // 로딩 스피너로 깜빡이지 않는다.
-      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      container.invalidate(reservationDetailProvider(_key(bandId)));
     } on ApiException catch (e) {
       _revertRsvp(bandId, status);
       _toast(e.message);
@@ -279,6 +281,8 @@ class _ReservationDetailScreenState
   }
 
   Future<void> _addSong(int bandId) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final song = await showDialog<_SongInput>(
       context: context,
       builder: (_) => const _SongDialog(),
@@ -286,14 +290,14 @@ class _ReservationDetailScreenState
     if (song == null) return;
     setState(() => _busy = true);
     try {
-      await ref.read(reservationRepositoryProvider).addSetlistItem(
+      await container.read(reservationRepositoryProvider).addSetlistItem(
             bandId: bandId,
             reservationId: widget.reservationId,
             title: song.title,
             artist: song.artist,
             referenceUrl: song.referenceUrl,
           );
-      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      container.invalidate(reservationDetailProvider(_key(bandId)));
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
@@ -304,6 +308,8 @@ class _ReservationDetailScreenState
   }
 
   Future<void> _editSong(int bandId, SetlistItem item) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final song = await showDialog<_SongInput>(
       context: context,
       builder: (_) => _SongDialog(initial: item),
@@ -311,7 +317,7 @@ class _ReservationDetailScreenState
     if (song == null) return;
     setState(() => _busy = true);
     try {
-      await ref.read(reservationRepositoryProvider).updateSetlistItem(
+      await container.read(reservationRepositoryProvider).updateSetlistItem(
             bandId: bandId,
             reservationId: widget.reservationId,
             itemId: item.id,
@@ -319,7 +325,7 @@ class _ReservationDetailScreenState
             artist: song.artist,
             referenceUrl: song.referenceUrl,
           );
-      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      container.invalidate(reservationDetailProvider(_key(bandId)));
     } on ApiException catch (e) {
       _toast(e.message);
     } catch (_) {
@@ -330,19 +336,21 @@ class _ReservationDetailScreenState
   }
 
   Future<void> _reorderSetlist(int bandId, List<int> itemIds) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     try {
-      await ref.read(reservationRepositoryProvider).reorderSetlist(
+      await container.read(reservationRepositoryProvider).reorderSetlist(
             bandId: bandId,
             reservationId: widget.reservationId,
             itemIds: itemIds,
           );
-      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      container.invalidate(reservationDetailProvider(_key(bandId)));
     } on ApiException catch (e) {
       _toast(e.message);
-      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      container.invalidate(reservationDetailProvider(_key(bandId)));
     } catch (_) {
       _toast('순서를 바꾸지 못했어요.');
-      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      container.invalidate(reservationDetailProvider(_key(bandId)));
     }
   }
 
@@ -360,12 +368,12 @@ class _ReservationDetailScreenState
     final container = ProviderScope.containerOf(context, listen: false);
     setState(() => _busy = true);
     try {
-      await ref.read(reservationRepositoryProvider).deleteSetlistItem(
+      await container.read(reservationRepositoryProvider).deleteSetlistItem(
             bandId: bandId,
             reservationId: widget.reservationId,
             itemId: item.id,
           );
-      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      container.invalidate(reservationDetailProvider(_key(bandId)));
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
@@ -418,6 +426,8 @@ class _ReservationDetailScreenState
   }
 
   Future<void> _confirmCancel(int bandId) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -446,13 +456,13 @@ class _ReservationDetailScreenState
 
     setState(() => _busy = true);
     try {
-      await ref.read(reservationRepositoryProvider).cancel(
+      await container.read(reservationRepositoryProvider).cancel(
             bandId: bandId,
             reservationId: widget.reservationId,
           );
-      ref.invalidate(monthReservationsProvider);
-      ref.invalidate(upcomingReservationsProvider(bandId));
-      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      container.invalidate(monthReservationsProvider);
+      container.invalidate(upcomingReservationsProvider(bandId));
+      container.invalidate(reservationDetailProvider(_key(bandId)));
       if (mounted) {
         _toast('합주를 취소했어요.');
         context.pop();
@@ -467,6 +477,8 @@ class _ReservationDetailScreenState
   }
 
   Future<void> _decide(int bandId, {required bool approve}) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     if (!approve) {
       final ok = await showDialog<bool>(
         context: context,
@@ -496,16 +508,16 @@ class _ReservationDetailScreenState
 
     setState(() => _busy = true);
     try {
-      final repo = ref.read(reservationRepositoryProvider);
+      final repo = container.read(reservationRepositoryProvider);
       if (approve) {
         await repo.approve(bandId: bandId, reservationId: widget.reservationId);
       } else {
         await repo.reject(bandId: bandId, reservationId: widget.reservationId);
       }
       _boardOverride = null;
-      ref.invalidate(monthReservationsProvider);
-      ref.invalidate(upcomingReservationsProvider(bandId));
-      ref.invalidate(reservationDetailProvider(_key(bandId)));
+      container.invalidate(monthReservationsProvider);
+      container.invalidate(upcomingReservationsProvider(bandId));
+      container.invalidate(reservationDetailProvider(_key(bandId)));
       _toast(approve ? '일정을 확정했어요.' : '일정을 거절했어요.');
     } on ApiException catch (e) {
       _toast(e.message);

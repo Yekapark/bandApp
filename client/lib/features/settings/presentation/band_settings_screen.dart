@@ -168,6 +168,8 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
   /// 밴드 삭제. 되돌릴 수 없어서 무엇이 지워지는지 먼저 보여주고,
   /// 밴드 이름을 정확히 입력해야만 삭제 버튼이 살아난다.
   Future<void> _deleteBand(int bandId, String bandName) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final plan = await _planOf(bandId);
     if (!mounted) return;
     // 자동 갱신 중이면 지워도 Google 은 계속 청구한다 — 서버도 막지만(409), 이름을 다 치게 하기 전에 알린다.
@@ -238,10 +240,10 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
 
     setState(() => _busy = true);
     try {
-      await ref.read(bandRepositoryProvider).deleteBand(bandId, bandName);
+      await container.read(bandRepositoryProvider).deleteBand(bandId, bandName);
       // 지워진 밴드가 선택 상태로 남지 않게 비우고 목록을 다시 받는다.
-      ref.read(selectedBandIdProvider.notifier).clear();
-      ref.invalidate(myBandsProvider);
+      container.read(selectedBandIdProvider.notifier).clear();
+      container.invalidate(myBandsProvider);
       if (mounted) {
         _toast('밴드를 삭제했어요.');
         context.go('/home');
@@ -256,12 +258,14 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
   }
 
   Future<void> _changePermission(int bandId, String mode) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() => _busy = true);
     try {
       await ref
           .read(bandRepositoryProvider)
           .updateSettings(bandId: bandId, permission: mode);
-      ref.invalidate(bandDetailProvider(bandId));
+      container.invalidate(bandDetailProvider(bandId));
       _toast('일정 등록 권한을 바꿨어요.');
     } on ApiException catch (e) {
       _toast(e.message);
@@ -273,6 +277,8 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
   }
 
   Future<void> _delegate(int bandId, BandMember m) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final plan = await _planOf(bandId);
     if (!mounted) return;
     final ok = await showDialog<bool>(
@@ -316,13 +322,13 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
     if (ok != true) return;
     setState(() => _busy = true);
     try {
-      await ref.read(bandRepositoryProvider).delegateLeadership(
+      await container.read(bandRepositoryProvider).delegateLeadership(
             bandId: bandId,
             newLeaderUserId: m.userId,
           );
-      ref.invalidate(bandMembersProvider(bandId));
-      ref.invalidate(bandDetailProvider(bandId));
-      ref.invalidate(myBandsProvider);
+      container.invalidate(bandMembersProvider(bandId));
+      container.invalidate(bandDetailProvider(bandId));
+      container.invalidate(myBandsProvider);
       _toast('${m.name} 님이 밴드장이 됐어요.');
     } on ApiException catch (e) {
       _toast(e.message);
@@ -381,6 +387,8 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
   }
 
   Future<void> _kick(int bandId, BandMember m) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -409,8 +417,8 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
       await ref
           .read(bandRepositoryProvider)
           .kickMember(bandId: bandId, targetUserId: m.userId);
-      ref.invalidate(bandMembersProvider(bandId));
-      ref.invalidate(myBandsProvider);
+      container.invalidate(bandMembersProvider(bandId));
+      container.invalidate(myBandsProvider);
       _toast('${m.name} 님을 내보냈어요.');
     } on ApiException catch (e) {
       _toast(e.message);
@@ -422,6 +430,8 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
   }
 
   Future<void> _leave(int bandId, bool isLeader) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     // 밴드장은 서버가 409 로 거절한다. 누를 수 있는 "나가기" 를 보여 주지 않고 할 수 있는 일만 안내한다.
     if (isLeader) {
       await showDialog<void>(
@@ -465,9 +475,9 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
     if (ok != true) return;
     setState(() => _busy = true);
     try {
-      await ref.read(bandRepositoryProvider).leaveBand(bandId);
-      ref.read(selectedBandIdProvider.notifier).clear();
-      ref.invalidate(myBandsProvider);
+      await container.read(bandRepositoryProvider).leaveBand(bandId);
+      container.read(selectedBandIdProvider.notifier).clear();
+      container.invalidate(myBandsProvider);
       if (mounted) {
         _toast('밴드에서 나왔어요.');
         context.go('/home');

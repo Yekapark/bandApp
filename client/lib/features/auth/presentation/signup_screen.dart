@@ -56,12 +56,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           );
       // 성공 → 라우터 redirect 가 /home 으로 이동시킨다.
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.message;
         _fieldErrors.addAll(e.fieldErrors);
       });
     } catch (_) {
-      setState(() => _error = '가입하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      if (mounted) setState(() => _error = '가입하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }

@@ -161,6 +161,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _deleteRoom(int bandId, Room room) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -188,7 +190,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       await ref
           .read(roomRepositoryProvider)
           .delete(bandId: bandId, roomId: room.id);
-      ref.invalidate(roomsProvider(bandId));
+      container.invalidate(roomsProvider(bandId));
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()

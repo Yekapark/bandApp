@@ -55,14 +55,16 @@ class _NotificationSettingsScreenState
   }
 
   Future<void> _save() async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() => _busy = true);
     try {
-      final saved = await ref.read(notificationRepositoryProvider).update(
+      final saved = await container.read(notificationRepositoryProvider).update(
             pushEnabled: _push,
             reminderOffsets: _offsets.toList()..sort(),
           );
       _seeded = false;
-      ref.invalidate(notificationSettingProvider);
+      container.invalidate(notificationSettingProvider);
       if (mounted) {
         _seed(saved);
         _toast('알림 설정을 저장했어요.');
