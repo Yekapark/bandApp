@@ -160,7 +160,8 @@ class _NotificationListScreenState
                   onTap: () {
                     final route = notificationRoute(n.type, n.reservationId);
                     if (route != null && route != Routes.notifications) {
-                      context.push(route);
+                      openNotification(
+                          GoRouter.of(context), ref.invalidate, route);
                     }
                   },
                 );

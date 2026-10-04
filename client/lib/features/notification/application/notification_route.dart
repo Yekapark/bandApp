@@ -1,4 +1,9 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../routing/app_router.dart';
+import '../../reservation/application/calendar_providers.dart';
+import '../../settlement/application/settlement_providers.dart';
 
 /// 알림을 눌렀을 때 갈 화면(LAUNCH_REVIEW U6). 푸시 알림을 눌렀을 때와 앱 안 알림 목록을 눌렀을 때가
 /// **같은 규칙**을 쓴다 — 예전에는 목록이 모든 알림을 `/reservations/{id}` 로 보내서, 요금제 알림(일정 id 가
@@ -33,3 +38,31 @@ bool notificationBandGone(int? bandId, Iterable<int>? myBandIds) =>
     myBandIds != null &&
     myBandIds.isNotEmpty &&
     !myBandIds.contains(bandId);
+
+/// 하단 탭 화면(캘린더 등). 이 화면들은 탭 껍데기(StatefulShellRoute) 안에 있어서 **push 하면 껍데기가 하나 더
+/// 쌓이고 본문이 빈 화면이 된다**(U39·QA-R05 — 취소 알림을 누르면 캘린더 탭만 보이고 본문이 비었다). 탭으로 이동(go)한다.
+bool isTabRoute(String route) => const {
+      Routes.home,
+      Routes.calendar,
+      Routes.map,
+      Routes.board,
+      Routes.settlements,
+    }.contains(route);
+
+/// 알림을 눌러 화면을 연다. 알림은 "다른 사람이 바꿨다" 는 뜻이라 받아 둔 일정·정산 상세를 먼저 버린다 —
+/// 그 화면이 이미 뒤에 열려 있으면 autoDispose 만으로는 옛 값이 남는다(U38·QA-R04).
+void openNotification(GoRouter router,
+    void Function(ProviderOrFamily provider) invalidate, String route) {
+  invalidate(settlementProvider);
+  invalidate(reservationDetailProvider);
+  openNotificationRoute(router, route);
+}
+
+/// 알림이 가리키는 화면을 연다 — 탭 화면은 go, 상세·요금제처럼 위에 얹는 화면은 push(뒤로 가면 알림 목록으로).
+void openNotificationRoute(GoRouter router, String route) {
+  if (isTabRoute(route)) {
+    router.go(route);
+  } else {
+    router.push(route);
+  }
+}

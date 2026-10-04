@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/auth_controller.dart';
 import '../../routing/app_router.dart';
@@ -100,11 +101,24 @@ class InviteLinkHandler {
   }
 }
 
+/// 합류 화면을 연다. **이미 합류 화면이면 새로 쌓지 않고 바꾼다(U37·QA-R06)** — 같은 링크를 두 번 열면
+/// 합류 화면이 두 겹 쌓여 앱의 뒤로를 두 번 눌러야 홈으로 갔다. 코드가 다른 링크면 새 코드로 바뀐다.
+void openInvite(GoRouter router, String location) {
+  // currentConfiguration.uri 는 push 로 쌓은 화면이 아니라 바탕 경로(/home)를 준다 — 맨 위 화면은 last 로 본다.
+  final top = router.routerDelegate.currentConfiguration;
+  final onJoin = top.isNotEmpty && top.last.matchedLocation == Routes.joinBand;
+  if (onJoin) {
+    router.replace(location);
+  } else {
+    router.push(location);
+  }
+}
+
 /// 앱이 사는 동안 하나만 둔다. `BandApp` 이 watch 해서 시작시킨다.
 final inviteLinkHandlerProvider = Provider<InviteLinkHandler>((ref) {
   final handler = InviteLinkHandler(
     isAuthenticated: () => ref.read(authControllerProvider).isAuthenticated,
-    push: (location) => ref.read(routerProvider).push(location),
+    push: (location) => openInvite(ref.read(routerProvider), location),
   )..start();
   ref.onDispose(handler.dispose);
   return handler;
