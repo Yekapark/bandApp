@@ -920,11 +920,16 @@ class _SetlistBlockState extends State<_SetlistBlock> {
             ),
           ],
           if (widget.editable) ...[
-            GestureDetector(
-              onTap: widget.busy ? null : () => widget.onDelete(item),
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6),
-                child: Icon(Icons.close, size: 16, color: AppColors.textFaint),
+            Semantics(
+              button: true,
+              label: '곡 삭제', // TalkBack(UI-04)
+              child: GestureDetector(
+                onTap: widget.busy ? null : () => widget.onDelete(item),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 6),
+                  child:
+                      Icon(Icons.close, size: 16, color: AppColors.textFaint),
+                ),
               ),
             ),
             if (draggable)

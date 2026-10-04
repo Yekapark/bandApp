@@ -40,6 +40,11 @@ class Fmt {
   static String dateKo(DateTime local) =>
       '${local.month}월 ${local.day}일 (${_dows[local.weekday - 1]})';
 
+  /// 올해면 "3월 1일 (월)", 아니면 "2027년 3월 1일 (월)" — 정기 일정 종료일처럼 해를 넘길 수 있는 날짜.
+  static String dateKoMaybeYear(DateTime local) => local.year == DateTime.now().year
+      ? dateKo(local)
+      : '${local.year}년 ${dateKo(local)}';
+
   /// UTC 를 로컬로 바꿔 "9월 10일 (목)" 로.
   static String dateKoUtc(DateTime utc) => dateKo(utc.toLocal());
 

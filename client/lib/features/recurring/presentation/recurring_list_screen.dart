@@ -248,6 +248,7 @@ class _RuleCard extends StatelessWidget {
             ),
             if (canDelete)
               IconButton(
+                tooltip: '정기 일정 삭제',
                 onPressed: onDelete,
                 icon: const Icon(Icons.delete_outline,
                     size: 20, color: AppColors.textDim),

@@ -205,22 +205,28 @@ class _MonthHeader extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        _RoundIcon(icon: Icons.chevron_left, onTap: onPrev),
+        _RoundIcon(icon: Icons.chevron_left, label: '이전 달', onTap: onPrev),
         const SizedBox(width: 6),
-        _RoundIcon(icon: Icons.chevron_right, onTap: onNext),
+        _RoundIcon(icon: Icons.chevron_right, label: '다음 달', onTap: onNext),
       ],
     );
   }
 }
 
 class _RoundIcon extends StatelessWidget {
-  const _RoundIcon({required this.icon, required this.onTap});
+  const _RoundIcon(
+      {required this.icon, required this.label, required this.onTap});
   final IconData icon;
+  final String label; // TalkBack 이 읽을 이름(UI-04)
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
       onTap: onTap,
       child: Container(
         width: 34,
@@ -232,6 +238,7 @@ class _RoundIcon extends StatelessWidget {
         ),
         child: Icon(icon, size: 20, color: AppColors.textSecondary),
       ),
+    ),
     );
   }
 }

@@ -111,6 +111,18 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       _title.text.trim().isNotEmpty &&
       _content.text.trim().isNotEmpty;
 
+  /// 입력칸의 maxLength 는 글자(이모지 1개 = 1)로 세지만 서버(@Size)는 UTF-16 단위라 이모지가 2 이상이다.
+  /// 이모지가 많으면 칸은 받아 주고 서버가 이유 없는 400 을 냈다(POST-03). Dart 의 length 가 서버와 같은 단위다.
+  String? get _lengthError {
+    if (_title.text.trim().length > 100) {
+      return '제목이 너무 길어요. 이모지는 한 개를 2자 이상으로 세요.';
+    }
+    if (_content.text.trim().length > 4000) {
+      return '본문이 너무 길어요. 이모지는 한 개를 2자 이상으로 세요.';
+    }
+    return null;
+  }
+
   /// 글은 만들어졌는데 첨부 일부를 못 올린 상태(새 글 → "사진 추가" 모드).
   bool get _hasFailedPending => _isEdit && _pending.isNotEmpty;
 
@@ -313,6 +325,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   /// 저장됐으므로 사용자는 남은 것만 다시 시도하면 된다.
   Future<void> _createThenAttach(int bandId) async {
     if (_busy) return; // 같은 프레임의 연타 — 버튼이 아직 비활성으로 다시 그려지기 전
+    if (_lengthError case final err?) return _toast(err);
     setState(() => _busy = true);
     try {
       final detail = await ref.read(boardRepositoryProvider).create(
@@ -403,6 +416,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   }
 
   Future<void> _saveEdit(int bandId) async {
+    if (_lengthError case final err?) return _toast(err);
     setState(() => _busy = true);
     try {
       await ref.read(boardRepositoryProvider).update(
@@ -869,7 +883,11 @@ class _PendingThumb extends StatelessWidget {
         Positioned(
           top: 2,
           right: 2,
-          child: GestureDetector(
+          // TalkBack 이 이름 없는 "버튼" 으로만 읽었다(UI-04).
+          child: Semantics(
+            button: true,
+            label: '첨부 빼기',
+            child: GestureDetector(
             onTap: onRemove,
             child: Container(
               decoration: const BoxDecoration(
@@ -879,6 +897,7 @@ class _PendingThumb extends StatelessWidget {
               padding: const EdgeInsets.all(3),
               child: const Icon(Icons.close, size: 14, color: Colors.white),
             ),
+          ),
           ),
         ),
       ],
@@ -917,7 +936,11 @@ class _MediaThumb extends StatelessWidget {
         Positioned(
           top: 2,
           right: 2,
-          child: GestureDetector(
+          // TalkBack 이 이름 없는 "버튼" 으로만 읽었다(UI-04).
+          child: Semantics(
+            button: true,
+            label: '첨부 빼기',
+            child: GestureDetector(
             onTap: onRemove,
             child: Container(
               decoration: const BoxDecoration(
@@ -927,6 +950,7 @@ class _MediaThumb extends StatelessWidget {
               padding: const EdgeInsets.all(3),
               child: const Icon(Icons.close, size: 14, color: Colors.white),
             ),
+          ),
           ),
         ),
       ],
