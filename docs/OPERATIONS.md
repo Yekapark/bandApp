@@ -362,13 +362,159 @@ FROM notification_dispatches WHERE user_id = 4 ORDER BY id DESC LIMIT 20;
 
 ---
 
-## 7. 백업에서 되돌리기
+## 7. 백업에서 되돌리기 — 새 PC(포맷 뒤)에서도 따라 하는 복구 안내
 
-[DEPLOY.md](DEPLOY.md) 의 복구 절을 따른다. 덤프는 하루 한 번 R2 로 올라가고 7개를 보관한다.
+> 이 절만 보고 **아무것도 깔려 있지 않은 Windows PC** 에서 백업을 열고 복원할 수 있게 썼다.
+> 서버 쪽 스크립트 설명은 [DEPLOY.md §4·§5](DEPLOY.md) 에 있다. 마지막 실제 훈련: **2026-10-05**(§7-8).
+
+### 7-0. 백업이 어디에 몇 개 있나
+
+| 어디 | 무엇 | 잠김 | 개수 | 언제 |
+|---|---|---|---|---|
+| 서버 `/opt/bandapp/backups/` | `bandapp-<UTC시각>.dump` | **안 잠김**(서버가 털리면 DB 도 털리므로 잠가 봐야 소용없다) | 최근 7개 | 매일 03:30 KST |
+| R2 `s3://bandule-prod/db-backups/` | `bandapp-<UTC시각>.dump.gpg` | **공개키로 잠김** — 개인키가 있어야 열린다 | 최근 7개 | 매일 03:30 KST |
+| 서버 `backups/predeploy/`, R2 `db-backups/predeploy/` | 배포 직전 덤프 | 위와 같음 | 각 7개 | 서버 코드가 바뀐 배포 때만 |
+
+- **서버가 살아 있으면** 서버의 안 잠긴 덤프로 복원한다(§7-6-A). 개인키가 필요 없다.
+- **서버가 날아갔으면** R2 의 잠긴 사본을 PC 로 받아 개인키로 연다(§7-2~§7-4) → 새 서버에 올린다(§7-6-B).
+- 덤프 하나 = **회원정보 전체**(이메일·이름·비밀번호 해시·밴드·일정·정산). 다룰 때 §7-7 을 지킨다.
+- 파일 이름의 시각은 **UTC** 다. `20261003T183001Z` = 2026-10-04 03:30 KST.
+
+### 7-1. 새 PC 에 필요한 것
+
+| 필요한 것 | 어디서 | 확인 |
+|---|---|---|
+| Git for Windows (Git Bash, **gpg 2.4 포함**) | git-scm.com | Git Bash 에서 `gpg --version` |
+| Docker Desktop | docker.com — 설치 뒤 한 번 실행해 둔다 | `docker info` 가 오류 없이 나온다 |
+| 이 저장소 | `git clone https://github.com/Yekapark/bandApp.git` | — |
+| **백업 개인키 파일 + 그 암호** | 사용자가 따로 보관한 곳(2곳 이상 — QA OPS-16) | 지문 `B4A794DF793BE679250199A84218121C3F08D54F` |
+| R2 접근 값 4개 (`R2_ACCOUNT_ID` `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` `R2_BUCKET`) | 서버 `/opt/bandapp/.env.prod`, 또는 Cloudflare 대시보드 › R2 › API 토큰에서 새로 발급 | 저장소에는 **없다**(git 미추적) |
+| (서버에 올릴 때) 배포 SSH 키 `~/.ssh/bandule_deploy` | 사용자 보관. 잃었으면 서버 업체 콘솔에서 새 공개키를 등록 | `ssh -i ~/.ssh/bandule_deploy root@<서버> 'bandule health'` |
+
+> **개인키를 잃으면 R2 사본은 아무도 못 연다.** 저장소의 공개키(`deploy/backup/backup-pubkey.asc`)는 잠그기만 한다.
+> 개인키를 처음 만든 PC 에서 내보내 두는 법: `gpg --export-secret-keys --armor B4A794DF793BE679250199A84218121C3F08D54F > bandule-backup-secret.asc`
+> (이 파일과 암호를 **서로 다른 곳**에 둔다 — 예: 파일은 USB, 암호는 비밀번호 관리자).
+
+### 7-2. 개인키 가져오기 (새 PC 에서 한 번)
 
 ```bash
-cd /opt/bandapp && ./deploy/backup/pg-restore.sh --dry-run   # 먼저 훈련 모드로
+gpg --import bandule-backup-secret.asc            # 보관해 둔 개인키 파일. 암호를 묻는다
+gpg --list-secret-keys --keyid-format long        # 아래가 보이면 된다
+#   sec   rsa4096/4218121C3F08D54F
+#         B4A794DF793BE679250199A84218121C3F08D54F
+#   uid   bandule-backup <notice@bandule.com>
 ```
+
+신뢰도(trust) 설정은 필요 없다 — 여는 데는 개인키만 있으면 된다.
+
+### 7-3. R2 에서 잠긴 백업 받기 (PC 로 바로)
+
+작업 폴더는 **저장소 밖**에 둔다(예: `~/restore`). R2 키는 화면·셸 기록에 남지 않게 `read` 로 넣는다.
+
+```bash
+mkdir -p ~/restore && cd ~/restore
+read -p  'R2_ACCOUNT_ID: '        R2_ACCOUNT_ID
+read -p  'R2_BUCKET: '            R2_BUCKET             # 운영은 bandule-prod
+read -p  'R2_ACCESS_KEY_ID: '     AWS_ACCESS_KEY_ID
+read -sp 'R2_SECRET_ACCESS_KEY: ' AWS_SECRET_ACCESS_KEY; echo
+export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+
+# Git Bash 는 /backup 같은 경로를 C:/... 로 바꿔 버린다 — MSYS_NO_PATHCONV=1 로 막는다.
+r2() {
+  MSYS_NO_PATHCONV=1 docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION=auto \
+    -v "$(pwd -W 2>/dev/null || pwd):/backup" amazon/aws-cli \
+    --endpoint-url "https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com" "$@"
+}
+r2 s3 ls "s3://$R2_BUCKET/db-backups/"                                  # 목록 — 맨 아래가 최신
+r2 s3 cp "s3://$R2_BUCKET/db-backups/bandapp-<UTC시각>.dump.gpg" /backup/
+```
+
+- 목록에 `.gpg` 가 아닌 `.dump` 가 보이면 암호화 도입(2026-10-02) 전의 **평문 사본**이다. 7개 보관 규칙으로 저절로 밀려나지만,
+  당장 지우려면 `r2 s3 rm "s3://$R2_BUCKET/db-backups/<그 파일>"`(되돌릴 수 없다).
+- 서버가 살아 있고 R2 키를 PC 에 넣기 싫으면 서버에서 받아 `scp` 로 가져와도 된다([DEPLOY.md §5-2](DEPLOY.md)).
+
+### 7-4. 열기 (복호화)
+
+```bash
+gpg --output bandapp-<UTC시각>.dump --decrypt bandapp-<UTC시각>.dump.gpg     # 개인키 암호를 묻는다
+head -c 5 bandapp-<UTC시각>.dump; echo                                         # PGDMP 로 시작하면 정상
+```
+
+### 7-5. 복원 훈련 — PC 의 임시 DB 로 (운영 서버를 건드리지 않는다)
+
+분기마다, 그리고 개인키·PC 를 바꾼 뒤에 한 번씩 한다. 운영과 같은 **Postgres 16** 을 쓴다.
+
+```bash
+DUMP=bandapp-<UTC시각>.dump
+docker run -d --name bandule-restore-drill -e POSTGRES_USER=bandapp -e POSTGRES_PASSWORD=drill \
+  -e POSTGRES_DB=restore_drill postgres:16-alpine
+until docker exec bandule-restore-drill pg_isready -U bandapp -d restore_drill >/dev/null 2>&1; do sleep 1; done
+
+docker exec -i bandule-restore-drill pg_restore --list < "$DUMP" | grep -c "TABLE DATA"    # 0 이 아니면 읽힌다
+docker exec -i bandule-restore-drill pg_restore -U bandapp -d restore_drill --no-owner --exit-on-error < "$DUMP"
+docker exec bandule-restore-drill psql -U bandapp -d restore_drill -tAc "select
+  'users='||(select count(*) from users)||' bands='||(select count(*) from bands)
+  ||' reservations='||(select count(*) from reservations)||' settlements='||(select count(*) from settlements)
+  ||' flyway='||(select max(installed_rank) from flyway_schema_history where success);"
+```
+
+**운영과 맞는지 대조** — 백업 시각(파일 이름의 UTC 시각) 뒤에 생긴 행을 운영에서 세어 더하면 같아야 한다. 운영은 **읽기만** 한다.
+서버에 접속해 [§1-B](#1-b-운영-db-vm--ssh-터널로만) 의 psql 로 들어가서:
+
+```sql
+-- '2026-10-03T18:30:01Z' 자리에 백업 파일 이름의 시각을 넣는다
+select (select count(*) from users) users,  (select count(*) from users where created_at > '2026-10-03T18:30:01Z') users_after,
+       (select count(*) from bands) bands,  (select count(*) from bands where created_at > '2026-10-03T18:30:01Z') bands_after,
+       (select max(installed_rank) from flyway_schema_history where success) flyway;
+```
+
+복원본 건수 + `*_after` = 운영 건수, `flyway` 같음 → 통과. (그 사이 삭제가 있었으면 그만큼 어긋난다 — 원인을 적어 둔다.)
+
+끝나면 **바로 지운다** — 컨테이너와 그 데이터, 열린 덤프, 받은 `.gpg`:
+
+```bash
+docker rm -f -v bandule-restore-drill      # -v: 이 컨테이너의 데이터 볼륨까지. docker volume prune 은 쓰지 않는다(다른 볼륨도 지운다)
+rm -f bandapp-*.dump bandapp-*.dump.gpg
+```
+
+### 7-6. 실제 복구
+
+**A. 서버는 살아 있고 데이터만 깨졌을 때** — 서버의 안 잠긴 덤프로. 복원하는 동안 앱이 멈춘다.
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@<서버>
+cd /opt/bandapp && ls -1 backups/bandapp-*.dump | tail -3                              # 되돌릴 시점 고르기
+RESTORE_DB=restore_drill sh deploy/backup/pg-restore.sh backups/bandapp-<시각>.dump    # 먼저 훈련 DB 로 확인('yes')
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T postgres dropdb -U bandapp restore_drill
+sh deploy/backup/pg-restore.sh backups/bandapp-<시각>.dump                             # 운영 DB 를 덮어쓴다('yes')
+```
+
+`pg-restore.sh` 가 앱 정지 → 스키마 비우기 → 복원 → 행 수 출력 → 앱 재기동까지 한다.
+
+**B. 서버가 통째로 날아갔을 때** — 새 VM 을 [DEPLOY.md §1·§2](DEPLOY.md) 대로 올린 뒤(앱이 뜨면 빈 스키마가 생긴다),
+§7-3·§7-4 로 PC 에서 연 덤프를 올려 복원한다.
+
+```bash
+scp -i ~/.ssh/bandule_deploy bandapp-<시각>.dump root@<새 서버>:/opt/bandapp/backups/
+ssh -i ~/.ssh/bandule_deploy root@<새 서버> 'cd /opt/bandapp && sh deploy/backup/pg-restore.sh backups/bandapp-<시각>.dump'
+rm -f bandapp-<시각>.dump                                                                # PC 에서 바로 지운다
+```
+
+DB 밖이라 복구되지 않는 것(R2 사진·영상의 참조, Redis 로그인 상태, 인증서)은 [DEPLOY.md §5-2](DEPLOY.md) 표를 본다.
+
+### 7-7. 덤프를 다룰 때 지킬 것
+
+- **저장소 폴더 안에 두지 않는다.** 이 저장소는 공개다. `tools/check-repo-rules.sh`·pre-commit 이 `*.dump` 를 막지만 그것만 믿지 않는다.
+- 연 덤프는 쓰고 나면 **바로 지운다**(PC·서버 임시 위치 모두).
+- 개인키 암호·R2 키를 명령줄 인자나 문서에 적지 않는다(§7-3 의 `read`).
+- 메신저·메일·클라우드 드라이브로 덤프를 옮기지 않는다. 꼭 옮겨야 하면 `.gpg` 상태로.
+
+### 7-8. 훈련 기록
+
+| 날짜 | 어디서 | 백업 | 결과 |
+|---|---|---|---|
+| 2026-09-06 | 로컬 스택(V13) | 로컬 덤프 | `restore_drill` 복원·운영 경로 복원 모두 성공([DEPLOY.md §5-3](DEPLOY.md)) |
+| **2026-10-05** | 사용자 PC(Windows, Git Bash gpg 2.4.7, Docker 29.7.2, `postgres:16-alpine`) — 클로드, 복호화는 사용자 | R2 `bandapp-20261003T183001Z.dump.gpg`(40,526 B) | R2 → PC 로 받음 → 개인키로 복호화(147,638 B, `PGDMP`) → `pg_restore --list` 테이블 데이터 24개 → 임시 DB 복원 성공: users 24·bands 16·reservations 56·settlements 6·settlement_shares 15·flyway 23. 운영(읽기만): users 28(백업 뒤 가입 4)·bands 17(뒤 1)·reservations 56(뒤 0)·flyway 23 → **백업 시점과 일치**. 덤프·`.gpg`·컨테이너 삭제. QA OPS-02·OPS-11 |
 
 ---
 
