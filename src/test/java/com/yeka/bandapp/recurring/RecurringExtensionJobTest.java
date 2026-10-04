@@ -83,9 +83,11 @@ class RecurringExtensionJobTest extends RecurringApiSupport {
         List<Reservation> occ = reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId);
         int full = occ.size();
         hardDeleteOccurrences(occ.subList(1, full));
-        // 남은 첫 회차를 4주 전으로 — "3주 넘게 쉬었다" 를 흉내 낸다.
+        // 남은 첫 회차를 4주 전으로 — "3주 넘게 쉬었다" 를 흉내 낸다. 배치는 원래 슬롯(original_start_at)으로
+        // 연장 위치를 정하므로 그것도 함께 옮긴다(시각만 옮기면 "사용자가 옮긴 회차" 가 된다).
         jdbc.update("update reservations set start_at = start_at - interval '28 days', "
-                + "end_at = end_at - interval '28 days' where id = ?", occ.get(0).getId());
+                + "end_at = end_at - interval '28 days', original_start_at = original_start_at - interval '28 days' "
+                + "where id = ?", occ.get(0).getId());
 
         planMutationService.applyRevoke(bandId, java.time.Instant.now());
         assertThat(recurringRuleService.extendRule(ruleId)).isZero();
