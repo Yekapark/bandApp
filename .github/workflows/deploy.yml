@@ -105,13 +105,25 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
-          envs: GHCR_TOKEN,GHCR_USER,IMAGE_TAG,GIT_SHA
+          envs: GHCR_TOKEN,GHCR_USER,IMAGE_TAG,GIT_SHA,FORCE
           script: |
             set -eu
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             cd /opt/bandapp
+            git fetch --quiet origin main
+            # 서버가 바뀌지 않은 머지(앱·문서·테스트·워크플로)로는 재시작하지 않는다. 재시작마다 잠깐 502 가 나서
+            # 실기기 QA 중에 문서·앱 머지 6건이 502 를 반복시켰다(2026-10-04).
+            # 기준은 "직전 커밋" 이 아니라 **지금 서버에 배포돼 있는 커밋**(이 클론의 HEAD — 배포 때마다 그 커밋으로
+            # checkout 한다). 위 fresh 단계가 중간 커밋을 건너뛰므로, 직전 커밋과만 비교하면 앞 커밋의 서버 변경이
+            # 뒤 문서 커밋에 묻혀 영영 배포되지 않는다. 건너뛸 때는 HEAD 를 그대로 둬서 다음 비교에 쌓이게 한다.
+            # 비교가 실패하면(커밋을 못 찾는 등) 배포한다. 수동 실행(롤백·재배포)은 항상 배포한다.
+            deployed=$(git rev-parse HEAD)
+            if [ "$FORCE" != "true" ] && git diff --quiet "$deployed" "$GIT_SHA" --                 src/main build.gradle.kts settings.gradle.kts gradle Dockerfile docker-compose.prod.yml deploy; then
+              echo "== 서버 코드 변경 없음 ($deployed → $GIT_SHA) — 재시작하지 않는다"
+              exit 0
+            fi
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             # 이미지와 같은 커밋의 compose·nginx·스크립트를 쓴다(origin/main 이면 그사이 들어온 커밋이 섞인다).
-            git fetch --quiet origin main && git checkout --quiet -f "$GIT_SHA"
+            git checkout --quiet -f "$GIT_SHA"
             sh deploy/deploy.sh "$IMAGE_TAG"
         env:
           # 워크플로 실행 동안만 유효한 토큰이라 VM 에 PAT 를 심어 둘 필요가 없다.
@@ -119,3 +131,4 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           IMAGE_TAG: ${{ steps.vars.outputs.sha }}
           GIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
