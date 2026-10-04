@@ -12,6 +12,7 @@ import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/discard_changes.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../band/application/band_providers.dart';
+import '../../band/data/band_models.dart';
 import '../../home/application/home_providers.dart';
 import '../application/calendar_providers.dart';
 import '../data/reservation_models.dart';
@@ -52,9 +53,14 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
   String _snapshot() =>
       '$_date|$_start|$_hours|${_room?.id}|${_cost.text}|${_note.text}';
 
+  /// 화면을 연 밴드에 고정한다(POST-10·UI-06). 작성 중 밴드에서 나가거나 알림을 눌러 밴드가 바뀌면
+  /// "현재 밴드" 가 다른 밴드로 넘어간다 — 저장할 때 그걸 읽으면 엉뚱한 밴드에 써진다.
+  MyBand? _band;
+
   @override
   void initState() {
     super.initState();
+    _band = ref.read(currentBandProvider);
     final e = widget.existing;
     if (e != null) {
       final s = e.startAt.toLocal();
@@ -110,7 +116,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
   }
 
   Future<void> _pickRoom() async {
-    final band = ref.read(currentBandProvider);
+    final band = _band;
     if (band == null) return;
     final room = await showRoomPickerSheet(context, band.id);
     if (room != null) setState(() => _room = room);
@@ -123,7 +129,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
   }
 
   Future<void> _submit() async {
-    final band = ref.read(currentBandProvider);
+    final band = _band;
     final room = _room;
     if (band == null || room == null || _loading) return;
 
@@ -225,7 +231,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final band = ref.watch(currentBandProvider);
+    final band = _band;
     final memberCount = band?.memberCount ?? 0;
     final cost = _costValue;
     // 정산과 같은 셈: 내림한 몫, 안 나눠떨어지면 "~"(몇 명이 1원씩 더 낸다). 예전에는 올림이라 정산 화면과 금액이 달랐다.

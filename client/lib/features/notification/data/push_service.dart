@@ -232,6 +232,13 @@ class PushService {
       data['type']?.toString(),
       int.tryParse('${data['reservationId'] ?? ''}'),
     );
+    final myBandIds = _ref.read(myBandsProvider).valueOrNull?.map((b) => b.id);
+    if (notificationBandGone(bandId, myBandIds)) {
+      scaffoldMessengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('이미 나간 밴드의 알림이에요.')));
+      return;
+    }
     // 밴드를 여러 개 가진 사람은 지금 보고 있는 밴드가 알림의 밴드가 아닐 수 있다. 화면들이 "현재 밴드" 로
     // 데이터를 읽으므로 먼저 바꾼다(멤버가 아닌 밴드면 목록의 첫 밴드로 돌아간다).
     if (bandId != null) _ref.read(selectedBandIdProvider.notifier).select(bandId);

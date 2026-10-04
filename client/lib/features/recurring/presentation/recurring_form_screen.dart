@@ -11,6 +11,7 @@ import '../../../shared/widgets/app_scaffold.dart';
 import '../../../shared/widgets/discard_changes.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../band/application/band_providers.dart';
+import '../../band/data/band_models.dart';
 import '../../reservation/application/calendar_providers.dart';
 import '../../home/application/home_providers.dart';
 import '../application/recurring_providers.dart';
@@ -48,9 +49,14 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
   String _snapshot() => '${_room?.id}|$_freq|$_weekday|$_start|$_end|'
       '$_startDate|$_endDate|${_cost.text}|${_note.text}';
 
+  /// 화면을 연 밴드에 고정한다(POST-10·UI-06). 작성 중 밴드에서 나가거나 알림을 눌러 밴드가 바뀌면
+  /// "현재 밴드" 가 다른 밴드로 넘어간다 — 저장할 때 그걸 읽으면 엉뚱한 밴드에 써진다.
+  MyBand? _band;
+
   @override
   void initState() {
     super.initState();
+    _band = ref.read(currentBandProvider);
     final now = DateTime.now();
     _weekday = now.weekday;
     _startDate = DateTime(now.year, now.month, now.day);
@@ -76,7 +82,7 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Future<void> _pickRoom() async {
-    final band = ref.read(currentBandProvider);
+    final band = _band;
     if (band == null) return;
     final room = await showRoomPickerSheet(context, band.id);
     if (room != null) setState(() => _room = room);
@@ -117,7 +123,7 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
   }
 
   Future<void> _submit() async {
-    final band = ref.read(currentBandProvider);
+    final band = _band;
     final room = _room;
     if (band == null || room == null || _loading) return;
 
