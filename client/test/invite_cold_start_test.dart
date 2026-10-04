@@ -38,7 +38,7 @@ void main() {
     );
     handler = InviteLinkHandler(
       isAuthenticated: () => status == AuthStatus.authenticated,
-      push: router.push,
+      push: (location) => openInvite(router, location),
     );
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
   }
@@ -90,5 +90,35 @@ void main() {
     expect(InviteLinkHandler.joinLocation('A&b=1'),
         '${Routes.joinBand}?code=A%26b%3D1');
     expect(InviteLinkHandler.joinLocation(''), Routes.joinBand);
+  });
+
+  testWidgets('U37 같은 링크를 두 번 받아도 합류 화면은 한 겹 — 뒤로 한 번에 홈', (tester) async {
+    await boot(tester);
+    await become(tester, AuthStatus.authenticated);
+    expect(find.text('HOME'), findsOneWidget);
+
+    handler.handle(link);
+    await tester.pumpAndSettle();
+    handler.handle(link);
+    await tester.pumpAndSettle();
+    expect(find.text('JOIN:ABCD2345'), findsOneWidget);
+
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('HOME'), findsOneWidget);
+  });
+
+  testWidgets('U37 합류 화면에서 다른 코드 링크가 오면 그 코드로 바뀐다', (tester) async {
+    await boot(tester);
+    await become(tester, AuthStatus.authenticated);
+    handler.handle(link);
+    await tester.pumpAndSettle();
+    handler.handle(Uri.parse('bandule://invite/WXYZ6789'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('JOIN:WXYZ6789'), findsOneWidget);
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('HOME'), findsOneWidget);
   });
 }

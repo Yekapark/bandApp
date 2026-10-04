@@ -245,7 +245,7 @@ class PushService {
     if (route == null) return;
     // 콜드 스타트면 라우터가 아직 스플래시·홈으로 가는 중이다 — 한 프레임 뒤에 얹는다.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ref.read(routerProvider).push(route);
+      openNotification(_ref.read(routerProvider), _ref.invalidate, route);
     });
   }
 

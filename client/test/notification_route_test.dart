@@ -1,6 +1,8 @@
 import 'package:bandapp_client/features/notification/application/notification_route.dart';
 import 'package:bandapp_client/routing/app_router.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 /// LAUNCH_REVIEW U6 — 알림을 누르면 그 알림의 화면으로 간다.
 void main() {
@@ -37,5 +39,45 @@ void main() {
     expect(notificationBandGone(3, null), isFalse);
     expect(notificationBandGone(3, const []), isFalse);
     expect(notificationBandGone(null, [1]), isFalse);
+  });
+
+  // U39·QA-R05 — 탭 화면을 push 하면 탭 껍데기가 하나 더 쌓여 본문이 빈 화면이 됐다(go_router assertion).
+  testWidgets('취소 알림 → 캘린더 탭이 실제로 보인다, 일정 알림 → 상세가 위에 얹힌다', (tester) async {
+    final router = GoRouter(initialLocation: Routes.home, routes: [
+      StatefulShellRoute.indexedStack(
+        builder: (_, __, shell) => Scaffold(body: shell),
+        branches: [
+          StatefulShellBranch(routes: [
+            GoRoute(path: Routes.home, builder: (_, __) => const Text('HOME')),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: Routes.calendar, builder: (_, __) => const Text('CAL')),
+          ]),
+        ],
+      ),
+      GoRoute(
+          path: Routes.notifications,
+          builder: (_, __) => const Scaffold(body: Text('NOTI'))),
+      GoRoute(
+          path: '/reservations/:id',
+          builder: (_, s) => Scaffold(body: Text('R${s.pathParameters['id']}'))),
+    ]);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    router.push(Routes.notifications);
+    await tester.pumpAndSettle();
+
+    openNotificationRoute(router, notificationRoute('RESERVATION_CANCELLED', 5)!);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('CAL').hitTestable(), findsOneWidget);
+
+    router.push(Routes.notifications);
+    await tester.pumpAndSettle();
+    openNotificationRoute(router, Routes.reservation(12));
+    await tester.pumpAndSettle();
+    expect(find.text('R12').hitTestable(), findsOneWidget);
+    router.pop(); // 상세는 위에 얹혔으므로 뒤로 가면 알림 목록
+    await tester.pumpAndSettle();
+    expect(find.text('NOTI').hitTestable(), findsOneWidget);
   });
 }
