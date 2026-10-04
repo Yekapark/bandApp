@@ -123,6 +123,8 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
   }
 
   Future<void> _submit() async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final band = _band;
     final room = _room;
     if (band == null || room == null || _loading) return;
@@ -142,7 +144,7 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
       _error = null;
     });
     try {
-      final result = await ref.read(recurringRepositoryProvider).create(
+      final result = await container.read(recurringRepositoryProvider).create(
             bandId: band.id,
             roomId: room.id,
             frequency: _freq,
@@ -155,9 +157,9 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
             note: _note.text.trim(),
           );
       // 규칙만 만드는 게 아니라 회차(일정)까지 생성된다 — 캘린더·홈도 함께 비운다.
-      ref.invalidate(recurringRulesProvider(band.id));
-      ref.invalidate(monthReservationsProvider);
-      ref.invalidate(upcomingReservationsProvider(band.id));
+      container.invalidate(recurringRulesProvider(band.id));
+      container.invalidate(monthReservationsProvider);
+      container.invalidate(upcomingReservationsProvider(band.id));
       if (!mounted) return;
       await _showResultDialog(result);
       if (!mounted) return;

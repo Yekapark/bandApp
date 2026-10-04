@@ -230,6 +230,8 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
   }
 
   Future<void> _submit() async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final band = _band;
     final name = _name.text.trim();
     if (band == null || name.isEmpty) return;
@@ -261,7 +263,7 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
               lat: _pickedLat,
               lng: _pickedLng,
             );
-      ref.invalidate(roomsProvider(band.id));
+      container.invalidate(roomsProvider(band.id));
       if (mounted) context.pop<Room>(room);
     } on ApiException catch (e) {
       setState(() => _error = e.message);

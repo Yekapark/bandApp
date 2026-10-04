@@ -60,6 +60,8 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   }
 
   Future<void> _issue(int bandId) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final regenerate = ref
             .read(currentInviteProvider(bandId))
             .valueOrNull
@@ -91,8 +93,8 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
 
     setState(() => _busy = true);
     try {
-      await ref.read(inviteRepositoryProvider).issue(bandId: bandId);
-      ref.invalidate(currentInviteProvider(bandId));
+      await container.read(inviteRepositoryProvider).issue(bandId: bandId);
+      container.invalidate(currentInviteProvider(bandId));
       _toast(regenerate ? '새 코드를 발급했어요.' : '초대코드를 만들었어요.');
     } on ApiException catch (e) {
       _toast(e.message);
@@ -104,6 +106,8 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
   }
 
   Future<void> _revoke(int bandId) async {
+    // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
+    final container = ProviderScope.containerOf(context, listen: false);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -129,8 +133,8 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
 
     setState(() => _busy = true);
     try {
-      await ref.read(inviteRepositoryProvider).revoke(bandId);
-      ref.invalidate(currentInviteProvider(bandId));
+      await container.read(inviteRepositoryProvider).revoke(bandId);
+      container.invalidate(currentInviteProvider(bandId));
       _toast('초대코드를 무효화했어요.');
     } on ApiException catch (e) {
       _toast(e.message);

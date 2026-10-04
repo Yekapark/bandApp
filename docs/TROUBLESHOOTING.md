@@ -1,5 +1,15 @@
 # 문제 기록
 
+## 2026-10-04 — 저장 중에 뒤로 가면 서버엔 저장됐는데 캘린더·목록이 옛것으로 남는다 (U35)
+
+**증상** — 전체 버그 점검에서 찾음. 일정 등록 화면에서 [합주 등록하기] 를 누르고 응답 전에 뒤로 가면, 일정은 서버에 생기는데 캘린더·홈에는 보이지 않는다(당겨서 새로고침해야 보임). 밴드 합류 중에 뒤로 가면 새 밴드가 목록에 늦게 뜨고 선택도 안 된다. 나가기·삭제·위임·추방·참석·셋리스트·쿠폰 등도 같은 구조.
+
+**원인** — flutter_riverpod 2.6.1 의 `ConsumerStatefulElement` 는 화면이 dispose 된 뒤 `ref.read/invalidate` 를 부르면 **디버그가 아니라 항상** `StateError('Cannot use "ref" after the widget was disposed.')` 를 던진다(`consumer.dart` `_assertNotDisposed`). 핸들러들이 `await 저장()` 다음 줄에서 `ref.invalidate(목록)` 을 불렀으니, 그 사이 화면이 닫히면 갱신이 예외로 끊기고 `catch` 가 조용히 삼켰다(`mounted` 확인으로 오류 문구도 안 뜸). 일정 등록 폼은 저장 중에 뒤로 가기가 막혀 있지 않다.
+
+**해결** — `await` **전에** `final container = ProviderScope.containerOf(context, listen: false);` 로 앱 전체 컨테이너를 잡아 두고, 응답 뒤 갱신은 `container.invalidate/read` 로 한다. 컨테이너는 화면과 상관없이 살아 있다. 일정 상세의 셋리스트 "되돌리기" 가 이미 이렇게 하고 있었다. 23곳. PR #193.
+
+**확인법** — `client/test/closed_screen_refresh_test.dart`(합류 요청 중 화면 닫기 → 응답 → 선택·목록 재조회, 옛 코드에서 실패). **새 핸들러에서 await 뒤에 ref 를 쓰려면 먼저 컨테이너를 잡거나 `if (!mounted) return;` 을 둔다** — 후자는 갱신 자체를 건너뛰므로 목록 갱신에는 전자.
+
 ## 2026-10-04 — 이모지가 많은 글 제목이 입력칸은 통과하고 서버에서 "입력값이 올바르지 않습니다" (U34, QA POST-03)
 
 **증상** — 코드 점검으로 찾음. 제목 칸에 이모지 60개를 넣으면 칸은 100자 제한 안이라 받아 주는데, [등록] 하면 서버가 400 `INVALID_INPUT` 을 내고 앱은 이유 없는 "입력값이 올바르지 않습니다" 만 보였다.
