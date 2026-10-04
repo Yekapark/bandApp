@@ -59,7 +59,11 @@ class _JoinBandScreenState extends ConsumerState<JoinBandScreen> {
       ref.read(selectedBandIdProvider.notifier).select(band.id);
       if (mounted) context.go(Routes.home);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      // 서버 문구는 무엇이 틀렸는지만 말한다(만료·무효·소진·없음) — 다음 행동을 덧붙인다(BAND-04).
+      final hint = e.code.startsWith('INVITE_')
+          ? ' 밴드장에게 새 초대코드를 받아 주세요.'
+          : '';
+      if (mounted) setState(() => _error = e.message + hint);
     } catch (_) {
       if (mounted) setState(() => _error = '밴드에 합류하지 못했어요.');
     } finally {

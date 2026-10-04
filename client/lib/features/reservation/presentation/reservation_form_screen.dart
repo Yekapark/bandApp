@@ -335,11 +335,14 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
                       ),
                       _StepButton(
                         icon: Icons.remove,
+                        label: '30분 줄이기',
                         onTap: () => _bumpHours(-0.5),
                       ),
                       const SizedBox(width: 8),
                       _StepButton(
-                          icon: Icons.add, onTap: () => _bumpHours(0.5)),
+                          icon: Icons.add,
+                          label: '30분 늘리기',
+                          onTap: () => _bumpHours(0.5)),
                     ],
                   ),
                 ),
@@ -546,13 +549,19 @@ class _TapCard extends StatelessWidget {
 }
 
 class _StepButton extends StatelessWidget {
-  const _StepButton({required this.icon, required this.onTap});
+  const _StepButton(
+      {required this.icon, required this.label, required this.onTap});
   final IconData icon;
+  final String label; // TalkBack 이 읽을 이름(UI-04)
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
       onTap: onTap,
       child: Container(
         width: 38,
@@ -563,6 +572,7 @@ class _StepButton extends StatelessWidget {
         ),
         child: Icon(icon, size: 18, color: AppColors.textSecondary),
       ),
+    ),
     );
   }
 }

@@ -45,6 +45,29 @@ void main() {
 
     expect(repo.createdIn, [1]);
   });
+
+  testWidgets('이모지로 서버 길이를 넘기면 보내지 않고 안내한다 (POST-03)', (tester) async {
+    final repo = _FakeBoard();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        currentBandProvider.overrideWithValue(band(1)),
+        boardRepositoryProvider.overrideWithValue(repo),
+        bandPlanProvider.overrideWith(
+            (ref, id) async => const BandPlan(tier: 'PREMIUM')),
+      ],
+      child: const MaterialApp(home: PostComposeScreen()),
+    ));
+    // 칸은 60 글자로 받지만 서버 단위로는 120.
+    await tester.enterText(find.byType(TextField).at(0), '😀' * 60);
+    await tester.enterText(find.byType(TextField).at(1), '본문');
+    await tester.ensureVisible(find.text('등록'));
+    await tester.pump(); // 스크롤 뒤 한 프레임 — 그 전에는 탭이 버튼에 닿지 않는다
+    await tester.tap(find.text('등록'));
+    await tester.pumpAndSettle();
+
+    expect(repo.createdIn, isEmpty);
+    expect(find.textContaining('제목이 너무 길어요'), findsOneWidget);
+  });
 }
 
 class _FakeBoard extends BoardRepository {

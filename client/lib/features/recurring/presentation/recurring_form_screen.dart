@@ -340,7 +340,7 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
                     Expanded(
                       child: _TapCard(
                         label: '시작일',
-                        value: Fmt.dateKo(_startDate),
+                        value: Fmt.dateKoMaybeYear(_startDate),
                         onTap: () => _pickDate(start: true),
                       ),
                     ),
@@ -348,7 +348,7 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
                     Expanded(
                       child: _TapCard(
                         label: '종료일 (선택)',
-                        value: _endDate == null ? '없음' : Fmt.dateKo(_endDate!),
+                        value: _endDate == null ? '없음' : Fmt.dateKoMaybeYear(_endDate!),
                         onTap: () => _pickDate(start: false),
                         onClear: _endDate == null
                             ? null
@@ -550,10 +550,14 @@ class _TapCard extends StatelessWidget {
                           fontSize: 11, color: AppColors.textDim)),
                 ),
                 if (onClear != null)
-                  GestureDetector(
-                    onTap: onClear,
-                    child: const Icon(Icons.close,
-                        size: 14, color: AppColors.textFaint),
+                  Semantics(
+                    button: true,
+                    label: '지우기', // TalkBack(UI-04)
+                    child: GestureDetector(
+                      onTap: onClear,
+                      child: const Icon(Icons.close,
+                          size: 14, color: AppColors.textFaint),
+                    ),
                   ),
               ],
             ),

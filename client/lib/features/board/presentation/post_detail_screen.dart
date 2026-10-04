@@ -463,7 +463,11 @@ class _MediaBlock extends StatelessWidget {
           builder: (_) => _FullImage(url: media.downloadUrl!, freshUrl: freshUrl),
         ),
       ),
-      child: ClipRRect(
+      // TalkBack 이 이름 없이 읽던 사진 탭(UI-04).
+      child: Semantics(
+        button: true,
+        label: '사진 크게 보기',
+        child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
         child: Image.network(
           media.downloadUrl!,
@@ -486,6 +490,7 @@ class _MediaBlock extends StatelessWidget {
             ));
           },
         ),
+      ),
       ),
     );
   }
@@ -611,7 +616,10 @@ class _FullVideoState extends State<_FullVideo> {
         onTap: () => setState(() {
           _controller.value.isPlaying ? _controller.pause() : _controller.play();
         }),
-        child: Stack(
+        child: Semantics(
+          button: true,
+          label: _controller.value.isPlaying ? '영상 일시정지' : '영상 재생', // UI-04
+          child: Stack(
           alignment: Alignment.center,
           children: [
             VideoPlayer(_controller),
@@ -628,6 +636,7 @@ class _FullVideoState extends State<_FullVideo> {
                     color: Colors.white, size: 38),
               ),
           ],
+        ),
         ),
       ),
       controls: VideoProgressIndicator(
