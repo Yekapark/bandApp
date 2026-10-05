@@ -88,6 +88,15 @@ final currentBandProvider = Provider<MyBand?>((ref) {
   );
 });
 
+/// 작성 화면은 연 밴드에 고정해 저장한다(U33). 그 사이 다른 밴드 알림을 눌러 "현재 밴드" 가 바뀌었으면, 저장 뒤 열리는
+/// 상세가 바뀐 밴드로 그 일정을 찾아 "일정을 찾을 수 없습니다" 가 됐다(U42·QA-R09). 저장에 성공하면 저장한 밴드로 되돌린다 —
+/// 사용자는 그 밴드에서 쓰던 것을 저장했으니 그 밴드 화면으로 돌아오는 게 맞다.
+void reselectSavedBand(ProviderContainer container, int bandId) {
+  if (container.read(currentBandProvider)?.id != bandId) {
+    container.read(selectedBandIdProvider.notifier).select(bandId);
+  }
+}
+
 /// 특정 밴드의 멤버 목록.
 final bandMembersProvider =
     FutureProvider.family<List<BandMember>, int>((ref, bandId) async {

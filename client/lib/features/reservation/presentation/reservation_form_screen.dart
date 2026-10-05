@@ -168,6 +168,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
           (bandId: band.id, reservationId: widget.existing!.id),
         ));
       }
+      reselectSavedBand(container, band.id);
 
       if (!mounted) return;
       if (result.overlaps.isNotEmpty) {

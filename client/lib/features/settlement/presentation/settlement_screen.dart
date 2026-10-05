@@ -57,6 +57,14 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
 
     final key = _key(band.id);
     final settlementAsync = ref.watch(settlementProvider(key));
+    // 프로바이더가 새 값을 받으면(알림으로 열 때의 무효화·당겨 새로고침 등) 이 화면이 들고 있던 직전 응답(_override)을
+    // 버린다. _override 가 늘 우선이라, 위에 새 정산 화면을 띄웠다 뒤로 돌아오면 아래 화면은 옛 금액·납부 체크를
+    // 계속 보였다(U41·QA-R08).
+    ref.listen(settlementProvider(key), (_, next) {
+      if (_override != null && next.hasValue && !next.isLoading) {
+        setState(() => _override = null);
+      }
+    });
     final detailKey = (bandId: band.id, reservationId: widget.reservationId);
     final detailAsync = ref.watch(reservationDetailProvider(detailKey));
     final detail = detailAsync.valueOrNull;

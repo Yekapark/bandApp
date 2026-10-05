@@ -264,6 +264,7 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
               lng: _pickedLng,
             );
       container.invalidate(roomsProvider(band.id));
+      reselectSavedBand(container, band.id);
       if (mounted) context.pop<Room>(room);
     } on ApiException catch (e) {
       setState(() => _error = e.message);

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../routing/app_router.dart';
+import '../../band/data/band_models.dart';
 import '../../reservation/application/calendar_providers.dart';
 import '../../settlement/application/settlement_providers.dart';
 
@@ -38,6 +39,19 @@ bool notificationBandGone(int? bandId, Iterable<int>? myBandIds) =>
     myBandIds != null &&
     myBandIds.isNotEmpty &&
     !myBandIds.contains(bandId);
+
+/// 지금 서버 기준 내 밴드 id. [fetch] 가 실패하거나 [timeout] 을 넘기면 [cached](이 폰에 받아 둔 목록)를 쓴다(U43).
+Future<Iterable<int>?> freshBandIds(
+  Future<List<MyBand>> Function() fetch,
+  Iterable<int>? cached, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  try {
+    return (await fetch().timeout(timeout)).map((b) => b.id);
+  } catch (_) {
+    return cached;
+  }
+}
 
 /// 하단 탭 화면(캘린더 등). 이 화면들은 탭 껍데기(StatefulShellRoute) 안에 있어서 **push 하면 껍데기가 하나 더
 /// 쌓이고 본문이 빈 화면이 된다**(U39·QA-R05 — 취소 알림을 누르면 캘린더 탭만 보이고 본문이 비었다). 탭으로 이동(go)한다.

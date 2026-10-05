@@ -40,6 +40,17 @@ class _JoinBandScreenState extends ConsumerState<JoinBandScreen> {
   String get _value => _code.text;
   bool get _full => _value.length == _codeLength;
 
+  /// 합류 화면에 있는 채 다른 초대 링크를 받으면 라우터가 화면을 바꾸지만(U37 replace) 같은 화면 상태가 재사용돼
+  /// 입력칸이 처음 코드로 남았다(U40·QA-R07). 새 링크의 코드로 바꾸고 이전 오류 문구도 지운다.
+  @override
+  void didUpdateWidget(covariant JoinBandScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialCode != oldWidget.initialCode) {
+      _code.text = _sanitize(widget.initialCode);
+      _error = null;
+    }
+  }
+
   @override
   void dispose() {
     _code.dispose();

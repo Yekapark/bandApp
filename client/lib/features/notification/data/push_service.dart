@@ -138,7 +138,7 @@ class PushService {
         // 앱이 꺼져 있다가 알림으로 켜진 것은 getInitialMessage 로 한 번 온다.
         FirebaseMessaging.onMessageOpenedApp.listen(_openFromPush);
         final initial = await messaging.getInitialMessage();
-        if (initial != null) _openFromPush(initial);
+        if (initial != null) unawaited(_openFromPush(initial));
       }
     } catch (e) {
       debugPrint('PushService: 초기화 건너뜀 ($e)');
@@ -224,7 +224,7 @@ class PushService {
 
   /// 푸시를 눌렀을 때 — 그 알림의 밴드로 바꾸고 해당 화면을 연다(U6). 서버가 싣는 data:
   /// `type`·`bandId`·(일정 알림이면) `reservationId` (`NotificationMessages`).
-  void _openFromPush(RemoteMessage message) {
+  Future<void> _openFromPush(RemoteMessage message) async {
     if (!_active) return;
     final data = message.data;
     final bandId = int.tryParse('${data['bandId'] ?? ''}');
@@ -232,7 +232,16 @@ class PushService {
       data['type']?.toString(),
       int.tryParse('${data['reservationId'] ?? ''}'),
     );
-    final myBandIds = _ref.read(myBandsProvider).valueOrNull?.map((b) => b.id);
+    // 이 폰에 받아 둔 목록이 아니라 지금 서버 목록으로 본다 — 다른 기기에서 나간 밴드는 캐시에 그대로 남아 있어,
+    // 나간 밴드의 알림을 눌러도 안내 대신 "일정을 찾을 수 없습니다" 상세가 열렸다(U43·QA-R10). 못 받으면 캐시로 판단한다.
+    Iterable<int>? myBandIds;
+    if (bandId != null) {
+      myBandIds = await freshBandIds(
+        () => _ref.refresh(myBandsProvider.future),
+        _ref.read(myBandsProvider).valueOrNull?.map((b) => b.id),
+      );
+      if (!_active) return;
+    }
     if (notificationBandGone(bandId, myBandIds)) {
       scaffoldMessengerKey.currentState
         ?..hideCurrentSnackBar()
