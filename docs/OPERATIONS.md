@@ -391,6 +391,8 @@ FROM notification_dispatches WHERE user_id = 4 ORDER BY id DESC LIMIT 20;
 | R2 접근 값 4개 (`R2_ACCOUNT_ID` `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` `R2_BUCKET`) | 서버 `/opt/bandapp/.env.prod`, 또는 Cloudflare 대시보드 › R2 › API 토큰에서 새로 발급 | 저장소에는 **없다**(git 미추적) |
 | (서버에 올릴 때) 배포 SSH 키 `~/.ssh/bandule_deploy` | 사용자 보관. 잃었으면 서버 업체 콘솔에서 새 공개키를 등록 | `ssh -i ~/.ssh/bandule_deploy root@<서버> 'bandule health'` |
 
+> PC 를 통째로 옮기는 경우의 전체 목록(앱 서명 키·계정·결제 포함)은 **§9**.
+>
 > **개인키를 잃으면 R2 사본은 아무도 못 연다.** 저장소의 공개키(`deploy/backup/backup-pubkey.asc`)는 잠그기만 한다.
 > 개인키를 처음 만든 PC 에서 내보내 두는 법: `gpg --export-secret-keys --armor B4A794DF793BE679250199A84218121C3F08D54F > bandule-backup-secret.asc`
 > (이 파일과 암호를 **서로 다른 곳**에 둔다 — 예: 파일은 USB, 암호는 비밀번호 관리자).
@@ -548,3 +550,148 @@ ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh
 ```
 
 워크플로를 손으로 한 번 돌리려면 GitHub → Actions → **운영 점검** → Run workflow.
+
+---
+
+## 9. 새 컴퓨터로 옮기기 — 포맷 전 백업 · 계정과 비밀번호 · 결제 · 새 PC 설치
+
+> PC 를 포맷하거나 바꿀 때 **이 절만 위에서부터 따라 하면** 새 PC 에서 개발·빌드·배포·운영을 그대로 이어 갈 수 있게 썼다.
+> 2026-10-05 이 PC 를 조사해서 만든 목록이다. 새 비밀 파일·계정·결제가 생기면 이 절과
+> [SERVICES_AND_SHUTDOWN.md](SERVICES_AND_SHUTDOWN.md) 에 같이 적는다.
+>
+> **⚠️ 이 저장소는 공개다. 비밀번호·키·토큰의 "값" 은 여기 절대 적지 않는다.** 여기에는 무엇이 필요한지, 어디에 두는지,
+> 잃으면 어디서 다시 받는지만 적는다. 값은 **개인 보관함**에 둔다 — 이 절에서 "개인 보관함" 은
+> ① 비밀번호 관리자(계정·암호용)와 ② 암호를 건 USB 또는 암호화한 압축 파일(파일용), **서로 다른 두 곳**을 말한다.
+> 메일·메신저·공개 클라우드 폴더에 평문으로 두지 않는다.
+
+### 9-1. 포맷 전에 — 개인 보관함으로 옮길 파일
+
+이 파일들은 git 에 **없다**(`.gitignore`). PC 와 함께 사라진다.
+
+| 중요 | 파일 (이 PC 기준 경로) | 무엇 | 잃으면 | 다시 얻는 법 |
+|---|---|---|---|---|
+| 🔴 | `client/android/bandule-release.jks` | Play **업로드 키**(앱 서명) | Play 에 업데이트를 못 올린다 | Play Console › 앱 무결성 › 업로드 키 재설정 요청(며칠 걸림). **반드시 백업** |
+| 🔴 | `client/android/key.properties` | 위 키스토어의 암호·별칭·경로(`storePassword` `keyPassword` `keyAlias` `storeFile`) | 키스토어가 있어도 못 연다 | 암호를 비밀번호 관리자에도 따로 적어 둔다 |
+| 🔴 | `~/.ssh/bandule_deploy`, `~/.ssh/bandule_deploy.pub` | 운영 서버 SSH 키 | 서버 접속 불가 | Vultr 웹 콘솔로 새 키 등록(§9-6) |
+| 🔴 | `~/.android/debug.keystore` | 개발 빌드 서명 키 — **카카오 콘솔에 이 키 해시가 등록돼 있다** | 새 PC 의 개발 빌드에서 카카오 로그인·지도 실패 | 카카오 개발자 콘솔에 새 키 해시 추가(§9-6) |
+| 🔴 | 백업 복호화 개인키(gpg, 지문 `B4A794DF793BE679250199A84218121C3F08D54F`) + 암호 | R2 DB 백업을 여는 열쇠 | R2 백업을 아무도 못 연다 | **다시 만들 수 없다.** 2026-10-05 두 곳 보관 확인(QA OPS-16). 새 PC 로 가져오기는 §7-2 |
+| 🟡 | 서버의 `/opt/bandapp/.env.prod` | 운영 설정·비밀값 전부(DB·Redis 비번, JWT 키, R2 키, 카카오 키, 메일 SMTP, 결제 웹훅 비밀 등) | 서버가 날아가면 새 서버를 못 세운다 | **로컬 `.env.prod` 가 아니라 서버 것을** 받아 보관: `scp -i ~/.ssh/bandule_deploy root@64.176.231.126:/opt/bandapp/.env.prod ./env.prod.backup` → 바로 개인 보관함으로 옮기고 PC 에서 지운다(저장소 폴더에서 받지 않는다 — 2026-09-08 유출 사고) |
+| 🟡 | 서버의 서비스 계정 JSON 2개 — `.env.prod` 의 `PLAY_SA_HOST_PATH`(Play 구매 검증), `FCM_CREDENTIALS_HOST_PATH`(푸시) 가 가리키는 파일 | Google 서비스 계정 키 | 결제 검증·푸시가 멈춘다 | Google Cloud 콘솔 › IAM › 서비스 계정 › 키 새로 만들기(옛 키는 삭제) |
+| 🟡 | `.env.prod` (저장소 폴더) | 서버 것의 **옛 사본**일 수 있다 | — | 서버 것을 정본으로 쓴다. 이 파일은 백업하지 않아도 된다 |
+| 🟡 | `.env` (저장소 폴더) | 로컬 개발 설정(개발 DB·JWT·카카오·R2·FCM) | 로컬 `docker compose up` 이 안 뜬다 | 개발용 값이라 새로 만들어도 된다. 키 이름은 이 파일에서 확인 |
+| 🟡 | `client/dart_defines.json` | `KAKAO_NATIVE_APP_KEY`, `API_BASE_URL` | 앱 빌드에 카카오 키가 안 들어간다 | 카카오 개발자 콘솔 › 앱 키 › 네이티브 앱 키 |
+| 🟡 | `client/android/local.properties` | `kakao.appKey`(직접 넣는 줄) + 나머지는 flutter 가 채움 | 안드로이드 카카오 리다이렉트 실패 | 위와 같은 네이티브 앱 키 한 줄 |
+| 🟡 | `client/android/app/src/prod/google-services.json`, `.../dev/google-services.json` | Firebase 앱 설정(푸시·Crashlytics) | 빌드 실패 또는 푸시 꺼짐 | Firebase 콘솔 › 프로젝트 설정 › 앱 › `google-services.json` 다운로드(운영 `bandule-b94d2`, 개발 `bandapp-dev-67c6f`) |
+| 🟡 | `secrets/bandapp-dev-67c6f-firebase-adminsdk-*.json` | 개발 서버 푸시용 서비스 계정 | 로컬 서버 푸시 안 됨 | Firebase 콘솔(개발) › 서비스 계정 › 새 비공개 키 |
+| 🟢 | `C:\Users\<사용자>\.claude\projects\C--band-bandApp\memory\` | 클로드 작업 기억(답변 언어, 커밋 규칙 등) | 클로드가 이전 합의를 잊는다 | 폴더째 백업 → 새 PC 같은 위치에 복사 |
+| 🟢 | `.codex/`, `.agents/`, `.claude/settings.local.json` | 코덱스·클로드 이 PC 전용 설정 | 다시 설정하면 된다 | 필요하면 함께 백업 |
+| ⚪ | `local.properties`(루트), `bin/`, `build/`, `.gradle/` 등 | 자동 생성 | — | 백업하지 않는다 |
+| ⚪ | `backups/bandapp-20260905T*.dump` | 2026-09-05 로컬 개발 DB 덤프 | — | **백업하지 않는다.** 회원 데이터일 수 있으니 필요 없으면 지운다 |
+
+포맷 전 마지막 확인:
+
+```bash
+# 저장소에 커밋 안 한 작업이 없는지 — 있으면 브랜치에 커밋·푸시한다
+cd /c/band/bandApp && git status --short && git stash list
+# 키 해시를 적어 둔다(새 PC 에서 카카오 콘솔 등록이 맞는지 비교용 — 값이 아니라 지문이라 적어도 된다)
+keytool -exportcert -alias androiddebugkey -keystore ~/.android/debug.keystore -storepass android | openssl sha1 -binary | openssl base64
+#   → 2026-10-05 이 PC: ahCJ5a5dXyiPh3x9ksny6yMbjzk=  (카카오 콘솔에 등록된 개발 키 해시. 새 PC 에서 debug.keystore 를 옮겼다면 같은 값이 나와야 한다)
+```
+
+### 9-2. 계정과 비밀번호 — 비밀번호 관리자에 있어야 하는 것
+
+**값은 비밀번호 관리자에만.** 아래 표의 "보관할 것" 이 모두 들어 있는지 포맷 전에 확인한다.
+**2단계 인증(OTP) 앱이 폰에 있으면** 폰은 포맷하지 않으니 괜찮지만, 각 서비스의 **복구 코드**도 함께 보관한다.
+
+| 계정 | 쓰는 곳 | 보관할 것 |
+|---|---|---|
+| **Google 계정**(개발자 계정 주인) | Play Console, Firebase(운영·개발), Google Cloud(서비스 계정·Pub/Sub), Google 결제 프로필(정산 계좌) | 비밀번호, 2단계 복구 코드 |
+| **GitHub** `Yekapark` | 저장소 `Yekapark/bandApp`, Actions 시크릿(`DEPLOY_HOST` `DEPLOY_USER` `DEPLOY_KEY` `DEPLOY_PORT`), GHCR | 비밀번호, 2단계 복구 코드. 새 PC 에서는 `gh auth login` |
+| **Cloudflare** | 도메인 `bandule.com`(등록·DNS), R2(`bandule-prod`), Pages(약관 사이트), Email Routing(`notice@bandule.com` → 개인 메일) | 비밀번호, 2단계 복구 코드, R2 API 토큰(값은 서버 `.env.prod`) |
+| **Vultr** | 운영 서버(서울 VM `64.176.231.126`) | 비밀번호, 2단계 복구 코드. 서버 **root 비밀번호**는 Vultr 서버 상세 화면에 있다(웹 콘솔 로그인용) |
+| **Resend** | 메일 발송(인증·재설정·신고 알림) | 비밀번호. SMTP 값은 서버 `.env.prod`(`MAIL_SMTP_*`) |
+| **카카오 개발자** | 카카오 로그인·장소 검색·지도 | 비밀번호. 앱 키(네이티브·REST·어드민)는 콘솔에서 다시 볼 수 있다 |
+| **UptimeRobot** | `/actuator/health` 감시 | 비밀번호 |
+| **개인 메일**(`notice@bandule.com` 전달받는 곳, Play 스토어 연락처) | 사용자 문의·인증 메일 | 비밀번호, 복구 수단 |
+| **홈택스 · 위택스 · 정부24** | 사업자등록·통신판매업·등록면허세 | 공동/간편 인증서(인증서 파일이면 백업) |
+| **업로드 키스토어 암호** | `key.properties` 의 두 암호 | 비밀번호 관리자에 따로 한 번 더 |
+| **gpg 백업 개인키 암호** | R2 백업 복호화 | 개인키 파일과 **다른 곳**에(OPS-16) |
+| 심사·QA 데모 계정 `demo.leader@bandule.com` `demo.guitar@bandule.com` `demo.drum@bandule.com` | Play 심사 로그인 안내, QA | 비밀번호(Play Console › 앱 콘텐츠 › 앱 액세스에도 적혀 있다) |
+| Play **라이선스 테스터** Google 계정 | 테스트 결제 | 비밀번호 |
+| Claude · Codex(ChatGPT) | 작업 도구 | 로그인 정보 |
+
+### 9-3. 돈이 나가는 곳 — 새 PC 와 상관없이 계속 청구된다
+
+결제 수단·청구서는 PC 가 아니라 각 서비스 계정에 묶여 있다. 포맷해도 끊기지 않고, 계정 로그인만 되면 된다.
+자세한 금액·주기·폐업 시 정리는 [SERVICES_AND_SHUTDOWN.md §1·§2](SERVICES_AND_SHUTDOWN.md).
+
+| 💳 결제 | 금액 · 주기 | 청구서 보는 곳 |
+|---|---|---|
+| Vultr 운영 서버 | 매월, 약 $10대 | Vultr 콘솔 › Billing |
+| 도메인 `bandule.com` | 매년 자동 갱신, 약 $10대 | Cloudflare › Domain Registration |
+| Google Play 개발자 등록 | 최초 1회 $25(끝남) | Play Console › 설정 › 개발자 계정 |
+| 통신판매업 등록면허세 | 신고 시 + 매년 1월 | 위택스 |
+| Google Play 수수료 | 구독 매출의 15%(정산에서 차감) | Play Console › 재무 보고서 |
+| 결제 수단만 걸린 무료 서비스 | Cloudflare R2(무료 한도 초과분), Google Cloud(Pub/Sub) | 각 콘솔 › 결제 |
+
+### 9-4. 새 PC 설치 순서
+
+이 PC 기준 버전(2026-10-05). CI 도 같은 버전을 쓴다(`.github/workflows/`).
+
+| 순서 | 설치 | 버전 · 확인 | 왜 |
+|---|---|---|---|
+| 1 | **Git for Windows** (Git Bash) | `git --version`, `gpg --version`(2.4 포함) | 저장소·셸·백업 복호화 |
+| 2 | **GitHub CLI** `gh` | 2.98 → `gh auth login`(Yekapark) | PR·CI 확인 |
+| 3 | **JDK 21** | `java -version` → 21 | 백엔드 빌드(Gradle). 안드로이드 빌드도 21 로 된다 |
+| 4 | **Docker Desktop** | `docker info` | 로컬 실행·통합 테스트(Testcontainers)·백업 복원 |
+| 5 | **Android Studio** (SDK·platform-tools) | `adb version` | 안드로이드 SDK, 폰 연결(QA) |
+| 6 | **Flutter 3.47.2 stable** | `flutter --version`, `flutter doctor` | 앱 |
+| 7 | **Python 3.13** + `pip install pillow markdown` | `python --version` | 빌드 스크립트(`release_store.py` 등), 스토어 이미지(Pillow), 약관 사이트(markdown) |
+| 8 | **Node.js 24** + `npm i -g firebase-tools` → `firebase login` | `firebase --version`(15) | 테스터 배포(`client/tools/release_tester.py`) |
+
+설치 뒤:
+
+```bash
+# 1) 저장소
+cd /c && mkdir -p band && cd band
+git clone https://github.com/Yekapark/bandApp.git && cd bandApp
+git config core.hooksPath .githooks          # 비밀 파일 커밋 차단 훅 — 새 PC 마다 한 번(CLAUDE.md 규칙)
+git config user.name "<이름>" && git config user.email "<GitHub 이메일>"
+
+# 2) 개인 보관함의 파일을 제자리에 (§9-1 표의 경로 그대로)
+#    client/android/bandule-release.jks, client/android/key.properties, client/dart_defines.json,
+#    client/android/app/src/{prod,dev}/google-services.json, secrets/…adminsdk….json, .env
+#    ~/.ssh/bandule_deploy(.pub)  → chmod 600 ~/.ssh/bandule_deploy
+#    ~/.android/debug.keystore    (Android Studio 를 처음 연 뒤 생긴 것을 덮어쓴다)
+#    클로드 기억: memory 폴더를 C:\Users\<사용자>\.claude\projects\C--band-bandApp\memory\ 로
+echo "kakao.appKey=<네이티브 앱 키>" >> client/android/local.properties   # 값은 비밀번호 관리자/카카오 콘솔에서
+
+# 3) 백업 개인키 (§7-2)
+gpg --import bandule-backup-secret.asc
+```
+
+### 9-5. 새 PC 에서 잘 되는지 확인
+
+| 확인 | 명령 | 기대 |
+|---|---|---|
+| 비밀 파일이 git 에 안 잡힘 | `git status --short` | 아무 것도 안 나옴(위 파일들은 무시 목록) |
+| 서버 접속 | `ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bandule health'` | 안쪽·바깥 모두 정상 |
+| 백엔드 | `./gradlew build` (Docker 켠 채로) | 테스트 포함 성공 |
+| 로컬 실행 | `docker compose up` | app·postgres·redis 기동 |
+| 앱 분석·테스트 | `cd client && flutter pub get && flutter analyze && flutter test` | 오류 0·전부 통과 |
+| 스토어 빌드 검사 | `cd client && python tools/release_store.py --no-bump` | 서버 주소·16KB·targetSdk·**업로드 키 서명** 모두 OK(번호는 안 올림) |
+| 카카오(개발 빌드) | 폰에 개발 빌드 설치 → 카카오 로그인 | 로그인됨 — 안 되면 키 해시(§9-6) |
+| 백업 열기 | §7-3·§7-4 | `.dump.gpg` 가 열린다 |
+| PR·CI | `gh pr list` | 목록이 나온다 |
+
+### 9-6. 잃어버렸을 때
+
+| 잃은 것 | 복구 |
+|---|---|
+| **업로드 키스토어**(`.jks`) 또는 그 암호 | Play Console › 테스트 및 출시 › 앱 무결성 › 앱 서명 › **업로드 키 재설정 요청**. 새 키스토어를 만들어(`keytool -genkeypair`) 인증서(.pem)를 제출 → Google 승인 뒤 새 키로 올린다. 승인까지 업데이트를 못 올린다 |
+| **SSH 키** | 새 키 `ssh-keygen -t ed25519 -f ~/.ssh/bandule_deploy` → Vultr 콘솔 › 서버 › **View Console** 에서 root 로 로그인(root 비밀번호는 서버 상세 화면) → `/root/.ssh/authorized_keys` 끝에 새 `.pub` 한 줄 추가. GitHub 자동 배포는 Actions 시크릿 `DEPLOY_KEY` 를 따로 쓰므로 영향 없다 |
+| **debug.keystore** | 새 PC 의 키 해시(§9-1 명령)를 카카오 개발자 콘솔 › 앱 › 플랫폼 › Android › **키 해시 추가**. 옛 해시는 지워도 된다 |
+| **gpg 백업 개인키** | 복구 불가. 새 키 쌍을 만들어 공개키를 `deploy/backup/backup-pubkey.asc` 로 바꾸고 배포 → 그 뒤 백업부터 새 키로 잠긴다. **옛 R2 백업은 영영 못 연다** |
+| **서버 `.env.prod`**(서버도 날아감) | 키 이름은 로컬 `.env.prod`·`docker-compose.prod.yml` 에서 확인하고 값은 각 콘솔에서 새로 발급: R2(Cloudflare), 카카오, Resend SMTP, Google 서비스 계정. DB·Redis 비밀번호·JWT 키는 새로 만든다(`openssl rand -base64 48`) — **JWT 를 바꾸면 전원 다시 로그인** |
+| **google-services.json · dart_defines · kakao.appKey** | §9-1 "다시 얻는 법" 칸 |
+| **GitHub 로그인(2단계 포함)** | 복구 코드로 로그인. 없으면 GitHub 지원 — 저장소 접근이 막히면 배포도 못 한다 |
