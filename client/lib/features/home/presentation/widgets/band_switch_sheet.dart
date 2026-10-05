@@ -11,11 +11,18 @@ Future<void> showBandSwitchSheet(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.surface,
+    // 밴드가 많으면 목록이 시트 기본 높이(화면 9/16)를 넘는데 스크롤이 없어 아래 밴드·버튼이 잘렸다(U44·QA-R11).
+    // 하단 탭 영역 안쪽 화면이 아니라 앱 전체 위에 띄우고, 화면의 85% 까지 키운 뒤 넘치면 스크롤한다.
+    useRootNavigator: true,
+    isScrollControlled: true,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+    ),
     builder: (sheetContext) {
       final bands = ref.read(myBandsProvider).valueOrNull ?? const [];
       final current = ref.read(currentBandProvider);
       return SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,

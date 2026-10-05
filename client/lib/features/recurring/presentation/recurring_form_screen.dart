@@ -160,6 +160,7 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
       container.invalidate(recurringRulesProvider(band.id));
       container.invalidate(monthReservationsProvider);
       container.invalidate(upcomingReservationsProvider(band.id));
+      reselectSavedBand(container, band.id);
       if (!mounted) return;
       await _showResultDialog(result);
       if (!mounted) return;

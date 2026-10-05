@@ -334,6 +334,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
             content: _content.text.trim(),
           );
       if (!mounted) return;
+      reselectSavedBand(ProviderScope.containerOf(context, listen: false), bandId);
       setState(() {
         _postId = detail.id;
         _media = detail.media;
@@ -430,6 +431,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
         postDetailProvider((bandId: bandId, postId: _postId!)),
       );
       if (mounted) {
+        reselectSavedBand(ProviderScope.containerOf(context, listen: false), bandId);
         _dirty = false;
         Navigator.of(context).pop(true);
       }
