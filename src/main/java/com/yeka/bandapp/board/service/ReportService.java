@@ -184,10 +184,13 @@ public class ReportService {
                 requireNotSelf(post.getAuthorId(), callerId);
             }
             case USER -> {
-                if (!userDirectory.existsActive(targetId)) {
+                requireNotSelf(targetId, callerId);
+                // 나와 같은 밴드에 있는 사람만 신고할 수 있다. 예전에는 존재만 확인해, 아무 번호나 넣어 보면
+                // 201/404 로 그 번호의 계정이 있는지 알아낼 수 있었다(LAUNCH_REVIEW U36). 같은 밴드가 아니면
+                // 없는 계정과 똑같이 404 — 응답으로 둘을 구분할 수 없다. 앱은 글 상세(같은 밴드)에서만 사용자 신고를 띄운다.
+                if (!userDirectory.existsActive(targetId) || !accessGuard.shareActiveBand(callerId, targetId)) {
                     throw new BusinessException(ErrorCode.REPORT_TARGET_NOT_FOUND);
                 }
-                requireNotSelf(targetId, callerId);
             }
             default -> throw new BusinessException(ErrorCode.INVALID_INPUT);
         }

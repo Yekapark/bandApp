@@ -16,6 +16,11 @@ public interface BandMemberRepository extends JpaRepository<BandMember, Long> {
 
     boolean existsByBandIdAndUserIdAndLeftAtIsNull(Long bandId, Long userId);
 
+    /** 두 회원이 지금 같은 밴드에 함께 있는가(둘 다 활성 멤버). */
+    @Query("select count(a) > 0 from BandMember a, BandMember b where a.bandId = b.bandId "
+            + "and a.userId = :userId and b.userId = :otherUserId and a.leftAt is null and b.leftAt is null")
+    boolean shareActiveBand(@Param("userId") long userId, @Param("otherUserId") long otherUserId);
+
     List<BandMember> findByBandIdAndLeftAtIsNullOrderByJoinedAtAsc(Long bandId);
 
     /** "내가 속한 밴드 목록"용. {@code ix_band_members_user_active} 부분 인덱스를 탄다. */

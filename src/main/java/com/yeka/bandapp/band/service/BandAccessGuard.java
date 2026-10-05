@@ -34,6 +34,11 @@ public class BandAccessGuard {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_BAND_MEMBER));
     }
 
+    /** 두 회원이 지금 같은 밴드에 함께 있는가. */
+    public boolean shareActiveBand(long userId, long otherUserId) {
+        return bandMemberRepository.shareActiveBand(userId, otherUserId);
+    }
+
     public BandMember requireActiveMember(long bandId, long userId) {
         return bandMemberRepository.findByBandIdAndUserIdAndLeftAtIsNull(bandId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_BAND_MEMBER));
