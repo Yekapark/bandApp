@@ -34,10 +34,22 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
       _products.isEmpty ? null : _products.values.first;
   bool _storeReady = true;
   bool _busy = false;
+  Timer? _poll;
+
+  /// 요금제는 화면을 열 때마다, 열려 있는 동안 1분마다 서버에서 새로 받는다. 캐시가 프로세스 수명 내내 남아서
+  /// 갱신 결제가 보류(ON_HOLD)로 바뀐 뒤에도 다시 들어온 화면이 옛 PREMIUM 을 보였다(U46·QA-R13).
+  void _refreshPlan() {
+    final band = ref.read(currentBandProvider);
+    if (band != null) ref.invalidate(bandPlanProvider(band.id));
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshPlan();
+    });
+    _poll = Timer.periodic(const Duration(minutes: 1), (_) => _refreshPlan());
     // 결제 결과는 앱 전역 PurchaseSync 가 받아 서버에 반영하고 안내도 띄운다(LAUNCH_REVIEW B2).
     // 이 화면은 버튼 잠금만 따라간다. 결과가 오면(승인 대기 포함) 푼다 — 승인 대기 중인 밴드를 또 결제하는 것은
     // PurchaseSync 가 막는다. 예전엔 승인 대기면 안내 없이 버튼이 계속 돌았다.
@@ -49,6 +61,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
 
   @override
   void dispose() {
+    _poll?.cancel();
     _eventSub?.cancel();
     super.dispose();
   }

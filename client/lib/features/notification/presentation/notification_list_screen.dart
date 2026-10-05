@@ -12,6 +12,7 @@ import '../application/notification_route.dart';
 import '../data/notification_models.dart';
 import '../data/notification_repository.dart';
 import '../data/notification_seen_storage.dart';
+import '../data/push_service.dart' show scaffoldMessengerKey;
 
 /// 받은 알림 목록.
 ///
@@ -75,6 +76,27 @@ class _NotificationListScreenState
     } finally {
       if (mounted && bandId == _bandId) setState(() => _loadingMore = false);
     }
+  }
+
+  /// 목록이 열려 있는 사이 다른 기기에서 밴드를 나갔을 수 있다 — 푸시와 같이 서버 목록을 새로 받아 본다.
+  /// 안 보면 상세가 "밴드 멤버가 아닙니다" 로 열렸다(U45·QA-R12).
+  Future<void> _open(int bandId, AppNotification n) async {
+    final route = notificationRoute(n.type, n.reservationId);
+    if (route == null || route == Routes.notifications) return;
+    final router = GoRouter.of(context);
+    final myBandIds = await freshBandIds(
+      () => ref.refresh(myBandsProvider.future),
+      ref.read(myBandsProvider).valueOrNull?.map((b) => b.id),
+    );
+    if (!mounted) return;
+    if (notificationBandGone(bandId, myBandIds)) {
+      scaffoldMessengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('이미 나간 밴드의 알림이에요.')));
+      router.go(Routes.home);
+      return;
+    }
+    openNotification(router, ref.invalidate, route);
   }
 
   @override
@@ -157,13 +179,7 @@ class _NotificationListScreenState
                 return _NotificationTile(
                   item: n,
                   isNew: _seenBefore == null || n.sentAt.isAfter(_seenBefore!),
-                  onTap: () {
-                    final route = notificationRoute(n.type, n.reservationId);
-                    if (route != null && route != Routes.notifications) {
-                      openNotification(
-                          GoRouter.of(context), ref.invalidate, route);
-                    }
-                  },
+                  onTap: () => _open(band.id, n),
                 );
               },
             ),
