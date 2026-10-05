@@ -8,6 +8,8 @@ import 'package:bandapp_client/features/plan/data/iap_service.dart';
 import 'package:bandapp_client/features/plan/data/plan_models.dart';
 import 'package:bandapp_client/features/plan/data/plan_repository.dart';
 import 'package:dio/dio.dart';
+import 'package:bandapp_client/features/notification/data/push_service.dart' show scaffoldMessengerKey;
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
@@ -386,6 +388,49 @@ void main() {
 
     expect(repo.restored, ['tok-403']);
     expect(iap.completed, isEmpty);
+  });
+
+  // QA BILL-33 — 403 외의 영구 거절(404 밴드 없음·422 밴드 모름)도 같은 실행에서 다시 보내지 않는다. 통신 장애는 다시 보낸다.
+  for (final (code, status) in [('BAND_NOT_FOUND', 404), ('PURCHASE_BAND_UNKNOWN_X', 422)]) {
+    test('BILL-33 영구 거절 $status 는 이번 실행에서 다시 보내지 않는다', () async {
+      repo.restoreError = ApiException(code: code, message: 'x', statusCode: status);
+      sync.start();
+      final p = _purchase('tok-$status', PurchaseStatus.restored, pending: true, band: 4);
+      iap.emit([p]);
+      await settle();
+      iap.emit([p]); // 화면 복귀·전환으로 스토어가 다시 흘려보낸 같은 구매
+      await settle();
+
+      expect(repo.restored, ['tok-$status']);
+      expect(iap.completed, isEmpty); // 완료하지 않아야 Google 이 환불한다
+    });
+  }
+
+  test('BILL-33 통신 장애(상태 코드 없음)는 영구 거절이 아니라 다시 보낸다', () async {
+    repo.restoreError = ApiException(code: 'NETWORK', message: '연결 안 됨');
+    sync.start();
+    final p = _purchase('tok-net', PurchaseStatus.restored, pending: true, band: 4);
+    iap.emit([p]);
+    await settle();
+    iap.emit([p]);
+    await settle();
+
+    expect(repo.restored, ['tok-net', 'tok-net']);
+  });
+
+  // QA BILL-35 — Play 오류 원문(영문 BillingResponse…)을 보여 주지 않고 한국어로 안내한다.
+  testWidgets('BILL-35 결제 오류는 영문 코드 대신 한국어 안내', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        scaffoldMessengerKey: scaffoldMessengerKey,
+        home: const Scaffold(body: SizedBox())));
+    sync.start();
+    await tester.runAsync(() => sync.buy(_products(), bandId: 2));
+    iap.emit([_errorPurchase('BillingResponse.serviceUnavailable')]);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pump();
+
+    expect(find.textContaining('결제를 완료하지 못했어요'), findsOneWidget);
+    expect(find.textContaining('BillingResponse'), findsNothing);
   });
 
   test('#62 일시적 실패(5xx)는 다음에 다시 보낸다', () async {

@@ -102,4 +102,33 @@ class AuthLifecycleIntegrationTest extends ApiIntegrationTest {
         assertThat(errorCode(refreshed)).isEqualTo("REFRESH_TOKEN_INVALID");
         assertThat(refreshTokenStore.exists(userId, late.refreshJti())).isFalse();
     }
+
+    @Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    /** QA PRIV-03 — 탈퇴하면 기기 푸시 토큰이 지워지고, 옛 토큰으로 초대 합류·구매 복원·푸시 재등록이 안 된다. */
+    @Test
+    void withdrawn_account_loses_push_and_cannot_join_restore_or_reregister() {
+        JsonNode data = body(post("/api/v1/auth/signup",
+                "{\"email\":\"priv03@band.app\",\"password\":\"pw12345678\",\"name\":\"탈퇴자\"}")).get("data");
+        long userId = data.at("/user/id").asLong();
+        String access = data.at("/tokens/accessToken").asText();
+        assertThat(post("/api/v1/notifications/device-tokens",
+                "{\"token\":\"priv03-fcm\",\"platform\":\"ANDROID\"}", access).getStatusCode().value()).isEqualTo(201);
+        assertThat(jdbc.queryForObject("select count(*) from device_tokens where user_id = ?", Integer.class, userId))
+                .isEqualTo(1);
+
+        assertThat(post("/api/v1/users/me/withdraw", "{\"password\":\"pw12345678\"}", access)
+                .getStatusCode().value()).isEqualTo(204);
+
+        assertThat(jdbc.queryForObject("select count(*) from device_tokens where user_id = ?", Integer.class, userId))
+                .isZero(); // 푸시가 더 가지 않는다
+        for (ResponseEntity<String> res : java.util.List.of(
+                post("/api/v1/bands/join", "{\"code\":\"ABCD2345\"}", access),
+                post("/api/v1/plan/google/restore", "{\"purchaseToken\":\"t@band-1\"}", access),
+                post("/api/v1/notifications/device-tokens", "{\"token\":\"priv03-fcm2\",\"platform\":\"ANDROID\"}", access))) {
+            assertThat(res.getStatusCode().value()).isEqualTo(401);
+            assertThat(errorCode(res)).isEqualTo("ACCOUNT_WITHDRAWN");
+        }
+    }
 }

@@ -107,6 +107,27 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
     }
 
     @Test
+    void 보류_위에_쿠폰으로_PREMIUM_인_밴드도_결제자가_탈퇴하면_옛_구독을_해지한다() {
+        // QA BILL-22: 보류로 FREE → 쿠폰으로 PREMIUM(옛 토큰·결제자 기록은 남음). 결제수단이 복구되면 옛 구독이 다시 청구되므로
+        // 탈퇴할 때 해지해야 한다. 쿠폰 기간은 그대로 남는다.
+        String payer = signup("wcs-payer7@band.app", "결제자");
+        long bandId = createBand(payer, "보류쿠폰탈퇴");
+        String purchase = "wcs-f-" + System.nanoTime();
+        assertThat(verifyGoogle(payer, bandId, purchase).getStatusCode().value()).isEqualTo(200);
+        assertThat(googlePlayWebhook(RTDN_ON_HOLD, purchase).getStatusCode().value()).isEqualTo(200);
+        jdbc.update("insert into plan_coupons (code, grant_days, max_uses, expires_at, created_at) "
+                + "values ('WCSHOLD1', 30, null, null, now())");
+        assertThat(redeemCoupon(payer, bandId, "WCSHOLD1").getStatusCode().value()).isEqualTo(200);
+        assertThat(planRow(bandId).get("tier")).isEqualTo("PREMIUM");
+
+        withdraw(payer);
+
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
+        assertThat(planRow(bandId).get("tier")).isEqualTo("PREMIUM");         // 쿠폰 기간은 그대로
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isNull();
+    }
+
+    @Test
     void 해지_호출이_실패해도_탈퇴는_끝나고_재시도를_위해_결제자_연결은_남긴다() {
         String payer = signup("wcs-payer4@band.app", "결제자");
         long payerId = myUserId(payer);
@@ -143,6 +164,65 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
 
         assertThat(gateway.cancelledRenewals()).contains(purchase);
         assertThat(planRow(bandId).get("purchased_by_user_id")).isNull();
+    }
+
+    /** QA BILL-32 — 같은 Google 계정을 쓰는 다른 앱 계정 B 가 복원해도 처음 결제자 A 가 남는다. B 가 떠나면 해지 없음, A 가 떠나면 해지. */
+    @Test
+    void 다른_앱_계정이_복원해도_처음_결제자가_남고_그_사람이_떠날_때만_해지한다() {
+        String a = signup("wcs-restore-a@band.app", "결제자A");
+        String b = signup("wcs-restore-b@band.app", "복원자B");
+        long aId = myUserId(a);
+        String token = "wcs-g-" + System.nanoTime();
+        long bandId = createBand(a, "복원밴드");
+        String purchase = token + "@band-" + bandId;           // no-op 게이트웨이: 끝의 @band-N 이 구매에 적힌 밴드
+        long[] band = {bandId};
+        join(b, issueInvite(a, bandId, null));
+        assertThat(verifyGoogle(a, bandId, purchase).getStatusCode().value()).isEqualTo(200);
+        assertThat(post("/api/v1/bands/" + bandId + "/leader", "{\"newLeaderUserId\":" + myUserId(b) + "}", a)
+                .getStatusCode().value()).isEqualTo(200);
+
+        assertThat(post("/api/v1/plan/google/restore", "{\"purchaseToken\":\"" + purchase + "\"}", b)
+                .getStatusCode().value()).isEqualTo(200);
+        assertThat(planRow(band[0]).get("purchased_by_user_id")).isEqualTo(aId);   // 덮어쓰지 않는다
+
+        withdraw(b);   // 비결제자(지금 밴드장) 탈퇴 — 밴드장은 A 에게 자동 위임
+        assertThat(gateway.cancelledRenewals()).doesNotContain(purchase);
+
+        withdraw(a);   // 결제자 탈퇴
+        assertThat(gateway.cancelledRenewals()).contains(purchase);
+    }
+
+    /** QA BILL-32 — 결제자 기록이 비어 있으면(옛 구매) 처음 복원한 밴드장이 결제자로 적힌다. */
+    @Test
+    void 결제자_기록이_비어_있으면_복원한_밴드장이_결제자가_된다() {
+        String leader = signup("wcs-restore-c@band.app", "밴드장");
+        long leaderId = myUserId(leader);
+        long bandId = createBand(leader, "빈기록밴드");
+        String purchase = "wcs-h-" + System.nanoTime() + "@band-" + bandId;
+        assertThat(verifyGoogle(leader, bandId, purchase).getStatusCode().value()).isEqualTo(200);
+        jdbc.update("update band_plans set purchased_by_user_id = null where band_id = ?", bandId);
+
+        assertThat(post("/api/v1/plan/google/restore", "{\"purchaseToken\":\"" + purchase + "\"}", leader)
+                .getStatusCode().value()).isEqualTo(200);
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isEqualTo(leaderId);
+    }
+
+    /** QA BILL-34 — 스토어 구독 없이 쿠폰만 쓰는 밴드의 밴드장이 탈퇴해도 Play 해지 호출이 없다. */
+    @Test
+    void 쿠폰만_쓰는_밴드의_밴드장이_탈퇴해도_해지를_부르지_않는다() {
+        String leader = signup("wcs-coupon-only@band.app", "밴드장");
+        String member = signup("wcs-coupon-member@band.app", "멤버");
+        long bandId = createBand(leader, "쿠폰만밴드");
+        join(member, issueInvite(leader, bandId, null));
+        jdbc.update("insert into plan_coupons (code, grant_days, max_uses, expires_at, created_at) "
+                + "values ('WCSONLY1', 30, null, null, now())");
+        assertThat(redeemCoupon(leader, bandId, "WCSONLY1").getStatusCode().value()).isEqualTo(200);
+        int before = gateway.cancelledRenewals().size();
+
+        withdraw(leader);
+
+        assertThat(gateway.cancelledRenewals()).hasSize(before);
+        assertThat(planRow(bandId).get("tier")).isEqualTo("PREMIUM");
     }
 
     private int purchaserLeftNotices(long leaderId, long bandId) {
