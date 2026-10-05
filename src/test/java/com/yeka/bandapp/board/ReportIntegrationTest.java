@@ -64,11 +64,30 @@ class ReportIntegrationTest extends BoardApiSupport {
     void member_can_report_another_user() {
         String a = signup("rp-user-a@band.app", "에이");
         String b = signup("rp-user-b@band.app", "비");
-        createBand(a, "국카스텐");
+        long band = createBand(a, "국카스텐");
+        join(b, issueInvite(a, band, null)); // 같은 밴드 사람만 신고할 수 있다(U36)
 
         ResponseEntity<String> res = post(REPORTS,
                 "{\"targetType\":\"USER\",\"targetId\":" + myUserId(b) + ",\"reason\":\"괴롭힘\"}", a);
         assertThat(res.getStatusCode().value()).isEqualTo(201);
+    }
+
+    /** U36 — 같은 밴드가 아닌 사람과 없는 번호는 똑같이 404 라 응답으로 계정 존재를 알아낼 수 없다. */
+    @Test
+    void reporting_a_user_outside_my_bands_looks_the_same_as_a_missing_user() {
+        String a = signup("rp-enum-a@band.app", "에이");
+        String stranger = signup("rp-enum-s@band.app", "남");
+        createBand(a, "내밴드");
+        createBand(stranger, "남의밴드");
+
+        ResponseEntity<String> existing = post(REPORTS,
+                "{\"targetType\":\"USER\",\"targetId\":" + myUserId(stranger) + ",\"reason\":\"x\"}", a);
+        ResponseEntity<String> missing = post(REPORTS,
+                "{\"targetType\":\"USER\",\"targetId\":987654321,\"reason\":\"x\"}", a);
+
+        assertThat(existing.getStatusCode().value()).isEqualTo(404);
+        assertThat(missing.getStatusCode().value()).isEqualTo(404);
+        assertThat(errorCode(existing)).isEqualTo(errorCode(missing)).isEqualTo("REPORT_TARGET_NOT_FOUND");
     }
 
     @Test
