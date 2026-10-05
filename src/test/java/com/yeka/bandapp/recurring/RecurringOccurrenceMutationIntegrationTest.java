@@ -122,6 +122,45 @@ class RecurringOccurrenceMutationIntegrationTest extends RecurringApiSupport {
         assertThat(reservations.findById(past.getId()).orElseThrow().getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
     }
 
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    /** QA REC-05 — 과거·진행 중·미래 회차가 섞인 규칙을 지우면 미래 회차만 취소되고, 진행 중 회차의 상태·정산은 그대로다. */
+    @Test
+    void deleting_a_rule_cancels_only_unstarted_occurrences_and_keeps_an_in_progress_one() {
+        String leader = signup("inprog-owner@band.app", "owner");
+        String member = signup("inprog-member@band.app", "member");
+        long band = createBand(leader, "in progress");
+        assertThat(join(member, issueInvite(leader, band, null)).getStatusCode().value()).isEqualTo(200);
+        long room = createRoom(leader, band, "{\"name\":\"room\"}");
+        long rule = weeklyRule(leader, band, room);
+        seedPastOccurrences(leader, band, room, rule, 1);
+
+        var all = reservations.findByRecurringRuleIdOrderByStartAtAsc(rule);
+        var past = all.getFirst();
+        var inProgress = all.get(1); // 내일 회차를 "1시간 전 시작, 2시간 뒤 끝" 으로 옮긴다
+        jdbc.update("update reservations set start_at = now() - interval '1 hour', end_at = now() + interval '2 hours' "
+                + "where id = ?", inProgress.getId());
+        var futureIds = all.subList(2, all.size()).stream().map(Reservation::getId).toList();
+        assertThat(futureIds).isNotEmpty();
+
+        String path = "/api/v1/bands/" + band + "/reservations/" + inProgress.getId() + "/settlement";
+        assertThat(post(path, "{\"totalAmount\":20000,\"splitType\":\"EQUAL\"}", leader)
+                .getStatusCode().value()).isEqualTo(201);
+        assertThat(put(path + "/shares/" + myUserId(member), "{\"paid\":true}", member)
+                .getStatusCode().value()).isEqualTo(200);
+        var settlementBefore = data(get(path, leader));
+
+        assertThat(delete("/api/v1/bands/" + band + "/recurring-rules/" + rule, leader)
+                .getStatusCode().value()).isEqualTo(204);
+
+        assertThat(reservations.findById(past.getId()).orElseThrow().getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(reservations.findById(inProgress.getId()).orElseThrow().getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(futureIds).allSatisfy(id ->
+                assertThat(reservations.findById(id).orElseThrow().getStatus()).isEqualTo(ReservationStatus.CANCELLED));
+        assertThat(reservations.findAllById(futureIds)).hasSize(futureIds.size()); // 행은 남는다(소프트 취소)
+        assertThat(data(get(path, leader))).isEqualTo(settlementBefore);
+    }
+
     private long weeklyRule(String leader, long band, long room) {
         var start = today().plusDays(1);
         return createRule(leader, band,

@@ -39,6 +39,9 @@ class MediaExpirationJobTest extends BoardApiSupport {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private com.yeka.bandapp.board.service.MediaDirectoryService mediaDirectory;
+
     @BeforeEach
     void resetStorage() {
         storage.reset();
@@ -98,6 +101,51 @@ class MediaExpirationJobTest extends BoardApiSupport {
     }
 
     // --- helpers -------------------------------------------------------
+
+    /** QA MEDIA-09 — 만료된 첨부는 주소가 막히고(downloadUrl 없음) 글 제목·본문은 그대로 남는다. */
+    @Test
+    void expired_media_has_no_download_url_and_the_post_body_survives() {
+        String leader = signup("exp-body-l@band.app", "리더");
+        long bandId = createBand(leader, "만료본문밴드");
+        long postId = createPost(leader, bandId, "남는 제목", "남는 본문");
+        long mediaId = data(issueUploadUrl(leader, bandId, postId, "image/jpeg", ONE_KB)).get("mediaId").asLong();
+        storage.putObject(storage.lastPresignedPutKey(), ONE_KB, "image/jpeg");
+        assertThat(completeUpload(leader, bandId, postId, mediaId).getStatusCode().value()).isEqualTo(200);
+        String path = "/api/v1/bands/" + bandId + "/posts/" + postId;
+        assertThat(data(get(path, leader)).at("/media/0/downloadUrl").isTextual()).isTrue();
+
+        expireAt(mediaId, Instant.now().minusSeconds(60));
+        assertThat(mediaMaintenanceService.expireOverdue(Instant.now())).isEqualTo(1);
+
+        var post = data(get(path, leader));
+        assertThat(post.get("title").asText()).isEqualTo("남는 제목");
+        assertThat(post.get("content").asText()).isEqualTo("남는 본문");
+        var media = post.at("/media/0");
+        assertThat(media.get("status").asText()).isEqualTo("EXPIRED");
+        assertThat(media.path("downloadUrl").isNull() || media.path("downloadUrl").isMissingNode()).isTrue();
+    }
+
+    /** QA MEDIA-10 — 한 밴드의 업그레이드(보관기한 해제)·강등(유예 기한)이 다른 밴드 첨부의 보관기한을 건드리지 않는다. */
+    @Test
+    void upgrade_and_downgrade_change_retention_only_for_that_band() {
+        long a = uploadReady("iso-a");
+        long b = uploadReady("iso-b");
+        long bandA = jdbc.queryForObject("select p.band_id from media_attachments m join board_posts p on p.id = m.board_post_id "
+                + "where m.id = ?", Long.class, a);
+        java.util.function.LongFunction<Timestamp> expiry = id ->
+                jdbc.queryForObject("select expires_at from media_attachments where id = ?", Timestamp.class, id);
+        Timestamp bBefore = expiry.apply(b);
+        assertThat(bBefore).isNotNull(); // 무료라 30일 기한
+
+        mediaDirectory.extendRetentionForBand(bandA);   // A 업그레이드
+        assertThat(expiry.apply(a)).isNull();
+        assertThat(expiry.apply(b)).isEqualTo(bBefore);
+
+        Instant grace = Instant.now().plus(java.time.Duration.ofDays(7));
+        mediaDirectory.applyGracePeriodForBand(bandA, grace);   // A 강등 — 유예 기한
+        assertThat(expiry.apply(a)).isNotNull();
+        assertThat(expiry.apply(b)).isEqualTo(bBefore);
+    }
 
     private long uploadReady(String slugPrefix) {
         String leader = signup(slugPrefix + "-l@band.app", "리더");

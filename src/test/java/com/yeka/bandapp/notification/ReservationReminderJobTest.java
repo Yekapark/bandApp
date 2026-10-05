@@ -98,6 +98,31 @@ class ReservationReminderJobTest extends NotificationApiSupport {
         assertThat(push.sentCount()).isEqualTo(2);
     }
 
+    /** QA PUSH-10 — 시작 시각은 그대로 두고 장소·메모만 바꾸면 이미 보낸 리마인더를 다시 보내지 않는다. */
+    @Test
+    void changing_only_the_room_or_note_does_not_resend_the_reminder() {
+        String leader = signup("rmd-place-l@band.app", "리더");
+        long bandId = createBand(leader, "장소만");
+        registerToken(leader, "place-dev", "ANDROID");
+        putSettings(leader, true, 60);
+        long roomA = createRoom(leader, bandId, "{\"name\":\"A방\"}");
+        long roomB = createRoom(leader, bandId, "{\"name\":\"B방\"}");
+        // 앱처럼 분 단위 시각을 쓴다 — Instant.now() 의 나노초는 DB(마이크로초)에 잘려 "시각이 바뀜" 으로 보인다.
+        Instant base = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+        String start = base.plus(Duration.ofMinutes(30)).toString();
+        String end = base.plus(Duration.ofMinutes(90)).toString();
+        long reservationId = createReservation(leader, bandId, roomA, start, end);
+        push.reset();
+        assertThat(reminderService.runOnce(Instant.now())).isEqualTo(1);
+
+        assertThat(put("/api/v1/bands/" + bandId + "/reservations/" + reservationId,
+                "{\"roomId\":" + roomB + ",\"startAt\":\"" + start + "\",\"endAt\":\"" + end
+                        + "\",\"note\":\"장소 바뀜\"}", leader).getStatusCode().value()).isEqualTo(200);
+
+        assertThat(reminderService.runOnce(Instant.now())).isZero();
+        assertThat(push.sentCount()).isEqualTo(1);
+    }
+
     /** 시점보다 늦게 도래하면 문구는 실제 남은 시간 — 5분 뒤 시작인데 "1시간 뒤" 라고 하면 안 된다. */
     @Test
     void late_reminder_says_the_real_time_left() {
