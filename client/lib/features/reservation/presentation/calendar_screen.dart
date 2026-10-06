@@ -51,6 +51,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     final key = (bandId: band.id, month: month);
     final reservationsAsync = ref.watch(monthReservationsProvider(key));
+    // 한 번도 못 받은 달이면 "일정 없음" 은 사실이 아니다 — 오류 줄만 보이고 빈 날 안내는 숨긴다(UI-05).
+    final unknown = reservationsAsync.hasError && !reservationsAsync.hasValue;
     final byDay = <DateTime, List<Reservation>>{};
     for (final r in reservationsAsync.valueOrNull ?? const <Reservation>[]) {
       final d = _dayOnly(r.startAt.toLocal());
@@ -132,7 +134,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
                 const SizedBox(width: 9),
                 Text(
-                  dayItems.isEmpty ? '일정 없음' : '${dayItems.length}건',
+                  unknown ? '' : dayItems.isEmpty ? '일정 없음' : '${dayItems.length}건',
                   style:
                       const TextStyle(fontSize: 11.5, color: AppColors.textDim),
                 ),
@@ -146,7 +148,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               ],
             ),
             const SizedBox(height: 10),
-            if (dayItems.isEmpty)
+            if (unknown)
+              const SizedBox.shrink()
+            else if (dayItems.isEmpty)
               _EmptyDay()
             else
               for (final r in dayItems)
