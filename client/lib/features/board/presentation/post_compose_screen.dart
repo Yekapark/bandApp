@@ -239,7 +239,8 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               pending: _pending,
               busy: _busy,
               compressPct: _compressPct,
-              pendingFailed: _isEdit,
+              // 업로드가 도는 동안엔 아직 실패가 아니다 — 예전엔 올리는 중인 첨부까지「올리지 못함」으로 보였다(QA-R20).
+              pendingFailed: _isEdit && !_busy,
               onAdd: () => _addAttachment(bandId),
               onRemove: (m) => _removeMedia(bandId, m),
               onRemovePending: _removePending,

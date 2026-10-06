@@ -137,9 +137,17 @@ class BoardRepository {
       contentType: contentType,
       sizeBytes: sizeBytes,
     );
-    await _putToStorage(ticket, data, sizeBytes, contentType, onProgress);
-    return _completeMedia(
-        bandId: bandId, postId: postId, mediaId: ticket.mediaId);
+    try {
+      await _putToStorage(ticket, data, sizeBytes, contentType, onProgress);
+      return await _completeMedia(
+          bandId: bandId, postId: postId, mediaId: ticket.mediaId);
+    } catch (_) {
+      // 실패한 첨부의 PENDING 행을 치운다 — 남으면 재시도한 새 첨부와 함께 글에 "업로드 처리 중인 첨부예요" 와
+      // 첨부 수 +1 이 서버 고아 정리(1시간)까지 모든 멤버에게 보였다(QA-R19). 오프라인이면 이것도 실패하니 무시한다.
+      await deleteMedia(bandId: bandId, postId: postId, mediaId: ticket.mediaId)
+          .catchError((_) {});
+      rethrow;
+    }
   }
 
   Future<UploadTicket> _issueUploadUrl({
