@@ -161,7 +161,11 @@ class _Header extends ConsumerWidget {
         const SizedBox(width: 8),
         _IconSquare(
           icon: Icons.settings_outlined,
-          onTap: () => context.push(Routes.settings),
+          onTap: () {
+            // 설정 홈의 「멤버 초대」 등은 내 역할로 갈린다 — 다른 기기에서 위임받았으면 캐시는 아직 멤버다(U47).
+            ref.invalidate(myBandsProvider);
+            context.push(Routes.settings);
+          },
         ),
       ],
     );

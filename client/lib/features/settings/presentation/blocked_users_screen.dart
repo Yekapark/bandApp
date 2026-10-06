@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../board/application/board_providers.dart';
 import '../../board/data/board_models.dart';
 import '../../board/data/board_repository.dart';
 import '../application/settings_providers.dart';
@@ -87,6 +88,8 @@ class BlockedUsersScreen extends ConsumerWidget {
     try {
       await ref.read(boardRepositoryProvider).unblock(b.blockedUserId);
       ref.invalidate(blockedUsersProvider);
+      // 받아 둔 게시판 목록엔 그 사람 글이 빠져 있다 — 새로고침 전까지 안 돌아왔다(QA-R16).
+      ref.invalidate(boardFeedProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()

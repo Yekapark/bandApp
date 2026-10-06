@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../routing/app_router.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../band/application/band_providers.dart';
+import '../../band/application/invite_providers.dart';
 import '../../band/data/band_models.dart';
 import '../../band/data/band_repository.dart';
 import '../../plan/application/plan_providers.dart';
@@ -25,6 +26,20 @@ class BandSettingsScreen extends ConsumerStatefulWidget {
 
 class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
   bool _busy = false;
+
+  /// 멤버·내 역할(myBands)·밴드 정보는 홈이 늘 구독해 캐시가 남는다 — 그 사이 가입한 멤버가 안 보여 위임할
+  /// 대상을 못 골랐고, 위임받은 새 밴드장에게 관리 버튼이 안 보였다. 설정을 열 때마다 새로 받는다(QA-R14).
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final band = mounted ? ref.read(currentBandProvider) : null;
+      if (band == null) return;
+      ref.invalidate(myBandsProvider);
+      ref.invalidate(bandMembersProvider(band.id));
+      ref.invalidate(bandDetailProvider(band.id));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -419,6 +434,8 @@ class _BandSettingsScreenState extends ConsumerState<BandSettingsScreen> {
           .kickMember(bandId: bandId, targetUserId: m.userId);
       container.invalidate(bandMembersProvider(bandId));
       container.invalidate(myBandsProvider);
+      // 서버가 추방과 함께 지금 초대코드를 무효화한다 — 안 버리면 초대 화면이 죽은 코드를 계속 보여 준다(QA-R15).
+      container.invalidate(currentInviteProvider(bandId));
       _toast('${m.name} 님을 내보냈어요.');
     } on ApiException catch (e) {
       _toast(e.message);

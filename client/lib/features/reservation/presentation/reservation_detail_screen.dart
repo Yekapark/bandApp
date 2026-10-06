@@ -829,19 +829,11 @@ class _SetlistBlockState extends State<_SetlistBlock> {
   @override
   void didUpdateWidget(_SetlistBlock old) {
     super.didUpdateWidget(old);
-    final incoming = widget.items.map((e) => e.id).toList();
-    final current = _local.map((e) => e.id).toList();
-    if (!_sameOrder(incoming, current)) {
+    // 서버에서 새 목록이 왔을 때만 바꾼다(같은 목록으로 다시 그려질 땐 드래그한 순서 유지). 예전엔 id 순서가
+    // 같으면 버려서 곡 제목·링크를 고쳐도 다시 들어가기 전까지 옛 값이 보였다(QA-R17).
+    if (!identical(old.items, widget.items)) {
       _local = List.of(widget.items);
     }
-  }
-
-  bool _sameOrder(List<int> a, List<int> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
   }
 
   /// [newIndex] 는 oldIndex 항목이 제거된 뒤 기준으로 이미 보정된 값이다(onReorderItem).

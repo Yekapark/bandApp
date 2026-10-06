@@ -216,7 +216,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   '· ${o.roomName}  ${Fmt.dateKoUtc(o.startAt)} '
-                  '${Fmt.time(o.startAt)}–${Fmt.time(o.endAt)}',
+                  '${Fmt.timeRange(o.startAt, o.endAt)}',
                   style: const TextStyle(fontSize: 12),
                 ),
               ),
