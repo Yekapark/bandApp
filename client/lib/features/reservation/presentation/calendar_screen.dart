@@ -415,7 +415,7 @@ class _DayReservationTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${Fmt.time(r.startAt)}–${Fmt.time(r.endAt)} · '
+                    '${Fmt.timeRange(r.startAt, r.endAt)} · '
                     '${Fmt.durationKo(r.startAt, r.endAt)}',
                     style:
                         const TextStyle(fontSize: 11, color: AppColors.textDim),

@@ -26,6 +26,15 @@ class Fmt {
     return '${_two(d.hour)}:${_two(d.minute)}';
   }
 
+  /// "23:00–다음날 02:00". 자정을 넘기면 끝 시각이 다음 날임을 밝힌다 — 일정은 시작일에만 보여서
+  /// "23:00–02:00" 만으로는 끝나는 날이 헷갈렸다(CAL-09).
+  static String timeRange(DateTime startUtc, DateTime endUtc) {
+    final s = startUtc.toLocal();
+    final e = endUtc.toLocal();
+    final nextDay = DateTime(e.year, e.month, e.day).isAfter(DateTime(s.year, s.month, s.day));
+    return '${time(startUtc)}–${nextDay ? '다음날 ' : ''}${time(endUtc)}';
+  }
+
   /// "14" (일)
   static String day(DateTime utc) => utc.toLocal().day.toString();
 

@@ -11,4 +11,10 @@ void main() {
   test('연도 없는 표기는 그대로', () {
     expect(Fmt.dateKo(DateTime(2026, 9, 10)), '9월 10일 (목)');
   });
+
+  test('자정을 넘기는 일정은 끝 시각에 다음날을 붙인다', () {
+    final start = DateTime(2026, 10, 31, 23).toUtc();
+    expect(Fmt.timeRange(start, start.add(const Duration(hours: 3))), '23:00–다음날 02:00');
+    expect(Fmt.timeRange(start.subtract(const Duration(hours: 4)), start), '19:00–23:00');
+  });
 }
