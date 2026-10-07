@@ -95,6 +95,8 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
+        // 작은 화면에서 키보드가 열리면 내용이 창 밖으로 넘친다(QA-R24).
+        scrollable: true,
         title: const Text('정말 탈퇴할까요?', style: TextStyle(fontSize: 16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,

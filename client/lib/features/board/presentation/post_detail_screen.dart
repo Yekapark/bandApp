@@ -243,6 +243,8 @@ class PostDetailScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
+        // 작은 화면에서 키보드가 열리면 내용이 창 밖으로 넘친다(QA-R24).
+        scrollable: true,
         title: const Text('신고', style: TextStyle(fontSize: 16)),
         content: TextField(
           controller: controller,

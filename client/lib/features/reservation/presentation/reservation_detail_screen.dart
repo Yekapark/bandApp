@@ -1223,6 +1223,8 @@ class _SongDialogState extends State<_SongDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppColors.surface,
+      // 작은 화면에서 키보드가 열리면 내용이 창 밖으로 넘친다(QA-R24).
+      scrollable: true,
       title:
           Text(_isEdit ? '곡 수정' : '곡 추가', style: const TextStyle(fontSize: 16)),
       content: Column(
