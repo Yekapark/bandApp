@@ -262,7 +262,11 @@ class PostDetailScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (reason == null || reason.isEmpty) return;
+    if (reason == null || !context.mounted) return;
+    if (reason.isEmpty) {
+      _snack(context, '신고 사유를 적어주세요.');
+      return;
+    }
     try {
       await ref.read(boardRepositoryProvider).report(
             targetType: targetType,
