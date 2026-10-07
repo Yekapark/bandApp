@@ -109,7 +109,7 @@ def cmd_hide_post(a):
     cmd_post(a)
     confirm(f"글 {a.post_id} 을 숨기고, 첨부를 저장소 삭제 대기로 돌리고, 관련 신고를 처리 완료로 바꾼다.")
     print(sql(hide_post_sql(a.post_id)))
-    print("완료. 첨부는 오늘 04:15 배치가 저장소에서 지운다.")
+    print("완료. 첨부는 다음 04:15 배치가 저장소에서 지운다.")
 
 
 def cmd_hide_media(a):
@@ -140,7 +140,7 @@ def cmd_suspend(a):
             + (" 이 사람의 글도 모두 숨긴다." if a.hide_posts else ""))
 
     statements = (
-        f"UPDATE users SET suspended_until = {until}::timestamptz, suspension_reason = {quote(a.reason.strip()[:200])} "
+        f"UPDATE users SET suspended_until = ({until})::timestamptz, suspension_reason = {quote(a.reason.strip()[:200])} "
         f"WHERE id = {a.user_id};\n"
         # 정지된 사람의 기기로 밴드 알림(일정·정산·글)이 계속 가지 않게.
         f"DELETE FROM device_tokens WHERE user_id = {a.user_id};\n"

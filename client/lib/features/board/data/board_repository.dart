@@ -1,4 +1,3 @@
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,6 +23,7 @@ class BoardRepository {
   BoardRepository(this._dio);
 
   final Dio _dio;
+  final _failedUploads = <({int bandId, int postId, int mediaId})>{};
   final Dio _plain = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 10),
@@ -128,9 +128,11 @@ class BoardRepository {
     required String contentType,
     required int sizeBytes,
     required Stream<List<int>> data,
+
     /// 저장소로 보낸 바이트 수. 영상은 수백 MB 라 화면에 진행률을 보여줘야 한다.
     void Function(int sent, int total)? onProgress,
   }) async {
+    await _cleanupFailedUploads(bandId: bandId, postId: postId);
     final ticket = await _issueUploadUrl(
       bandId: bandId,
       postId: postId,
@@ -142,11 +144,34 @@ class BoardRepository {
       return await _completeMedia(
           bandId: bandId, postId: postId, mediaId: ticket.mediaId);
     } catch (_) {
-      // 실패한 첨부의 PENDING 행을 치운다 — 남으면 재시도한 새 첨부와 함께 글에 "업로드 처리 중인 첨부예요" 와
-      // 첨부 수 +1 이 서버 고아 정리(1시간)까지 모든 멤버에게 보였다(QA-R19). 오프라인이면 이것도 실패하니 무시한다.
-      await deleteMedia(bandId: bandId, postId: postId, mediaId: ticket.mediaId)
+      // 오프라인이면 삭제도 실패한다. ID를 남겨 재시도 전에 지우고 새 첨부를 만든다(QA-R19).
+      _failedUploads
+          .add((bandId: bandId, postId: postId, mediaId: ticket.mediaId));
+      await _cleanupFailedUploads(bandId: bandId, postId: postId)
           .catchError((_) {});
       rethrow;
+    }
+  }
+
+  Future<void> _cleanupFailedUploads({
+    required int bandId,
+    required int postId,
+  }) async {
+    // 프로세스를 종료하면 이 목록은 사라진다. 그 경우 기존 서버 고아 정리가 처리한다.
+    final failed = _failedUploads
+        .where((m) => m.bandId == bandId && m.postId == postId)
+        .toList();
+    for (final media in failed) {
+      try {
+        await deleteMedia(
+          bandId: bandId,
+          postId: postId,
+          mediaId: media.mediaId,
+        );
+      } on ApiException catch (e) {
+        if (e.statusCode != 404) rethrow;
+      }
+      _failedUploads.remove(media);
     }
   }
 
@@ -182,8 +207,9 @@ class BoardRepository {
         ticket.uploadUrl,
         data: data,
         // 스트림이라 dio 가 전체 크기를 모른다(total 이 -1 로 온다). 우리가 아는 값을 넘긴다.
-        onSendProgress:
-            onProgress == null ? null : (sent, _) => onProgress(sent, sizeBytes),
+        onSendProgress: onProgress == null
+            ? null
+            : (sent, _) => onProgress(sent, sizeBytes),
         options: Options(
           sendTimeout: uploadSendTimeout(sizeBytes),
           headers: {
