@@ -16,6 +16,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../band/application/band_providers.dart';
 import '../application/board_providers.dart';
+import '../application/picker_cache.dart';
 import '../data/board_models.dart';
 import '../data/board_repository.dart';
 
@@ -99,6 +100,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               () => _compressor.cleanupFiles(deleteCompressedVideos: true))
           .catchError((_) {}));
     }
+    unawaited(purgePickerCopies(const {}));
     _title.dispose();
     _content.dispose();
     super.dispose();
@@ -525,6 +527,8 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       _toast('첨부는 글당 10개까지예요. 앞의 ${files.length}개만 담았어요.');
     }
 
+    rememberPickerCacheDir([for (final f in files) f.path]);
+
     final items = <_PendingMedia>[];
     for (final file in files) {
       final contentType = _resolveContentType(file, kind);
@@ -547,6 +551,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
         continue;
       }
       items.add(item);
+    }
+    if (!_busy) {
+      await purgePickerCopies(
+          {for (final p in [..._pending, ...items]) p.file.path});
     }
     if (items.isEmpty || !mounted) return;
 
