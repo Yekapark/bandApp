@@ -46,6 +46,10 @@ class _ReservationDetailScreenState
   int _rsvpSeq = 0;
   bool _busy = false;
 
+  /// 곡을 지운 직후 목록이 한 칸씩 당겨진다. 같은 자리를 연타하던 손가락이 다음 곡 ✕ 를 누르지 않게
+  /// 새 목록이 보인 뒤 잠깐 ✕ 를 무시한다(QA-R25/U59).
+  DateTime _songDeleteBlockedUntil = DateTime(0);
+
   ReservationKey _key(int bandId) =>
       (bandId: bandId, reservationId: widget.reservationId);
 
@@ -356,6 +360,7 @@ class _ReservationDetailScreenState
 
   /// ✕ 는 드래그 손잡이 옆이라 잘못 누르기 쉽다(#65). 바로 지우되 "되돌리기" 를 준다.
   Future<void> _deleteSong(int bandId, SetlistItem item) async {
+    if (_busy || DateTime.now().isBefore(_songDeleteBlockedUntil)) return;
     final order = ref
             .read(reservationDetailProvider(_key(bandId)))
             .valueOrNull
@@ -373,7 +378,14 @@ class _ReservationDetailScreenState
             reservationId: widget.reservationId,
             itemId: item.id,
           );
-      container.invalidate(reservationDetailProvider(_key(bandId)));
+      // 새 목록이 올 때까지 잠근다 — 그 전에 풀면 지운 곡이 아직 보이고 눌려서 "항목을 찾을 수 없습니다"(QA-R21/U54).
+      try {
+        await container.refresh(reservationDetailProvider(_key(bandId)).future);
+      } catch (_) {
+        // 목록을 못 받아도 삭제는 끝났다. 화면은 provider 의 오류 표시로 넘긴다.
+      }
+      _songDeleteBlockedUntil =
+          DateTime.now().add(const Duration(milliseconds: 500));
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
