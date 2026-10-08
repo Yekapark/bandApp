@@ -8,6 +8,7 @@ import com.yeka.bandapp.reservation.repository.ReservationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -154,6 +155,49 @@ class RecurringExtensionJobTest extends RecurringApiSupport {
         for (Reservation r : after) {
             assertThat(r.getStartAt().atZone(SEOUL).toLocalDate()).isBeforeOrEqualTo(endDate);
         }
+    }
+
+    /**
+     * QA REC-08 — "매월 마지막 주" 규칙이 실제 DB·연장 배치에서도 달이 바뀔 때마다 그 달 마지막 요일로 이어진다
+     * (예: 10/31 → 11/28 → 12/26). 날짜를 고정할 수 없어(시계 주입 없음) 지평선 안에 마지막 요일이 두 번
+     * 드는 요일을 고르고, 시작일은 과거의 5번째 요일로 둔다(과거 시작일도 회차는 오늘부터).
+     */
+    @Test
+    void monthly_last_week_rule_extends_into_the_next_month_on_its_last_weekday() {
+        String leader = signup("rec-job-lastweek@band.app", "리더");
+        long bandId = createBand(leader, "마지막주밴드");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+
+        LocalDate today = today();
+        DayOfWeek dow = java.util.Arrays.stream(DayOfWeek.values())
+                .filter(d -> lastWeekdaysWithin(d, today, today.plusWeeks(8)).size() >= 2)
+                .findFirst().orElseThrow();
+        LocalDate start = today.minusDays(1);
+        while (start.getDayOfWeek() != dow || start.getDayOfMonth() < 29) {
+            start = start.minusDays(1);
+        }
+
+        long ruleId = createRule(leader, bandId, ruleBody(roomId, "MONTHLY", dow, "19:00", "22:00", start, null));
+        List<Reservation> occ = reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId);
+        List<LocalDate> expected = lastWeekdaysWithin(dow, today, today.plusWeeks(8));
+        assertThat(datesOf(occ)).isEqualTo(expected);
+
+        // 첫 회차만 남기고 지워 "다음 달 회차는 아직 안 만듦" 을 흉내 낸 뒤 배치가 다음 달 마지막 요일을 채우는지.
+        hardDeleteOccurrences(occ.subList(1, occ.size()));
+        assertThat(recurringRuleService.extendRule(ruleId)).isEqualTo(expected.size() - 1);
+        assertThat(datesOf(reservationRepository.findByRecurringRuleIdOrderByStartAtAsc(ruleId))).isEqualTo(expected);
+        assertThat(recurringRuleService.extendRule(ruleId)).isZero();
+    }
+
+    private static List<LocalDate> lastWeekdaysWithin(DayOfWeek dow, LocalDate today, LocalDate horizonEnd) {
+        return today.withDayOfMonth(1).datesUntil(horizonEnd.plusMonths(1), java.time.Period.ofMonths(1))
+                .map(m -> m.with(java.time.temporal.TemporalAdjusters.lastInMonth(dow)))
+                .filter(d -> !d.isBefore(today) && !d.isAfter(horizonEnd))
+                .toList();
+    }
+
+    private static List<LocalDate> datesOf(List<Reservation> occ) {
+        return occ.stream().map(r -> r.getStartAt().atZone(SEOUL).toLocalDate()).toList();
     }
 
     /** 규칙이 삭제된 뒤 연장을 호출해도 아무 회차도 만들지 않는다. */
