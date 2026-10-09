@@ -32,4 +32,24 @@ void main() {
     expect(other.existsSync(), isTrue);
     setPickerCacheDirForTest(null);
   });
+
+  test('startup purges leftover picker copies and compressed videos', () async {
+    final cache = await Directory.systemTemp.createTemp('picker_startup_test');
+    addTearDown(() => cache.delete(recursive: true));
+    final left = File('${cache.path}${Platform.pathSeparator}11111111-2222-3333-4444-555555555555${Platform.pathSeparator}v.mp4')
+      ..createSync(recursive: true);
+    final other = File('${cache.path}${Platform.pathSeparator}keep.bin')..createSync();
+    var compressedCleaned = false;
+
+    setPickerCacheDirForTest(null);
+    await purgeStaleMediaOnStartup(
+      tempDir: () async => cache,
+      cleanupCompressed: () async => compressedCleaned = true,
+    );
+
+    expect(left.parent.existsSync(), isFalse);
+    expect(other.existsSync(), isTrue);
+    expect(compressedCleaned, isTrue);
+    setPickerCacheDirForTest(null);
+  });
 }
