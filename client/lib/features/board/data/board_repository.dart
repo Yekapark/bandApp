@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+import '../../auth/application/auth_controller.dart';
 import 'board_models.dart';
 
 /// 저장소 PUT 의 전송 제한 시간. dio 의 sendTimeout 은 "본문 **전체**를 보내는 데" 걸리는 시간이라,
@@ -12,6 +13,7 @@ Duration uploadSendTimeout(int sizeBytes) =>
     Duration(seconds: 60 + sizeBytes ~/ (64 * 1024));
 
 final boardRepositoryProvider = Provider<BoardRepository>((ref) {
+  ref.watch(signedInUserIdProvider); // 계정이 바뀌면 이 저장소 위의 캐시를 버린다(AUTH-09)
   return BoardRepository(ref.watch(dioProvider));
 });
 

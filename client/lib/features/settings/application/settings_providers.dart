@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../board/data/board_models.dart';
-import '../../notification/application/notification_providers.dart';
+import '../../auth/application/auth_controller.dart';
 import '../../board/data/board_repository.dart';
 
 /// 내가 차단한 사용자 목록.

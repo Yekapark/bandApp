@@ -183,3 +183,10 @@ class AuthController extends Notifier<AuthState> {
     state = const AuthState.signedOut();
   }
 }
+
+/// 지금 로그인한 사용자 id. 내 것만 담는 캐시(알림 설정·알림 목록)가 이걸 지켜본다 — 로그아웃하고 다른 계정으로
+/// 들어오면 다시 받는다. 데이터 저장소(일정·게시판·정산 등)도 이걸 지켜봐서, 계정이 바뀌면 그 위의 캐시가 모두
+/// 새로 받아진다(AUTH-09 — 같은 밴드의 다른 계정으로 바꿔 로그인하면 앞 계정 시점의 화면이 남아 있었다). 예전에는 앱을 끄기 전까지 앞 계정의 알림 설정·알림 목록이 그대로 보였고, 그 설정으로
+/// [저장] 을 누르면 새 계정에 앞 계정 값이 들어갔다.
+final signedInUserIdProvider =
+    Provider<int?>((ref) => ref.watch(authControllerProvider.select((s) => s.user?.id)));

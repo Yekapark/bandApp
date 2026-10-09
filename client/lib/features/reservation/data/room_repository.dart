@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+import '../../auth/application/auth_controller.dart';
 import 'place_models.dart';
 import 'room_models.dart';
 
 final roomRepositoryProvider = Provider<RoomRepository>((ref) {
+  ref.watch(signedInUserIdProvider); // 계정이 바뀌면 이 저장소 위의 캐시를 버린다(AUTH-09)
   return RoomRepository(ref.watch(dioProvider));
 });
 

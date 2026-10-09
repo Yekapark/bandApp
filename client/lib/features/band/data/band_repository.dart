@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+import '../../auth/application/auth_controller.dart';
 import 'band_models.dart';
 
 final bandRepositoryProvider = Provider<BandRepository>((ref) {
+  ref.watch(signedInUserIdProvider); // 계정이 바뀌면 이 저장소 위의 캐시를 버린다(AUTH-09)
   return BandRepository(ref.watch(dioProvider));
 });
 
