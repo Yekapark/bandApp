@@ -9,6 +9,13 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 ///
 /// 네이티브: 카카오톡 설치 시 앱 전환 로그인, 아니면 카카오계정(웹뷰) 로그인.
 /// 웹: 카카오계정 로그인만 가능.
+/// 사용자가 카카오 로그인을 스스로 그만뒀는가. 취소 신호는 두 가지다 — 카카오톡 로그인 화면을 닫으면
+/// PlatformException('CANCELED'), **동의 화면의 「취소」** 는 KakaoAuthException(access_denied).
+/// 예전엔 앞의 것만 봐서 동의 화면 취소 뒤 브라우저 로그인 창이 또 떴다(QA-R29, AUTH-16).
+bool isKakaoLoginCanceled(Object e) =>
+    (e is PlatformException && e.code == 'CANCELED') ||
+    (e is KakaoAuthException && e.error == AuthErrorCause.accessDenied);
+
 Future<String> fetchKakaoAccessToken() async {
   OAuthToken token;
   if (!kIsWeb && await isKakaoTalkInstalled()) {
@@ -18,8 +25,8 @@ Future<String> fetchKakaoAccessToken() async {
       // 사용자가 카카오톡 로그인을 취소하면 계정 로그인으로 폴백하지 않는다
       // (취소를 계정창으로 되돌리면 UX 가 나쁨). 그 외 오류만 폴백.
       // 예전에는 주석과 달리 모든 오류를 폴백해서, 카카오톡에서 "취소" 를 눌러도 브라우저
-      // 로그인 창이 또 떴다. 취소 신호는 카카오 SDK 의 PlatformException('CANCELED') 다.
-      if (e is PlatformException && e.code == 'CANCELED') rethrow;
+      // 로그인 창이 또 떴다.
+      if (isKakaoLoginCanceled(e)) rethrow;
       token = await UserApi.instance.loginWithKakaoAccount();
     }
   } else {
