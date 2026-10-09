@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:kakao_map_sdk/kakao_map_sdk.dart';
@@ -8,6 +10,7 @@ import 'app.dart';
 import 'core/config/app_config.dart';
 import 'core/config/native_abi.dart';
 import 'core/diagnostics/crash_reporting.dart';
+import 'features/board/application/picker_cache.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,4 +45,6 @@ Future<void> main() async {
     }
   }
   runApp(const ProviderScope(child: BandApp()));
+  // 첫 화면을 기다리게 하지 않는다 — 지난 실행에서 남은 첨부 임시 파일 정리(U60 후속).
+  unawaited(purgeStaleMediaOnStartup());
 }
