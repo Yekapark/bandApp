@@ -44,6 +44,10 @@ class _ReservationDetailScreenState
   /// 참석 응답 순번. 연달아 누르면 응답이 보낸 순서와 다르게 올 수 있다 — 늦게 온 옛 응답이 화면을
   /// 덮어 서버(마지막으로 누른 값)와 다른 상태가 남지 않게, 마지막 요청의 응답만 화면에 반영한다.
   int _rsvpSeq = 0;
+
+  /// 저장 중에 누른 마지막 선택. 저장이 끝나면 이것을 이어서 보낸다 — 버리면 "참석 → 바로 불참" 처럼 빠르게 바꾼
+  /// 마지막 선택이 사라졌다(QA-R28). 날고 있는 요청은 하나뿐이라 #21 의 동시 생성 충돌은 그대로 막힌다.
+  AttendanceStatus? _queuedRsvp;
   bool _busy = false;
 
   /// 곡을 지운 직후 목록이 한 칸씩 당겨진다. 같은 자리를 연타하던 손가락이 다음 곡 ✕ 를 누르지 않게
@@ -229,9 +233,15 @@ class _ReservationDetailScreenState
   Future<void> _respond(int bandId, int meId, AttendanceStatus status) async {
     // 응답을 기다리는 사이 화면이 닫혀도 목록을 갱신할 수 있게 컨테이너를 잡아 둔다 — 닫힌 화면의 ref 는 예외를 던진다.
     final container = ProviderScope.containerOf(context, listen: false);
-    // 요청이 날고 있으면 무시한다(#21). 아직 참석 행이 없는 멤버(나중에 합류)가 연타하면 서버가 행을 두 번
-    // 만들려다 둘째가 "동시에 처리되었습니다" 로 실패했다.
-    if (_savingRsvp) return;
+    // 요청이 날고 있으면 동시에 보내지 않는다(#21). 아직 참석 행이 없는 멤버(나중에 합류)가 연타하면 서버가 행을 두 번
+    // 만들려다 둘째가 "동시에 처리되었습니다" 로 실패했다. 대신 마지막 선택을 칠해 두고 끝난 뒤 보낸다.
+    if (_savingRsvp) {
+      setState(() {
+        _pendingRsvp = status;
+        _queuedRsvp = status;
+      });
+      return;
+    }
     // 먼저 칠하고 나중에 보낸다.
     final seq = ++_rsvpSeq;
     setState(() {
@@ -267,6 +277,11 @@ class _ReservationDetailScreenState
       _toast('참석 상태를 바꾸지 못했어요.');
     } finally {
       if (mounted) setState(() => _savingRsvp = false);
+    }
+    final next = _queuedRsvp;
+    _queuedRsvp = null;
+    if (mounted && next != null && next != status) {
+      await _respond(bandId, meId, next);
     }
   }
 
@@ -391,6 +406,9 @@ class _ReservationDetailScreenState
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
             content: const Text('곡을 지웠어요'),
+            // 액션이 있는 스낵바는 Flutter 가 기본으로 닫지 않는다(persist) — 다른 화면·밴드까지 남아 아래 버튼과
+            // 입력칸을 가렸다(QA-R27). 기본 4초 뒤 닫는다.
+            persist: false,
             action: SnackBarAction(
               label: '되돌리기',
               onPressed: () =>
