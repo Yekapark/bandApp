@@ -6,11 +6,6 @@ import '../data/notification_models.dart';
 import '../data/notification_repository.dart';
 import '../data/notification_seen_storage.dart';
 
-/// 지금 로그인한 사용자 id. 내 것만 담는 캐시(알림 설정·알림 목록)가 이걸 지켜본다 — 로그아웃하고 다른 계정으로
-/// 들어오면 다시 받는다. 예전에는 앱을 끄기 전까지 앞 계정의 알림 설정·알림 목록이 그대로 보였고, 그 설정으로
-/// [저장] 을 누르면 새 계정에 앞 계정 값이 들어갔다.
-final signedInUserIdProvider =
-    Provider<int?>((ref) => ref.watch(authControllerProvider.select((s) => s.user?.id)));
 
 /// 내 알림 설정(디바이스·토큰 아님 — 계정 단위). 로그인 토큰이 주인을 정한다.
 final notificationSettingProvider =
