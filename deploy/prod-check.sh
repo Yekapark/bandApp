@@ -28,6 +28,10 @@ cd "${APP_DIR:-/opt/bandapp}" 2>/dev/null || { echo "!! ${APP_DIR:-/opt/bandapp}
 C="docker compose -f docker-compose.prod.yml --env-file .env.prod"
 fail=0
 bad() { echo "!! $*"; fail=1; }
+# 걸린 검사 바로 아래 처리 명령. 매일 점검 워크플로가 `→` 줄을 메일 본문에 그대로 옮긴다 — 내 PC 저장소 폴더(Git Bash)에서
+# 그대로 치면 되게 쓴다. 토큰·이메일 같은 값은 넣지 않는다(공개 로그).
+SSH="ssh -i ~/.ssh/bandule_deploy root@64.176.231.126"
+fix() { echo "   → $*"; }
 
 echo "== 운영 점검 $(date -u +%Y-%m-%dT%H:%MZ) ($(hostname))"
 
@@ -43,6 +47,8 @@ if [ "$h" = healthy ]; then
     echo "health   healthy"
 else
     bad "health   앱 컨테이너 상태가 healthy 가 아니다: ${h:-확인불가}"
+    fix "원인 보기: $SSH 'bandule errors'"
+    fix "앱 다시 띄우기(30~60초 끊김): $SSH 'cd /opt/bandapp && bandule restart'"
 fi
 
 # 2. 컨테이너가 다 떠 있나
@@ -50,6 +56,8 @@ want=$($C config --services 2>/dev/null | wc -l)
 up=$($C ps --services --filter status=running 2>/dev/null | wc -l)
 if [ "$up" -lt "$want" ]; then
     bad "컨테이너  $up/$want 만 떠 있다"
+    fix "어느 게 꺼졌나: $SSH 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod ps -a'"
+    fix "다 다시 띄우기: $SSH 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d'"
     detail && $C ps
 else
     echo "컨테이너 $up/$want"
@@ -58,7 +66,9 @@ fi
 # 3. 디스크. 차면 DB 도 백업도 같이 죽는다.
 use=$(df -P / | awk 'NR==2 {for (i = 1; i <= NF; i++) if ($i ~ /%$/) { gsub(/%/, "", $i); print $i; exit }}')
 if [ "${use:-0}" -ge "$DISK_MAX" ]; then
-    bad "디스크   ${use}% (기준 ${DISK_MAX}%) — docker system prune -f 를 먼저 본다"
+    bad "디스크   ${use}% (기준 ${DISK_MAX}%) — 차면 DB·백업이 멈춘다"
+    fix "무엇이 차지하나: $SSH 'cd /opt/bandapp && bandule disk'"
+    fix "안 쓰는 도커 이미지 정리(데이터는 안 지움): $SSH 'docker system prune -f'"
 else
     echo "디스크   ${use}%"
 fi
@@ -68,10 +78,13 @@ fi
 last=$(ls -t backups/*.dump 2>/dev/null | head -1)
 if [ -z "$last" ]; then
     bad "백업     한 개도 없다"
+    fix "지금 한 번 백업: $SSH 'cd /opt/bandapp && bandule backup'"
 else
     age_h=$(( ($(date +%s) - $(date -r "$last" +%s)) / 3600 ))
     if [ "$age_h" -gt "$BACKUP_MAX_H" ]; then
-        bad "백업     마지막이 ${age_h}시간 전 ($last) — 크론과 /var/log/bandapp-backup.log 를 본다"
+        bad "백업     마지막이 ${age_h}시간 전 ($last) — 매일 백업이 멈췄다"
+        fix "왜 멈췄나: $SSH 'tail -30 /var/log/bandapp-backup.log; crontab -l | grep -i backup'"
+        fix "지금 한 번 백업: $SSH 'cd /opt/bandapp && bandule backup'"
     else
         echo "백업     ${age_h}시간 전 ($(basename "$last"))"
     fi
@@ -80,7 +93,8 @@ fi
 # 5. 에러 급증
 errs=$(docker logs --since 24h bandapp-app-1 2>&1 | grep -ciE 'error|exception')
 if [ "${errs:-0}" -gt "$ERR_MAX" ]; then
-    bad "에러     24시간 ${errs}줄 (기준 ${ERR_MAX}) — 가장 많은 것:"
+    bad "에러     24시간 ${errs}줄 (기준 ${ERR_MAX}) — 무언가 반복해서 실패 중"
+    fix "어떤 에러가 많은지: $SSH 'sh -s' < deploy/prod-check.sh"
     detail && docker logs --since 24h bandapp-app-1 2>&1 | grep -iE 'error|exception' \
         | sed 's/^[^ ]* [^ ]* //' | cut -c1-90 | sort | uniq -c | sort -rn | head -5
 else
@@ -90,7 +104,8 @@ fi
 # 6. 요청 폭주. RTDN 재전송 폭풍을 찾은 방법 그대로다 — 어떤 경로가 얼마나 맞고 있는지.
 reqs=$(docker logs --since 60m bandapp-nginx-1 2>&1 | wc -l)
 if [ "${reqs:-0}" -gt "$REQ_MAX" ]; then
-    bad "요청     1시간 ${reqs}건 (기준 ${REQ_MAX}) — 가장 많은 경로:"
+    bad "요청     1시간 ${reqs}건 (기준 ${REQ_MAX}) — 공격이나 재전송 폭주일 수 있다"
+    fix "어느 경로가 맞고 있나: $SSH 'sh -s' < deploy/prod-check.sh"
     detail && docker logs --since 60m bandapp-nginx-1 2>&1 \
         | awk '{print $6, $7}' | sort | uniq -c | sort -rn | head -5
 else
@@ -104,11 +119,13 @@ domain=$(grep -m1 '^DOMAIN=' .env.prod 2>/dev/null | cut -d= -f2- | tr -d '"' | 
 end=$(echo | openssl s_client -connect 127.0.0.1:443 -servername "${domain:-localhost}" 2>/dev/null \
       | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
 if [ -z "$end" ]; then
-    bad "인증서   읽지 못했다 (DOMAIN=${domain:-없음}) — openssl 이 있는지, nginx 가 443 에 떠 있는지 본다"
+    bad "인증서   읽지 못했다 (DOMAIN=${domain:-없음}) — nginx 가 443 에 떠 있는지 본다"
+    fix "nginx 상태: $SSH 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 30 nginx'"
 else
     days=$(( ($(date -d "$end" +%s) - $(date +%s)) / 86400 ))
     if [ "$days" -lt "$CERT_MIN_DAYS" ]; then
-        bad "인증서   ${days}일 남음 (기준 ${CERT_MIN_DAYS}일) — 갱신 실패 중. $C logs --tail 50 certbot 을 본다"
+        bad "인증서   ${days}일 남음 (기준 ${CERT_MIN_DAYS}일) — 자동 갱신이 멈췄다. 만료일에 앱 접속이 끊긴다"
+        fix "갱신 기록: $SSH 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 50 certbot'"
     else
         echo "인증서   ${days}일 남음"
     fi
@@ -120,7 +137,9 @@ fi
 #    확인하고 표시를 그만 남긴다(점검은 24시간을 보므로 하루 뒤 풀린다).
 cancel_fail=$(docker logs --since 24h bandapp-app-1 2>&1 | grep -c 'SUBSCRIPTION_CANCEL_FAILED')
 if [ "${cancel_fail:-0}" -gt 0 ]; then
-    bad "구독해지 24시간 ${cancel_fail}건 실패 — 탈퇴한 결제자의 구독이 아직 청구될 수 있다. 최근 것:"
+    bad "구독해지 24시간 ${cancel_fail}건 실패 — 탈퇴한 결제자의 구독이 아직 청구될 수 있다(서버가 매시 다시 시도)"
+    fix "어느 밴드인지: $SSH 'sh -s' < deploy/prod-check.sh   (구독해지 아래 bandId)"
+    fix "계속 걸리면 그 밴드 구독을 Play Console › 주문 관리에서 직접 해지 — 다음 재시도가 확인하고 멈춘다"
     detail && docker logs --since 24h bandapp-app-1 2>&1 | grep 'SUBSCRIPTION_CANCEL_FAILED' \
         | grep -o 'userId=[0-9]* bandId=[0-9]* cause=.*— ' | sort | uniq -c | tail -5
 else
@@ -131,7 +150,8 @@ fi
 #    남긴다. 계속 걸리면 cause 를 본다 — R2 장애면 기다리고, 구독 해지 실패면 Play Console › 주문 관리에서 직접 해지한다.
 purge_fail=$(docker logs --since 24h bandapp-app-1 2>&1 | grep -c 'MEMBERLESS_BAND_PURGE_FAILED')
 if [ "${purge_fail:-0}" -gt 0 ]; then
-    bad "빈밴드삭제 24시간 ${purge_fail}건 실패 — 탈퇴한 사람의 글·사진이 아직 남아 있다. 최근 것:"
+    bad "빈밴드삭제 24시간 ${purge_fail}건 실패 — 탈퇴한 사람의 글·사진이 아직 남아 있다(서버가 10분마다 다시 시도)"
+    fix "왜 실패하나: $SSH 'sh -s' < deploy/prod-check.sh   (cause 가 R2 면 기다리고, 구독 해지 실패면 Play Console 에서 직접 해지)"
     detail && docker logs --since 24h bandapp-app-1 2>&1 | grep 'MEMBERLESS_BAND_PURGE_FAILED'         | grep -o 'bandId=[0-9]* cause=.*— ' | sort | uniq -c | tail -5
 else
     echo "빈밴드삭제 실패 0건"
@@ -150,6 +170,7 @@ unmatched=$(docker exec bandapp-postgres-1 psql -U "${DB_USER:-bandapp}" -d "${D
      from unmatched_store_purchases where resolved_at is null" 2>/dev/null)
 if [ -z "$unmatched" ]; then
     bad "밴드없는결제 확인 실패 — DB 를 읽지 못했다 (postgres 컨테이너·V24 마이그레이션을 본다)"
+    fix "DB 컨테이너·마이그레이션: $SSH 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod ps postgres; docker logs bandapp-app-1 2>&1 | grep -iE \"flyway|migrat\" | tail -5'"
 else
     set -- $unmatched
     if [ "$1" -gt 0 ]; then
@@ -163,4 +184,5 @@ else
 fi
 
 [ "$fail" = 0 ] && echo "== 이상 없음"
+[ "$fail" = 0 ] || fix "잘 모르겠으면 이 메일 내용을 그대로 Claude 에게 붙여넣는다"
 exit $fail
