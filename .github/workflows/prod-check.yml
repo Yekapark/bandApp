@@ -14,6 +14,11 @@ on:
   schedule:
     - cron: '0 22 * * *'      # 매일 07:00 KST (UTC 22:00)
   workflow_dispatch:
+    inputs:
+      rehearsal:
+        description: '리허설 — 서버를 보지 않고 모든 검사가 실패한 것처럼 이슈(=메일)를 만든다'
+        type: boolean
+        default: false
 
 jobs:
   check:
@@ -29,9 +34,10 @@ jobs:
       # 밖에서 본 모습. ssh 가 안 되더라도 이건 답을 준다.
       # 앱이 컨테이너 안에서 healthy 여도 Nginx·인증서가 죽으면 사용자는 못 쓴다.
       - name: 밖에서 (HTTPS · 인증서)
-        if: env.DEPLOY_HOST != ''
+        if: env.DEPLOY_HOST != '' && !inputs.rehearsal
         run: |
           set -o pipefail
+          exec > >(tee outside.txt) 2>&1   # 이슈 본문에 요약 줄을 옮기려고 남긴다
           fail=0
           code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$DOMAIN/actuator/health" || echo 000)
           if [ "$code" = 200 ]; then echo "https    $code"; else echo "!! https    $code"; fail=1; fi
@@ -50,7 +56,7 @@ jobs:
         id: outside
 
       - name: 서버에서 (컨테이너 · 디스크 · 백업 · 에러 · 요청)
-        if: env.DEPLOY_HOST != ''
+        if: env.DEPLOY_HOST != '' && !inputs.rehearsal
         id: inside
         continue-on-error: true
         env:
@@ -60,6 +66,7 @@ jobs:
         run: |
           set -o pipefail
           umask 077
+          exec > >(tee inside.txt) 2>&1   # 이슈 본문에 요약 줄을 옮기려고 남긴다
           printf '%s\n' "$DEPLOY_KEY" > deploy_key
           # 스크립트를 흘려 넣는다 — 서버 클론이 낡아 있어도 **이 커밋의 검사**가 돈다.
           ssh -i deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 \
@@ -87,21 +94,93 @@ jobs:
         if: env.DEPLOY_HOST == ''
         run: echo "::notice title=점검 건너뜀::DEPLOY_HOST 시크릿이 비어 있다."
 
+      # 실패 메일이 실제로 어떻게 오는지 보는 리허설(수동 실행에서 rehearsal 체크). 서버는 건드리지 않는다.
+      # 아래 줄은 deploy/prod-check.sh 의 bad "…" 문구와 위 "밖에서" 단계의 !! 문구를 숫자만 바꿔 옮긴 것 —
+      # 검사를 추가·수정하면 여기도 맞춘다.
+      - name: 리허설 — 모든 검사 실패 흉내
+        if: inputs.rehearsal
+        id: rehearsal
+        continue-on-error: true
+        run: |
+          cat > outside.txt <<'EOF'
+          !! https    000
+          !! 인증서  9일 남음
+          EOF
+          cat > inside.txt <<'EOF'
+          !! health   앱 컨테이너 상태가 healthy 가 아니다: unhealthy
+          !! 컨테이너  4/5 만 떠 있다
+          !! 디스크   91% (기준 85%) — docker system prune -f 를 먼저 본다
+          !! 백업     마지막이 40시간 전 (backups/bandapp-예시.dump) — 크론과 /var/log/bandapp-backup.log 를 본다
+          !! 에러     24시간 350줄 (기준 200) — 가장 많은 것:
+          !! 요청     1시간 4000건 (기준 2000) — 가장 많은 경로:
+          !! 인증서   15일 남음 (기준 21일) — 갱신 실패 중. docker compose … logs --tail 50 certbot 을 본다
+          !! 구독해지 24시간 1건 실패 — 탈퇴한 결제자의 구독이 아직 청구될 수 있다. 최근 것:
+          !! 빈밴드삭제 24시간 1건 실패 — 탈퇴한 사람의 글·사진이 아직 남아 있다. 최근 것:
+          !! 밴드없는결제 미해결 1건 (번호 1, 가장 오래된 것 0일 전) — 돈은 들어왔는데 PREMIUM 을 줄 밴드를 못 찾았다
+             → 내 PC 저장소 폴더에서 보기: python tools/purchases.py list
+             → 결제한 밴드를 알면 그 밴드에 반영(10분 안): python tools/purchases.py link <번호> <밴드ID>
+             → 모르면 그대로 둔다: 결제 3일 뒤 Google 이 자동 환불하고 이 경보는 저절로 꺼진다
+          EOF
+          cat outside.txt inside.txt
+          exit 1
+
+      # 걸리면 운영자에게 메일을 **직접** 보낸다. GitHub 이슈 알림은 Watch·알림 주소 설정이 하나라도 어긋나면 조용히
+      # 안 온다(2026-10-13 리허설 #237 메일이 실제로 안 왔다). Resend HTTP API 로 Actions 에서 바로 보내므로 서버가 죽어도
+      # 나간다. 시크릿: RESEND_API_KEY(서버 .env.prod 의 MAIL_SMTP_PASSWORD 와 같은 키), ALERT_EMAIL_TO(받을 주소, 쉼표로 여러 개).
+      # 둘 중 하나라도 비면 경고만 남기고 넘어간다 — 이슈는 아래에서 그대로 만든다. 보내기에 실패하면 이 단계가 실패로 남는다.
+      - name: 메일로 알림
+        if: (env.DEPLOY_HOST != '' && (steps.outside.outcome == 'failure' || steps.inside.outcome == 'failure')) || steps.rehearsal.outcome == 'failure'
+        continue-on-error: true
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$RESEND_API_KEY" ] || [ -z "$ALERT_EMAIL_TO" ]; then
+            echo "::warning title=메일 안 보냄::RESEND_API_KEY·ALERT_EMAIL_TO 시크릿이 비어 있다 (docs/OPERATIONS.md §8)"
+            exit 0
+          fi
+          prefix=""; [ "${{ inputs.rehearsal }}" = true ] && prefix="[리허설] "
+          summary=$(cat outside.txt inside.txt 2>/dev/null | grep -E '^(!!|  *→)' || echo "(요약을 못 읽었다 — 실행 로그를 본다)")
+          text="밴듈 운영 점검이 걸렸다 ($(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M') KST).
+
+          $summary
+
+          실행 로그: $RUN
+          !! 는 걸린 검사, → 는 그 자리에서 칠 명령이다. 처리 방법은 docs/OPERATIONS.md §8."
+          jq -n --arg to "$ALERT_EMAIL_TO" --arg subject "${prefix}[밴듈] 운영 점검 실패 $(TZ=Asia/Seoul date +%F)" --arg text "$text" \
+            '{from: "밴듈 운영 점검 <notice@bandule.com>", to: ($to | split(",") | map(gsub("^ +| +$"; ""))), subject: $subject, text: $text}' > mail.json
+          code=$(curl -s -o resend.out -w '%{http_code}' -X POST https://api.resend.com/emails \
+                 -H "Authorization: Bearer $RESEND_API_KEY" -H 'Content-Type: application/json' --data @mail.json)
+          if [ "$code" = 200 ]; then echo "메일 보냄"; else echo "!! 메일 실패 HTTP $code"; cat resend.out; exit 1; fi
+
       # 둘 중 하나라도 걸리면 이슈로 남긴다. 이미 열린 것이 있으면 댓글만 단다 —
       # 매일 새 이슈가 쌓이면 아무도 안 본다.
       - name: 이상하면 이슈
-        if: env.DEPLOY_HOST != '' && (steps.outside.outcome == 'failure' || steps.inside.outcome == 'failure')
+        if: (env.DEPLOY_HOST != '' && (steps.outside.outcome == 'failure' || steps.inside.outcome == 'failure')) || steps.rehearsal.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          body="운영 점검이 걸렸다. 어느 검사인지는 실행 로그에 있다: $RUN
+          # 걸린 검사 요약(`!!` 줄)과 처리 명령(`→` 줄)만 옮긴다 — QUIET=1 출력이라 숫자뿐이고 이미 공개 로그에 있다.
+          # 메일 본문에 그대로 실려서, 메일만 보고 무엇이 걸렸고 무엇을 치면 되는지 알 수 있게 한다.
+          summary=$(cat outside.txt inside.txt 2>/dev/null | grep -E '^(!!|  *→)' || echo "(요약을 못 읽었다 — 아래 실행 로그를 본다)")
+          body="운영 점검이 걸렸다.
+
+          \`\`\`
+          $summary
+          \`\`\`
+
+          실행 로그: $RUN
 
           로그에는 숫자만 남긴다(공개 저장소). 자세한 것은 서버에서:
           \`ssh -i ~/.ssh/bandule_deploy root@\$DEPLOY_HOST 'sh -s' < deploy/prod-check.sh\`"
           gh label create prod-check --color B60205 --description "매일 운영 점검" 2>/dev/null || true
-          num=$(gh issue list --label prod-check --state open --limit 1 --json number --jq '.[0].number // empty')
-          if [ -n "$num" ]; then
+          num=$(gh issue list --label prod-check --state open --limit 20 --json number,title               --jq '[.[] | select(.title | startswith("[리허설]") | not)][0].number // empty')   # 리허설 이슈에 진짜 경보를 섞지 않는다
+          if [ "${{ inputs.rehearsal }}" = true ]; then
+            # 리허설은 열린 실제 경보에 섞지 않고 늘 새 이슈로 — 메일 제목에 [리허설] 이 붙는다. 확인 뒤 손으로 닫는다.
+            gh issue create --title "[리허설] 운영 점검 실패 $(date -u +%F)" --label prod-check --body "$body"
+          elif [ -n "$num" ]; then
             gh issue comment "$num" --body "$body"
           else
             gh issue create --title "운영 점검 실패 $(date -u +%F)" --label prod-check --body "$body"

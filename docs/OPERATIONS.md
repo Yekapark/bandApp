@@ -528,6 +528,21 @@ DB 밖이라 복구되지 않는 것(R2 사진·영상의 참조, Redis 로그�
 이제 매일 07:00 KST 에 GitHub Actions 가 서버를 본다
 ([`.github/workflows/prod-check.yml`](../.github/workflows/prod-check.yml)).
 걸리면 **`prod-check` 라벨이 붙은 이슈**가 열리고, 이미 열려 있으면 거기 댓글이 달린다.
+**운영자 메일로 직접 보낸다** — 제목 `[밴듈] 운영 점검 실패 날짜`, 보낸 사람 `notice@bandule.com`(Resend, Actions 에서 바로 —
+서버가 죽어도 나간다). GitHub 이슈 알림은 Watch·알림 주소 설정이 어긋나면 조용히 안 와서(2026-10-13 리허설) 따로 보낸다.
+**본문에 걸린 검사 줄(`!!`)과 처리 명령(`→`)이 그대로 실린다** — 메일만 보고 무엇이 걸렸고 무엇을 치면 되는지 안다.
+
+받을 주소·키는 저장소 시크릿이다(한 번만). 키는 서버 `.env.prod` 의 메일 키를 화면에 안 띄우고 옮긴다:
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 "grep -m1 '^MAIL_SMTP_PASSWORD=' /opt/bandapp/.env.prod | cut -d= -f2- | sed 's/[[:space:]]*#.*$//; s/^\"//; s/\"$//' | tr -d '\r\n'" | gh secret set RESEND_API_KEY --repo Yekapark/bandApp
+```
+
+```bash
+gh secret set ALERT_EMAIL_TO --repo Yekapark/bandApp --body "받을주소@example.com"
+```
+
+둘 중 하나라도 비면 메일은 건너뛰고(실행에 경고) 이슈만 만든다. 메일 키를 바꾸면 이 시크릿도 다시 넣는다.
 
 | 보는 것 | 걸리는 기준 |
 |---|---|
@@ -538,6 +553,9 @@ DB 밖이라 복구되지 않는 것(R2 사진·영상의 참조, Redis 로그�
 | 백업 | 마지막 덤프가 36시간보다 오래됨 |
 | 에러 | 24시간 에러·예외 로그 200줄 초과 |
 | 요청 | 1시간 요청 2000건 초과 (초당 1회 = 3600건) |
+| 구독해지 | 탈퇴한 결제자의 구독 해지가 24시간 안에 한 건이라도 실패 |
+| 빈밴드삭제 | 멤버 0명 밴드 삭제가 24시간 안에 한 건이라도 실패 |
+| 밴드없는결제 | 돈은 들어왔는데 PREMIUM 을 줄 밴드를 못 찾은 결제가 **해결 전까지** (아래) |
 
 임계값은 [`deploy/prod-check.sh`](../deploy/prod-check.sh) 맨 위 변수로 몰아 뒀다.
 오탐이 잦으면 거기만 고친다.
@@ -550,6 +568,29 @@ ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh
 ```
 
 워크플로를 손으로 한 번 돌리려면 GitHub → Actions → **운영 점검** → Run workflow.
+**실패 메일이 어떻게 오는지 보려면** 같은 화면에서 `rehearsal` 을 체크하고 돌린다 — 서버는 건드리지 않고 모든 검사가
+실패한 것처럼 `[리허설] 운영 점검 실패` 이슈(=메일)를 새로 만든다. 확인한 뒤 그 이슈는 손으로 닫는다.
+
+### 8-1. 「밴드없는결제」 경보가 왔을 때 — `tools/purchases.py`
+
+만료 뒤 Play 스토어 「다시 구독」 같은 결제는 밴드 표시가 없어, 서버가 이전 구독으로 원래 밴드를 찾는다. 못 찾으면
+**아무 밴드도 올리지 않고** `unmatched_store_purchases`(V24)에 남기고, 해결될 때까지 매일 경보가 온다(QA BILL-31).
+
+**대부분은 아무것도 안 해도 된다.** 서버가 10분마다 다시 보고, 그 결제가 밴드에 붙었거나 Google 에서 끝났으면
+스스로 닫는다. 서버가 확인 처리를 못 한 결제는 **결제 3일 뒤 Google 이 자동 환불**하므로 결국 닫힌다.
+
+결제한 밴드를 알면(결제자 문의 등) 그 밴드에 반영한다. 내 PC 저장소 폴더에서:
+
+```bash
+python tools/purchases.py list                 # 미해결 목록 — 메일의 번호, 자동 환불 예정 시각
+python tools/purchases.py show 3               # 자세히 — 주문 ID 로 Play Console › 주문 관리에서 결제자를 찾는다
+python tools/purchases.py link 3 123           # 3번 결제를 밴드 123 에 — 서버가 10분 안에 PREMIUM·확인 처리
+python tools/purchases.py close 3 "환불함"      # 반영 없이 닫기 (Console 에서 직접 환불했을 때 등)
+```
+
+바꾸는 명령은 대상을 먼저 보여 주고 `yes` 를 쳐야 실행한다. `link` 한 밴드에 이미 다른 구독이 살아 있으면 서버가
+거부하고 미해결로 남는다 — 다른 밴드를 고르거나 `close`. 운영 DB 대신 내 PC 의 docker compose 에 시험하려면
+`BANDULE_HOST=local`.
 
 ---
 
