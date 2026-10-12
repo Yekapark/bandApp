@@ -4,7 +4,7 @@
 # 왜 있나 — 배포 직후 헬스체크 말고는 감시가 없었다. 그래서 밴드에 안 붙은 구매 알림이
 # 7일 동안 초당 한 번씩 서버를 때리는 동안 아무도 몰랐다
 # (docs/TROUBLESHOOTING.md 2026-09-09). 여기 있는 검사는 전부 "터졌는데 아무도 안 보는"
-# 종류다 — 요청 폭주, 디스크, 백업 멈춤, 에러 급증, HTTPS 인증서 만료.
+# 종류다 — 요청 폭주, 디스크, 메모리, 백업 멈춤, 에러 급증, HTTPS 인증서 만료, 강제 종료.
 #
 # 서버에서 직접:              sh deploy/prod-check.sh
 # 내 PC 에서 서버로 흘려서:   ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh
@@ -17,6 +17,8 @@ REQ_MAX=${REQ_MAX:-2000}       # 1시간 요청 수 (초당 1회 = 3600)
 DISK_MAX=${DISK_MAX:-85}       # 루트 디스크 사용률 %
 BACKUP_MAX_H=${BACKUP_MAX_H:-36}   # 마지막 백업이 몇 시간 안이어야 하는지
 CERT_MIN_DAYS=${CERT_MIN_DAYS:-21} # HTTPS 인증서가 최소 며칠 남아 있어야 하는지 (certbot 은 30일 전부터 갱신한다)
+MEM_MIN_FREE=${MEM_MIN_FREE:-10}   # 서버 메모리 중 새로 쓸 수 있는 몫(available)이 최소 몇 % 남아야 하는지
+REDIS_MAX_MB=${REDIS_MAX_MB:-256}  # Redis 가 쓰는 메모리 상한(MB). 키가 전부 유효기간이 있어 평소엔 몇 MB 다
 
 # QUIET=1 이면 숫자만 찍고 **로그 내용은 안 찍는다.**
 # 이 저장소는 공개고 GitHub Actions 로그도 공개다 — 에러 줄·요청 경로에는 이메일·구매
@@ -155,6 +157,46 @@ if [ "${purge_fail:-0}" -gt 0 ]; then
     detail && docker logs --since 24h bandapp-app-1 2>&1 | grep 'MEMBERLESS_BAND_PURGE_FAILED'         | grep -o 'bandId=[0-9]* cause=.*— ' | sort | uniq -c | tail -5
 else
     echo "빈밴드삭제 실패 0건"
+fi
+
+# 11. 메모리. 차면 리눅스가 아무 프로세스나 강제로 끝낸다(OOM) — 보통 제일 큰 앱이나 DB 가 죽는다. 디스크처럼
+#     서서히 차는 것을 미리 본다. available = 캐시를 비우면 새로 쓸 수 있는 몫(free 보다 정확하다).
+mem=$(awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} END {if (t) printf "%d %d %d", a*100/t, (t-a)/1024, t/1024}' /proc/meminfo)
+set -- $mem
+if [ -z "$1" ]; then
+    bad "메모리   읽지 못했다 (/proc/meminfo)"
+elif [ "$1" -lt "$MEM_MIN_FREE" ]; then
+    bad "메모리   남은 몫 $1% (사용 $2/$3MB, 기준 ${MEM_MIN_FREE}% 이상) — 더 차면 앱이나 DB 가 강제 종료된다"
+    fix "누가 쓰나: $SSH 'docker stats --no-stream --format \"{{.Name}} {{.MemUsage}}\"'"
+    fix "앱만 다시 띄워 비우기(30~60초 끊김): $SSH 'cd /opt/bandapp && bandule restart'"
+else
+    echo "메모리   남은 몫 $1% (사용 $2/$3MB)"
+fi
+
+# 12. Redis 메모리. 넣는 키가 전부 유효기간이 있어 평소엔 몇 MB 다 — 커지면 유효기간 없는 키가 새로 생긴 것이다.
+redis_mb=$(docker exec bandapp-redis-1 sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli INFO memory' 2>/dev/null            | awk -F: '/^used_memory:/ {printf "%d", $2/1048576}')
+redis_keys=$(docker exec bandapp-redis-1 sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli DBSIZE' 2>/dev/null | tr -cd '0-9')
+if [ -z "$redis_mb" ]; then
+    bad "Redis    읽지 못했다 — 컨테이너가 꺼졌거나 비밀번호가 안 맞는다"
+    fix "상태: $SSH 'docker logs --tail 30 bandapp-redis-1'"
+elif [ "$redis_mb" -gt "$REDIS_MAX_MB" ]; then
+    bad "Redis    ${redis_mb}MB · 키 ${redis_keys:-?}개 (기준 ${REDIS_MAX_MB}MB) — 유효기간 없는 키가 쌓이는 중일 수 있다"
+    fix "어떤 키가 많나: $SSH 'docker exec bandapp-redis-1 sh -c \"REDISCLI_AUTH=\\\$REDIS_PASSWORD redis-cli --scan | cut -d: -f1-2 | sort | uniq -c | sort -rn | head\"'"
+    fix "모르겠으면 이 메일을 Claude 에게 — 유효기간 없는 키를 넣는 코드를 찾아 고친다"
+else
+    echo "Redis    ${redis_mb}MB · 키 ${redis_keys:-?}개"
+fi
+
+# 13. 강제 종료·재시작. 메모리가 모자라 커널이 죽였거나(OOMKilled) 앱이 스스로 죽어 docker 가 다시 띄운 횟수.
+#     "지금은 떠 있음" 이라 health·컨테이너 검사로는 안 보인다. 배포하면 컨테이너가 새로 생겨 0 부터 센다.
+crash=$(for c in $(docker ps -q --filter name=bandapp-); do
+          docker inspect -f '{{.Name}} {{.RestartCount}} {{.State.OOMKilled}}' "$c"
+        done 2>/dev/null | awk '$2 > 0 || $3 == "true" {sub("^/", "", $1); printf "%s(재시작 %s, OOM %s) ", $1, $2, $3}')
+if [ -n "$crash" ]; then
+    bad "재시작   ${crash}— 죽었다가 다시 뜬 컨테이너가 있다"
+    fix "왜 죽었나: $SSH 'docker logs --tail 50 bandapp-app-1; dmesg | grep -i \"killed process\" | tail -5'"
+else
+    echo "재시작   0회"
 fi
 
 # 10. 돈은 들어왔는데 어느 밴드에도 못 붙인 구독(QA BILL-31, V24 unmatched_store_purchases). 만료 뒤 Play 스토어
