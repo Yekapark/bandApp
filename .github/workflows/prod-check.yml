@@ -132,6 +132,14 @@ jobs:
              → 계속 걸리면 그 밴드 구독을 Play Console › 주문 관리에서 직접 해지 — 다음 재시도가 확인하고 멈춘다
           !! 빈밴드삭제 24시간 1건 실패 — 탈퇴한 사람의 글·사진이 아직 남아 있다(서버가 10분마다 다시 시도)
              → 왜 실패하나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh   (cause 가 R2 면 기다리고, 구독 해지 실패면 Play Console 에서 직접 해지)
+          !! 메모리   남은 몫 6% (사용 1840/1962MB, 기준 10% 이상) — 더 차면 앱이나 DB 가 강제 종료된다
+             → 누가 쓰나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'docker stats --no-stream --format "{{.Name}} {{.MemUsage}}"'
+             → 앱만 다시 띄워 비우기(30~60초 끊김): ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && bandule restart'
+          !! Redis    300MB · 키 90000개 (기준 256MB) — 유효기간 없는 키가 쌓이는 중일 수 있다
+             → 어떤 키가 많나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'docker exec bandapp-redis-1 sh -c "REDISCLI_AUTH=\$REDIS_PASSWORD redis-cli --scan | cut -d: -f1-2 | sort | uniq -c | sort -rn | head"'
+             → 모르겠으면 이 메일을 Claude 에게 — 유효기간 없는 키를 넣는 코드를 찾아 고친다
+          !! 재시작   bandapp-app-1(재시작 2, OOM true) — 죽었다가 다시 뜬 컨테이너가 있다
+             → 왜 죽었나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'docker logs --tail 50 bandapp-app-1; dmesg | grep -i "killed process" | tail -5'
           !! 밴드없는결제 미해결 1건 (번호 1, 가장 오래된 것 0일 전) — 돈은 들어왔는데 PREMIUM 을 줄 밴드를 못 찾았다
              → 내 PC 저장소 폴더에서 보기: python tools/purchases.py list
              → 결제한 밴드를 알면 그 밴드에 반영(10분 안): python tools/purchases.py link <번호> <밴드ID>
