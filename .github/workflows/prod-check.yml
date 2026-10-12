@@ -40,16 +40,16 @@ jobs:
           exec > >(tee outside.txt) 2>&1   # 이슈 본문에 요약 줄을 옮기려고 남긴다
           fail=0
           code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$DOMAIN/actuator/health" || echo 000)
-          if [ "$code" = 200 ]; then echo "https    $code"; else echo "!! https    $code"; fail=1; fi
+          if [ "$code" = 200 ]; then echo "https    $code"; else echo "!! https    $code — 밖에서 앱 접속이 안 된다(사용자 앱이 지금 안 됨)"; echo "   → 서버 안 상태: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && bandule health'"; fail=1; fi
 
           end=$(echo | openssl s_client -servername "$DOMAIN" -connect "$DOMAIN:443" 2>/dev/null \
                 | openssl x509 -noout -enddate | cut -d= -f2)
           if [ -n "$end" ]; then
             days=$(( ( $(date -d "$end" +%s) - $(date +%s) ) / 86400 ))
             # Let's Encrypt 는 만료 30일 전부터 갱신한다. 14일 아래면 갱신이 멈춘 것이다.
-            if [ "$days" -lt 14 ]; then echo "!! 인증서  ${days}일 남음"; fail=1; else echo "인증서   ${days}일 남음"; fi
+            if [ "$days" -lt 14 ]; then echo "!! 인증서  ${days}일 남음 — 자동 갱신이 멈췄다"; echo "   → 갱신 기록: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 50 certbot'"; fail=1; else echo "인증서   ${days}일 남음"; fi
           else
-            echo "!! 인증서  확인 실패"; fail=1
+            echo "!! 인증서  확인 실패 — 443 에 접속이 안 된다"; fail=1
           fi
           exit $fail
         continue-on-error: true
@@ -103,23 +103,40 @@ jobs:
         continue-on-error: true
         run: |
           cat > outside.txt <<'EOF'
-          !! https    000
-          !! 인증서  9일 남음
+          !! https    000 — 밖에서 앱 접속이 안 된다(사용자 앱이 지금 안 됨)
+             → 서버 안 상태: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && bandule health'
+          !! 인증서  9일 남음 — 자동 갱신이 멈췄다
+             → 갱신 기록: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 50 certbot'
           EOF
           cat > inside.txt <<'EOF'
           !! health   앱 컨테이너 상태가 healthy 가 아니다: unhealthy
+             → 원인 보기: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'bandule errors'
+             → 앱 다시 띄우기(30~60초 끊김): ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && bandule restart'
           !! 컨테이너  4/5 만 떠 있다
-          !! 디스크   91% (기준 85%) — docker system prune -f 를 먼저 본다
-          !! 백업     마지막이 40시간 전 (backups/bandapp-예시.dump) — 크론과 /var/log/bandapp-backup.log 를 본다
-          !! 에러     24시간 350줄 (기준 200) — 가장 많은 것:
-          !! 요청     1시간 4000건 (기준 2000) — 가장 많은 경로:
-          !! 인증서   15일 남음 (기준 21일) — 갱신 실패 중. docker compose … logs --tail 50 certbot 을 본다
-          !! 구독해지 24시간 1건 실패 — 탈퇴한 결제자의 구독이 아직 청구될 수 있다. 최근 것:
-          !! 빈밴드삭제 24시간 1건 실패 — 탈퇴한 사람의 글·사진이 아직 남아 있다. 최근 것:
+             → 어느 게 꺼졌나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod ps -a'
+             → 다 다시 띄우기: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod up -d'
+          !! 디스크   91% (기준 85%) — 차면 DB·백업이 멈춘다
+             → 무엇이 차지하나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && bandule disk'
+             → 안 쓰는 도커 이미지 정리(데이터는 안 지움): ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'docker system prune -f'
+          !! 백업     마지막이 40시간 전 (backups/bandapp-예시.dump) — 매일 백업이 멈췄다
+             → 왜 멈췄나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'tail -30 /var/log/bandapp-backup.log; crontab -l | grep -i backup'
+             → 지금 한 번 백업: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && bandule backup'
+          !! 에러     24시간 350줄 (기준 200) — 무언가 반복해서 실패 중
+             → 어떤 에러가 많은지: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh
+          !! 요청     1시간 4000건 (기준 2000) — 공격이나 재전송 폭주일 수 있다
+             → 어느 경로가 맞고 있나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh
+          !! 인증서   15일 남음 (기준 21일) — 자동 갱신이 멈췄다. 만료일에 앱 접속이 끊긴다
+             → 갱신 기록: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail 50 certbot'
+          !! 구독해지 24시간 1건 실패 — 탈퇴한 결제자의 구독이 아직 청구될 수 있다(서버가 매시 다시 시도)
+             → 어느 밴드인지: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh   (구독해지 아래 bandId)
+             → 계속 걸리면 그 밴드 구독을 Play Console › 주문 관리에서 직접 해지 — 다음 재시도가 확인하고 멈춘다
+          !! 빈밴드삭제 24시간 1건 실패 — 탈퇴한 사람의 글·사진이 아직 남아 있다(서버가 10분마다 다시 시도)
+             → 왜 실패하나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh   (cause 가 R2 면 기다리고, 구독 해지 실패면 Play Console 에서 직접 해지)
           !! 밴드없는결제 미해결 1건 (번호 1, 가장 오래된 것 0일 전) — 돈은 들어왔는데 PREMIUM 을 줄 밴드를 못 찾았다
              → 내 PC 저장소 폴더에서 보기: python tools/purchases.py list
              → 결제한 밴드를 알면 그 밴드에 반영(10분 안): python tools/purchases.py link <번호> <밴드ID>
              → 모르면 그대로 둔다: 결제 3일 뒤 Google 이 자동 환불하고 이 경보는 저절로 꺼진다
+             → 잘 모르겠으면 이 메일 내용을 그대로 Claude 에게 붙여넣는다
           EOF
           cat outside.txt inside.txt
           exit 1
