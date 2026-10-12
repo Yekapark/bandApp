@@ -67,7 +67,16 @@ def must_be_open(row_id):
         sys.exit(f"!! {row_id}번은 이미 해결됐다(show 로 어떻게 끝났는지 본다). 아무것도 바꾸지 않았다.")
 
 
-ROW = ("SELECT id AS 번호, received_at AT TIME ZONE 'Asia/Seoul' AS 받은시각_KST, notification_type AS 알림, "
+# Google 알림 번호를 무슨 일인지로 풀어 쓴다 — 「복구·갱신」 같은 Google 용어는 알아보기 어렵다.
+KIND = ("CASE notification_type "
+        "WHEN 4 THEN '새로 결제함' "
+        "WHEN 2 THEN '1년 자동 갱신 결제' "
+        "WHEN 7 THEN '해지·만료했다가 다시 구독' "
+        "WHEN 1 THEN '카드 문제로 멈췄다가 결제 다시 됨' "
+        "WHEN 6 THEN '카드 문제로 결제 실패, 유예 중' "
+        "ELSE '알림 ' || notification_type END")
+
+ROW = (f"SELECT id AS 번호, received_at AT TIME ZONE 'Asia/Seoul' AS 받은시각_KST, {KIND} AS 무슨_결제, "
        "product_id AS 상품, order_id AS 주문ID, left(purchase_token, 12) || '…' AS 토큰, "
        "(received_at + interval '3 days') AT TIME ZONE 'Asia/Seoul' AS 자동환불_예정_KST, "
        "target_band_id AS 반영할밴드, resolved_at AT TIME ZONE 'Asia/Seoul' AS 해결_KST, resolution AS 해결 "
@@ -76,7 +85,6 @@ ROW = ("SELECT id AS 번호, received_at AT TIME ZONE 'Asia/Seoul' AS 받은시�
 
 def cmd_list(_):
     print(sql(f"{ROW} WHERE resolved_at IS NULL ORDER BY id;"))
-    print("알림 번호: 1 복구 · 2 갱신 · 4 구매 · 6 유예 · 7 재시작(만료 뒤 Play 「다시 구독」 등)")
     print("결제한 밴드를 알면: python tools/purchases.py link <번호> <밴드ID>  /  모르면 두면 3일 뒤 자동 환불로 닫힌다.")
 
 
@@ -117,7 +125,7 @@ def cmd_close(a):
 # 훈련: 종류(알림 번호)별로 가짜 미해결 건을 넣어, 매일 점검 → 메일 → list/close 를 실제로 돌려 본다.
 # 토큰이 drill- 로 시작해 진짜 결제와 섞이지 않고 drill-clean 이 이것만 지운다. 서버 배치가 10분마다 이 토큰을
 # Google 에 물어 "없는 토큰" 이면 스스로 닫으므로, 넣은 뒤 바로 점검을 돌린다.
-DRILL = {1: 2, 2: 1, 4: 3, 6: 1, 7: 2}   # 알림 번호: 건수 — 복구·갱신·구매·유예·재시작
+DRILL = {1: 2, 2: 1, 4: 3, 6: 1, 7: 2}   # Google 알림 번호: 건수 (뜻은 KIND)
 
 
 def cmd_drill(a):
@@ -129,7 +137,7 @@ def cmd_drill(a):
             rows.append(f"('GOOGLE_PLAY', 'drill-{kind}-{i + 1}-' || extract(epoch FROM now())::bigint, {kind}, "
                         f"'premium_yearly', 'GPA.DRILL-{kind}-{i + 1}', "
                         f"now() - interval '{a.days} days' + interval '{n} minutes')")
-    print(f"넣을 것: {n}건 — " + ", ".join(f"알림{k} {c}건" for k, c in DRILL.items()) + f", 받은 시각 약 {a.days}일 전")
+    print(f"넣을 것: {n}건 (새로 결제 3 · 1년 갱신 1 · 다시 구독 2 · 결제 다시 됨 2 · 유예 중 1), 받은 시각 약 {a.days}일 전")
     confirm("운영 DB 에 훈련용 미해결 건을 넣는다 (토큰 drill-…). 끝나면 drill-clean 으로 지운다.")
     sql("INSERT INTO unmatched_store_purchases "
         "(store, purchase_token, notification_type, product_id, order_id, received_at) VALUES\n"
