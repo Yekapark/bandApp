@@ -528,8 +528,21 @@ DB 밖이라 복구되지 않는 것(R2 사진·영상의 참조, Redis 로그�
 이제 매일 07:00 KST 에 GitHub Actions 가 서버를 본다
 ([`.github/workflows/prod-check.yml`](../.github/workflows/prod-check.yml)).
 걸리면 **`prod-check` 라벨이 붙은 이슈**가 열리고, 이미 열려 있으면 거기 댓글이 달린다.
-이슈가 열리면 GitHub 알림 메일이 온다 — 제목 `[Yekapark/bandApp] 운영 점검 실패 날짜 (Issue #번호)`.
+**운영자 메일로 직접 보낸다** — 제목 `[밴듈] 운영 점검 실패 날짜`, 보낸 사람 `notice@bandule.com`(Resend, Actions 에서 바로 —
+서버가 죽어도 나간다). GitHub 이슈 알림은 Watch·알림 주소 설정이 어긋나면 조용히 안 와서(2026-10-13 리허설) 따로 보낸다.
 **본문에 걸린 검사 줄(`!!`)과 처리 명령(`→`)이 그대로 실린다** — 메일만 보고 무엇이 걸렸고 무엇을 치면 되는지 안다.
+
+받을 주소·키는 저장소 시크릿이다(한 번만). 키는 서버 `.env.prod` 의 메일 키를 화면에 안 띄우고 옮긴다:
+
+```bash
+ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 "grep -m1 '^MAIL_SMTP_PASSWORD=' /opt/bandapp/.env.prod | cut -d= -f2- | sed 's/[[:space:]]*#.*$//; s/^\"//; s/\"$//' | tr -d '\r\n'" | gh secret set RESEND_API_KEY --repo Yekapark/bandApp
+```
+
+```bash
+gh secret set ALERT_EMAIL_TO --repo Yekapark/bandApp --body "받을주소@example.com"
+```
+
+둘 중 하나라도 비면 메일은 건너뛰고(실행에 경고) 이슈만 만든다. 메일 키를 바꾸면 이 시크릿도 다시 넣는다.
 
 | 보는 것 | 걸리는 기준 |
 |---|---|
