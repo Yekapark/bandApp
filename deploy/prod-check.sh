@@ -137,5 +137,22 @@ else
     echo "빈밴드삭제 실패 0건"
 fi
 
+# 10. 돈은 들어왔는데 어느 밴드에도 못 붙인 구독(QA BILL-31). 만료 뒤 Play 스토어 「다시 구독」은 밴드 표시 없이 이전
+#     구독 토큰(linkedPurchaseToken)만 따라오고, 서버가 그 토큰으로 원래 밴드를 찾는다(StoreSubscriptionService.purchaseBand).
+#     못 찾으면 아무 밴드도 올리지 않고 1시간 재전송을 기다린 뒤 "모르는 구매 토큰 (밴드 없음)" 을 남기고 포기한다 —
+#     결제한 사람의 밴드가 FREE 로 남는다. 실기기로 재현할 수 없는 경로라(시험 구독은 만료 즉시 Play 목록에서 사라짐)
+#     첫 실제 사례를 여기서 잡는다. 해지·만료 같은 알림(type 3·12·13 등)도 같은 문구를 남기므로 돈이 들어오는
+#     종류만 센다: 1 RECOVERED · 2 RENEWED · 4 PURCHASED · 6 IN_GRACE_PERIOD · 7 RESTARTED.
+#     걸리면 Play Console › 주문 관리에서 그 시각의 주문을 찾아 원래 밴드를 확인해 올리거나 환불한다.
+#     로그 문구를 바꾸면 여기도 같이 바꾼다.
+orphan=$(docker logs --since 24h bandapp-app-1 2>&1 | grep -cE 'RTDN: 모르는 구매 토큰 \(밴드 없음\) type=(1|2|4|6|7) ')
+if [ "${orphan:-0}" -gt 0 ]; then
+    bad "밴드없는결제 24시간 ${orphan}건 — 돈은 들어왔는데 PREMIUM 을 줄 밴드를 못 찾았다. 최근 것:"
+    detail && docker logs --since 24h bandapp-app-1 2>&1 | grep -E 'RTDN: 모르는 구매 토큰 \(밴드 없음\) type=(1|2|4|6|7) ' \
+        | sed -E 's/^([^ .]+).*(type=[0-9]+).*/   \1Z \2/' | tail -5
+else
+    echo "밴드없는결제 0건"
+fi
+
 [ "$fail" = 0 ] && echo "== 이상 없음"
 exit $fail
