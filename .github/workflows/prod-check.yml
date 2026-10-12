@@ -70,7 +70,7 @@ jobs:
           exec > >(tee inside.txt) 2>&1   # 이슈 본문에 요약 줄을 옮기려고 남긴다
           printf '%s\n' "$DEPLOY_KEY" > deploy_key
           # 스크립트를 흘려 넣는다 — 서버 클론이 낡아 있어도 **이 커밋의 검사**가 돈다.
-          ssh -i deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 \
+          ssh -i deploy_key -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=20 \
               -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" \
               'QUIET=1 sh -s' < deploy/prod-check.sh
 
@@ -86,7 +86,7 @@ jobs:
         run: |
           umask 077
           printf '%s\n' "$DEPLOY_KEY" > deploy_key
-          host=$(ssh -i deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 \
+          host=$(ssh -i deploy_key -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=20 \
               -p "${DEPLOY_PORT:-22}" "$DEPLOY_USER@$DEPLOY_HOST" \
               "grep -m1 -E '^MAIL_SMTP_HOST=' /opt/bandapp/.env.prod | cut -d= -f2- | tr -d '\"' | tr -cd 'A-Za-z0-9.-'")
           echo "::notice title=메일 발신 호스트::${host:-비어 있음(기본값 사용)}"
