@@ -8,6 +8,8 @@
     python tools/purchases.py show 3                   # 3번 자세히 — 주문 ID 로 Play Console › 주문 관리에서 찾는다
     python tools/purchases.py link 3 123               # 3번 결제를 밴드 123 에 반영 — 서버 배치가 10분 안에 PREMIUM·확인 처리
     python tools/purchases.py close 3 "환불함"          # 반영 없이 닫기 (Console 에서 직접 환불했을 때 등)
+    python tools/purchases.py drill                    # 훈련: 종류별 가짜 미해결 건을 넣어 점검·메일을 실제로 돌려 본다
+    python tools/purchases.py drill-clean              # 훈련 건만 지운다
 
 무엇을 바꿀지 먼저 보여 주고 `yes` 를 입력해야 실행한다. 구매 토큰은 화면에 앞 12자만 보인다.
 필요한 것: 배포 키 `~/.ssh/bandule_deploy` (docs/NEW_PC_SETUP.md). 다른 키·호스트는 환경변수 BANDULE_SSH_KEY·BANDULE_HOST
@@ -112,6 +114,37 @@ def cmd_close(a):
     print("닫았다. 다음 매일 점검부터 이 건으로는 경보가 안 온다.")
 
 
+# 훈련: 종류(알림 번호)별로 가짜 미해결 건을 넣어, 매일 점검 → 메일 → list/close 를 실제로 돌려 본다.
+# 토큰이 drill- 로 시작해 진짜 결제와 섞이지 않고 drill-clean 이 이것만 지운다. 서버 배치가 10분마다 이 토큰을
+# Google 에 물어 "없는 토큰" 이면 스스로 닫으므로, 넣은 뒤 바로 점검을 돌린다.
+DRILL = {1: 2, 2: 1, 4: 3, 6: 1, 7: 2}   # 알림 번호: 건수 — 복구·갱신·구매·유예·재시작
+
+
+def cmd_drill(a):
+    rows = []
+    n = 0
+    for kind, count in DRILL.items():
+        for i in range(count):
+            n += 1
+            rows.append(f"('GOOGLE_PLAY', 'drill-{kind}-{i + 1}-' || extract(epoch FROM now())::bigint, {kind}, "
+                        f"'premium_yearly', 'GPA.DRILL-{kind}-{i + 1}', "
+                        f"now() - interval '{a.days} days' + interval '{n} minutes')")
+    print(f"넣을 것: {n}건 — " + ", ".join(f"알림{k} {c}건" for k, c in DRILL.items()) + f", 받은 시각 약 {a.days}일 전")
+    confirm("운영 DB 에 훈련용 미해결 건을 넣는다 (토큰 drill-…). 끝나면 drill-clean 으로 지운다.")
+    sql("INSERT INTO unmatched_store_purchases "
+        "(store, purchase_token, notification_type, product_id, order_id, received_at) VALUES\n"
+        + ",\n".join(rows) + ";")
+    cmd_list(a)
+    print("→ 바로 점검(메일): gh workflow run prod-check.yml --ref main   — 서버 배치가 10분 안에 닫을 수 있다")
+
+
+def cmd_drill_clean(_):
+    print(sql("SELECT id, notification_type, resolved_at IS NOT NULL AS 해결됨, resolution "
+              "FROM unmatched_store_purchases WHERE purchase_token LIKE 'drill-%' ORDER BY id;"))
+    confirm("훈련용(drill-) 건을 모두 지운다. 진짜 결제 건은 건드리지 않는다.")
+    print(sql("DELETE FROM unmatched_store_purchases WHERE purchase_token LIKE 'drill-%';"))
+
+
 def main():
     parser = argparse.ArgumentParser(description="밴드를 못 찾은 결제 처리 (매일 점검 「밴드없는결제」)")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -127,6 +160,10 @@ def main():
     p.add_argument("id", type=int)
     p.add_argument("memo")
     p.set_defaults(fn=cmd_close)
+    p = sub.add_parser("drill", help="훈련: 종류별 가짜 미해결 건 넣기 (점검·메일 시험)")
+    p.add_argument("--days", type=int, default=2, help="받은 시각을 며칠 전으로 (기본 2)")
+    p.set_defaults(fn=cmd_drill)
+    sub.add_parser("drill-clean", help="훈련용 건만 지우기").set_defaults(fn=cmd_drill_clean)
     args = parser.parse_args()
     args.fn(args)
 
