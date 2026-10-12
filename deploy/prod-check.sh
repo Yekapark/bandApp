@@ -199,6 +199,36 @@ else
     echo "재시작   0회"
 fi
 
+# 14. 서버 밖 백업(R2). 4번은 서버 안 파일만 본다 — 서버 디스크가 통째로 망가지면 그 백업도 같이 사라진다. 매일 백업이
+#     암호화해 R2 db-backups/ 에 올린 것이 기준 시간 안에 있는지 본다(파일명이 UTC 시각). 업로드만 실패하면(R2 키 교체 등)
+#     4번은 통과하고 여기서만 걸린다. 백업 스크립트와 같은 방법(amazon/aws-cli 컨테이너)으로 목록만 읽는다.
+r2get() { grep -m1 "^$1=" .env.prod 2>/dev/null | cut -d= -f2- | sed "s/[[:space:]]*#.*$//; s/[[:space:]]*$//"; }
+R2B=$(r2get R2_BUCKET); R2K=$(r2get R2_ACCESS_KEY_ID); R2S=$(r2get R2_SECRET_ACCESS_KEY)
+R2E=$(r2get R2_ENDPOINT); [ -n "$R2E" ] || R2E="https://$(r2get R2_ACCOUNT_ID).r2.cloudflarestorage.com"
+if [ -z "$R2B" ] || [ -z "$R2K" ]; then
+    bad "R2백업   R2 설정이 없다 — 백업이 서버 안에만 있다"
+    fix "백업 스크립트 설명: deploy/backup/pg-backup.sh · docs/DEPLOY.md §5"
+else
+    newest=$(docker run --rm -e AWS_ACCESS_KEY_ID="$R2K" -e AWS_SECRET_ACCESS_KEY="$R2S" -e AWS_DEFAULT_REGION=auto                amazon/aws-cli --endpoint-url "$R2E" s3 ls "s3://$R2B/db-backups/" 2>/dev/null              | awk '{print $4}' | grep '^bandapp-' | sort | tail -1)
+    stamp=$(echo "$newest" | sed -n 's/^bandapp-\([0-9]\{8\}\)T\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)Z.*/ ::/p')
+    if [ -z "$newest" ]; then
+        bad "R2백업   목록을 못 읽었거나 하나도 없다 — R2 키가 바뀌었거나 업로드가 계속 실패 중"
+        fix "백업 기록: $SSH 'tail -30 /var/log/bandapp-backup.log'"
+        fix "지금 한 번 백업(R2 업로드 포함): $SSH 'cd /opt/bandapp && bandule backup'"
+    elif [ -z "$stamp" ]; then
+        bad "R2백업   마지막 파일 이름을 못 읽었다 ($newest)"
+    else
+        r2_age=$(( ($(date +%s) - $(date -u -d "$stamp" +%s)) / 3600 ))
+        if [ "$r2_age" -gt "$BACKUP_MAX_H" ]; then
+            bad "R2백업   마지막이 ${r2_age}시간 전 ($newest) — 서버 밖으로 백업이 안 나가고 있다"
+            fix "백업 기록(업로드 실패 줄): $SSH 'tail -30 /var/log/bandapp-backup.log'"
+            fix "지금 한 번 백업(R2 업로드 포함): $SSH 'cd /opt/bandapp && bandule backup'"
+        else
+            echo "R2백업   ${r2_age}시간 전 ($newest)"
+        fi
+    fi
+fi
+
 # 10. 돈은 들어왔는데 어느 밴드에도 못 붙인 구독(QA BILL-31, V24 unmatched_store_purchases). 만료 뒤 Play 스토어
 #     「다시 구독」은 밴드 표시 없이 이전 구독 토큰만 따라오고, 서버가 그 토큰으로 원래 밴드를 찾는다. 못 찾으면 아무
 #     밴드도 올리지 않고 이 테이블에 남긴다. **해결될 때까지 매일 걸린다** — 예전처럼 로그를 24시간만 세면 배포로
