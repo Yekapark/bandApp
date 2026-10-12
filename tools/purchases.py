@@ -5,9 +5,10 @@
 아무것도 안 해도 경보는 꺼진다. 결제한 밴드를 알면 그 밴드에 반영할 수 있다.
 
     python tools/purchases.py list                     # 미해결 목록 (매일 점검 메일에 나온 번호)
-    python tools/purchases.py show 3                   # 3번 자세히 — 주문 ID 로 Play Console › 주문 관리에서 찾는다
+    python tools/purchases.py show 3                   # 3번 자세히 — 이어받은 예전 구독의 밴드(원래 밴드 후보)
     python tools/purchases.py link 3 123               # 3번 결제를 밴드 123 에 반영 — 서버 배치가 10분 안에 PREMIUM·확인 처리
     python tools/purchases.py close 3 "환불함"          # 반영 없이 닫기 (Console 에서 직접 환불했을 때 등)
+    python tools/purchases.py find-band 노을밴드          # 밴드ID 찾기 — 밴드 이름 일부, 또는 멤버 가입 이메일
     python tools/purchases.py drill                    # 훈련: 종류별 가짜 미해결 건을 넣어 점검·메일을 실제로 돌려 본다
     python tools/purchases.py drill-clean              # 훈련 건만 지운다
 
@@ -90,11 +91,34 @@ def cmd_list(_):
 
 def cmd_show(a):
     print(sql(f"{ROW} WHERE id = {a.id};"))
-    # 이어받은 이전 토큰이 예전에 어디 붙어 있었는지 — 밴드가 지워졌으면 안 나온다. 결제한 사람에게 물어보는 게 확실하다.
-    print(sql(f"SELECT b.id AS 밴드ID, b.name AS 밴드, p.tier, p.expires_at "
-              f"FROM unmatched_store_purchases u JOIN band_plans p ON p.purchase_token = u.linked_purchase_token "
-              f"JOIN bands b ON b.id = p.band_id WHERE u.id = {a.id};"))
-    print("주문ID 로 Play Console › 주문 관리에서 결제한 사람을 찾을 수 있다. 위 표가 비었으면 이전 구독의 밴드가 남아 있지 않다.")
+    # 이 결제가 이어받은 예전 구독이 붙어 있던 밴드 — 원래 밴드의 가장 강한 후보. 예전 밴드가 지워졌거나 이어받은 구독이
+    # 아니면(새 결제 등) 없다. Play Console 에는 결제자 이메일이 안 나오므로, 그때는 결제한 사람의 문의로 찾는다.
+    prev = sql(f"SELECT b.id || ' (' || b.name || ', ' || p.tier || ')' "
+               f"FROM unmatched_store_purchases u JOIN band_plans p ON p.purchase_token = u.linked_purchase_token "
+               f"JOIN bands b ON b.id = p.band_id WHERE u.id = {a.id};", table=False).strip()
+    if prev:
+        print(f"이어받은 예전 구독의 밴드: {prev}  → 맞으면 python tools/purchases.py link {a.id} {prev.split(' ')[0]}")
+    else:
+        print("이어받은 예전 구독의 밴드: 없음 (예전 밴드가 지워졌거나, 새 결제라 이어받은 구독이 없다)")
+        print("→ 결제한 사람이 문의하면 영수증 메일의 주문번호(GPA.…)가 위 주문ID 와 같은지 보고,"
+              " 밴드 이름·가입 이메일로 python tools/purchases.py find-band <이름 또는 이메일>")
+        print("→ 문의가 없으면 그대로 둔다 — 자동환불 예정 시각에 Google 이 환불하고 저절로 닫힌다")
+
+
+def cmd_find_band(a):
+    q = quote(a.query.strip().lower())
+    out = sql(
+        "SELECT b.id AS 밴드ID, b.name AS 밴드, u.name AS 밴드장, "
+        "(SELECT count(*) FROM band_members m WHERE m.band_id = b.id AND m.left_at IS NULL) AS 인원, "
+        "p.tier AS 요금제, p.expires_at AT TIME ZONE 'Asia/Seoul' AS 끝나는날_KST "
+        "FROM bands b JOIN users u ON u.id = b.leader_id LEFT JOIN band_plans p ON p.band_id = b.id "
+        f"WHERE position({q} in lower(b.name)) > 0 "
+        f"   OR b.id IN (SELECT m.band_id FROM band_members m JOIN users w ON w.id = m.user_id "
+        f"               WHERE lower(w.email) = {q} AND m.left_at IS NULL) "
+        "ORDER BY b.id LIMIT 20;")
+    print(out)
+    print("밴드 이름의 일부, 또는 멤버의 가입 이메일(정확히)로 찾는다. 카카오 가입자는 이메일이 없을 수 있다 — 밴드 이름으로.")
+    print("→ 맞는 밴드를 찾았으면: python tools/purchases.py link <번호> <밴드ID>")
 
 
 def cmd_link(a):
@@ -168,6 +192,9 @@ def main():
     p.add_argument("id", type=int)
     p.add_argument("memo")
     p.set_defaults(fn=cmd_close)
+    p = sub.add_parser("find-band", help="밴드 이름 일부 또는 멤버 가입 이메일로 밴드ID 찾기")
+    p.add_argument("query")
+    p.set_defaults(fn=cmd_find_band)
     p = sub.add_parser("drill", help="훈련: 종류별 가짜 미해결 건 넣기 (점검·메일 시험)")
     p.add_argument("--days", type=int, default=2, help="받은 시각을 며칠 전으로 (기본 2)")
     p.set_defaults(fn=cmd_drill)

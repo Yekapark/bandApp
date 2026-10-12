@@ -583,7 +583,8 @@ ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'sh -s' < deploy/prod-check.sh
 
 ```bash
 python tools/purchases.py list                 # 미해결 목록 — 메일의 번호, 자동 환불 예정 시각
-python tools/purchases.py show 3               # 자세히 — 주문 ID 로 Play Console › 주문 관리에서 결제자를 찾는다
+python tools/purchases.py show 3               # 자세히 — 이어받은 예전 구독의 밴드(원래 밴드 후보)
+python tools/purchases.py find-band 노을밴드     # 밴드ID 찾기 — 결제자가 알려 준 밴드 이름·가입 이메일로
 python tools/purchases.py link 3 123           # 3번 결제를 밴드 123 에 — 서버가 10분 안에 PREMIUM·확인 처리
 python tools/purchases.py close 3 "환불함"      # 반영 없이 닫기 (Console 에서 직접 환불했을 때 등)
 ```
