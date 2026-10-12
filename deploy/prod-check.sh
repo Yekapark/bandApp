@@ -19,6 +19,7 @@ BACKUP_MAX_H=${BACKUP_MAX_H:-36}   # 마지막 백업이 몇 시간 안이어야
 CERT_MIN_DAYS=${CERT_MIN_DAYS:-21} # HTTPS 인증서가 최소 며칠 남아 있어야 하는지 (certbot 은 30일 전부터 갱신한다)
 MEM_MIN_FREE=${MEM_MIN_FREE:-10}   # 서버 메모리 중 새로 쓸 수 있는 몫(available)이 최소 몇 % 남아야 하는지
 REDIS_MAX_MB=${REDIS_MAX_MB:-256}  # Redis 가 쓰는 메모리 상한(MB). 키가 전부 유효기간이 있어 평소엔 몇 MB 다
+REBOOT_MAX_D=${REBOOT_MAX_D:-7}    # 보안 업데이트가 재부팅을 며칠 넘게 기다리면 알릴지
 
 # QUIET=1 이면 숫자만 찍고 **로그 내용은 안 찍는다.**
 # 이 저장소는 공개고 GitHub Actions 로그도 공개다 — 에러 줄·요청 경로에는 이메일·구매
@@ -209,8 +210,10 @@ if [ -z "$R2B" ] || [ -z "$R2K" ]; then
     bad "R2백업   R2 설정이 없다 — 백업이 서버 안에만 있다"
     fix "백업 스크립트 설명: deploy/backup/pg-backup.sh · docs/DEPLOY.md §5"
 else
-    newest=$(docker run --rm -e AWS_ACCESS_KEY_ID="$R2K" -e AWS_SECRET_ACCESS_KEY="$R2S" -e AWS_DEFAULT_REGION=auto                amazon/aws-cli --endpoint-url "$R2E" s3 ls "s3://$R2B/db-backups/" 2>/dev/null              | awk '{print $4}' | grep '^bandapp-' | sort | tail -1)
-    stamp=$(echo "$newest" | sed -n 's/^bandapp-\([0-9]\{8\}\)T\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)Z.*/ ::/p')
+    newest=$(docker run --rm -e AWS_ACCESS_KEY_ID="$R2K" -e AWS_SECRET_ACCESS_KEY="$R2S" -e AWS_DEFAULT_REGION=auto \
+               amazon/aws-cli --endpoint-url "$R2E" s3 ls "s3://$R2B/db-backups/" 2>/dev/null \
+             | awk '{print $4}' | grep '^bandapp-' | sort | tail -1)
+    stamp=$(echo "$newest" | sed -n 's/^bandapp-\([0-9]\{8\}\)T\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)Z.*/\1 \2:\3:\4/p')
     if [ -z "$newest" ]; then
         bad "R2백업   목록을 못 읽었거나 하나도 없다 — R2 키가 바뀌었거나 업로드가 계속 실패 중"
         fix "백업 기록: $SSH 'tail -30 /var/log/bandapp-backup.log'"
@@ -227,6 +230,23 @@ else
             echo "R2백업   ${r2_age}시간 전 ($newest)"
         fi
     fi
+fi
+
+# 15. 서버 OS 재부팅 대기. Ubuntu 는 커널 같은 보안 업데이트를 받으면 재부팅해야 적용되고, 그때 이 표시를 남긴다.
+#     받은 직후엔 알리지 않고 REBOOT_MAX_D 일 넘게 미뤄졌을 때만 건다 — 매일 울리면 아무도 안 본다. 컨테이너는
+#     restart: unless-stopped 라 재부팅 뒤 저절로 다시 뜬다(1~2분 끊김).
+if [ -f /var/run/reboot-required ]; then
+    rb_days=$(( ($(date +%s) - $(date -r /var/run/reboot-required +%s)) / 86400 ))
+    rb_pkgs=$(wc -l < /var/run/reboot-required.pkgs 2>/dev/null || echo "?")
+    if [ "$rb_days" -ge "$REBOOT_MAX_D" ]; then
+        bad "재부팅   보안 업데이트(${rb_pkgs}개)가 ${rb_days}일째 재부팅을 기다린다 — 재부팅해야 적용된다"
+        fix "사용자가 적은 시간(새벽)에: $SSH 'reboot'   — 1~2분 뒤 앱·DB·Redis 가 저절로 다시 뜬다"
+        fix "다시 떴는지: $SSH 'cd /opt/bandapp && bandule health'"
+    else
+        echo "재부팅   필요 (${rb_days}일째, ${REBOOT_MAX_D}일 넘으면 알림)"
+    fi
+else
+    echo "재부팅   필요 없음"
 fi
 
 # 10. 돈은 들어왔는데 어느 밴드에도 못 붙인 구독(QA BILL-31, V24 unmatched_store_purchases). 만료 뒤 Play 스토어
