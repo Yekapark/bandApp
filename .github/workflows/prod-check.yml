@@ -146,7 +146,7 @@ jobs:
           로그에는 숫자만 남긴다(공개 저장소). 자세한 것은 서버에서:
           \`ssh -i ~/.ssh/bandule_deploy root@\$DEPLOY_HOST 'sh -s' < deploy/prod-check.sh\`"
           gh label create prod-check --color B60205 --description "매일 운영 점검" 2>/dev/null || true
-          num=$(gh issue list --label prod-check --state open --limit 1 --json number --jq '.[0].number // empty')
+          num=$(gh issue list --label prod-check --state open --limit 20 --json number,title               --jq '[.[] | select(.title | startswith("[리허설]") | not)][0].number // empty')   # 리허설 이슈에 진짜 경보를 섞지 않는다
           if [ "${{ inputs.rehearsal }}" = true ]; then
             # 리허설은 열린 실제 경보에 섞지 않고 늘 새 이슈로 — 메일 제목에 [리허설] 이 붙는다. 확인 뒤 손으로 닫는다.
             gh issue create --title "[리허설] 운영 점검 실패 $(date -u +%F)" --label prod-check --body "$body"
