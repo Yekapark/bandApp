@@ -15,6 +15,8 @@ import com.yeka.bandapp.plan.gateway.StoreBillingGateway.StoreSubscription;
 import com.yeka.bandapp.plan.gateway.StoreBillingUnavailableException;
 import com.yeka.bandapp.plan.repository.BandPlanRepository;
 import com.yeka.bandapp.plan.repository.ProcessedStoreEventRepository;
+import com.yeka.bandapp.plan.repository.UnmatchedStorePurchaseRepository;
+import com.yeka.bandapp.plan.entity.UnmatchedStorePurchase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -84,11 +86,16 @@ public class StoreSubscriptionService {
     private final ProcessedStoreEventRepository processedEvents;
     private final PlanProperties planProperties;
     private final StoreBillingProperties billingProperties;
+    private final UnmatchedStorePurchaseRepository unmatchedPurchases;
+
+    /** 밴드를 못 찾은 구독을 기록할 때 남기는 ERROR 표시. 매일 점검은 이 로그가 아니라 V24 테이블을 센다. */
+    public static final String UNMATCHED_MARKER = "PURCHASE_UNMATCHED";
 
     public StoreSubscriptionService(BandAccessGuard accessGuard, BandPlanRepository bandPlanRepository,
                                     PlanMutationService planMutationService, StoreBillingGateway billingGateway,
                                     ProcessedStoreEventRepository processedEvents, PlanProperties planProperties,
-                                    StoreBillingProperties billingProperties) {
+                                    StoreBillingProperties billingProperties,
+                                    UnmatchedStorePurchaseRepository unmatchedPurchases) {
         this.accessGuard = accessGuard;
         this.bandPlanRepository = bandPlanRepository;
         this.planMutationService = planMutationService;
@@ -96,6 +103,7 @@ public class StoreSubscriptionService {
         this.processedEvents = processedEvents;
         this.planProperties = planProperties;
         this.billingProperties = billingProperties;
+        this.unmatchedPurchases = unmatchedPurchases;
     }
 
     /**
@@ -255,6 +263,9 @@ public class StoreSubscriptionService {
             if (isGrantType(notificationType) && withinGrantRetryWindow(publishTime)) {
                 throw new StoreWebhookRetryException(
                         "type=" + notificationType + " 인데 아직 밴드에 안 붙은 토큰 — 재전송 대기");
+            }
+            if (isGrantType(notificationType)) {
+                recordUnmatched(notificationType, purchaseToken);
             }
             log.warn("RTDN: 모르는 구매 토큰 (밴드 없음) type={} — 무시", notificationType);
             markProcessed(messageId, notificationType, purchaseToken);
@@ -556,6 +567,89 @@ public class StoreSubscriptionService {
             case SUB_PURCHASED, SUB_RENEWED, SUB_RECOVERED, SUB_RESTARTED, SUB_IN_GRACE_PERIOD -> true;
             default -> false;
         };
+    }
+
+    /**
+     * 돈은 들어왔는데 밴드를 못 찾고 포기하는 구독을 남긴다(V24, QA BILL-31). 스토어에서 이미 끝난(돈이 안 남은) 구독이면
+     * 남길 게 없다. 스토어가 잠깐 답하지 않으면 일단 남긴다 — 놓치는 것보다 낫고, {@link #resolveUnmatchedPurchases} 가
+     * 다음에 다시 물어 끝난 것이면 스스로 닫는다. 외부 조회라 트랜잭션 밖에서 부른다.
+     */
+    private void recordUnmatched(int notificationType, String purchaseToken) {
+        StoreSubscription sub = null;
+        try {
+            sub = billingGateway.fetch(Store.GOOGLE_PLAY, purchaseToken).orElse(null);
+            if (sub == null || !grantable(sub)) {
+                return;
+            }
+        } catch (StoreBillingUnavailableException transientFailure) {
+            log.warn("RTDN: 밴드 못 찾은 구매의 스토어 조회 실패 — 일단 기록한다", transientFailure);
+        }
+        try {
+            unmatchedPurchases.saveAndFlush(UnmatchedStorePurchase.of(Store.GOOGLE_PLAY, purchaseToken, notificationType,
+                    sub == null ? null : sub.productId(), sub == null ? null : sub.orderId(),
+                    sub == null ? null : sub.linkedPurchaseToken(), Instant.now()));
+            log.error("{} type={} — 돈은 들어왔는데 PREMIUM 을 줄 밴드를 못 찾았다. 처리: python tools/purchases.py list",
+                    UNMATCHED_MARKER, notificationType);
+        } catch (DataIntegrityViolationException alreadyRecorded) {
+            log.debug("RTDN: 이미 기록한 밴드 못 찾은 구매 type={}", notificationType);
+        }
+    }
+
+    /**
+     * 밴드를 못 찾은 구독(V24)을 다시 본다 — 정상이면 대상이 없어 쿼리 한 번으로 끝난다. 하나씩:
+     * <ol>
+     *   <li>그 토큰이 어떤 경로로든(앱 검증·복원) 밴드에 붙었으면 해결.
+     *   <li>스토어에서 끝났으면(환불·만료 — 확인 처리를 못 받아 3일 뒤 Google 자동 환불 포함) 해결.
+     *   <li>이제 원래 밴드를 찾을 수 있거나({@link #purchaseBand}) 운영자가 {@code target_band_id} 를 정했으면 그 밴드에
+     *       PREMIUM·확인 처리를 하고 해결. 반영이 거부되면(이미 다른 구독 등) 미해결로 두고 ERROR 를 남긴다.
+     * </ol>
+     * 스토어가 답하지 않으면 그 건은 다음 차례로 미룬다. 외부 조회가 있어 트랜잭션 없이 돈다.
+     *
+     * @return 이번에 해결한 건수
+     */
+    public int resolveUnmatchedPurchases() {
+        int resolved = 0;
+        for (UnmatchedStorePurchase open : unmatchedPurchases.findByResolvedAtIsNullOrderByIdAsc()) {
+            String how = resolutionFor(open);
+            if (how == null) {
+                continue;
+            }
+            open.resolve(Instant.now(), how);
+            unmatchedPurchases.save(open);
+            log.info("밴드 못 찾은 구매 해결 id={} — {}", open.getId(), how);
+            resolved++;
+        }
+        return resolved;
+    }
+
+    private String resolutionFor(UnmatchedStorePurchase open) {
+        Optional<Long> attached = bandPlanRepository.findBandIdByPurchaseToken(open.getPurchaseToken());
+        if (attached.isPresent()) {
+            return "밴드 " + attached.get() + " 에 연결됨(자동)";
+        }
+        StoreSubscription sub;
+        try {
+            sub = billingGateway.fetch(Store.GOOGLE_PLAY, open.getPurchaseToken()).orElse(null);
+        } catch (StoreBillingUnavailableException transientFailure) {
+            log.warn("밴드 못 찾은 구매 재확인: 스토어 조회 일시 실패 id={} — 다음에 다시", open.getId());
+            return null;
+        }
+        if (sub == null || !grantable(sub)) {
+            return "스토어에서 끝남(" + (sub == null ? "토큰 없음" : sub.state()) + ") — 환불·만료";
+        }
+        OptionalLong found = purchaseBand(sub);
+        Long bandId = found.isPresent() ? Long.valueOf(found.getAsLong()) : open.getTargetBandId();
+        if (bandId == null) {
+            return null;
+        }
+        try {
+            grantAndAcknowledge(bandId, sub);
+        } catch (BusinessException rejected) {
+            log.error("{} id={} bandId={} 반영 거부 code={} — 다른 밴드를 정하거나 close 한다",
+                    UNMATCHED_MARKER, open.getId(), bandId, rejected.errorCode());
+            return null;
+        }
+        return "밴드 " + bandId + " 에 연결(" + (found.isPresent() ? "자동" : "운영자") + ")";
     }
 
     /** 처리 완료 표시. 이미 있으면(동시 중복 전달) 삼킨다. */

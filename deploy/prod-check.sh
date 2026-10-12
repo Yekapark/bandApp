@@ -137,21 +137,29 @@ else
     echo "빈밴드삭제 실패 0건"
 fi
 
-# 10. 돈은 들어왔는데 어느 밴드에도 못 붙인 구독(QA BILL-31). 만료 뒤 Play 스토어 「다시 구독」은 밴드 표시 없이 이전
-#     구독 토큰(linkedPurchaseToken)만 따라오고, 서버가 그 토큰으로 원래 밴드를 찾는다(StoreSubscriptionService.purchaseBand).
-#     못 찾으면 아무 밴드도 올리지 않고 1시간 재전송을 기다린 뒤 "모르는 구매 토큰 (밴드 없음)" 을 남기고 포기한다 —
-#     결제한 사람의 밴드가 FREE 로 남는다. 실기기로 재현할 수 없는 경로라(시험 구독은 만료 즉시 Play 목록에서 사라짐)
-#     첫 실제 사례를 여기서 잡는다. 해지·만료 같은 알림(type 3·12·13 등)도 같은 문구를 남기므로 돈이 들어오는
-#     종류만 센다: 1 RECOVERED · 2 RENEWED · 4 PURCHASED · 6 IN_GRACE_PERIOD · 7 RESTARTED.
-#     걸리면 Play Console › 주문 관리에서 그 시각의 주문을 찾아 원래 밴드를 확인해 올리거나 환불한다.
-#     로그 문구를 바꾸면 여기도 같이 바꾼다.
-orphan=$(docker logs --since 24h bandapp-app-1 2>&1 | grep -cE 'RTDN: 모르는 구매 토큰 \(밴드 없음\) type=(1|2|4|6|7) ')
-if [ "${orphan:-0}" -gt 0 ]; then
-    bad "밴드없는결제 24시간 ${orphan}건 — 돈은 들어왔는데 PREMIUM 을 줄 밴드를 못 찾았다. 최근 것:"
-    detail && docker logs --since 24h bandapp-app-1 2>&1 | grep -E 'RTDN: 모르는 구매 토큰 \(밴드 없음\) type=(1|2|4|6|7) ' \
-        | sed -E 's/^([^ .]+).*(type=[0-9]+).*/   \1Z \2/' | tail -5
+# 10. 돈은 들어왔는데 어느 밴드에도 못 붙인 구독(QA BILL-31, V24 unmatched_store_purchases). 만료 뒤 Play 스토어
+#     「다시 구독」은 밴드 표시 없이 이전 구독 토큰만 따라오고, 서버가 그 토큰으로 원래 밴드를 찾는다. 못 찾으면 아무
+#     밴드도 올리지 않고 이 테이블에 남긴다. **해결될 때까지 매일 걸린다** — 예전처럼 로그를 24시간만 세면 배포로
+#     컨테이너가 바뀌거나 하루가 지나면 경보가 저절로 꺼졌다. 해결은 대부분 서버 배치(10분마다)가 한다: 밴드에 붙었거나,
+#     Google 이 환불·만료했으면(확인 처리를 못 받은 구매는 3일 뒤 자동 환불) 닫는다. 운영자 명령은 tools/purchases.py.
+#     `→` 로 시작하는 줄은 매일 점검 워크플로가 이슈(=메일) 본문에 그대로 옮긴다 — 번호·건수만 있고 토큰은 없다.
+DB_USER=${DB_USERNAME:-$(grep -m1 '^DB_USERNAME=' .env.prod 2>/dev/null | cut -d= -f2- | tr -cd 'A-Za-z0-9_')}
+DB_NAME_=${DB_NAME:-$(grep -m1 '^DB_NAME=' .env.prod 2>/dev/null | cut -d= -f2- | tr -cd 'A-Za-z0-9_')}
+unmatched=$(docker exec bandapp-postgres-1 psql -U "${DB_USER:-bandapp}" -d "${DB_NAME_:-bandapp}" -tAc     "select count(*) || ' ' || coalesce(string_agg(id::text, ',' order by id), '') || ' ' ||
+            coalesce(extract(day from now() - min(received_at))::int, 0)
+     from unmatched_store_purchases where resolved_at is null" 2>/dev/null)
+if [ -z "$unmatched" ]; then
+    bad "밴드없는결제 확인 실패 — DB 를 읽지 못했다 (postgres 컨테이너·V24 마이그레이션을 본다)"
 else
-    echo "밴드없는결제 0건"
+    set -- $unmatched
+    if [ "$1" -gt 0 ]; then
+        bad "밴드없는결제 미해결 $1건 (번호 $2, 가장 오래된 것 $3일 전) — 돈은 들어왔는데 PREMIUM 을 줄 밴드를 못 찾았다"
+        echo "   → 내 PC 저장소 폴더에서 보기: python tools/purchases.py list"
+        echo "   → 결제한 밴드를 알면 그 밴드에 반영(10분 안): python tools/purchases.py link <번호> <밴드ID>"
+        echo "   → 모르면 그대로 둔다: 결제 3일 뒤 Google 이 자동 환불하고 이 경보는 저절로 꺼진다"
+    else
+        echo "밴드없는결제 0건"
+    fi
 fi
 
 [ "$fail" = 0 ] && echo "== 이상 없음"
