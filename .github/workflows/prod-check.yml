@@ -140,6 +140,12 @@ jobs:
              → 모르겠으면 이 메일을 Claude 에게 — 유효기간 없는 키를 넣는 코드를 찾아 고친다
           !! 재시작   bandapp-app-1(재시작 2, OOM true) — 죽었다가 다시 뜬 컨테이너가 있다
              → 왜 죽었나: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'docker logs --tail 50 bandapp-app-1; dmesg | grep -i "killed process" | tail -5'
+          !! R2백업   마지막이 50시간 전 (bandapp-예시.dump.gpg) — 서버 밖으로 백업이 안 나가고 있다
+             → 백업 기록(업로드 실패 줄): ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'tail -30 /var/log/bandapp-backup.log'
+             → 지금 한 번 백업(R2 업로드 포함): ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && bandule backup'
+          !! 재부팅   보안 업데이트(3개)가 9일째 재부팅을 기다린다 — 재부팅해야 적용된다
+             → 사용자가 적은 시간(새벽)에: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'reboot'   — 1~2분 뒤 앱·DB·Redis 가 저절로 다시 뜬다
+             → 다시 떴는지: ssh -i ~/.ssh/bandule_deploy root@64.176.231.126 'cd /opt/bandapp && bandule health'
           !! 밴드없는결제 미해결 1건 (번호 1, 가장 오래된 것 0일 전) — 돈은 들어왔는데 PREMIUM 을 줄 밴드를 못 찾았다
              → 내 PC 저장소 폴더에서 보기: python tools/purchases.py list
              → 결제한 밴드를 알면 그 밴드에 반영(10분 안): python tools/purchases.py link <번호> <밴드ID>
