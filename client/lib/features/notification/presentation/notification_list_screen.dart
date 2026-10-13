@@ -307,7 +307,7 @@ class _Empty extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 32),
         child: Text(
-          '받은 알림이 없어요.\n합주 일정이 등록되거나 정산이 올라오면 여기에 쌓여요.',
+          '받은 알림이 없어요.',
           textAlign: TextAlign.center,
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.6),

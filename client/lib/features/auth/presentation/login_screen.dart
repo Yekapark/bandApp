@@ -69,12 +69,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  void _todo(String what) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('$what 은 아직 준비 중이에요.')));
-  }
-
   /// 카카오 버튼. **첫 사용이면 약관 동의를 먼저 받는다.**
   ///
   /// 카카오는 첫 로그인이 곧 가입이라, 그냥 통과시키면 약관도 나이 확인도 없이 계정이
@@ -94,10 +88,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _kakao() async {
     if (!AppConfig.kakaoEnabled) {
-      // 키가 안 들어간 건 빌드 문제다. 사용자에게 사유를 실토하지 않고 로그로만 남긴다
-      // (--dart-define-from-file 을 빠뜨리면 이 상태가 된다).
+      // 키가 없으면 버튼 자체를 숨기므로(build) 여기 올 일은 없다. 혹시 오면 로그만 남긴다.
       debugPrint('카카오 로그인 비활성: KAKAO_NATIVE_APP_KEY 가 비어 있다');
-      _todo('카카오 로그인');
       return;
     }
     FocusScope.of(context).unfocus();
@@ -155,17 +147,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 30),
                   Text(
-                    '우리 밴드 합주,\n한 곳에서 정리하자',
+                    '합주 일정과 정산을\n한곳에서',
                     style: Theme.of(context).textTheme.headlineLarge,
-                  ),
-                  const SizedBox(height: 9),
-                  const Text(
-                    '이메일로 로그인하거나, 새 계정을 만들어 시작하세요.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.6,
-                      color: AppColors.textDim,
-                    ),
                   ),
                   const SizedBox(height: 28),
                   TextFormField(
@@ -176,8 +159,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     decoration: const InputDecoration(hintText: '이메일'),
                     validator: (v) {
                       final s = v?.trim() ?? '';
-                      if (s.isEmpty) return '이메일을 입력하세요.';
-                      if (!s.contains('@')) return '이메일 형식이 아닙니다.';
+                      if (s.isEmpty) return '이메일을 입력해 주세요.';
+                      if (!s.contains('@')) return '이메일 형식이 아니에요.';
                       return null;
                     },
                   ),
@@ -189,7 +172,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _submit(),
                     decoration: const InputDecoration(hintText: '비밀번호'),
-                    validator: (v) => (v ?? '').isEmpty ? '비밀번호를 입력하세요.' : null,
+                    validator: (v) => (v ?? '').isEmpty ? '비밀번호를 입력해 주세요.' : null,
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
@@ -223,15 +206,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  const _OrDivider(),
-                  const SizedBox(height: 16),
-                  _SocialButton(
-                    label: '카카오로 계속하기',
-                    background: AppColors.kakao,
-                    foreground: AppColors.onKakao,
-                    onTap: _loading ? null : _kakaoWithTerms,
-                  ),
+                  // 카카오 키 없이 빌드하면(--dart-define-from-file 누락) 버튼을 숨긴다. 예전에는 눌렀을 때
+                  // "준비 중이에요" 를 띄웠는데, 출시 빌드에는 키가 들어가므로 개발 PC 에서만 생기는 상태다.
+                  if (AppConfig.kakaoEnabled) ...[
+                    const SizedBox(height: 6),
+                    const _OrDivider(),
+                    const SizedBox(height: 16),
+                    _SocialButton(
+                      label: '카카오로 계속하기',
+                      background: AppColors.kakao,
+                      foreground: AppColors.onKakao,
+                      onTap: _loading ? null : _kakaoWithTerms,
+                    ),
+                  ],
                   // 네이버 로그인 버튼을 뺐다. 눌리지 않는 버튼은 "이 앱은 아직 덜
                   // 됐구나" 라는 인상만 준다 — 되는 길(이메일·카카오)이 이미 둘 있다.
                   // 실제로 붙일 때 다시 넣는다.

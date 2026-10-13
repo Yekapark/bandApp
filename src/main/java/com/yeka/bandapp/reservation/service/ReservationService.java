@@ -111,7 +111,7 @@ public class ReservationService {
     public ReservationListResponse list(long bandId, long userId, Instant from, Instant to, boolean includeInactive) {
         accessGuard.requireActiveMember(bandId, userId);
         if (from == null || to == null) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회 기간(from, to)이 필요합니다.");
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "조회할 기간을 정해 주세요.");
         }
         if (!to.isAfter(from)) {
             throw new BusinessException(ErrorCode.INVALID_RESERVATION_PERIOD);

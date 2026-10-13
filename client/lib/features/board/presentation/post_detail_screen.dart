@@ -154,7 +154,7 @@ class PostDetailScreen extends ConsumerWidget {
         backgroundColor: AppColors.surface,
         title: const Text('게시글을 삭제할까요?', style: TextStyle(fontSize: 16)),
         content: const Text(
-          '삭제하면 첨부한 사진·영상도 함께 사라집니다.',
+          '삭제하면 첨부한 사진·영상도 함께 사라져요.',
           style: TextStyle(fontSize: 12.5, color: AppColors.textDim),
         ),
         actions: [
@@ -256,7 +256,7 @@ class PostDetailScreen extends ConsumerWidget {
           maxLength: 500,
           minLines: 2,
           maxLines: 4,
-          decoration: const InputDecoration(hintText: '신고 사유를 적어주세요.'),
+          decoration: const InputDecoration(hintText: '신고 사유를 적어 주세요.'),
         ),
         actions: [
           TextButton(
@@ -270,7 +270,7 @@ class PostDetailScreen extends ConsumerWidget {
     );
     if (reason == null || !context.mounted) return;
     if (reason.isEmpty) {
-      _snack(context, '신고 사유를 적어주세요.');
+      _snack(context, '신고 사유를 적어 주세요.');
       return;
     }
     try {

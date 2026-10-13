@@ -202,8 +202,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${_isEdit ? '저장' : '등록'}은 완료됐어요. 아래 일정과 시간대가 겹칩니다 — '
-              '필요하면 상세 화면에서 시간을 조정하세요.',
+              '${_isEdit ? '저장' : '등록'}했어요. 아래 일정과 시간이 겹쳐요.',
               style: const TextStyle(
                 fontSize: 12.5,
                 color: AppColors.textDim,
@@ -269,7 +268,7 @@ class _ReservationFormScreenState extends ConsumerState<ReservationFormScreen> {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  '합주실 예약은 전화·카톡으로 직접 하고, 확정된 내용만 여기에 남겨요.',
+                  '예약은 합주실에 직접 하고, 여기엔 기록만 남겨요.',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.6,

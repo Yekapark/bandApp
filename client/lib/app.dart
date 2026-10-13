@@ -46,6 +46,7 @@ final _userData = <ProviderOrFamily>[
   blockedUsersProvider,
   settlementProvider,
   bandSettlementsProvider,
+  myOutstandingProvider,
 ];
 
 class BandApp extends ConsumerWidget {

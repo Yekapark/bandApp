@@ -88,8 +88,7 @@ class _CreateBandScreenState extends ConsumerState<CreateBandScreen> {
                   border: Border.all(color: AppColors.borderFaint),
                 ),
                 child: const Text(
-                  '밴드를 만들면 내가 밴드장이 돼요. 초대코드는 설정 › 멤버 초대에서 만들어 공유해요. '
-                  '장르·파트 설정은 추후 지원 예정이에요.',
+                  '밴드를 만들면 내가 밴드장이 돼요. 초대코드는 설정 › 멤버 초대에서 만들어 공유해요.',
                   style: TextStyle(
                       fontSize: 11.5, height: 1.6, color: AppColors.textDim),
                 ),

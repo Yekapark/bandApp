@@ -28,6 +28,7 @@ final _bandData = <ProviderOrFamily>[
   roomsProvider,
   boardFeedProvider,
   bandSettlementsProvider,
+  myOutstandingProvider,
   // 알림 목록은 여기 없다 — PushService 가 복귀할 때마다(간격 제한 없이) 갱신한다.
   // 종 배지는 늦으면 바로 티가 나서 60초를 기다릴 이유가 없다.
 ];

@@ -41,9 +41,6 @@ Future<void> showBandSwitchSheet(BuildContext context, WidgetRef ref) {
               const SizedBox(height: 16),
               const Text('내 밴드 전환',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              const Text('한 계정으로 여러 밴드에 소속될 수 있어요.',
-                  style: TextStyle(fontSize: 11.5, color: AppColors.textDim)),
               const SizedBox(height: 14),
               for (final b in bands)
                 Padding(

@@ -642,8 +642,8 @@ class _CouponNotice extends StatelessWidget {
           ),
           SizedBox(height: 5),
           Text(
-            '위에 적힌 날짜까지 프리미엄이에요. 자동으로 갱신되지 않아요. 계속 쓰려면 지금 결제해도 돼요 — '
-            '남은 쿠폰 기간은 결제한 1년 뒤에 그대로 붙어요.',
+            '위 날짜까지 프리미엄이고, 자동 갱신되지 않아요. '
+            '지금 결제하면 남은 쿠폰 기간은 결제한 1년 뒤에 이어 붙어요.',
             style: TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
           ),
         ],

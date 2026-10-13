@@ -4,6 +4,7 @@ import com.yeka.bandapp.band.service.BandAccessGuard;
 import com.yeka.bandapp.room.entity.Room;
 import com.yeka.bandapp.room.repository.RoomRepository;
 import com.yeka.bandapp.settlement.dto.BandSettlementListResponse;
+import com.yeka.bandapp.settlement.dto.MyOutstandingResponse;
 import com.yeka.bandapp.settlement.entity.SettlementShare;
 import com.yeka.bandapp.settlement.repository.BandSettlementRow;
 import com.yeka.bandapp.settlement.repository.SettlementRepository;
@@ -68,6 +69,13 @@ public class BandSettlementListService {
                         roomNames, userId))
                 .toList();
         return BandSettlementListResponse.of(items, limit);
+    }
+
+    /** 그 밴드에서 내가 아직 안 낸 돈 전체 — 목록처럼 페이지로 나누지 않는다. */
+    @Transactional(readOnly = true)
+    public MyOutstandingResponse myOutstanding(long bandId, long userId) {
+        accessGuard.requireActiveMember(bandId, userId);
+        return MyOutstandingResponse.from(shareRepository.sumMyOutstanding(bandId, userId));
     }
 
     /** 합주실 이름. 삭제된 합주실은 목록에 없고, 그 줄은 이름이 {@code null} 이 된다. */
