@@ -7,5 +7,9 @@
 
     <!-- 개발 중에는 로컬 백엔드에 http 로 붙는다. Android 9+ 는 평문 HTTP 를 기본 차단하므로
          디버그 빌드에서만 열어 준다(릴리스 매니페스트에는 없다 — 배포는 https 를 쓴다). -->
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <!-- 오류 기록(Crashlytics)은 릴리스에서만 보낸다(crash_reporting.dart). Dart 가 끄기 전 시작 직후 몇 초는
+             SDK 기본값(켜짐)이라 지난 실행의 비정상 종료가 올라갈 수 있었다(PRIV-08) — 처음부터 끈다. -->
+        <meta-data android:name="firebase_crashlytics_collection_enabled" android:value="false" />
+    </application>
 </manifest>

@@ -26,7 +26,11 @@ class BlockedUsersScreen extends ConsumerWidget {
         backgroundColor: AppColors.surface,
         onRefresh: () async {
           ref.invalidate(blockedUsersProvider);
-          await ref.read(blockedUsersProvider.future);
+          // 실패는 화면의 오류 상태로 보인다. 받지 않으면 처리 안 된 오류로 Crashlytics 에 쌓인다
+          // (밴드에서 나간 뒤 당겨서 새로고침 → 403).
+          try {
+            await ref.read(blockedUsersProvider.future);
+          } catch (_) {}
         },
         child: blocksAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),

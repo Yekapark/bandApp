@@ -83,7 +83,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         backgroundColor: AppColors.surface,
         onRefresh: () async {
           ref.invalidate(monthReservationsProvider(key));
-          await ref.read(monthReservationsProvider(key).future);
+          // 실패는 화면의 오류 상태로 보인다. 받지 않으면 처리 안 된 오류로 Crashlytics 에 쌓인다
+          // (밴드에서 나간 뒤 당겨서 새로고침 → 403).
+          try {
+            await ref.read(monthReservationsProvider(key).future);
+          } catch (_) {}
         },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),

@@ -1,5 +1,29 @@
 # 문제 기록
 
+## 2026-10-14 — 밴드에서 나간 뒤 당겨서 새로고침하면 403 이 「처리 안 된 오류」로 Crashlytics 에 쌓였다 (+46 대기)
+
+**증상** — Crashlytics 에 심각하지 않은 오류 `ApiException(NOT_BAND_MEMBER, 403): 밴드 멤버가 아닙니다.` 1건(1.0.0(40), SM-G981N·Android 13, 10/8~9 Codex 탈퇴·추방 QA 무렵). 스택 `unwrap` ← `BoardRepository.detail` ← Riverpod `handleFuture`. 앱은 꺼지지 않았고 화면은 원래대로 오류 상태를 보였다.
+
+**원인** — 게시글 상세의 당겨서 새로고침이 `await ref.read(postDetailProvider(key).future)` 를 그대로 기다렸다. 서버가 거절하면 그 Future 가 예외를 던지는데 `RefreshIndicator` 는 `onRefresh` 의 예외를 받지 않는다 → 영(zone)까지 올라가 `PlatformDispatcher.onError` → `crash_reporting.dart` 가 Crashlytics 로 보냈다. 화면의 오류 표시는 provider 의 AsyncValue 가 따로 하므로 예외를 받을 사람이 없었다. 같은 모양이 7곳(초대·게시글 상세·정기 일정 상세/목록·캘린더·일정 상세·차단 목록). 홈·정산 두 화면은 이미 `try/catch` 로 받고 있었다.
+
+**해결** — 7곳 모두 `try { await ref.read(…future); } catch (_) {}`(정산 화면과 같은 방식, 실패는 화면 오류 상태로 보인다). 같은 점검에서 나온 `unawaited_return_in_try_block` 경고 46개는 오탐이다 — `unwrap` 은 동기 함수이고 네트워크 호출은 이미 `await` 한다.
+
+**확인법** — 밴드 멤버 둘로 한 사람이 게시글·일정 상세를 연 채 다른 사람이 그를 추방 → 열린 화면을 당겨서 새로고침 → 오류 안내만 보이고 Crashlytics 에 새 `NOT_BAND_MEMBER` 이벤트가 생기지 않는다. 새 새로고침을 만들 때 `grep -rn "await ref.read(.*\.future)" client/lib` 결과가 `try` 안인지 본다.
+
+---
+
+## 2026-10-14 — 디버그 빌드도 시작 직후 약 2.6초는 오류 기록 수집이 켜져 있었다 (PRIV-08)
+
+**증상** — PRIV-08 QA 디버그 빌드(S20) 기동 로그: `01:16:36.476 Crashlytics automatic data collection ENABLED by global Firebase setting` … `01:16:39.119 DISABLED by API`. 그 사이 네이티브 SDK 는 지난 실행의 비정상 종료 기록을 보낼 수 있다.
+
+**원인** — `crash_reporting.dart` 는 디버그·프로필이면 `setCrashlyticsCollectionEnabled(false)` 를 부르지만, 이건 Dart 가 뜬 뒤라 네이티브 SDK 가 먼저 기본값(켜짐)으로 시작한다. 릴리스에서 사용자가 끈 경우는 문제없다 — 끈 값이 기기에 저장돼 시작부터 `DISABLED by API` 였다(§167 OFF 시험).
+
+**해결** — `android/app/src/debug`·`profile` 매니페스트에 `firebase_crashlytics_collection_enabled=false`. 릴리스(main) 매니페스트는 그대로(기본 켜짐 + 사용자 설정).
+
+**확인법** — 디버그 빌드 설치 뒤 `adb shell setprop log.tag.FirebaseCrashlytics DEBUG` → 앱 실행 → 첫 줄이 `DISABLED by firebase_crashlytics_collection_enabled manifest flag`.
+
+---
+
 ## 2026-10-10 — 카카오톡 동의 화면에서 「취소」 해도 브라우저 로그인 창이 또 떴다 (QA-R29/U64, +45 대기)
 
 **증상** — S24(카카오톡 로그인됨)에서 「카카오로 계속하기」 → 카카오톡 「카카오 로그인 동의」 화면 → 「취소」 를 누르면 2초 안에 삼성 인터넷의 카카오계정 로그인(accounts.kakao.com) 창이 떴다.
