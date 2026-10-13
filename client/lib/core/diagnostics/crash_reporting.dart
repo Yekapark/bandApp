@@ -68,6 +68,9 @@ class CrashReporting {
     await crashlytics.setCrashlyticsCollectionEnabled(value);
     if (!value) await crashlytics.deleteUnsentReports();
   }
+
+  /// PRIV-08 QA 빌드의 "테스트 비정상 종료" 버튼 전용.
+  static void crashForQa() => FirebaseCrashlytics.instance.crash();
 }
 
 /// Crashlytics 로 나가는 오류 — 원래 오류 문자열에서 민감값을 가린 것(PRIV-09). 스택은 호출부가 그대로 넘긴다.
