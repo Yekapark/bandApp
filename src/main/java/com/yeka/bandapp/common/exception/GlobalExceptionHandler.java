@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleUnreadable(HttpMessageNotReadableException e) {
         ErrorCode code = ErrorCode.INVALID_INPUT;
         return ResponseEntity.status(code.status())
-                .body(ApiResponse.fail(ErrorPayload.of(code.name(), "요청 본문을 해석할 수 없습니다.")));
+                .body(ApiResponse.fail(ErrorPayload.of(code.name(), "요청을 처리하지 못했어요. 입력한 값을 다시 확인해 주세요.")));
     }
 
     /**
@@ -54,7 +54,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleBadRequestParam(Exception e) {
         ErrorCode code = ErrorCode.INVALID_INPUT;
         return ResponseEntity.status(code.status())
-                .body(ApiResponse.fail(ErrorPayload.of(code.name(), "요청 파라미터가 올바르지 않습니다.")));
+                .body(ApiResponse.fail(ErrorPayload.of(code.name(), "입력한 값을 다시 확인해 주세요.")));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

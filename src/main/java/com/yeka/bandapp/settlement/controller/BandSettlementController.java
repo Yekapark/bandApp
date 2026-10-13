@@ -3,6 +3,7 @@ package com.yeka.bandapp.settlement.controller;
 import com.yeka.bandapp.common.response.ApiResponse;
 import com.yeka.bandapp.common.security.AuthPrincipal;
 import com.yeka.bandapp.settlement.dto.BandSettlementListResponse;
+import com.yeka.bandapp.settlement.dto.MyOutstandingResponse;
 import com.yeka.bandapp.settlement.service.BandSettlementListService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,5 +40,15 @@ public class BandSettlementController {
                                                         @RequestParam(required = false) Long cursor,
                                                         @RequestParam(required = false) Integer size) {
         return ApiResponse.ok(listService.list(bandId, principal.userId(), cursor, size));
+    }
+
+    @Operation(summary = "내 미납 합계",
+            description = "그 밴드에서 내가 아직 안 낸 금액의 합과 건수. 목록의 myOutstandingTotal 은 한 페이지 "
+                    + "합계지만 이건 페이지와 상관없이 전부 더한다(면제된 몫은 제외). 홈 요약 카드용. "
+                    + "그 밴드 멤버만(비멤버 403 NOT_BAND_MEMBER).")
+    @GetMapping("/my-outstanding")
+    public ApiResponse<MyOutstandingResponse> myOutstanding(@AuthenticationPrincipal AuthPrincipal principal,
+                                                            @PathVariable long bandId) {
+        return ApiResponse.ok(listService.myOutstanding(bandId, principal.userId()));
     }
 }

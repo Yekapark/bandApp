@@ -17,7 +17,7 @@ void main() {
     await tester.tap(find.text('밴드 합류하기'));
     await tester.pumpAndSettle();
 
-    expect(find.text('만료된 초대코드입니다. 밴드장에게 새 초대코드를 받아 주세요.'), findsOneWidget);
+    expect(find.text('기한이 지난 초대코드예요. 밴드장에게 새 초대코드를 받아 주세요.'), findsOneWidget);
   });
 }
 
@@ -26,5 +26,5 @@ class _ExpiredInvite extends BandRepository {
 
   @override
   Future<Band> joinBand(String code) async => throw ApiException(
-      code: 'INVITE_EXPIRED', message: '만료된 초대코드입니다.', statusCode: 410);
+      code: 'INVITE_EXPIRED', message: '기한이 지난 초대코드예요.', statusCode: 410);
 }

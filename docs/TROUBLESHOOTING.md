@@ -1,5 +1,21 @@
 # 문제 기록
 
+## 2026-10-13 — 클라우드 세션에서 백엔드 테스트가 안 돌았다 (Docker 꺼짐·Maven Central 429)
+
+**증상** — 클라우드(Claude Code 원격) 세션에서 `./gradlew test` 가 두 번 막혔다. ① 통합 테스트(Testcontainers)가 Docker 에 붙지 못했다(`docker ps` 실패). ② 그다음엔 테스트 이전 단계에서 `Could not resolve org.springframework.boot:spring-boot-loader-tools:3.5.16 … Received status code 429 from server: Too Many Requests`(repo.maven.apache.org)로 빌드 설정이 실패했다. 몇 분 뒤 다시 해도 같았다.
+
+**원인** — ① 컨테이너에 `dockerd` 는 깔려 있지만 세션이 시작될 때 데몬이 떠 있지 않다. ② 새 컨테이너는 Gradle 캐시가 비어 있어 의존성 전부를 Maven Central 에서 받는데, 클라우드 출구 IP 가 여러 세션과 공유돼 Maven Central 의 요청 제한(429)에 걸린다. 프록시가 막은 게 아니라(그건 403/407) Maven Central 이 돌려준 것이다. 저장소 코드나 빌드 설정의 문제는 아니다.
+
+**해결** — 저장소 파일은 건드리지 않고 세션 안에서만 우회했다.
+1. `dockerd > /tmp/dockerd.log 2>&1 &` 로 데몬을 띄우고 `docker info` 가 될 때까지 기다린다.
+2. 저장소 **밖**(스크래치 폴더)에 Gradle init 스크립트를 두고 Maven Central 을 Google 미러(`https://maven-central.storage-download.googleapis.com/maven2/`)로 바꿔 `./gradlew -I <스크립트> test` 로 돌린다. 스크립트는 `settingsEvaluated` 에서 `pluginManagement.repositories` 앞에 미러를 넣고, `allprojects` 에서 url 이 `repo.maven.apache.org` 인 저장소의 url 을 미러로 바꾼다.
+
+덧붙여 같은 세션에서 겪은 함정: **Gradle 이 컴파일하는 동안 `git stash` 를 하면** 수정 전 소스가 컴파일되고, 되돌린 뒤에도 Gradle 이 변경을 놓쳐 옛 클래스로 테스트가 돈다(새 API 가 404). `--rerun-tasks` 로 다시 컴파일하면 풀린다. 빌드가 도는 중에는 작업 폴더를 바꾸지 않는다.
+
+**확인법** — `curl -sS -o /dev/null -w "%{http_code}" https://maven-central.storage-download.googleapis.com/maven2/org/apache/apache/33/apache-33.pom` 이 200 이고, 위 스크립트로 `./gradlew -I … test` 가 의존성 단계를 넘어간다. 의심되면 `javap -cp build/classes/java/main <클래스>` 로 컴파일된 클래스에 새 메서드가 있는지 본다.
+
+---
+
 ## 2026-10-10 — 카카오톡 동의 화면에서 「취소」 해도 브라우저 로그인 창이 또 떴다 (QA-R29/U64, +45 대기)
 
 **증상** — S24(카카오톡 로그인됨)에서 「카카오로 계속하기」 → 카카오톡 「카카오 로그인 동의」 화면 → 「취소」 를 누르면 2초 안에 삼성 인터넷의 카카오계정 로그인(accounts.kakao.com) 창이 떴다.

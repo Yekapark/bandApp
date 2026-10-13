@@ -65,7 +65,7 @@ public class BandService {
     static String requireVisibleName(String raw) {
         String name = raw == null ? "" : raw.strip();
         if (INVISIBLE.matcher(name).replaceAll("").isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT, "밴드 이름을 입력해 주세요");
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "밴드 이름을 입력해 주세요.");
         }
         return name;
     }

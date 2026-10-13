@@ -134,6 +134,7 @@ class _BandSettlementsScreenState extends ConsumerState<BandSettlementsScreen> {
             // 새 첫 페이지가 오면 위의 identical 비교가 이어 붙인 것을 버린다.
             onRefresh: () async {
               ref.invalidate(bandSettlementsProvider(band.id));
+              ref.invalidate(myOutstandingProvider(band.id));
               try {
                 await ref.read(bandSettlementsProvider(band.id).future);
               } catch (_) {}
@@ -168,7 +169,7 @@ class _BandSettlementsScreenState extends ConsumerState<BandSettlementsScreen> {
                         setState(() => _moreFailed = false);
                         _loadMore(band.id);
                       },
-                      child: const Text('나머지 정산 불러오기 · 다시 시도'),
+                      child: const Text('다시 불러오기'),
                     )
                   else if (!_exhausted)
                     Builder(builder: (_) {

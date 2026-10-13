@@ -44,7 +44,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           const Text(
-            '탈퇴하면 계정이 즉시 삭제되고 소속 밴드에서 자동으로 나갑니다. '
+            '탈퇴하면 계정이 즉시 삭제되고 소속 밴드에서 자동으로 나가요. '
             '내가 밴드장인 밴드는 가장 먼저 가입한 멤버에게 밴드장이 넘어가요. 되돌릴 수 없어요.',
             style:
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.6),

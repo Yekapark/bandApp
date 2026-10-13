@@ -170,4 +170,83 @@ class BandSettlementListIntegrationTest extends ReservationApiSupport {
         assertThat(mine.get("settlements").get(0).get("myPaid").isNull()).isTrue();
         assertThat(mine.get("myOutstandingTotal").asInt()).isZero();
     }
+
+    private JsonNode myOutstanding(String token, long bandId) {
+        ResponseEntity<String> res = get(listPath(bandId) + "/my-outstanding", token);
+        assertThat(res.getStatusCode().value()).isEqualTo(200);
+        return data(res);
+    }
+
+    /** 홈 카드용 합계는 목록 페이지와 상관없이 전부 더한다 — 목록 첫 페이지만 보면 오래된 미납이 빠진다. */
+    @Test
+    void my_outstanding_sums_every_page_and_drops_paid_shares() {
+        String leader = signup("bstl-f-l@band.app", "리더");
+        String member = signup("bstl-f-m@band.app", "멤버");
+        long bandId = createBand(leader, "검정치마");
+        join(member, issueInvite(leader, bandId, null));
+        long roomId = createRoom(leader, bandId, "{\"name\":\"1번방\"}");
+        long r1 = createReservation(leader, bandId, roomId, T10, T13);
+        long r2 = createReservation(leader, bandId, roomId, T13, T16);
+        createSettlement(leader, bandId, r1, 10_000);   // 2명 → 5,000씩
+        createSettlement(leader, bandId, r2, 30_000);   // 2명 → 15,000씩
+
+        // 목록을 한 건씩 끊어 읽으면 첫 페이지 합계에는 최신 정산만 든다.
+        assertThat(list(member, bandId, "?size=1").get("myOutstandingTotal").asInt()).isEqualTo(15_000);
+
+        JsonNode before = myOutstanding(member, bandId);
+        assertThat(before.get("amount").asLong()).isEqualTo(20_000);
+        assertThat(before.get("count").asLong()).isEqualTo(2);
+
+        markPaid(member, bandId, r1, myUserId(member));
+
+        JsonNode after = myOutstanding(member, bandId);
+        assertThat(after.get("amount").asLong()).isEqualTo(15_000);
+        assertThat(after.get("count").asLong()).isEqualTo(1);
+    }
+
+    @Test
+    void my_outstanding_is_zero_without_settlements_and_refused_to_non_members() {
+        String leader = signup("bstl-g-l@band.app", "리더");
+        String stranger = signup("bstl-g-x@band.app", "낯선이");
+        long bandId = createBand(leader, "실리카겔");
+
+        JsonNode empty = myOutstanding(leader, bandId);
+        assertThat(empty.get("amount").asLong()).isZero();
+        assertThat(empty.get("count").asLong()).isZero();
+
+        assertThat(get(listPath(bandId) + "/my-outstanding", stranger).getStatusCode().value())
+                .isEqualTo(403);
+    }
+
+    /** 다른 밴드의 미납은 섞이지 않는다. */
+    @Test
+    void my_outstanding_counts_only_this_band() {
+        String leader = signup("bstl-h-l@band.app", "리더");
+        String member = signup("bstl-h-m@band.app", "멤버");
+        long bandA = createBand(leader, "A밴드");
+        long bandB = createBand(leader, "B밴드");
+        join(member, issueInvite(leader, bandA, null));
+        join(member, issueInvite(leader, bandB, null));
+        long roomA = createRoom(leader, bandA, "{\"name\":\"A방\"}");
+        long roomB = createRoom(leader, bandB, "{\"name\":\"B방\"}");
+        createSettlement(leader, bandA, createReservation(leader, bandA, roomA, T10, T13), 10_000);
+        createSettlement(leader, bandB, createReservation(leader, bandB, roomB, T10, T13), 40_000);
+
+        assertThat(myOutstanding(member, bandA).get("amount").asLong()).isEqualTo(5_000);
+        assertThat(myOutstanding(member, bandB).get("amount").asLong()).isEqualTo(20_000);
+    }
+
+    @Test
+    void my_outstanding_does_not_overflow_with_large_amounts() {
+        String leader = signup("bstl-i-l@band.app", "리더");
+        long bandId = createBand(leader, "넘침2");
+        long roomId = createRoom(leader, bandId, "{\"name\":\"방\"}");
+        long s1 = createSettlement(leader, bandId, createReservation(leader, bandId, roomId, T10, T13), 10_000);
+        long s2 = createSettlement(leader, bandId, createReservation(leader, bandId, roomId, T13, T16), 10_000);
+        for (long settlementId : new long[]{s1, s2}) {
+            jdbc.update("update settlement_shares set amount = 2000000000 where settlement_id = ?", settlementId);
+        }
+
+        assertThat(myOutstanding(leader, bandId).get("amount").asLong()).isEqualTo(4_000_000_000L);
+    }
 }

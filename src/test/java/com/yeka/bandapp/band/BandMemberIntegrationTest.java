@@ -154,7 +154,7 @@ class BandMemberIntegrationTest extends BandApiSupport {
         for (String name : new String[]{"\\u200B\\u200B", "\\u3164", "\\u2800 \\uFEFF\\u0007"}) {
             ResponseEntity<String> res = post("/api/v1/bands", "{\"name\":\"" + name + "\"}", leader);
             assertThat(res.getStatusCode().value()).as(name).isEqualTo(400);
-            assertThat(body(res).at("/error/message").asText()).isEqualTo("밴드 이름을 입력해 주세요");
+            assertThat(body(res).at("/error/message").asText()).isEqualTo("밴드 이름을 입력해 주세요.");
         }
         // 공백·줄바꿈만이면 그 전에 @NotBlank 가 400 으로 막는다
         assertThat(post("/api/v1/bands", "{\"name\":\"\\n\\t\"}", leader).getStatusCode().value()).isEqualTo(400);

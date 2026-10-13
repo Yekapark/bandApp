@@ -10,6 +10,7 @@ import '../../notification/application/notification_providers.dart';
 import '../../band/data/band_models.dart';
 import '../application/home_providers.dart';
 import '../../plan/application/plan_providers.dart';
+import '../../settlement/application/settlement_providers.dart';
 import 'widgets/band_switch_sheet.dart';
 import 'widgets/home_sections.dart';
 import 'widgets/plan_expiry_banner.dart';
@@ -53,6 +54,7 @@ class _HomeBody extends ConsumerWidget {
     final membersAsync = ref.watch(bandMembersProvider(band.id));
     final upcomingAsync = ref.watch(upcomingReservationsProvider(band.id));
     final next = ref.watch(nextReservationProvider(band.id));
+    final outstandingAsync = ref.watch(myOutstandingProvider(band.id));
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -61,10 +63,12 @@ class _HomeBody extends ConsumerWidget {
         ref.invalidate(myBandsProvider);
         ref.invalidate(bandMembersProvider(band.id));
         ref.invalidate(upcomingReservationsProvider(band.id));
+        ref.invalidate(myOutstandingProvider(band.id));
         try {
           await Future.wait([
             ref.read(bandMembersProvider(band.id).future),
             ref.read(upcomingReservationsProvider(band.id).future),
+            ref.read(myOutstandingProvider(band.id).future),
           ]);
         } catch (_) {
           // 예전엔 실패해도 아무 안내 없이 옛 화면이 남았다(#44). 옛 값은 그대로 두고 알린다.
@@ -90,6 +94,7 @@ class _HomeBody extends ConsumerWidget {
           NextRehearsalCard(reservation: next),
           const SizedBox(height: 12),
           SummaryRow(
+            outstandingAsync: outstandingAsync,
             upcomingCount: upcomingAsync.valueOrNull?.length,
           ),
           const SizedBox(height: 22),

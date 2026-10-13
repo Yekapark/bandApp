@@ -246,8 +246,7 @@ class _RecurringFormScreenState extends ConsumerState<RecurringFormScreen> {
                     style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 6),
                 const Text(
-                  '등록하면 앞으로 8주분 회차가 캘린더에 자동으로 생겨요. '
-                  '개별 회차는 캘린더에서 따로 수정·취소할 수 있어요.',
+                  '등록하면 앞으로 8주분 회차가 캘린더에 생겨요.',
                   style: TextStyle(
                       fontSize: 12, height: 1.6, color: AppColors.textDim),
                 ),

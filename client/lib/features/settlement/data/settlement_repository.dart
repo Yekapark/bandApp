@@ -43,6 +43,20 @@ class SettlementRepository {
     }
   }
 
+  /// 그 밴드에서 내가 아직 안 낸 돈 전체(페이지 구분 없음).
+  Future<MyOutstanding> myOutstanding({required int bandId}) async {
+    try {
+      final res =
+          await _dio.get<dynamic>('/bands/$bandId/settlements/my-outstanding');
+      return unwrap(
+        res,
+        (d) => MyOutstanding.fromJson(d! as Map<String, dynamic>),
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
   Future<Settlement?> get({
     required int bandId,
     required int reservationId,

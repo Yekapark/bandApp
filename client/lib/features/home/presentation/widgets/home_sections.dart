@@ -8,6 +8,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../routing/app_router.dart';
 import '../../../band/data/band_models.dart';
 import '../../../reservation/data/reservation_models.dart';
+import '../../../settlement/data/settlement_models.dart';
 
 /// 멤버 아바타 가로 레일.
 class MemberRail extends StatelessWidget {
@@ -130,7 +131,7 @@ class NextRehearsalCard extends StatelessWidget {
           children: [
             const Expanded(
               child: Text(
-                '예정된 합주가 없어요.\n캘린더에서 일정을 기록해 보세요.',
+                '예정된 합주가 없어요.',
                 style: TextStyle(
                     fontSize: 13, height: 1.5, color: AppColors.textDim),
               ),
@@ -215,9 +216,14 @@ class _MiniPill extends StatelessWidget {
   }
 }
 
-/// 2칸 요약 그리드. 좌측 정산 카드는 밴드 전체 합계 API 가 없어 값 대신 정산 탭으로 보낸다.
+/// 2칸 요약 그리드 — 내가 안 낸 돈 · 예정 합주 수.
 class SummaryRow extends StatelessWidget {
-  const SummaryRow({super.key, required this.upcomingCount});
+  const SummaryRow({
+    super.key,
+    required this.outstandingAsync,
+    required this.upcomingCount,
+  });
+  final AsyncValue<MyOutstanding> outstandingAsync;
   final int? upcomingCount;
 
   @override
@@ -226,9 +232,12 @@ class SummaryRow extends StatelessWidget {
       children: [
         Expanded(
           child: _SummaryCard(
-            title: '이번 달 정산',
-            value: '—',
-            hint: '정산 탭에서 확인',
+            title: '내가 안 낸 돈',
+            value: outstandingAsync.when(
+              loading: () => '…',
+              error: (_, __) => '—',
+              data: (o) => o.amount == 0 ? '없음' : Fmt.won(o.amount),
+            ),
             onTap: () => context.go(Routes.settlements),
           ),
         ),
@@ -237,7 +246,6 @@ class SummaryRow extends StatelessWidget {
           child: _SummaryCard(
             title: '예정 합주',
             value: upcomingCount == null ? '…' : '$upcomingCount회',
-            hint: '앞으로 60일',
             valueColor: AppColors.textPrimary,
             onTap: () => context.go(Routes.calendar),
           ),
@@ -251,14 +259,12 @@ class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.title,
     required this.value,
-    required this.hint,
     required this.onTap,
     this.valueColor = AppColors.purple,
   });
 
   final String title;
   final String value;
-  final String hint;
   final VoidCallback onTap;
   final Color valueColor;
 
@@ -281,10 +287,6 @@ class _SummaryCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(value,
                 style: AppTypography.mono(fontSize: 19, color: valueColor)),
-            const SizedBox(height: 3),
-            Text(hint,
-                style: const TextStyle(
-                    fontSize: 10.5, color: AppColors.textFaint)),
           ],
         ),
       ),

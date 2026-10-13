@@ -202,3 +202,21 @@ class BandSettlementPage {
     );
   }
 }
+
+/// 한 밴드에서 내가 아직 안 낸 돈 전체(홈 요약 카드).
+///
+/// [BandSettlementPage.myOutstandingTotal] 은 그 페이지 합계라 정산이 많으면 오래된 미납이 빠진다.
+/// 이건 서버가 페이지와 상관없이 전부 더한 값이다(면제된 몫 제외).
+class MyOutstanding {
+  const MyOutstanding({required this.amount, required this.count});
+
+  final int amount;
+  final int count;
+
+  factory MyOutstanding.fromJson(Map<String, dynamic> json) {
+    return MyOutstanding(
+      amount: (json['amount'] as num?)?.toInt() ?? 0,
+      count: (json['count'] as num?)?.toInt() ?? 0,
+    );
+  }
+}

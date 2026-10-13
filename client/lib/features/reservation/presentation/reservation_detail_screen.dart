@@ -192,7 +192,6 @@ class _ReservationDetailScreenState
                 const SizedBox(height: 24),
                 // 확정 전·취소된 일정은 새 정산을 못 만든다(서버 409). 이미 있는 정산은 볼 수 있다.
                 _SettlementLink(
-                  canCreate: r.isConfirmed,
                   onTap: () => context.push(Routes.settlement(r.id)),
                 ),
                 if (r.isPending && band.isLeader) ...[
@@ -464,7 +463,7 @@ class _ReservationDetailScreenState
         backgroundColor: AppColors.surface,
         title: const Text('이 합주를 취소할까요?', style: TextStyle(fontSize: 16)),
         content: const Text(
-          '합주실에는 직접 취소 연락을 한 뒤 정리하세요. '
+          '합주실에는 직접 취소 연락을 한 뒤 정리해 주세요. '
           '기록은 남아 과거 정산에서 참조할 수 있어요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
@@ -516,7 +515,7 @@ class _ReservationDetailScreenState
           backgroundColor: AppColors.surface,
           title: const Text('이 일정을 거절할까요?', style: TextStyle(fontSize: 16)),
           content: const Text(
-            '거절하면 등록 시 잡았던 합주실 사용 횟수가 되돌아가고, 등록자에게 알림이 갑니다.',
+            '거절하면 등록한 사람에게 알림이 가요.',
             style: TextStyle(
                 fontSize: 12.5, color: AppColors.textDim, height: 1.5),
           ),
@@ -648,7 +647,7 @@ class _StatusBanner extends StatelessWidget {
       case ReservationStatus.pending:
         bg = AppColors.purple.withValues(alpha: 0.1);
         fg = AppColors.purpleSoft;
-        text = '밴드장 확인 대기 중 · 합주실 예약은 완료';
+        text = '밴드장 승인 대기 · 합주실 예약 완료';
         break;
       case ReservationStatus.confirmed:
         bg = AppColors.primary.withValues(alpha: 0.1);
@@ -1121,8 +1120,7 @@ class _AttendanceList extends StatelessWidget {
 }
 
 class _SettlementLink extends StatelessWidget {
-  const _SettlementLink({required this.canCreate, required this.onTap});
-  final bool canCreate;
+  const _SettlementLink({required this.onTap});
   final VoidCallback onTap;
 
   @override
@@ -1137,20 +1135,19 @@ class _SettlementLink extends StatelessWidget {
           borderRadius: BorderRadius.circular(13),
           border: Border.all(color: AppColors.purple.withValues(alpha: 0.3)),
         ),
-        child: Row(
+        child: const Row(
           children: [
             Expanded(
               child: Text(
-                canCreate ? '정산 (N빵) 보기 · 만들기' : '정산 (N빵) 보기',
-                style: const TextStyle(
+                '정산',
+                style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w700,
                   color: AppColors.purpleSoft,
                 ),
               ),
             ),
-            const Icon(Icons.chevron_right,
-                size: 18, color: AppColors.purpleSoft),
+            Icon(Icons.chevron_right, size: 18, color: AppColors.purpleSoft),
           ],
         ),
       ),
@@ -1181,7 +1178,7 @@ class _CancelButton extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Text(
-                '이 합주 변경 · 취소',
+                '합주 취소',
                 style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,

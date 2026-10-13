@@ -22,3 +22,9 @@ final bandSettlementsProvider =
     FutureProvider.family<BandSettlementPage, int>((ref, bandId) async {
   return ref.watch(settlementRepositoryProvider).listForBand(bandId: bandId);
 });
+
+/// 홈 요약 카드 "내가 안 낸 돈". 정산 목록 첫 페이지 합계가 아니라 서버가 전부 더한 값이다.
+final myOutstandingProvider =
+    FutureProvider.family<MyOutstanding, int>((ref, bandId) async {
+  return ref.watch(settlementRepositoryProvider).myOutstanding(bandId: bandId);
+});
