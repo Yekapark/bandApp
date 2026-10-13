@@ -4,4 +4,9 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <application>
+        <!-- 오류 기록(Crashlytics)은 릴리스에서만 보낸다(crash_reporting.dart). Dart 가 끄기 전 시작 직후 몇 초는
+             SDK 기본값(켜짐)이라 지난 실행의 비정상 종료가 올라갈 수 있었다(PRIV-08) — 처음부터 끈다. -->
+        <meta-data android:name="firebase_crashlytics_collection_enabled" android:value="false" />
+    </application>
 </manifest>

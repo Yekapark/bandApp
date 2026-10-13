@@ -39,6 +39,10 @@ class AppConfig {
   /// 정책 위반이기도 하다.
   static const bool testerBuild = bool.fromEnvironment('TESTER_BUILD');
 
+  /// 오류 기록 QA 빌드(PRIV-08). 켜면 설정 맨 아래에 일부러 오류·비정상 종료를 내는 버튼이 생긴다.
+  /// 스토어·테스터 빌드는 이 값을 넣지 않으므로 그 코드가 빌드에서 빠진다.
+  static const bool qaCrashTest = bool.fromEnvironment('QA_CRASH_TEST');
+
   /// 설정 화면 맨 아래에 찍는 버전. `tools/release_tester.py` 가 pubspec 의 값을 넣는다.
   ///
   /// pubspec 을 앱에서 직접 읽을 수는 없어서 빌드할 때 주입한다. 안 넣고 빌드하면

@@ -87,6 +87,7 @@ class SettingsHomeScreen extends ConsumerWidget {
           ),
           // 오류 기록은 국외(Google, 미국)로 보내므로 거부할 수 있어야 한다 — 개인정보처리방침 7. 릴리스 빌드에만 보인다.
           if (CrashReporting.available) const _CrashReportSwitch(),
+          if (AppConfig.qaCrashTest) const _QaCrashButtons(),
           const SizedBox(height: 12),
           const Divider(height: 1, color: AppColors.border),
           _Tile(
@@ -176,6 +177,38 @@ class _Tile extends StatelessWidget {
           : const Icon(Icons.chevron_right,
               size: 18, color: AppColors.textFaint),
     );
+  }
+}
+
+/// PRIV-08 QA 빌드 전용 — `--dart-define=QA_CRASH_TEST=true` 일 때만 보인다.
+/// Firebase 가 없거나 디버그 빌드여도 버튼은 보인다(그때 아무것도 안 보내고 앱이 계속 도는지 보는 것도 시험이다).
+class _QaCrashButtons extends StatelessWidget {
+  const _QaCrashButtons();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      _Tile(
+        icon: Icons.error_outline,
+        label: 'QA: 테스트 오류 내기',
+        sub: '처리 안 된 Dart 오류를 하나 던져요(앱은 계속 돌아요).',
+        onTap: () => Future<void>.microtask(() => throw StateError(
+            'PRIV-08 QA 테스트 오류 ${DateTime.now().toIso8601String()}')),
+      ),
+      _Tile(
+        icon: Icons.dangerous_outlined,
+        label: 'QA: 테스트 비정상 종료',
+        sub: '앱을 강제로 꺼요. 기록은 다음 실행 때 올라가요.',
+        onTap: () {
+          if (!CrashReporting.available) {
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('이 빌드는 오류 기록을 쓰지 않아요.')));
+            return;
+          }
+          CrashReporting.crashForQa();
+        },
+      ),
+    ]);
   }
 }
 
