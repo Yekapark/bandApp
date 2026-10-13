@@ -207,6 +207,62 @@ class WithdrawalCancelsSubscriptionIntegrationTest extends PlanApiSupport {
         assertThat(planRow(bandId).get("purchased_by_user_id")).isEqualTo(leaderId);
     }
 
+    /**
+     * QA BILL-18 — V21 이전 구매(결제자 칸이 없던 때 산 구독)를 픽스처로 만든다. 기록이 없으니 결제한 사람이 떠나도 자동 해지는
+     * 못 한다(한계·수동 관리). 그 뒤 새 결제로 토큰이 바뀌면 새 결제자가 적히고, 옛 결제자가 떠나도 새 구독도 다른 밴드 구독도 해지하지 않는다.
+     */
+    @Test
+    void V21_이전_결제자_미기록_구독은_자동_해지하지_않고_토큰이_바뀌면_새_결제자만_적힌다() {
+        String oldPayer = signup("wcs-v21-old@band.app", "옛결제자");
+        String leader = signup("wcs-v21-leader@band.app", "새밴드장");
+        long leaderId = myUserId(leader);
+        long bandId = createBand(oldPayer, "V21이전밴드");
+        join(leader, issueInvite(oldPayer, bandId, null));
+        String oldToken = "wcs-v21-a-" + System.nanoTime() + "@band-" + bandId;
+        assertThat(verifyGoogle(oldPayer, bandId, oldToken).getStatusCode().value()).isEqualTo(200);
+        jdbc.update("update band_plans set purchased_by_user_id = null where band_id = ?", bandId);   // V21 이전 모양
+        String otherPayer = signup("wcs-v21-other@band.app", "다른밴드결제자");
+        long otherBand = createBand(otherPayer, "남의밴드");
+        String otherToken = "wcs-v21-o-" + System.nanoTime();
+        assertThat(verifyGoogle(otherPayer, otherBand, otherToken).getStatusCode().value()).isEqualTo(200);
+        assertThat(post("/api/v1/bands/" + bandId + "/leader", "{\"newLeaderUserId\":" + leaderId + "}", oldPayer)
+                .getStatusCode().value()).isEqualTo(200);
+
+        // 기록 없는 결제자가 떠남 → 해지 못 함(한계), 재시도 배치 대상도 아님
+        assertThat(post("/api/v1/bands/" + bandId + "/members/leave", null, oldPayer).getStatusCode().is2xxSuccessful())
+                .isTrue();
+        withdrawnPurchaserSubscriptions.retryPending();
+        assertThat(gateway.cancelledRenewals()).doesNotContain(oldToken, otherToken);
+        assertThat(planRow(bandId).get("tier")).isEqualTo("PREMIUM");
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isNull();
+
+        // 이후 복원 → 복원한 밴드장이 결제자로 적힘
+        assertThat(post("/api/v1/plan/google/restore", "{\"purchaseToken\":\"" + oldToken + "\"}", leader)
+                .getStatusCode().value()).isEqualTo(200);
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isEqualTo(leaderId);
+
+        // 옛 구독이 끝나고 새 결제(토큰 교체) → 새 결제자가 적힘
+        gateway.simulateState(oldToken, com.yeka.bandapp.plan.gateway.StoreBillingGateway.StoreSubscriptionState.EXPIRED);
+        String newPayer = signup("wcs-v21-new@band.app", "새결제자");
+        long newPayerId = myUserId(newPayer);
+        join(newPayer, issueInvite(leader, bandId, null));
+        assertThat(post("/api/v1/bands/" + bandId + "/leader", "{\"newLeaderUserId\":" + newPayerId + "}", leader)
+                .getStatusCode().value()).isEqualTo(200);
+        String newToken = "wcs-v21-b-" + System.nanoTime() + "@band-" + bandId;
+        assertThat(verifyGoogle(newPayer, bandId, newToken).getStatusCode().value()).isEqualTo(200);
+        assertThat(planRow(bandId).get("purchase_token")).isEqualTo(newToken);
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isEqualTo(newPayerId);
+
+        // 옛 구독을 복원했던 사람이 떠나도 새 구독·다른 밴드 구독은 그대로
+        assertThat(post("/api/v1/bands/" + bandId + "/members/leave", null, leader).getStatusCode().is2xxSuccessful())
+                .isTrue();
+        withdrawnPurchaserSubscriptions.retryPending();
+        assertThat(gateway.cancelledRenewals()).doesNotContain(newToken, oldToken, otherToken);
+        assertThat(planRow(bandId).get("purchased_by_user_id")).isEqualTo(newPayerId);
+        assertThat(planRow(otherBand).get("purchased_by_user_id")).isEqualTo(myUserId(otherPayer));
+        gateway.simulateState(oldToken, null);
+    }
+
     /** QA BILL-34 — 스토어 구독 없이 쿠폰만 쓰는 밴드의 밴드장이 탈퇴해도 Play 해지 호출이 없다. */
     @Test
     void 쿠폰만_쓰는_밴드의_밴드장이_탈퇴해도_해지를_부르지_않는다() {
