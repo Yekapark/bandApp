@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import androidx.core.view.WindowCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,6 +15,12 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 화면을 상태 바·내비 바 뒤까지 그린다(edge-to-edge). Android 15+ 는 targetSdk 35 부터 강제라
+        // 이미 그렇게 그려지고, 인셋은 Flutter 쪽(app.dart 전역 SafeArea + AppBar)이 처리한다.
+        // 여기서 명시적으로 켜는 이유는 Play 콘솔 경고("일부 사용자에게는 더 넓은 화면이 표시되지
+        // 않을 수 있습니다") 때문 — 호출이 없으면 Android 14 이하에서는 예전 방식으로 그려진다.
+        // FlutterActivity 는 ComponentActivity 가 아니라 enableEdgeToEdge() 를 못 쓴다.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         super.onCreate(savedInstanceState)
         createNotificationChannel()
     }

@@ -1,5 +1,17 @@
 # 문제 기록
 
+## 2026-10-14 — Play 콘솔 경고 「일부 사용자에게는 더 넓은 화면이 표시되지 않을 수 있습니다」 (P14, 다음 빌드 대기)
+
+**증상** — Play 콘솔 권장사항: Android 15 부터 SDK 35 를 타겟팅하는 앱은 기본적으로 더 넓은 화면(edge-to-edge)을 표시하니 인셋을 처리하거나 `enableEdgeToEdge()` 를 호출하라.
+
+**원인** — 앱 화면은 이미 괜찮다. Flutter 3.47 + targetSdk 36 이라 Android 15+ 에서는 OS 가 edge-to-edge 를 강제하고, 인셋은 `app.dart` 의 전역 `SafeArea(top: false)` 와 AppBar 가 처리한다(2026-10 「시스템 내비게이션 바에 화면 아래가 가림」 항목). 경고는 Play 가 **앱 코드에 edge-to-edge 를 켜는 호출이 있는지**를 정적으로 보고 띄우는 것인데, `MainActivity` 에 그런 호출이 없었다. 안내대로 `enableEdgeToEdge()` 를 쓰려 해도 `FlutterActivity` 는 `ComponentActivity` 가 아니라 그 확장 함수를 못 부른다.
+
+**해결** — `MainActivity.onCreate` 에서 `super.onCreate` 전에 `WindowCompat.setDecorFitsSystemWindows(window, false)`(androidx.core, Flutter 가 이미 가져옴 — 의존성 추가 없음). Android 14 이하도 15+ 와 같은 방식으로 그려진다.
+
+**확인법** — 다음 스토어 빌드를 **Android 14 이하** 폰에서: 로그인·홈·알림 설정(저장 버튼)·일정 상세 하단 버튼이 상태 바·내비 바(제스처와 3버튼 둘 다)에 가리지 않는지 본다 — 2026-10-14 기준 Android 14 이하 기기가 없어 📵(미확인). 업로드 뒤 Play 콘솔 → 해당 버전 → 권장사항에서 경고가 사라졌는지 본다(정적 검사라 다음 버전부터 반영).
+
+---
+
 ## 2026-10-14 — 밴드에서 나간 뒤 당겨서 새로고침하면 403 이 「처리 안 된 오류」로 Crashlytics 에 쌓였다 (+46 대기)
 
 **증상** — Crashlytics 에 심각하지 않은 오류 `ApiException(NOT_BAND_MEMBER, 403): 밴드 멤버가 아닙니다.` 1건(1.0.0(40), SM-G981N·Android 13, 10/8~9 Codex 탈퇴·추방 QA 무렵). 스택 `unwrap` ← `BoardRepository.detail` ← Riverpod `handleFuture`. 앱은 꺼지지 않았고 화면은 원래대로 오류 상태를 보였다.
