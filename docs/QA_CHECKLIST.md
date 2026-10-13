@@ -291,7 +291,7 @@ QA 밴드는 **테스트 구독이 자동 갱신 중이므로 삭제하지 못�
 | PRIV-05 | P0 | [시험·최신 상태·남은 조건](QALIST_DONE.md#priv-05) | ⬜ 실제 미실행 — 2026-10-05 통합 목록 참조 |
 | PRIV-06 | P0 | [시험·최신 상태·남은 조건](QALIST_DONE.md#priv-06) | 🟡 일부 확인 — 2026-10-05 통합 목록 참조 |
 | PRIV-07 | P1 | [시험·최신 상태·남은 조건](QALIST_DONE.md#priv-07) | ✅ 확인 완료 — 2026-10-05 통합 목록 참조 |
-| PRIV-08 | P0 | [시험·최신 상태·남은 조건](QALIST.md#priv-08) | 🟡 일부 확인 — 2026-10-05 통합 목록 참조 |
+| PRIV-08 | P0 | [시험·최신 상태·남은 조건](QALIST_DONE.md#priv-08) | 🟡 일부 확인 — 2026-10-05 통합 목록 참조 |
 | PRIV-09 | P0 | [시험·최신 상태·남은 조건](QALIST_DONE.md#priv-09) | 🟡 일부 확인 — 2026-10-05 통합 목록 참조 |
 | PRIV-10 | P0 | [시험·최신 상태·남은 조건](QALIST_DONE.md#priv-10) | ⬜ 실제 미실행 — 2026-10-05 통합 목록 참조 |
 
@@ -4682,3 +4682,21 @@ OPS-10 모든 명시 조건 완료.
 정리: 아래 「§166 정리」 참고. 밴드156(guitar13 리더)은 guitar 가 두 폰에 로그인돼 있지 않아 이번에 삭제하지 못함 — FREE·토큰 만료라 청구 없음.
 
 **§166 정리 (2026-10-14 00:30경):** 00:20 재시도 배치 뒤에도 밴드173 새 구독 자동 갱신·결제자12·해지 로그 0 확인 → S24 Play 「연간」 정기 결제 취소(00:35 종료, 미청구) → 밴드174·173 앱에서 삭제 → 운영 DB `QA166%` 밴드·요금제·멤버 0행. S20 「연간」·「연간 2」 시험 구독은 해지 뒤 만료. S24 두 번째(409) 구매는 자동 환불. 폰 계정: S20 demo.bass(시작 때와 같음)·S24 demo.leader, 화면 덤프는 매번 폰에서 삭제·PC 캡처/덤프 삭제. 운영 DB 쓰기 0. 남김: 밴드156(guitar13 리더, FREE·만료 토큰) — guitar 로그인 때 삭제.
+
+## 167. PRIV-08 오류 기록 OFF/ON·빌드별 — 2026-10-14 클로드 S20 SM-G981N QA 빌드 (사용자 허용)
+
+사용자 결정 (가): 일부러 오류를 낼 수 있는 QA 빌드. `--dart-define=QA_CRASH_TEST=true` 일 때만 설정 맨 아래에 「QA: 테스트 오류 내기」(처리 안 된 Dart 오류)·「QA: 테스트 비정상 종료」(`FirebaseCrashlytics.crash()`) 버튼이 생긴다 — 스토어 빌드에는 빠진다. APK 3개(prod flavor·운영 서버): QA 릴리스(`1.0.0+45-qa`, 업로드 키 서명), QA 디버그(`-qa-debug`), Firebase 미설정 릴리스(`-qa-nofb`, google-services.json 을 빌드 동안만 옮김 → 원위치 확인, APK 에 `google_app_id` 없음 확인). Play 서명과 달라 S20 Play 앱을 지우고 설치, 사용자가 demo.bass 로그인. 대시보드는 Chrome 으로 Crashlytics(bandule-b94d2) 조회(사용자 허용). 기기 로그는 `log.tag.FirebaseCrashlytics DEBUG` 를 잠시 켜서 봄.
+
+| 조건 | 기대 | 실제 | 판정 |
+|---|---|---|---|
+| ON(새 설치 기본) 오류·비정상 종료 | 대시보드 수신 | 00:58:15 오류·00:58:20 종료 → 재실행 → 「Bad state: PRIV-08 QA 테스트 오류 …T00:58:16」 심각하지 않음 1·`FirebaseCrashlyticsTestCrash` 비정상 종료 1(1.0.0(45)·SM-G981N) | 완료 |
+| OFF → 재실행 유지 | 스위치 꺼진 채 | 01:02:01 OFF → 강제 종료·재실행 → 스위치 false, SDK 시작부터 「DISABLED by API」 | 완료 |
+| OFF 중 오류·비정상 종료 미전송 | 대시보드 늘지 않음·정상 기능 | 01:02:25 오류·01:02:28 종료 → 재실행 → SDK 「Automatic data collection is disabled · Waiting for send/deleteUnsentReports」 → 01:08 까지 대시보드 그대로(오류 1·종료 1). 앱 정상 | 완료 |
+| 다시 ON → OFF 동안 기록 삭제·새 오류만 전송 | OFF 때 것 없음 | 01:08:48 ON → 01:08:53 오류 → 재실행 → 01:14 대시보드 오류 2(두 번째 이벤트 01:08:55 「…T01:08:55」), 비정상 종료 1 그대로 — 01:02 오류·종료 없음 | 완료 |
+| Firebase 미설정 빌드 | 미전송·정상 기능 | 덮어 설치(로그인 유지): 스위치 숨김, 로그 「CrashReporting: Firebase 미설정 — 오류 기록 끔」, 오류는 기기 로그에만, 종료 버튼은 「이 빌드는 오류 기록을 쓰지 않아요」·앱 유지, 홈 정상 | 완료 |
+| 디버그 빌드 | 미전송·정상 기능 | 스위치 숨김, 오류 기기 로그만, 종료 버튼 안내·앱 유지. 01:15·01:20 시험 뒤 01:27 대시보드 그대로 | 완료 |
+| (발견) 디버그 시작 직후 수집 | 처음부터 꺼짐 | 01:16:36 「ENABLED by global Firebase setting」 → 01:16:39 「DISABLED by API」(약 2.6초 켜짐) → LAUNCH_REVIEW U67 으로 debug·profile 매니페스트 수정 → 고친 디버그 빌드, 앱 데이터 지운 첫 실행 첫 줄 「DISABLED by firebase_crashlytics_collection_enabled manifest flag」·ENABLED 0줄 | 고침·확인 |
+
+같은 대시보드에서 기존 오류 `ApiException(NOT_BAND_MEMBER, 403)`(1.0.0(40)·S20) 발견 → LAUNCH_REVIEW U66(새로고침 7곳이 예외를 받지 않음) 수정. 시험 이벤트(QA 테스트 오류·TestCrash) 이슈는 대시보드에 남아 있다 — 필요하면 닫기 처리.
+
+정리: S20 QA 빌드 삭제 → Play 스토어에서 +45 재설치(설치 출처 Play 확인), `log.tag.FirebaseCrashlytics` 되돌림, 알림 권한 안내는 두 번 다 「나중에」(권한 변경 0). **S20 은 재설치라 로그아웃 상태 — 사용자 로그인 필요.** PC APK·덤프 삭제. PRIV-08 모든 명시 조건 완료.
