@@ -525,7 +525,7 @@ DB 밖이라 복구되지 않는 것(R2 사진·영상의 참조, Redis 로그�
 배포 직후 헬스체크 말고는 감시가 없었다. 그래서 구매 알림이 **7일 동안 초당 한 번씩**
 서버를 때리는 동안 아무도 몰랐다 ([TROUBLESHOOTING.md](TROUBLESHOOTING.md) 2026-09-09).
 
-이제 매일 07:00 KST 에 GitHub Actions 가 서버를 본다
+이제 매일 04:43 KST(정각을 피한 시각 — 정각엔 GitHub 가 몇 시간씩 늦게 돌렸다) 에 GitHub Actions 가 서버를 본다
 ([`.github/workflows/prod-check.yml`](../.github/workflows/prod-check.yml)).
 걸리면 **`prod-check` 라벨이 붙은 이슈**가 열리고, 이미 열려 있으면 거기 댓글이 달린다.
 **매일 운영자 메일로 직접 보낸다** — 정상이면 `✅ [밴듈] 운영 점검 정상 날짜`(숫자 요약), 걸리면 `❌ [밴듈] 운영 점검 실패 날짜`.
