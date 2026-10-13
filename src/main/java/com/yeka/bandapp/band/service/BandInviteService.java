@@ -163,6 +163,6 @@ public class BandInviteService {
                 // ux_band_invites_code 경합 — 재시도.
             }
         }
-        throw new BusinessException(ErrorCode.INTERNAL_ERROR, "초대코드 생성에 반복 실패했습니다.");
+        throw new BusinessException(ErrorCode.INTERNAL_ERROR, "초대코드를 만들지 못했어요. 잠시 후 다시 시도해 주세요.");
     }
 }

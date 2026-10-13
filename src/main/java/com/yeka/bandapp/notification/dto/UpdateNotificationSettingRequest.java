@@ -15,7 +15,7 @@ public record UpdateNotificationSettingRequest(
         boolean pushEnabled,
 
         @Schema(description = "일정 시작 N분 전 리마인더 시점(분). 중복·순서는 서버가 정리한다.", example = "[10, 60]")
-        @Size(max = 20, message = "리마인더 시점이 너무 많습니다.")
+        @Size(max = 20, message = "리마인더 시점을 너무 많이 골랐어요.")
         List<@NotNull Integer> reminderOffsets
 ) {
 }

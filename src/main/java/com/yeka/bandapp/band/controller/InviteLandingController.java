@@ -120,7 +120,7 @@ public class InviteLandingController {
                   <p id="status">앱에서 초대를 여는 중…</p>
                   %IOS_BLOCK%
                   <a class="btn" id="android" href="%ANDROID_STORE%">Google Play에서 앱 받기</a>
-                  <p class="hint">앱이 열리지 않으면 위 버튼으로 설치한 뒤 코드를 입력하세요.</p>
+                  <p class="hint">앱이 열리지 않으면 위 버튼으로 설치한 뒤 코드를 입력해 주세요.</p>
                   <script>
                     (function () {
                       var code = "%CODE%";
