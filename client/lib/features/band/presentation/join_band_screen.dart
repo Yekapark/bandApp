@@ -135,7 +135,7 @@ class _JoinBandScreenState extends ConsumerState<JoinBandScreen> {
                 ),
                 const SizedBox(height: 14),
                 const Text(
-                  '초대코드가 없으면 밴드장에게 요청하세요.',
+                  '초대코드가 없으면 밴드장에게 요청해 주세요.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: AppColors.textFaint),
                 ),

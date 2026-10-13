@@ -463,7 +463,7 @@ class _ReservationDetailScreenState
         backgroundColor: AppColors.surface,
         title: const Text('이 합주를 취소할까요?', style: TextStyle(fontSize: 16)),
         content: const Text(
-          '합주실에는 직접 취소 연락을 한 뒤 정리하세요. '
+          '합주실에는 직접 취소 연락을 한 뒤 정리해 주세요. '
           '기록은 남아 과거 정산에서 참조할 수 있어요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),

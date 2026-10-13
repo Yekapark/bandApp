@@ -170,7 +170,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         title:
             Text('${room.name} 삭제할까요?', style: const TextStyle(fontSize: 16)),
         content: const Text(
-          '이미 등록된 일정에는 영향이 없어요. 앞으로 이 합주실은 목록·지도에서 빠집니다.',
+          '이미 등록된 일정에는 영향이 없어요. 앞으로 이 합주실은 목록·지도에서 빠져요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
         ),

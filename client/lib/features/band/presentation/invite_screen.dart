@@ -44,7 +44,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: Text(
-                  '초대코드는 밴드장만 발급할 수 있어요.\n밴드장에게 코드를 요청하세요.',
+                  '초대코드는 밴드장만 발급할 수 있어요.\n밴드장에게 코드를 요청해 주세요.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textDim, height: 1.6),
                 ),
@@ -114,7 +114,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
         backgroundColor: AppColors.surface,
         title: const Text('초대코드를 무효화할까요?', style: TextStyle(fontSize: 16)),
         content: const Text(
-          '무효화하면 지금 공유된 링크로는 아무도 들어올 수 없어요. 다시 초대하려면 새로 발급하세요.',
+          '무효화하면 지금 공유된 링크로는 아무도 들어올 수 없어요. 다시 초대하려면 새로 발급해 주세요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
         ),

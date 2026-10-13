@@ -159,8 +159,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     decoration: const InputDecoration(hintText: '이메일'),
                     validator: (v) {
                       final s = v?.trim() ?? '';
-                      if (s.isEmpty) return '이메일을 입력하세요.';
-                      if (!s.contains('@')) return '이메일 형식이 아닙니다.';
+                      if (s.isEmpty) return '이메일을 입력해 주세요.';
+                      if (!s.contains('@')) return '이메일 형식이 아니에요.';
                       return null;
                     },
                   ),
@@ -172,7 +172,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _submit(),
                     decoration: const InputDecoration(hintText: '비밀번호'),
-                    validator: (v) => (v ?? '').isEmpty ? '비밀번호를 입력하세요.' : null,
+                    validator: (v) => (v ?? '').isEmpty ? '비밀번호를 입력해 주세요.' : null,
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),

@@ -117,10 +117,10 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
   /// 이모지가 많으면 칸은 받아 주고 서버가 이유 없는 400 을 냈다(POST-03). Dart 의 length 가 서버와 같은 단위다.
   String? get _lengthError {
     if (_title.text.trim().length > 100) {
-      return '제목이 너무 길어요. 이모지는 한 개를 2자 이상으로 세요.';
+      return '제목이 너무 길어요. 이모지는 한 개가 2자 이상으로 계산돼요.';
     }
     if (_content.text.trim().length > 4000) {
-      return '본문이 너무 길어요. 이모지는 한 개를 2자 이상으로 세요.';
+      return '본문이 너무 길어요. 이모지는 한 개가 2자 이상으로 계산돼요.';
     }
     return null;
   }
@@ -1029,7 +1029,7 @@ class _UploadProgress extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         const Text(
-          '영상은 몇 분 걸릴 수 있어요. 화면을 벗어나지 마세요.',
+          '영상은 몇 분 걸릴 수 있어요. 끝날 때까지 이 화면에 있어 주세요.',
           style: TextStyle(fontSize: 11, color: AppColors.textFaint),
         ),
       ],

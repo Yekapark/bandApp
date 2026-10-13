@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 ///   1. 사용자가 할 수 있는 게 없는 **내부 용어**
 ///   2. 앱 말투(`~어요`)와 어긋나는 **격식체 어미** — 성공은 "했어요", 실패는 "못했습니다"로
 ///      갈리던 것을 통일했다. 새 화면에서 다시 섞이지 않게 막는다
+///   3. **명령형 `~하세요`** — 부탁은 `~해 주세요` 로 쓴다(2026-10-13 통일, LAUNCH_REVIEW U65)
 void main() {
   /// 사용자 화면 문구에 있으면 안 되는 말. 값은 "왜 안 되는지".
   const forbidden = <String, String>{
@@ -25,15 +26,12 @@ void main() {
     '마이그레이션': '내부 구현',
   };
 
-  /// 앱 말투와 어긋나는 어미.
-  const formalEndings = <String>[
-    '못했습니다',
-    '없습니다',
-    '있습니다',
-    '됩니다',
-    '합니다',
-    '입니다',
-  ];
+  /// 앱 말투와 어긋나는 어미. 낱말 목록으로는 "아닙니다·사라집니다·나갑니다" 가 빠져나가서
+  /// "~니다" 로 끝나는 말을 모두 잡는다.
+  final formalEnding = RegExp(r"[가-힣]니다(?=[.,!?'\s]|$)");
+
+  /// 명령형 "~세요". "~주세요" 는 앱의 부탁 말투라 뺀다.
+  final imperative = RegExp(r"(?<!주)세요(?=[.,!?'\s]|$)");
 
   /// 검사에서 빼는 줄.
   ///
@@ -85,14 +83,29 @@ void main() {
         final line = lines[i];
         if (isAllowed(line)) continue;
         if (!line.contains("'")) continue;
-        for (final ending in formalEndings) {
-          if (line.contains(ending)) {
-            offenders.add('${file.path}:${i + 1}  "$ending"\n    ${line.trim()}');
-          }
+        for (final m in formalEnding.allMatches(line)) {
+          offenders.add('${file.path}:${i + 1}  "${m[0]}"\n    ${line.trim()}');
         }
       }
     }
     expect(offenders, isEmpty,
         reason: '앱은 ~어요 체로 통일했다. 격식체가 남아 있다:\n${offenders.join('\n')}');
+  });
+
+  test('부탁은 ~하세요 가 아니라 ~해 주세요 로 쓴다', () {
+    final offenders = <String>[];
+    for (final file in screenFiles()) {
+      final lines = file.readAsLinesSync();
+      for (var i = 0; i < lines.length; i++) {
+        final line = lines[i];
+        if (isAllowed(line)) continue;
+        if (!line.contains("'")) continue;
+        if (imperative.hasMatch(line)) {
+          offenders.add('${file.path}:${i + 1}\n    ${line.trim()}');
+        }
+      }
+    }
+    expect(offenders, isEmpty,
+        reason: '명령형 ~세요 가 남아 있다:\n${offenders.join('\n')}');
   });
 }

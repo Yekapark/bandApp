@@ -60,7 +60,7 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = '인증번호를 보내지 못했어요. 잠시 후 다시 시도해요.');
+      setState(() => _error = '인증번호를 보내지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -83,16 +83,16 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(content: Text('비밀번호를 바꿨어요. 새 비밀번호로 로그인해요.')),
+          const SnackBar(content: Text('비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.')),
         );
       context.go(Routes.login);
     } on ApiException catch (e) {
       final msg = e.code == 'PASSWORD_RESET_CODE_INVALID'
-          ? '인증번호가 맞지 않거나 만료됐어요. 메일을 다시 확인해요.'
+          ? '인증번호가 맞지 않거나 만료됐어요. 메일을 다시 확인해 주세요.'
           : e.message;
       setState(() => _error = msg);
     } catch (_) {
-      setState(() => _error = '비밀번호를 바꾸지 못했어요. 잠시 후 다시 시도해요.');
+      setState(() => _error = '비밀번호를 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -143,14 +143,14 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  onEmailStep ? '비밀번호를 잊으셨어요?' : '메일함을 확인해요',
+                  onEmailStep ? '비밀번호를 잊으셨어요?' : '메일함을 확인해 주세요',
                   style: Theme.of(context).textTheme.headlineLarge,
                 ),
                 const SizedBox(height: 9),
                 Text(
                   onEmailStep
                       ? '가입한 이메일을 넣으면 6자리 인증번호를 보내 드려요.'
-                      : '${_email.text.trim()} 로 인증번호를 보냈어요.\n메일이 안 보이면 스팸함도 확인해요. 인증번호는 15분간 쓸 수 있어요.',
+                      : '${_email.text.trim()} 로 인증번호를 보냈어요.\n메일이 안 보이면 스팸함도 확인해 주세요. 인증번호는 15분간 쓸 수 있어요.',
                   style: const TextStyle(
                     fontSize: 12.5,
                     height: 1.6,
@@ -170,9 +170,9 @@ class _PasswordResetScreenState extends ConsumerState<PasswordResetScreen> {
                         const InputDecoration(hintText: 'you@example.com'),
                     validator: (v) {
                       final s = v?.trim() ?? '';
-                      if (s.isEmpty) return '이메일을 입력하세요.';
+                      if (s.isEmpty) return '이메일을 입력해 주세요.';
                       if (!s.contains('@') || !s.contains('.')) {
-                        return '이메일 형식이 아닙니다.';
+                        return '이메일 형식이 아니에요.';
                       }
                       return null;
                     },

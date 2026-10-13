@@ -102,8 +102,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                   validator: (v) {
                     final s = v?.trim() ?? '';
-                    if (s.isEmpty) return '이름을 입력하세요.';
-                    if (s.length > 30) return '30자 이내로 입력하세요.';
+                    if (s.isEmpty) return '이름을 입력해 주세요.';
+                    if (s.length > 30) return '30자 이내로 입력해 주세요.';
                     return null;
                   },
                 ),
@@ -119,9 +119,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                   validator: (v) {
                     final s = v?.trim() ?? '';
-                    if (s.isEmpty) return '이메일을 입력하세요.';
+                    if (s.isEmpty) return '이메일을 입력해 주세요.';
                     if (!s.contains('@') || !s.contains('.')) {
-                      return '이메일 형식이 아닙니다.';
+                      return '이메일 형식이 아니에요.';
                     }
                     return null;
                   },

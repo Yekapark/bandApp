@@ -185,7 +185,7 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
     // 다른 사람 몫(밴드장만 가능)은 잘못 누르기 쉬우니 한 번 묻는다.
     if (share.userId != meId) {
       final ok = await _confirm(
-        next ? '${share.name}님 몫을 낸 것으로 표시할까요?' : '${share.name}님의 납부 체크를 풀까요?',
+        next ? '${share.name} 님 몫을 낸 것으로 표시할까요?' : '${share.name} 님의 납부 체크를 풀까요?',
         next
             ? '현금 등으로 직접 받았을 때 써요. "밴드장 확인" 으로 표시돼요.'
             : '미납으로 돌아가요.',
@@ -225,7 +225,7 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
     final next = !(_pendingExempt[share.userId] ?? share.exempt);
     if (next) {
       final ok = await _confirm(
-        '${share.name}님 몫을 면제할까요?',
+        '${share.name} 님 몫을 면제할까요?',
         '밴드를 나간 멤버의 미납 몫을 받지 않은 채로 정리해요. 남은 금액에서 빠져요.',
         '면제',
       );
