@@ -36,12 +36,6 @@ class BandGateScreen extends ConsumerWidget {
               const SizedBox(height: 10),
               Text('밴드를 만들까요,\n들어갈까요?',
                   style: Theme.of(context).textTheme.headlineLarge),
-              const SizedBox(height: 9),
-              const Text(
-                '나중에 다른 밴드도 추가할 수 있어요.',
-                style: TextStyle(
-                    fontSize: 12.5, height: 1.6, color: AppColors.textDim),
-              ),
               const SizedBox(height: 26),
               _GateCard(
                 title: '밴드 만들기',

@@ -293,8 +293,8 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
         backgroundColor: AppColors.surface,
         title: const Text('정산을 다시 계산할까요?', style: TextStyle(fontSize: 16)),
         content: const Text(
-          '지금 멤버·참석자 기준으로 몫을 다시 나눠요. 총액과 나누는 방식은 그대로예요.\n'
-          '몫이 바뀐 사람은 납부 체크가 풀리고 알림이 가요. '
+          '지금 멤버·참석자 기준으로 몫을 다시 나눠요. '
+          '몫이 바뀐 사람은 납부 체크가 풀리고 알림이 가요.\n'
           '빠진 멤버가 이미 낸 금액은 그대로 두고 나머지만 다시 나눠요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
@@ -339,6 +339,7 @@ class _SettlementScreenState extends ConsumerState<SettlementScreen> {
   void _refreshCaches(int bandId) {
     ref.invalidate(settlementProvider(_key(bandId)));
     ref.invalidate(bandSettlementsProvider(bandId));
+    ref.invalidate(myOutstandingProvider(bandId));
   }
 
   void _toast(String msg) {
@@ -404,8 +405,7 @@ class _CreateFormState extends State<_CreateForm> {
         ),
         const SizedBox(height: 6),
         const Text(
-          '합주 총비용을 입력하면 멤버별 몫으로 나눠 드려요. '
-          '딱 나눠지지 않는 몇 원은 밴드장부터 한 명에 1원씩 더 내요.',
+          '합주 총비용을 입력하면 멤버별로 나눠요.',
           style: TextStyle(fontSize: 12, height: 1.6, color: AppColors.textDim),
         ),
         const SizedBox(height: 22),
@@ -651,7 +651,7 @@ class _Board extends StatelessWidget {
         if (canManage) ...[
           const SizedBox(height: 12),
           _SecondaryAction(
-            label: '멤버가 바뀌었어요 · 다시 계산',
+            label: '다시 계산',
             busy: busy,
             onTap: onRecalculate,
           ),

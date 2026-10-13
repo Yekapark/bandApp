@@ -207,7 +207,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
               minLines: 6,
               maxLines: 14,
               decoration: const InputDecoration(
-                hintText: '합주는 어땠나요? 사진 설명을 적어보세요.',
+                hintText: '내용',
                 alignLabelWithHint: true,
               ),
               onChanged: (_) => setState(() {}),
@@ -368,7 +368,7 @@ class _PostComposeScreenState extends ConsumerState<PostComposeScreen> {
       if (failed.isEmpty) {
         Navigator.of(context).pop(true);
       } else {
-        _toast('글은 등록됐어요. 첨부 ${failed.length}개는 올리지 못했어요 — 다시 시도해 주세요.');
+        _toast('글은 등록됐지만 첨부 ${failed.length}개를 올리지 못했어요.');
       }
     } on ApiException catch (e) {
       _toast(e.message);

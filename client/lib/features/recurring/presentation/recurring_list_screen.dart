@@ -89,7 +89,7 @@ class RecurringListScreen extends ConsumerWidget {
             if (rules.isEmpty) {
               return const _Scrollable(
                 child: _Message(
-                  '등록된 정기 일정이 없어요.\n매주·격주·매월 반복되는 합주를 추가해 보세요.',
+                  '등록된 정기 일정이 없어요.',
                 ),
               );
             }
@@ -136,8 +136,8 @@ class RecurringListScreen extends ConsumerWidget {
         backgroundColor: AppColors.surface,
         title: const Text('정기 일정을 삭제할까요?', style: TextStyle(fontSize: 16)),
         content: const Text(
-          '아직 시작하지 않은 회차만 취소돼요. 이미 지난 회차와 오늘 이후라도 개별로 '
-          '따로 손댄 회차는 그대로 남아요. 합주실에는 직접 연락해 주세요.',
+'아직 시작하지 않은 회차만 취소돼요. 따로 수정한 회차는 남아요. '
+          '합주실에는 직접 연락해 주세요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
         ),
@@ -339,8 +339,8 @@ class _PremiumLock extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           const Text(
-            '무료 요금제에서는 등록돼 있던 정기 일정도 새 회차를 만들지 않아요. '
-            '이미 캘린더에 있는 합주는 그대로고, 프리미엄으로 돌아오면 다시 이어져요.',
+            '무료 요금제에서는 정기 일정이 새 회차를 만들지 않아요. '
+            '이미 캘린더에 있는 합주는 그대로예요.',
             style:
                 TextStyle(fontSize: 12, color: AppColors.textDim, height: 1.5),
           ),

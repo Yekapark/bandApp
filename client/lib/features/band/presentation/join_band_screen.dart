@@ -108,7 +108,7 @@ class _JoinBandScreenState extends ConsumerState<JoinBandScreen> {
                     style: Theme.of(context).textTheme.headlineLarge),
                 const SizedBox(height: 10),
                 const Text(
-                  '코드 8자를 넣으면 바로 밴드에 들어가요.\n합주 일정과 정산이 자동으로 공유돼요.',
+                  '8자리 코드를 넣으면 바로 들어가요.',
                   style: TextStyle(
                       fontSize: 13.5, height: 1.6, color: AppColors.textDim),
                 ),

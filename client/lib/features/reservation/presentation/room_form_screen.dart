@@ -328,16 +328,6 @@ class _RoomFormScreenState extends ConsumerState<RoomFormScreen> {
                 _isEdit ? '합주실 정보 고치기' : '우리 밴드 합주실 추가',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              const SizedBox(height: 6),
-              const Text(
-                '한 번 등록하면 합주 등록할 때 목록에서 바로 고를 수 있어요. '
-                '이름만 필수예요.',
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.6,
-                  color: AppColors.textDim,
-                ),
-              ),
               const SizedBox(height: 22),
               const _Label('합주실 이름'),
               const SizedBox(height: 8),

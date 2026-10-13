@@ -94,11 +94,6 @@ class _TermsScreenState extends State<TermsScreen> {
                   doc: doc,
                 ),
               const Spacer(),
-              const Text(
-                '항목 옆 "보기" 를 누르면 전문이 열려요.',
-                style: TextStyle(
-                    fontSize: 11, height: 1.7, color: AppColors.textFaint),
-              ),
               const SizedBox(height: 16),
               PrimaryButton(
                 label: '동의하고 계속하기',

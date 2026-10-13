@@ -105,11 +105,6 @@ class RecurringDetailScreen extends ConsumerWidget {
                             fontSize: 11.5, color: AppColors.textDim)),
                   ],
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  '오늘 이후 8주 구간만 표시돼요. 그 이전 회차는 캘린더에서 확인하세요.',
-                  style: TextStyle(fontSize: 11, color: AppColors.textFaint),
-                ),
                 const SizedBox(height: 10),
                 if (detail.occurrences.isEmpty)
                   const Padding(
@@ -141,12 +136,6 @@ class RecurringDetailScreen extends ConsumerWidget {
                     ),
                     child: const Text('정기 일정 삭제'),
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    '아직 시작하지 않은 회차만 취소돼요. 따로 손댄 회차와 지난 회차는 그대로 남아요.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: AppColors.textFaint),
-                  ),
                 ],
               ],
             ),
@@ -167,7 +156,8 @@ class RecurringDetailScreen extends ConsumerWidget {
         backgroundColor: AppColors.surface,
         title: const Text('정기 일정을 삭제할까요?', style: TextStyle(fontSize: 16)),
         content: const Text(
-          '아직 시작하지 않은 회차만 취소돼요. 합주실에는 직접 취소 연락을 하세요.',
+          '아직 시작하지 않은 회차만 취소돼요. 따로 수정한 회차는 남아요. '
+          '합주실에는 직접 연락해 주세요.',
           style:
               TextStyle(fontSize: 12.5, color: AppColors.textDim, height: 1.5),
         ),

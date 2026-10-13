@@ -111,7 +111,7 @@ class _BoardScreenState extends ConsumerState<BoardScreen> {
             if (feed.posts.isEmpty) {
               return const _CenterInScroll(
                 child: Text(
-                  '아직 게시글이 없어요.\n첫 합주 사진을 올려보세요.',
+                  '아직 게시글이 없어요.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textDim, height: 1.6),
                 ),

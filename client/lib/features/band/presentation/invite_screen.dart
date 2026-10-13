@@ -244,8 +244,8 @@ class _Empty extends StatelessWidget {
         const SizedBox(height: 14),
         Text(
           expired
-              ? '초대코드 기한이 지났거나 사용 횟수를 다 썼어요.\n새 코드를 만들어 멤버에게 공유하세요.'
-              : '아직 초대코드가 없어요.\n코드를 만들어 멤버에게 공유하세요.',
+              ? '초대코드 기한이 지났거나 사용 횟수를 다 썼어요.'
+              : '아직 초대코드가 없어요.',
           textAlign: TextAlign.center,
           style: const TextStyle(color: AppColors.textDim, height: 1.6),
         ),

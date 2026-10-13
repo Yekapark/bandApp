@@ -76,7 +76,7 @@ class SettingsHomeScreen extends ConsumerWidget {
           _Tile(
             icon: Icons.block_outlined,
             label: '차단한 사용자',
-            sub: '게시판에서 서로의 글이 보이지 않는 사용자',
+            sub: '차단 목록 · 해제',
             onTap: () => context.push(Routes.blockedUsers),
           ),
           _Tile(
