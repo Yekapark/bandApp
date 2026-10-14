@@ -33,7 +33,7 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DOMAIN: api.bandule.com
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # 밖에서 본 모습. ssh 가 안 되더라도 이건 답을 준다.
       # 앱이 컨테이너 안에서 healthy 여도 Nginx·인증서가 죽으면 사용자는 못 쓴다.

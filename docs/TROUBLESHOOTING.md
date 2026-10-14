@@ -1,5 +1,17 @@
 # 문제 기록
 
+## 2026-10-14 — 운영 서버 SSH 가 root 비밀번호 로그인을 받고 있었다
+
+**증상** — 점검해 보니 `sshd -T` 가 `passwordauthentication yes`·`permitrootlogin yes`. 24시간 동안 SSH 로그인 실패(`Failed`/`Invalid user`)가 9,248건 — 봇이 root 비밀번호를 대입하고 있었다. 30일간 성공한 로그인은 전부 publickey(내 PC 와 배포 키)라 침입 흔적은 없었다.
+
+**원인** — 우리는 처음부터 키(`bandule_deploy`)로만 접속했지만, Vultr 이미지의 cloud-init 이 `/etc/ssh/sshd_config.d/50-cloud-init.conf` 에 `PasswordAuthentication yes` 를 써 둔다. 기본 `sshd_config` 도 `PermitRootLogin yes`. 키로 잘 들어가지니 비밀번호 문이 열려 있는 걸 아무도 확인하지 않았다. 서버 IP 는 저장소에 공개돼 있지만, IP 를 숨겨도 봇은 IPv4 전체를 훑으므로 IP 노출이 원인은 아니다.
+
+**해결** — `/etc/ssh/sshd_config.d/00-key-only.conf` 에 `PasswordAuthentication no`·`KbdInteractiveAuthentication no`·`PermitRootLogin prohibit-password`. sshd 는 **먼저 읽은 값**을 쓰므로 `50-cloud-init.conf` 보다 앞 이름(`00-`)이어야 한다 — 기본 `sshd_config` 를 고치면 Include 로 먼저 읽히는 50 번 파일에 진다. `sshd -t` 로 문법 확인 후 `systemctl reload ssh`(기존 연결 유지). 비상 출입은 Vultr 웹 콘솔(root 비밀번호, sshd 무관). 되돌리기: 그 파일 삭제 → `systemctl reload ssh`.
+
+**확인법** — `sshd -T | grep -E '^(passwordauthentication|permitrootlogin) '` → `no`·`without-password`. 내 PC 에서 `ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password root@<서버> true` → `Permission denied (publickey).` 키 접속 `ssh -i ~/.ssh/bandule_deploy root@<서버> 'bandule health'` 는 그대로 된다. 서버를 새로 만들면 같은 파일을 다시 넣는다.
+
+---
+
 ## 2026-10-14 — Play 콘솔 경고 「일부 사용자에게는 더 넓은 화면이 표시되지 않을 수 있습니다」 (P14, 다음 빌드 대기)
 
 **증상** — Play 콘솔 권장사항: Android 15 부터 SDK 35 를 타겟팅하는 앱은 기본적으로 더 넓은 화면(edge-to-edge)을 표시하니 인셋을 처리하거나 `enableEdgeToEdge()` 를 호출하라.

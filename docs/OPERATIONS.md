@@ -389,7 +389,7 @@ FROM notification_dispatches WHERE user_id = 4 ORDER BY id DESC LIMIT 20;
 | 이 저장소 | `git clone https://github.com/Yekapark/bandApp.git` | — |
 | **백업 개인키 파일 + 그 암호** | 사용자가 따로 보관한 곳(2곳 이상 — QA OPS-16) | 지문 `B4A794DF793BE679250199A84218121C3F08D54F` |
 | R2 접근 값 4개 (`R2_ACCOUNT_ID` `R2_ACCESS_KEY_ID` `R2_SECRET_ACCESS_KEY` `R2_BUCKET`) | 서버 `/opt/bandapp/.env.prod`, 또는 Cloudflare 대시보드 › R2 › API 토큰에서 새로 발급 | 저장소에는 **없다**(git 미추적) |
-| (서버에 올릴 때) 배포 SSH 키 `~/.ssh/bandule_deploy` | 사용자 보관. 잃었으면 서버 업체 콘솔에서 새 공개키를 등록 | `ssh -i ~/.ssh/bandule_deploy root@<서버> 'bandule health'` |
+| (서버에 올릴 때) 배포 SSH 키 `~/.ssh/bandule_deploy` | 사용자 보관. 잃었으면 서버 업체 콘솔에서 새 공개키를 등록. **SSH 는 키 전용**(2026-10-14, `/etc/ssh/sshd_config.d/00-key-only.conf`) — 비밀번호로는 SSH 로 못 들어간다. Vultr 웹 콘솔은 root 비밀번호로 들어가진다 | `ssh -i ~/.ssh/bandule_deploy root@<서버> 'bandule health'` |
 
 > PC 를 통째로 옮기는 경우의 전체 목록(앱 서명 키·계정·결제 포함)은 **§9**.
 >
