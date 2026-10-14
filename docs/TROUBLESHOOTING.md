@@ -9,6 +9,7 @@
 **해결** — `/etc/ssh/sshd_config.d/00-key-only.conf` 에 `PasswordAuthentication no`·`KbdInteractiveAuthentication no`·`PermitRootLogin prohibit-password`. sshd 는 **먼저 읽은 값**을 쓰므로 `50-cloud-init.conf` 보다 앞 이름(`00-`)이어야 한다 — 기본 `sshd_config` 를 고치면 Include 로 먼저 읽히는 50 번 파일에 진다. `sshd -t` 로 문법 확인 후 `systemctl reload ssh`(기존 연결 유지). 비상 출입은 Vultr 웹 콘솔(root 비밀번호, sshd 무관). 되돌리기: 그 파일 삭제 → `systemctl reload ssh`.
 
 **확인법** — `sshd -T | grep -E '^(passwordauthentication|permitrootlogin) '` → `no`·`without-password`. 내 PC 에서 `ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password root@<서버> true` → `Permission denied (publickey).` 키 접속 `ssh -i ~/.ssh/bandule_deploy root@<서버> 'bandule health'` 는 그대로 된다. 서버를 새로 만들면 같은 파일을 다시 넣는다.
+
 ---
 
 ## 2026-10-14 — Play 콘솔 경고 「일부 사용자에게는 더 넓은 화면이 표시되지 않을 수 있습니다」 (P14, 다음 빌드 대기)
