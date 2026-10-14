@@ -39,7 +39,6 @@
 ```mermaid
 flowchart LR
     App["Flutter 앱<br/>(Riverpod · go_router · Dio)"]
-    CF["Cloudflare"]
     subgraph VM["VM · Docker Compose"]
         N["Nginx"] --> S["Spring Boot"]
         S --> P[("PostgreSQL")]
@@ -48,7 +47,7 @@ flowchart LR
     R2[("Cloudflare R2")]
     Ext["Google Play · FCM<br/>Kakao API"]
 
-    App --> CF --> N
+    App -- HTTPS --> N
     App -- "presigned URL로 직접 업로드" --> R2
     S -- "URL 발급·검증" --> R2
     S --> Ext
@@ -89,9 +88,8 @@ Controller는 DTO(`record`)만 다루고 엔티티를 노출하지 않습니다.
 - **테스트** — 백엔드 통합 테스트는 Testcontainers로 실제 PostgreSQL·Redis를 띄워 실행합니다
   (테스트 586개). Flutter 위젯·단위 테스트를 별도 CI로 돌립니다.
 - **CI/CD** — `main` 의 CI가 통과하면 Docker 이미지를 GHCR에 올리고 VM에 SSH로 배포합니다.
-  배포 직전 DB 백업을 남기고, 새 컨테이너가 헬스 체크를 통과해야 교체합니다.
-- **운영** — Nginx는 Cloudflare 대역에서 온 요청만 실제 클라이언트 IP로 인정합니다. DB는 매일 공개키로 암호화해
-  R2에 백업하고, 정기 점검 워크플로가 서버 상태·오류 로그·인증서 만료를 확인해 메일로 알립니다.
+  배포 직전 DB 백업을 남기고, 교체 뒤 앱 헬스 체크와 Nginx 경유 응답까지 확인합니다.
+- **운영** — DB는 매일 공개키로 암호화해 R2에 백업하고, 정기 점검 워크플로가 서버 상태·오류 로그·인증서 만료를 확인해 메일로 알립니다.
 - **보안 사고와 재발 방지** — 설정 파일 사본이 공개 저장소에 커밋된 적이 있어, 모든 비밀값을 교체하고
   비밀 파일 이름 패턴을 막는 pre-commit 훅과 커밋 규칙을 만들었습니다.
 
