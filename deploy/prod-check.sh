@@ -235,8 +235,18 @@ fi
 # 15. 서버 OS 재부팅 대기. Ubuntu 는 커널 같은 보안 업데이트를 받으면 재부팅해야 적용되고, 그때 이 표시를 남긴다.
 #     받은 직후엔 알리지 않고 REBOOT_MAX_D 일 넘게 미뤄졌을 때만 건다 — 매일 울리면 아무도 안 본다. 컨테이너는
 #     restart: unless-stopped 라 재부팅 뒤 저절로 다시 뜬다(1~2분 끊김).
+#     며칠째인지는 파일 수정 시각으로 세면 안 된다 — 재부팅이 필요한 업데이트가 새로 깔릴 때마다 Ubuntu 가 이 파일을
+#     다시 써서 날짜가 0일로 돌아간다(보안 업데이트가 며칠 간격으로 오면 영원히 7일에 못 닿는다). 그래서 이번 부팅에서
+#     처음 본 시각을 따로 적어 두고 거기서 센다. 부팅 ID 가 바뀌면(=재부팅했으면) 새로 센다.
+RB_STATE=/var/lib/bandule-reboot-required-since
 if [ -f /var/run/reboot-required ]; then
-    rb_days=$(( ($(date +%s) - $(date -r /var/run/reboot-required +%s)) / 86400 ))
+    boot_id=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)
+    rb_since=$(awk -v b="$boot_id" '$1 == b { print $2 }' "$RB_STATE" 2>/dev/null)
+    if [ -z "$rb_since" ]; then
+        rb_since=$(date -r /var/run/reboot-required +%s)
+        echo "$boot_id $rb_since" > "$RB_STATE" 2>/dev/null
+    fi
+    rb_days=$(( ($(date +%s) - rb_since) / 86400 ))
     rb_pkgs=$(wc -l < /var/run/reboot-required.pkgs 2>/dev/null || echo "?")
     if [ "$rb_days" -ge "$REBOOT_MAX_D" ]; then
         bad "재부팅   보안 업데이트(${rb_pkgs}개)가 ${rb_days}일째 재부팅을 기다린다 — 재부팅해야 적용된다"
