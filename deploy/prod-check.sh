@@ -71,7 +71,7 @@ use=$(df -P / | awk 'NR==2 {for (i = 1; i <= NF; i++) if ($i ~ /%$/) { gsub(/%/,
 if [ "${use:-0}" -ge "$DISK_MAX" ]; then
     bad "디스크   ${use}% (기준 ${DISK_MAX}%) — 차면 DB·백업이 멈춘다"
     fix "무엇이 차지하나: $SSH 'cd /opt/bandapp && bandule disk'"
-    fix "안 쓰는 도커 이미지 정리(데이터는 안 지움): $SSH 'docker system prune -f'"
+    fix "안 쓰는 도커 이미지 정리(데이터는 안 지움): $SSH 'docker image prune -af'"
 else
     echo "디스크   ${use}%"
 fi

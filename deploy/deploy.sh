@@ -61,6 +61,10 @@ while [ $i -lt 12 ]; do
     if [ "$code" = "200" ]; then
         echo "== 배포 완료: $TAG"
         docker image prune -f >/dev/null 2>&1 || true
+        # 옛 앱 이미지는 태그(sha-…)가 붙어 있어 위 prune 으로 안 지워진다 — 운영에 144개·18GB 가 쌓였다
+        # (LAUNCH_REVIEW G14). 지금 것과 직전 2개만 남긴다. 더 옛것으로 되돌릴 때는 GHCR 에서 다시 받는다.
+        docker image ls --filter "reference=ghcr.io/yekapark/bandapp" --format '{{.Repository}}:{{.Tag}}' \
+            | grep -v ":$TAG\$" | tail -n +3 | xargs -r docker rmi >/dev/null 2>&1 || true
         exit 0
     fi
     sleep 5
