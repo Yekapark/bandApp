@@ -23,6 +23,16 @@ repositories {
     mavenCentral()
 }
 
+// Spring Boot 3.5 는 2026-06-25 의 3.5.16 을 끝으로 무료 패치가 나오지 않는다. 그 뒤에 나온 보안 수정을
+// 받으려면 BOM 이 정한 버전을 여기서 직접 올린다(LAUNCH_REVIEW G12). 같은 줄(패치)만 올린다.
+// Jackson 2.21.4 는 숫자 문자열 파싱이 입력 길이의 제곱으로 느려져(CVE-2026-89407), 합주실 좌표에 긴 문자열
+// 하나를 보내면 요청 하나가 CPU 를 몇 시간 붙잡았다(실측 4만 자 11.6초 → 2.21.7 부터 2MB 11ms).
+// Boot 4.x 로 옮기면 이 블록을 지운다(G13).
+extra["jackson-bom.version"] = "2.21.8"
+extra["tomcat.version"] = "10.1.61"
+extra["netty.version"] = "4.1.139.Final"
+extra["postgresql.version"] = "42.7.14"
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")

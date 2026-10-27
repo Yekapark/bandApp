@@ -1,5 +1,55 @@
 # 문제 기록
 
+## 2026-10-27 — 로그인한 아무나 요청 몇 개로 서버를 멈출 수 있었다 (서버 의존성 취약점, Dependabot 경보 0건)
+
+**증상** — 겉으로 드러난 장애는 없었다. 점검하다 찾았다. GitHub 의 Dependabot 보안 경보는 0건이었는데, 서버가 실제로 쓰는
+라이브러리 249개를 공개 취약점 DB(OSV, `api.osv.dev/v1/querybatch`)에 직접 대조하니 14개에 알려진 취약점이 있었다
+(Jackson·Tomcat·Netty·PostgreSQL 드라이버·Spring webmvc 등). 그중 우리 앱에서 실제로 닿는 것: 합주실 등록·수정의 좌표 칸에
+`"lat":"1111…1x"` 처럼 긴 숫자 문자열을 보내면 Jackson 2.21.4 가 입력 길이의 **제곱**으로 느려진다(CVE-2026-89407).
+실측 1만 자 0.66초 · 2만 자 2.9초 · 4만 자 11.6초. nginx 가 받는 최대 2MB 면 요청 하나가 CPU 를 몇 시간 붙잡는다 —
+가입은 무료라 누구나 요청 몇 개로 서버 전체를 멈출 수 있었다.
+
+**원인** —
+1. **Spring Boot 3.5 무료 지원이 끝났다.** Maven Central 에 2026-06-25 의 3.5.16 뒤로 3.5.x 가 없다(4.0.9·4.1.2 는 나옴).
+   Jackson·Tomcat 같은 라이브러리 버전은 Boot 의 BOM 이 정하는데, Boot 가 더 안 나오니 그 뒤 나온 보안 수정
+   (Jackson 2.21.7, Tomcat 10.1.58~61 …)이 우리 빌드에 안 들어왔다. Spring 자체 취약점 2건도 7.0.9 에서만 고쳐졌다.
+2. **Dependabot 이 서버 의존성을 하나도 못 보고 있었다.** GitHub 의존성 그래프(SBOM)에 Flutter(pub) 141개·Actions 10개만 있고
+   Maven 은 0개. GitHub 는 Gradle 빌드를 스스로 읽지 못해 CI 에서 의존성을 제출해 줘야 하는데, 그 단계가 없었다.
+   그래서 10-14 에 Dependabot 보안 경보를 켜고(G10) "0건" 을 본 것이 서버에 대해서는 아무 의미가 없었다.
+
+**해결** — `build.gradle.kts` 에서 BOM 버전을 같은 줄 최신 패치로 덮어씀: `jackson-bom.version` 2.21.8, `tomcat.version` 10.1.61,
+`netty.version` 4.1.139.Final, `postgresql.version` 42.7.14(넷 다 OSV 에 알려진 취약점 없음). `ci.yml` 에 `dependency-graph` 잡 —
+main 푸시 때 `gradle/actions/dependency-submission` 으로 runtimeClasspath 를 제출한다. 실패해도 CI 를 실패로 만들지 않는다
+(배포가 CI 성공을 기다린다). 나머지 취약점(Tomcat 보안 제약·DIGEST·FORM 인증·HTTP/2, Netty 서버·SPDY·CORS, 드라이버 채널
+바인딩, webmvc XsltView·SSE 조각)은 우리가 안 쓰는 기능이라 덮어쓰기만 하고 따로 손대지 않았다. 근본 해결은 Boot 4.x
+이전이라 출시 뒤로 미룸(LAUNCH_REVIEW G13).
+
+**확인법** — `RoomRequestParsingTest.좌표_칸의_긴_문자열은_바로_거절된다`: 10만 자 좌표 문자열을 5초 안에 거절해야 통과
+(새 버전 0.3초. `jackson-bom.version` 을 2.21.4 로 되돌리면 `execution timed out after 5000 ms` 로 깨지는 것을 확인했다).
+버전: `./gradlew -q dependencyInsight --dependency jackson-core --configuration runtimeClasspath` → 2.21.8 (tomcat-embed-core 10.1.61 등도 같은 방법).
+main 머지 뒤: CI 의 `dependency-graph` 잡이 초록, `gh api repos/Yekapark/bandApp/dependency-graph/sbom --jq '.sbom.packages[].externalRefs[0].referenceLocator' | grep -c maven` 이 0 보다 크다.
+다시 대조하려면 `./gradlew -q dependencies --configuration runtimeClasspath` 결과를 OSV querybatch 에 넣는다.
+
+---
+
+## 2026-10-27 — 운영 서버에 옛 앱 이미지 144개(약 18GB)가 쌓여 있었다
+
+**증상** — 서버 디스크 59%(29/52GB). `docker system df` 이미지 149개 중 쓰는 것 5개, `/var/lib/containerd` 18GB.
+`ghcr.io/yekapark/bandapp` 이미지가 9월 5일 것부터 144개 남아 있었다.
+
+**원인** — `deploy/deploy.sh` 끝의 `docker image prune -f` 는 **태그가 없는**(dangling) 이미지만 지운다. 앱 이미지는 배포마다
+`sha-…` 태그로 받아서 옛것도 태그가 붙은 채 남는다 — 그래서 한 번도 안 지워졌다. 매일 점검이 디스크 85% 에서 경보하지만,
+그때 안내하던 `docker system prune -f` 도 같은 이유로 이 이미지들을 못 지운다.
+
+**해결** — `deploy.sh` 가 배포 끝에 `docker image ls --filter reference=ghcr.io/yekapark/bandapp` 에서 지금 태그를 빼고
+최근 2개만 남긴 뒤 나머지를 `docker rmi`(실패해도 배포는 성공). 더 옛 버전으로 되돌릴 때는 GHCR 에서 다시 받는다.
+점검 안내도 `docker image prune -af` 로 바꿨다.
+
+**확인법** — 다음 배포 뒤 `ssh … 'docker image ls --filter reference=ghcr.io/yekapark/bandapp | wc -l'` 가 4 안팎(머리줄 포함),
+`df -h /` 사용량이 줄었는지. 지우기 전 고르기만 해 본 결과(2026-10-27): 남김 2개, 지울 것 141개.
+
+---
+
 ## 2026-10-15 — 운영 점검의 「재부팅 필요 (N일째)」가 재부팅을 안 했는데 5일째 → 0일째로 돌아갔다
 
 **증상** — 10/14 메일은 `재부팅   필요 (5일째, 7일 넘으면 알림)`, 10/15 메일은 `재부팅   필요 (0일째, …)`. 그 사이 재부팅은 하지 않았다. 0일째인데 여전히 「필요」라서 앞뒤가 안 맞아 보였다.
