@@ -56,6 +56,27 @@ jobs:
             build/test-results/test
           retention-days: 7
 
+  # 서버(Gradle) 의존성을 GitHub 의존성 그래프에 올린다. Gradle 은 자동으로 읽히지 않아서, 이게 없으면
+  # Dependabot 경보가 서버 의존성을 하나도 못 본다 — 2026-10-27 경보 0건이었는데 Jackson·Tomcat 취약점이 있었다
+  # (LAUNCH_REVIEW G12). 실제로 배포되는 runtimeClasspath 만. main 푸시에서만 쓰기 권한으로 돈다.
+  # 실패해도 CI 를 실패로 만들지 않는다 — 배포(deploy.yml)가 CI 성공을 기다리기 때문이다.
+  dependency-graph:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/dependency-submission@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          dependency-graph: generate-and-submit
+          dependency-graph-include-configurations: runtimeClasspath
+
   # Gradle 없이 몇 초면 끝난다. 빌드가 오래 걸려도 규칙 위반은 먼저 답을 준다.
   # 검사 내용과 뺀 이유는 tools/check-repo-rules.sh 주석에 있다.
   rules:
