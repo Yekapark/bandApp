@@ -36,6 +36,7 @@
 | 🆓 **GitHub** (`Yekapark/bandApp`, 공개) | 코드, CI/CD(Actions), 컨테이너 이미지(GHCR) | 공개 저장소라 무료 | GitHub |
 | 🆓 **Let's Encrypt** | HTTPS 인증서(서버에서 자동 갱신) | 무료 | 서버 certbot 컨테이너 |
 | 🆓 **UptimeRobot** ❓ | `/actuator/health` 5분 감시 (`docs/DEPLOY.md`) | 무료 플랜 | UptimeRobot |
+| 🆓 **D&B (Dun & Bradstreet) D-U-N-S** | 구글 조직 개발자 계정용 D-U-N-S 번호 (개인 계정의 12명·14일 조건 회피용) | 무료 | support.dnb.com (`qkrwkddjs777@naver.com`) — 2026-10-18 생성 요청 Case #34939353, 영업일 7~14일 |
 | — **Apple Developer** | iOS | **가입 안 함** (연 $99, 안드로이드 출시 후로 미룸) | — |
 
 ## 3. 행정 (돈은 안 들지만 폐업 때 반드시 신고)
