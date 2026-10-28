@@ -878,9 +878,9 @@ class _SetlistBlockState extends State<_SetlistBlock> {
     widget.onReorder(_local.map((e) => e.id).toList());
   }
 
-  /// 유튜브 링크면 유튜브 앱이, 아니면 브라우저가 연다. 주소에 http(s) 가 없으면 붙인다.
+  /// 유튜브 링크면 유튜브 앱이, 아니면 브라우저가 연다. 웹 주소가 아니면 열지 않는다([setlistWebLink]).
   Future<void> _openLink(String raw) async {
-    final uri = Uri.tryParse(raw.contains('://') ? raw : 'https://$raw');
+    final uri = setlistWebLink(raw);
     final ok = uri != null &&
         await launchUrl(uri, mode: LaunchMode.externalApplication)
             .catchError((_) => false);
@@ -1329,4 +1329,13 @@ class _LinkIcon extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 셋리스트 참고 링크를 열 주소. 웹 주소(http·https)만 돌려준다 — 같은 밴드 멤버가 넣어 둔 다른 앱 주소
+/// (`supertoss://`·`market://` 등)가 ▶ 한 번에 열리지 않게(LAUNCH_REVIEW U68). `://` 가 없으면 https 를 붙인다.
+Uri? setlistWebLink(String raw) {
+  final uri = Uri.tryParse(raw.contains('://') ? raw : 'https://$raw');
+  return uri != null && (uri.scheme == 'http' || uri.scheme == 'https')
+      ? uri
+      : null;
 }
