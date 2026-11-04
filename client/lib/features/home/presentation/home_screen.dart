@@ -31,6 +31,11 @@ class HomeScreen extends ConsumerWidget {
         ),
         data: (bands) {
           if (bands.isEmpty) {
+            // 다시 받는 중이면 이 빈 목록은 옛 값이다 — 밴드를 막 만들고 왔을 때 게이트로 되돌려 보내
+            // 화면 전환이 겹쳐 검은 화면이 됐다(TROUBLESHOOTING 2026-11-04). 새 목록을 기다린다.
+            if (bandsAsync.isRefreshing) {
+              return const Center(child: CircularProgressIndicator());
+            }
             // 밴드가 없으면 게이트로. (build 중 네비게이션 금지 → 다음 프레임)
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (context.mounted) context.go(Routes.bandGate);
