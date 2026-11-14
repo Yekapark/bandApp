@@ -70,4 +70,20 @@ else
     echo "   통과"
 fi
 
+# ---------------------------------------------------------------- 3. nginx 시작 스크립트 실행 권한
+#
+# nginx 공식 이미지는 /docker-entrypoint.d/*.sh 중 **실행 권한이 있는 것만** 돌리고, 없으면 로그에
+# "Ignoring ..., not executable" 한 줄만 남기고 넘어간다. Windows 에서 커밋하면(core.fileMode=false)
+# 권한이 100644 로 들어가 인증서 reload 루프가 두 달 동안 한 번도 안 돌았다(TROUBLESHOOTING 2026-11-14).
+
+echo "== nginx 시작 스크립트 실행 권한"
+noexec=$(git ls-files -s -- 'deploy/nginx/docker-entrypoint.d/*' | grep -v '^100755' | cut -f2)
+if [ -n "$noexec" ]; then
+    echo "$noexec" | sed 's/^/   /'
+    echo "   -> git update-index --chmod=+x <파일> 로 실행 권한을 커밋한다."
+    fail=1
+else
+    echo "   통과"
+fi
+
 exit $fail

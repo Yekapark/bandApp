@@ -1,5 +1,27 @@
 # 문제 기록
 
+## 2026-11-14 — 인증서는 갱신됐는데 nginx 가 옛 인증서를 계속 내보냄 (만료 20일 전 경보)
+
+**증상** — 매일 운영 점검이 「인증서 20일 남음(기준 21일) — 자동 갱신이 멈췄다」로 실패했다. 안내대로 certbot 로그를 보면
+아무것도 안 나온다(`certbot renew --quiet` 라 성공해도 출력이 없다). 바깥에서 받는 인증서는 2026-12-05 만료.
+
+**원인** — 갱신은 멈추지 않았다. certbot 은 11-04 에 새 인증서(2027-02-02 만료)를 받아 두었다(`/etc/letsencrypt/archive/api.bandule.com/cert2.pem`).
+nginx 는 인증서를 **기동할 때만** 읽어서, 6시간마다 `nginx -s reload` 하는 `deploy/nginx/docker-entrypoint.d/99-cert-reload.sh` 를
+붙여 두었는데 — nginx 공식 이미지의 시작 스크립트는 `/docker-entrypoint.d/*.sh` 중 **실행 권한이 있는 것만** 돌리고,
+없으면 `Ignoring /docker-entrypoint.d/99-cert-reload.sh, not executable` 한 줄만 남긴다. 파일을 Windows 에서 커밋해
+(`core.fileMode=false`) git 에 `100644` 로 들어갔고, 서버 checkout 도 실행 권한 없이 받았다. 2026-09-06 부터 reload 루프가 **한 번도 돌지 않았다.**
+첫 인증서(09-06 발급)가 아직 유효해서 두 달 동안 드러나지 않았다.
+
+**해결** — git 에 실행 권한 커밋(`git update-index --chmod=+x`), `tools/check-repo-rules.sh` 에 「nginx 시작 스크립트 실행 권한」 검사 추가
+(CI `rules` 에서 돈다). 배포의 `up -d` 는 nginx 설정이 그대로면 컨테이너를 새로 만들지 않아 **루프는 nginx 를 한 번 재시작해야 붙는다.**
+당장은 `nginx -s reload` 로 새 인증서를 집어 들게 한다(무중단).
+
+**확인법** — `echo | openssl s_client -connect api.bandule.com:443 -servername api.bandule.com 2>/dev/null | openssl x509 -noout -enddate` 가
+2027-02-02. nginx 재시작 뒤 `docker logs bandapp-nginx-1 2>&1 | grep 99-cert` 에 `Ignoring` 이 아니라 `Launching` 이 나오고,
+`docker exec bandapp-nginx-1 ps` 에 `sleep 6h` 루프가 보인다. `sh tools/check-repo-rules.sh` 가 권한 없는 파일을 잡는다(권한 빼고 실패 확인).
+
+---
+
 ## 2026-11-04 — Google 심사자가 제공한 데모 계정으로 로그인하지 못하고 새 계정을 만들었다
 
 **증상** — +49 심사 중 Google IP(`108.177.24.165`, UA `Dart/3.13`)가 16:28~16:41 KST 로그인 7번 모두 401, 회원가입 409(이미 있는
